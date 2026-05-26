@@ -1,0 +1,40 @@
+{
+  "source": "/Users/fahmiaquinas/Local Docs/Github Repo/DiPo/DiPoWidget/DiPoWidget.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "Pengeluaran",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 141
+        }
+      },
+      {
+        "comment": "",
+        "key": "Tambah\nTransaksi",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 191
+        }
+      },
+      {
+        "comment": "",
+        "key": "Pengeluaran Bulan Ini",
+        "location": {
+          "startingColumn": 35,
+          "startingLine": 214
+        }
+      },
+      {
+        "comment": "",
+        "key": "Lihat pengeluaran bulan ini dan tambah transaksi dengan satu tap.",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 215
+        }
+      }
+    ]
+  },
+  "version": 1
+}

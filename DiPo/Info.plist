@@ -10,8 +10,46 @@
 				<string>com.googleusercontent.apps.810914794268-nhaq685ftps5up6633ifj2r0b06oqo7c</string>
 			</array>
 		</dict>
+		<dict>
+			<!-- DiPo's own URL scheme for widget deep-links (e.g. dipo://add-transaction). -->
+			<!-- Separate dict so it doesn't get confused with the Google Sign-In scheme above. -->
+			<key>CFBundleURLName</key>
+			<string>com.fahmiaquinas.DiPo</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>dipo</string>
+			</array>
+		</dict>
 	</array>
 	<key>GIDClientID</key>
 	<string>810914794268-nhaq685ftps5up6633ifj2r0b06oqo7c.apps.googleusercontent.com</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+	<key>REVENUECAT_API_KEY</key>
+	<string>appl_prrkODEIIQhpqZyWLMzSogOABDN</string>
+    
+    <key>NSCameraUsageDescription</key>
+    <string>DiPo needs camera access to scan your receipts and automatically save transactions.</string>
+
+    <key>NSPhotoLibraryUsageDescription</key>
+    <string>DiPo needs photo library access to read receipts you've already saved as images.</string>
+    
+    <!-- Add to Info.plist -->
+    <key>NSAppTransportSecurity</key>
+    <dict>
+        <key>NSAllowsArbitraryLoads</key>
+        <false/>
+        <key>NSExceptionDomains</key>
+        <dict>
+            <!-- Only for development/testing - REMOVE in production -->
+            <key>open.er-api.com</key>
+            <dict>
+                <key>NSExceptionAllowsInsecureHTTPLoads</key>
+                <false/>
+                <key>NSIncludesSubdomains</key>
+                <true/>
+            </dict>
+        </dict>
+    </dict>
 </dict>
 </plist>

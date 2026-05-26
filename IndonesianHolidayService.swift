@@ -16,6 +16,12 @@ final class IndonesianHolidayService {
 
     private var cachedHolidays: Set<String> = []   // "YYYY-MM-DD"
     private var fetchedYears:   Set<Int>    = []
+    /// Years currently in flight. Without this, calling `isHoliday(...)` for
+    /// many dates in the same render frame spawns N parallel fetches for the
+    /// same year — the `fetchedYears` guard inside `fetchYear` only kicks in
+    /// AFTER the first fetch completes. Tracking in-flight at the call site
+    /// dedupes synchronously.
+    private var inFlightYears: Set<Int>     = []
 
     // MARK: - Public API
 
@@ -28,8 +34,11 @@ final class IndonesianHolidayService {
         let dd   = cal.component(.day,   from: date)
         let key  = String(format: "%04d-%02d-%02d", year, mm, dd)
 
-        // Trigger background fetch if we haven't loaded this year yet
-        if !fetchedYears.contains(year) {
+        // Trigger background fetch only if no fetch has started or completed
+        // for this year yet. Combined check (`fetched ∪ inFlight`) protects
+        // against the duplicate-Task explosion described above.
+        if !fetchedYears.contains(year), !inFlightYears.contains(year) {
+            inFlightYears.insert(year)
             Task { await fetchYear(year) }
         }
 
@@ -39,13 +48,19 @@ final class IndonesianHolidayService {
     /// Pre-fetch current + next year on app launch so data is ready immediately.
     func prefetch() {
         let year = Calendar.current.component(.year, from: .now)
-        Task { await fetchYear(year) }
-        Task { await fetchYear(year + 1) }
+        for y in [year, year + 1] where !fetchedYears.contains(y) && !inFlightYears.contains(y) {
+            inFlightYears.insert(y)
+            Task { await fetchYear(y) }
+        }
     }
 
     // MARK: - Fetch
 
     private func fetchYear(_ year: Int) async {
+        // Always clear the in-flight flag at the end so a transient error
+        // doesn't lock this year out forever. `fetchedYears` is the
+        // authoritative "done" marker.
+        defer { inFlightYears.remove(year) }
         guard !fetchedYears.contains(year) else { return }
 
         let urlString = "https://api-harilibur.vercel.app/api?year=\(year)"

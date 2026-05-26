@@ -1,0 +1,2 @@
+Target dependency graph (1 target)
+Target 'DiPoWidgetExtension' in project 'DiPo' (no dependencies)

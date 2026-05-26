@@ -1,13 +1,17 @@
 // ReceiptPreviewSheet.swift
-// Shown after a scan completes. Lets the user verify or correct the parsed
-// fields before they're saved as a TxRecord.
+// Final step of the scan flow: a "Receipt Info" card showing the parsed
+// fields with edit-in-place rows + Edit / Submit actions at the bottom.
 //
-// Design principles:
-//   - Show the receipt image alongside the editable fields so the user can
-//     compare visually without flipping screens.
-//   - Color the confidence badge so users know whether to trust the result.
-//   - All fields are editable — never trust the scanner blindly.
-//   - "Save" is the primary action; "Retake" lets them try again with a better photo.
+// Design:
+//   - Receipt photo banner at the top (tap to zoom for verification).
+//   - Compact label/value rows with thin dividers — easy to scan.
+//   - "Edit" toggles the rows into editable mode (TextField/Picker/DatePicker).
+//   - "Submit" creates the TxRecord against the chosen card and dismisses.
+//   - A tip banner reminds users they can edit before submitting.
+//
+// Why two modes (read-only vs. edit) instead of always-editable? It mirrors
+// the mock and reduces visual noise on first review — most users only want
+// to confirm the result rather than change anything.
 
 import SwiftUI
 import SwiftData
@@ -31,7 +35,7 @@ struct ReceiptPreviewSheet: View {
     @State private var selectedCardIndex: Int = 0
     @State private var showImageZoom = false
     @State private var saveError: String? = nil
-    @State private var appeared = false
+    @State private var isEditing: Bool = false
 
     private var availableCards: [BankCard] { cards }
 
@@ -40,47 +44,56 @@ struct ReceiptPreviewSheet: View {
         return availableCards[min(selectedCardIndex, availableCards.count - 1)]
     }
 
-    /// True when the form is in a saveable state.
     private var canSave: Bool {
+        // Require a positive amount. Previously we allowed `>= 0` to support
+        // 100%-promo receipts (Rp 0 totals are technically legit), but in
+        // practice OCR failures landed here as silent Rp 0 saves and users
+        // ended up with zero-value transactions they didn't notice. The
+        // reliability gain outweighs the rare 100%-promo edge case — those
+        // can still be entered manually from Add Transaction.
         scan.amount > 0 && !scan.merchantName.isEmpty && selectedCard != nil
     }
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(spacing: 18) {
-                    confidenceBanner
-                    receiptThumbnail
-                    formFields
-                    if let err = saveError {
-                        errorBanner(err)
+            ZStack {
+                AppTheme.bg.ignoresSafeArea()
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 18) {
+                        receiptThumbnail
+                        infoCard
+                        if let err = saveError {
+                            errorBanner(err)
+                        }
+                        tipBanner
+                        actionButtons
                     }
+                    .padding(.horizontal, 22)
+                    .padding(.top, 12)
+                    .padding(.bottom, 24)
                 }
-                .padding(.horizontal, 22)
-                .padding(.vertical, 16)
             }
-            .background(AppTheme.bg.ignoresSafeArea())
             .navigationTitle(loc("receipt.preview.title"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(loc("common.cancel")) { HapticManager.shared.tap(); dismiss() }
-                        .foregroundStyle(AppTheme.textSecondary)
-                }
-                ToolbarItem(placement: .primaryAction) {
-                    Button(loc("common.save")) { save() }
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(canSave ? AppTheme.accent : AppTheme.textSecondary.opacity(0.4))
-                        .disabled(!canSave)
+                    Button {
+                        HapticManager.shared.tap()
+                        dismiss()
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "chevron.left")
+                                .font(.system(size: 14, weight: .semibold))
+                        }
+                        .foregroundStyle(AppTheme.textPrimary)
+                    }
                 }
             }
             .onAppear {
                 amountText = formatAmountForEditing(scan.amount, currency: scan.currency)
-                // Pre-select a card whose currency matches the scanned currency.
                 if let idx = availableCards.firstIndex(where: { $0.resolvedCurrency == scan.currency }) {
                     selectedCardIndex = idx
                 }
-                withAnimation(.spring(response: 0.55, dampingFraction: 0.8)) { appeared = true }
             }
             .sheet(isPresented: $showImageZoom) {
                 ZoomableImageView(image: receiptImage)
@@ -92,29 +105,6 @@ struct ReceiptPreviewSheet: View {
 
     // MARK: - Sections
 
-    private var confidenceBanner: some View {
-        HStack(spacing: 10) {
-            Image(systemName: scan.mode == .haikuAI ? "sparkles" : "checkmark.seal.fill")
-                .foregroundStyle(Color(hex: scan.confidenceColorHex))
-                .font(.system(size: 18))
-            VStack(alignment: .leading, spacing: 2) {
-                Text(scan.confidenceLabel)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(AppTheme.textPrimary)
-                Text(scan.mode == .haikuAI ? loc("receipt.processed_by_ai") : loc("receipt.processed_locally"))
-                    .font(.system(size: 11))
-                    .foregroundStyle(AppTheme.textSecondary)
-            }
-            Spacer()
-        }
-        .padding(14)
-        .background(Color(hex: scan.confidenceColorHex).opacity(0.1), in: RoundedRectangle(cornerRadius: 14))
-        .overlay(
-            RoundedRectangle(cornerRadius: 14)
-                .stroke(Color(hex: scan.confidenceColorHex).opacity(0.25), lineWidth: 1)
-        )
-    }
-
     private var receiptThumbnail: some View {
         Button {
             HapticManager.shared.tap()
@@ -125,11 +115,10 @@ struct ReceiptPreviewSheet: View {
                     .resizable()
                     .scaledToFill()
                     .frame(maxWidth: .infinity)
-                    .frame(height: 160)
+                    .frame(height: 180)
                     .clipped()
                     .clipShape(RoundedRectangle(cornerRadius: 14))
 
-                // Subtle "tap to zoom" hint
                 HStack(spacing: 4) {
                     Image(systemName: "magnifyingglass").font(.system(size: 10))
                     Text(loc("receipt.tap_to_zoom")).font(.system(size: 11, weight: .medium))
@@ -143,65 +132,90 @@ struct ReceiptPreviewSheet: View {
         .buttonStyle(ScaleButtonStyle())
     }
 
-    private var formFields: some View {
-        VStack(spacing: 14) {
-            // Merchant
-            fieldRow(label: loc("receipt.field.merchant"), icon: "storefront.fill") {
-                TextField(loc("receipt.field.merchant_placeholder"), text: $scan.merchantName)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(AppTheme.textPrimary)
-                    .autocorrectionDisabled()
-            }
-
-            // Amount
-            fieldRow(label: loc("receipt.field.amount"), icon: "banknote.fill") {
-                HStack(spacing: 8) {
-                    Text(CurrencyManager.symbol(for: scan.currency))
+    private var infoCard: some View {
+        VStack(spacing: 0) {
+            // Vendor
+            row(label: loc("receipt.field.vendor")) {
+                if isEditing {
+                    TextField(loc("receipt.field.merchant_placeholder"), text: $scan.merchantName)
+                        .multilineTextAlignment(.trailing)
                         .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(AppTheme.textSecondary)
-                    TextField("0", text: $amountText)
-                        .keyboardType(.decimalPad)
-                        .font(.system(size: 17, weight: .bold))
                         .foregroundStyle(AppTheme.textPrimary)
-                        .onChange(of: amountText) { _, newValue in
-                            scan.amount = parseAmount(newValue)
-                        }
+                } else {
+                    Text(scan.merchantName.isEmpty ? "—" : scan.merchantName)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(AppTheme.textPrimary)
+                        .lineLimit(1)
                 }
             }
-
-            // Currency selector
-            fieldRow(label: loc("receipt.field.currency"), icon: "dollarsign.circle.fill") {
-                Picker("", selection: $scan.currency) {
-                    ForEach(CurrencyManager.supportedCurrencies, id: \.code) { c in
-                        Text("\(c.flag) \(c.code)").tag(c.code)
-                    }
-                }
-                .pickerStyle(.menu)
-                .tint(AppTheme.textPrimary)
-            }
-
-            // Date
-            fieldRow(label: loc("receipt.field.date"), icon: "calendar") {
-                DatePicker("", selection: $scan.date, in: ...Date(), displayedComponents: .date)
-                    .labelsHidden()
-                    .tint(AppTheme.accent)
-            }
-
+            divider
             // Category
-            fieldRow(label: loc("receipt.field.category"), icon: scan.category.icon) {
-                Picker("", selection: $scan.category) {
-                    // Only expense categories make sense for a receipt.
-                    ForEach(expenseCategories, id: \.self) { cat in
-                        Label(cat.displayLabel, systemImage: cat.icon).tag(cat)
+            row(label: loc("receipt.field.category")) {
+                if isEditing {
+                    Picker("", selection: $scan.category) {
+                        ForEach(expenseCategories, id: \.self) { cat in
+                            Text(cat.displayLabel).tag(cat)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .tint(AppTheme.textPrimary)
+                    .labelsHidden()
+                } else {
+                    HStack(spacing: 6) {
+                        Image(systemName: scan.category.icon)
+                            .font(.system(size: 12))
+                            .foregroundStyle(scan.category.color)
+                        Text(scan.category.displayLabel)
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(AppTheme.textPrimary)
                     }
                 }
-                .pickerStyle(.menu)
-                .tint(AppTheme.textPrimary)
             }
-
-            // Card
+            divider
+            // Amount (with currency symbol embedded in label like the mock)
+            row(label: String(format: loc("receipt.field.amount_with_symbol"),
+                              CurrencyManager.symbol(for: scan.currency))) {
+                if isEditing {
+                    HStack(spacing: 8) {
+                        Picker("", selection: $scan.currency) {
+                            ForEach(CurrencyManager.supportedCurrencies, id: \.code) { c in
+                                Text("\(c.flag) \(c.code)").tag(c.code)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .tint(AppTheme.textSecondary)
+                        .labelsHidden()
+                        TextField("0", text: $amountText)
+                            .keyboardType(.decimalPad)
+                            .multilineTextAlignment(.trailing)
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundStyle(AppTheme.textPrimary)
+                            .frame(maxWidth: 110)
+                            .onChange(of: amountText) { _, v in scan.amount = parseAmount(v) }
+                    }
+                } else {
+                    Text(CurrencyManager.shared.formatted(scan.amount, currency: scan.currency))
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(AppTheme.textPrimary)
+                }
+            }
+            divider
+            // Purchase date
+            row(label: loc("receipt.field.purchase_date")) {
+                if isEditing {
+                    DatePicker("", selection: $scan.date, in: ...Date(), displayedComponents: .date)
+                        .labelsHidden()
+                        .tint(AppTheme.accent)
+                } else {
+                    Text(formatDate(scan.date))
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(AppTheme.textPrimary)
+                }
+            }
+            // Card selector — only when multiple cards exist
             if availableCards.count > 1 {
-                fieldRow(label: loc("receipt.field.card"), icon: "creditcard.fill") {
+                divider
+                row(label: loc("receipt.field.card")) {
                     Picker("", selection: $selectedCardIndex) {
                         ForEach(availableCards.indices, id: \.self) { i in
                             Text(cardLabel(availableCards[i])).tag(i)
@@ -209,37 +223,94 @@ struct ReceiptPreviewSheet: View {
                     }
                     .pickerStyle(.menu)
                     .tint(AppTheme.textPrimary)
+                    .labelsHidden()
                 }
             }
-
+            divider
             // Notes
-            if !scan.notes.isEmpty {
-                fieldRow(label: loc("receipt.field.notes"), icon: "note.text") {
-                    TextField("", text: $scan.notes, axis: .vertical)
-                        .font(.system(size: 13))
-                        .foregroundStyle(AppTheme.textSecondary)
-                        .lineLimit(2...4)
+            row(label: loc("receipt.field.notes")) {
+                if isEditing {
+                    TextField(loc("tx.notes_placeholder"), text: $scan.notes, axis: .vertical)
+                        .multilineTextAlignment(.trailing)
+                        .font(.system(size: 14))
+                        .foregroundStyle(AppTheme.textPrimary)
+                        .lineLimit(1...3)
+                } else {
+                    Text(scan.notes.isEmpty ? "N/A" : scan.notes)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(scan.notes.isEmpty ? AppTheme.textSecondary : AppTheme.textPrimary)
+                        .lineLimit(2)
                 }
             }
+        }
+        .padding(.vertical, 4)
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(AppTheme.cardMid.opacity(0.4), lineWidth: 1)
+        )
+    }
 
-            // Retake button — secondary action, less prominent than Save in toolbar
+    private var tipBanner: some View {
+        HStack(spacing: 10) {
+            Text("💡")
+                .font(.system(size: 13))
+            Text(loc("receipt.preview.tip"))
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(AppTheme.accent)
+                .multilineTextAlignment(.leading)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(AppTheme.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 12))
+    }
+
+    private var actionButtons: some View {
+        HStack(spacing: 12) {
             Button {
                 HapticManager.shared.tap()
-                onRetake()
-                dismiss()
-            } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "camera.rotate.fill").font(.system(size: 13))
-                    Text(loc("receipt.retake")).font(.system(size: 14, weight: .semibold))
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                    isEditing.toggle()
                 }
-                .foregroundStyle(AppTheme.textSecondary)
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: isEditing ? "checkmark" : "pencil")
+                        .font(.system(size: 13, weight: .semibold))
+                    Text(isEditing ? loc("common.done") : loc("receipt.preview.edit"))
+                        .font(.system(size: 15, weight: .semibold))
+                }
+                .foregroundStyle(AppTheme.textPrimary)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
-                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 12))
+                .padding(.vertical, 14)
+                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14)
+                        .stroke(AppTheme.cardMid, lineWidth: 1)
+                )
             }
             .buttonStyle(ScaleButtonStyle())
-            .padding(.top, 4)
+
+            Button {
+                save()
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 13, weight: .semibold))
+                    Text(loc("receipt.preview.submit"))
+                        .font(.system(size: 15, weight: .semibold))
+                }
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+                .background(canSave ? AppTheme.accent : AppTheme.textSecondary.opacity(0.3),
+                            in: RoundedRectangle(cornerRadius: 14))
+                .shadow(color: canSave ? AppTheme.accent.opacity(0.35) : .clear, radius: 12, y: 6)
+            }
+            .buttonStyle(ScaleButtonStyle())
+            .disabled(!canSave)
         }
+        .padding(.top, 4)
     }
 
     private func errorBanner(_ message: String) -> some View {
@@ -256,33 +327,29 @@ struct ReceiptPreviewSheet: View {
         .background(AppTheme.red.opacity(0.1), in: RoundedRectangle(cornerRadius: 10))
     }
 
-    // MARK: - Helpers
+    // MARK: - Row helpers
 
-    /// A single field row with icon + label + custom content. Keeps the form
-    /// visually consistent without duplicating layout code per field.
-    private func fieldRow<Content: View>(label: String, icon: String,
-                                         @ViewBuilder content: () -> Content) -> some View {
+    private func row<Content: View>(label: String,
+                                    @ViewBuilder content: () -> Content) -> some View {
         HStack(spacing: 12) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(AppTheme.accent.opacity(0.12))
-                    .frame(width: 32, height: 32)
-                Image(systemName: icon)
-                    .font(.system(size: 13))
-                    .foregroundStyle(AppTheme.accent)
-            }
-            VStack(alignment: .leading, spacing: 2) {
-                Text(label)
-                    .font(.system(size: 11))
-                    .foregroundStyle(AppTheme.textSecondary)
-                content()
-            }
-            Spacer()
+            Text(label)
+                .font(.system(size: 14))
+                .foregroundStyle(AppTheme.textSecondary)
+            Spacer(minLength: 12)
+            content()
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 12))
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
     }
+
+    private var divider: some View {
+        Rectangle()
+            .fill(AppTheme.cardMid.opacity(0.5))
+            .frame(height: 0.5)
+            .padding(.horizontal, 16)
+    }
+
+    // MARK: - Helpers
 
     private var expenseCategories: [TxCategory] {
         [.shopping, .food, .travel, .bills, .transport, .health, .other]
@@ -294,7 +361,13 @@ struct ReceiptPreviewSheet: View {
         return "\(card.holderName) ••\(last4)"
     }
 
-    /// Format an amount for the editor. IDR uses no decimals; USD uses two.
+    private func formatDate(_ date: Date) -> String {
+        let f = DateFormatter()
+        f.dateFormat = "dd/MM/yyyy"
+        f.locale = LanguageManager.shared.currentLocale
+        return f.string(from: date)
+    }
+
     private func formatAmountForEditing(_ amount: Double, currency: String) -> String {
         let noDecimals = ["IDR", "JPY", "KRW", "VND"]
         if noDecimals.contains(currency.uppercased()) {
@@ -303,28 +376,19 @@ struct ReceiptPreviewSheet: View {
         return String(format: "%.2f", amount)
     }
 
-    /// Parse the user-edited amount string back to Double. Accepts both
-    /// Indonesian (1.234.567,89) and US (1,234.56) formats.
     private func parseAmount(_ text: String) -> Double {
-        // Reuse the same logic as the parser to stay consistent.
         let cleaned = text.replacingOccurrences(of: " ", with: "")
-        // If it has both . and , — assume the LAST one is decimal.
         let lastDot = cleaned.lastIndex(of: ".")
         let lastComma = cleaned.lastIndex(of: ",")
         var normalized = cleaned
         if let dot = lastDot, let comma = lastComma {
             if comma > dot {
-                // ID format: 1.234,56
                 normalized = cleaned.replacingOccurrences(of: ".", with: "")
                 normalized = normalized.replacingOccurrences(of: ",", with: ".")
             } else {
-                // US format: 1,234.56
                 normalized = cleaned.replacingOccurrences(of: ",", with: "")
             }
         } else if cleaned.contains(",") && !cleaned.contains(".") {
-            // Could be ID decimal "150,50" or US thousands "1,500"
-            // Heuristic: if exactly 3 digits after comma, treat as US thousands;
-            // otherwise as ID decimal.
             let parts = cleaned.split(separator: ",")
             if parts.count == 2, parts[1].count == 3 {
                 normalized = cleaned.replacingOccurrences(of: ",", with: "")
@@ -339,13 +403,13 @@ struct ReceiptPreviewSheet: View {
 
     private func save() {
         guard let card = selectedCard else { return }
+        // Match canSave's > 0 rule. Defense-in-depth in case some upstream
+        // path bypasses the disabled-button affordance.
         guard scan.amount > 0 else {
             saveError = loc("receipt.error.amount_required")
             return
         }
 
-        // Convert to card's currency if user picked a different currency
-        // (e.g., scanned receipt is in IDR but they picked the USD card).
         let storedCurrency: String
         let storedAmount: Double
         if scan.currency != card.resolvedCurrency {
@@ -358,21 +422,19 @@ struct ReceiptPreviewSheet: View {
             storedAmount = scan.amount
         }
 
-        // Build the TxRecord. Amount is negative because this is an expense.
+        let iconText = String(scan.merchantName.prefix(2).uppercased())
         let tx = TxRecord(
             name: scan.merchantName,
             date: scan.date,
             amount: -abs(storedAmount),
             type: "tx.type.purchase",
-            icon: scan.category.icon,
+            icon: iconText,
             iconBgHex: scan.category.iconBg,
             category: scan.category,
             currency: storedCurrency,
             notes: scan.notes
         )
         card.transactions.append(tx)
-        // Update card balance to reflect the new expense.
-        card.balance -= storedAmount
 
         do {
             try context.save()
@@ -388,8 +450,6 @@ struct ReceiptPreviewSheet: View {
 
 // MARK: - Zoomable Image
 
-/// Pinch-to-zoom view of the receipt photo. Lets the user verify hard-to-read
-/// details without retaking the photo.
 private struct ZoomableImageView: View {
     let image: UIImage
     @Environment(\.dismiss) private var dismiss
@@ -409,9 +469,7 @@ private struct ZoomableImageView: View {
                             .onChanged { value in
                                 scale = max(1, min(4, lastScale * value))
                             }
-                            .onEnded { _ in
-                                lastScale = scale
-                            }
+                            .onEnded { _ in lastScale = scale }
                     )
             }
             Button {

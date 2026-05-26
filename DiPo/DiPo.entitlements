@@ -6,5 +6,21 @@
 	<array>
 		<string>Default</string>
 	</array>
+	<!-- Shared with DiPoWidget so the widget can read pre-computed monthly totals -->
+	<!-- via UserDefaults(suiteName: "group.com.fahmiaquinas.DiPo"). The matching -->
+	<!-- entry must also be enabled on the widget target in DiPoWidget.entitlements. -->
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>group.com.fahmiaquinas.DiPo</string>
+	</array>
+	<!-- Push Notifications. Required for APNs registration → FCM token. -->
+	<!-- "development" here; Xcode's build system promotes it to -->
+	<!-- "production" automatically for Release / App Store builds. -->
+	<!-- IMPORTANT: also enable "Push Notifications" capability in Xcode -->
+	<!-- (target → Signing & Capabilities) so the App ID is registered -->
+	<!-- for push in the Apple Developer portal — editing this file alone -->
+	<!-- is not always enough for automatic signing to provision it. -->
+	<key>aps-environment</key>
+	<string>development</string>
 </dict>
 </plist>

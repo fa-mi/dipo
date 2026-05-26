@@ -1,0 +1,49 @@
+{
+  "" : {
+    "diagnostics" : "/Users/fahmiaquinas/Local Docs/Github Repo/DiPo/build/DiPo.build/Debug-iphoneos/DiPoWidgetExtension.build/Objects-normal/arm64/DiPoWidgetExtension-primary.dia",
+    "emit-module-dependencies" : "/Users/fahmiaquinas/Local Docs/Github Repo/DiPo/build/DiPo.build/Debug-iphoneos/DiPoWidgetExtension.build/Objects-normal/arm64/DiPoWidgetExtension-primary-emit-module.d",
+    "emit-module-diagnostics" : "/Users/fahmiaquinas/Local Docs/Github Repo/DiPo/build/DiPo.build/Debug-iphoneos/DiPoWidgetExtension.build/Objects-normal/arm64/DiPoWidgetExtension-primary-emit-module.dia",
+    "pch" : "/Users/fahmiaquinas/Local Docs/Github Repo/DiPo/build/DiPo.build/Debug-iphoneos/DiPoWidgetExtension.build/Objects-normal/arm64/DiPoWidgetExtension-primary-Bridging-header.pch",
+    "swift-dependencies" : "/Users/fahmiaquinas/Local Docs/Github Repo/DiPo/build/DiPo.build/Debug-iphoneos/DiPoWidgetExtension.build/Objects-normal/arm64/DiPoWidgetExtension-primary.swiftdeps"
+  },
+  "/Users/fahmiaquinas/Local Docs/Github Repo/DiPo/DiPoWidget/DiPoWidget.swift" : {
+    "const-values" : "/Users/fahmiaquinas/Local Docs/Github Repo/DiPo/build/DiPo.build/Debug-iphoneos/DiPoWidgetExtension.build/Objects-normal/arm64/DiPoWidget.swiftconstvalues",
+    "dependencies" : "/Users/fahmiaquinas/Local Docs/Github Repo/DiPo/build/DiPo.build/Debug-iphoneos/DiPoWidgetExtension.build/Objects-normal/arm64/DiPoWidget.d",
+    "diagnostics" : "/Users/fahmiaquinas/Local Docs/Github Repo/DiPo/build/DiPo.build/Debug-iphoneos/DiPoWidgetExtension.build/Objects-normal/arm64/DiPoWidget.dia",
+    "index-unit-output-path" : "/DiPo.build/Debug-iphoneos/DiPoWidgetExtension.build/Objects-normal/arm64/DiPoWidget.o",
+    "llvm-bc" : "/Users/fahmiaquinas/Local Docs/Github Repo/DiPo/build/DiPo.build/Debug-iphoneos/DiPoWidgetExtension.build/Objects-normal/arm64/DiPoWidget.bc",
+    "object" : "/Users/fahmiaquinas/Local Docs/Github Repo/DiPo/build/DiPo.build/Debug-iphoneos/DiPoWidgetExtension.build/Objects-normal/arm64/DiPoWidget.o",
+    "swift-dependencies" : "/Users/fahmiaquinas/Local Docs/Github Repo/DiPo/build/DiPo.build/Debug-iphoneos/DiPoWidgetExtension.build/Objects-normal/arm64/DiPoWidget.swiftdeps",
+    "swiftmodule" : "/Users/fahmiaquinas/Local Docs/Github Repo/DiPo/build/DiPo.build/Debug-iphoneos/DiPoWidgetExtension.build/Objects-normal/arm64/DiPoWidget~partial.swiftmodule"
+  },
+  "/Users/fahmiaquinas/Local Docs/Github Repo/DiPo/DiPoWidget/DiPoWidgetBundle.swift" : {
+    "const-values" : "/Users/fahmiaquinas/Local Docs/Github Repo/DiPo/build/DiPo.build/Debug-iphoneos/DiPoWidgetExtension.build/Objects-normal/arm64/DiPoWidgetBundle.swiftconstvalues",
+    "dependencies" : "/Users/fahmiaquinas/Local Docs/Github Repo/DiPo/build/DiPo.build/Debug-iphoneos/DiPoWidgetExtension.build/Objects-normal/arm64/DiPoWidgetBundle.d",
+    "diagnostics" : "/Users/fahmiaquinas/Local Docs/Github Repo/DiPo/build/DiPo.build/Debug-iphoneos/DiPoWidgetExtension.build/Objects-normal/arm64/DiPoWidgetBundle.dia",
+    "index-unit-output-path" : "/DiPo.build/Debug-iphoneos/DiPoWidgetExtension.build/Objects-normal/arm64/DiPoWidgetBundle.o",
+    "llvm-bc" : "/Users/fahmiaquinas/Local Docs/Github Repo/DiPo/build/DiPo.build/Debug-iphoneos/DiPoWidgetExtension.build/Objects-normal/arm64/DiPoWidgetBundle.bc",
+    "object" : "/Users/fahmiaquinas/Local Docs/Github Repo/DiPo/build/DiPo.build/Debug-iphoneos/DiPoWidgetExtension.build/Objects-normal/arm64/DiPoWidgetBundle.o",
+    "swift-dependencies" : "/Users/fahmiaquinas/Local Docs/Github Repo/DiPo/build/DiPo.build/Debug-iphoneos/DiPoWidgetExtension.build/Objects-normal/arm64/DiPoWidgetBundle.swiftdeps",
+    "swiftmodule" : "/Users/fahmiaquinas/Local Docs/Github Repo/DiPo/build/DiPo.build/Debug-iphoneos/DiPoWidgetExtension.build/Objects-normal/arm64/DiPoWidgetBundle~partial.swiftmodule"
+  },
+  "/Users/fahmiaquinas/Local Docs/Github Repo/DiPo/DiPoWidget/DiPoWidgetControl.swift" : {
+    "const-values" : "/Users/fahmiaquinas/Local Docs/Github Repo/DiPo/build/DiPo.build/Debug-iphoneos/DiPoWidgetExtension.build/Objects-normal/arm64/DiPoWidgetControl.swiftconstvalues",
+    "dependencies" : "/Users/fahmiaquinas/Local Docs/Github Repo/DiPo/build/DiPo.build/Debug-iphoneos/DiPoWidgetExtension.build/Objects-normal/arm64/DiPoWidgetControl.d",
+    "diagnostics" : "/Users/fahmiaquinas/Local Docs/Github Repo/DiPo/build/DiPo.build/Debug-iphoneos/DiPoWidgetExtension.build/Objects-normal/arm64/DiPoWidgetControl.dia",
+    "index-unit-output-path" : "/DiPo.build/Debug-iphoneos/DiPoWidgetExtension.build/Objects-normal/arm64/DiPoWidgetControl.o",
+    "llvm-bc" : "/Users/fahmiaquinas/Local Docs/Github Repo/DiPo/build/DiPo.build/Debug-iphoneos/DiPoWidgetExtension.build/Objects-normal/arm64/DiPoWidgetControl.bc",
+    "object" : "/Users/fahmiaquinas/Local Docs/Github Repo/DiPo/build/DiPo.build/Debug-iphoneos/DiPoWidgetExtension.build/Objects-normal/arm64/DiPoWidgetControl.o",
+    "swift-dependencies" : "/Users/fahmiaquinas/Local Docs/Github Repo/DiPo/build/DiPo.build/Debug-iphoneos/DiPoWidgetExtension.build/Objects-normal/arm64/DiPoWidgetControl.swiftdeps",
+    "swiftmodule" : "/Users/fahmiaquinas/Local Docs/Github Repo/DiPo/build/DiPo.build/Debug-iphoneos/DiPoWidgetExtension.build/Objects-normal/arm64/DiPoWidgetControl~partial.swiftmodule"
+  },
+  "/Users/fahmiaquinas/Local Docs/Github Repo/DiPo/build/DiPo.build/Debug-iphoneos/DiPoWidgetExtension.build/DerivedSources/GeneratedAssetSymbols.swift" : {
+    "const-values" : "/Users/fahmiaquinas/Local Docs/Github Repo/DiPo/build/DiPo.build/Debug-iphoneos/DiPoWidgetExtension.build/Objects-normal/arm64/GeneratedAssetSymbols.swiftconstvalues",
+    "dependencies" : "/Users/fahmiaquinas/Local Docs/Github Repo/DiPo/build/DiPo.build/Debug-iphoneos/DiPoWidgetExtension.build/Objects-normal/arm64/GeneratedAssetSymbols.d",
+    "diagnostics" : "/Users/fahmiaquinas/Local Docs/Github Repo/DiPo/build/DiPo.build/Debug-iphoneos/DiPoWidgetExtension.build/Objects-normal/arm64/GeneratedAssetSymbols.dia",
+    "index-unit-output-path" : "/DiPo.build/Debug-iphoneos/DiPoWidgetExtension.build/Objects-normal/arm64/GeneratedAssetSymbols.o",
+    "llvm-bc" : "/Users/fahmiaquinas/Local Docs/Github Repo/DiPo/build/DiPo.build/Debug-iphoneos/DiPoWidgetExtension.build/Objects-normal/arm64/GeneratedAssetSymbols.bc",
+    "object" : "/Users/fahmiaquinas/Local Docs/Github Repo/DiPo/build/DiPo.build/Debug-iphoneos/DiPoWidgetExtension.build/Objects-normal/arm64/GeneratedAssetSymbols.o",
+    "swift-dependencies" : "/Users/fahmiaquinas/Local Docs/Github Repo/DiPo/build/DiPo.build/Debug-iphoneos/DiPoWidgetExtension.build/Objects-normal/arm64/GeneratedAssetSymbols.swiftdeps",
+    "swiftmodule" : "/Users/fahmiaquinas/Local Docs/Github Repo/DiPo/build/DiPo.build/Debug-iphoneos/DiPoWidgetExtension.build/Objects-normal/arm64/GeneratedAssetSymbols~partial.swiftmodule"
+  }
+}

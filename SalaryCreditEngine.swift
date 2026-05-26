@@ -45,29 +45,38 @@ struct SalaryCreditEngine {
             // Only credit on or after the actual pay date
             guard today >= payDay else { continue }
 
-            // Find the target card
-            // Prefer the card linked to this schedule, fallback to first card
-            let targetCard: BankCard
-            if let cardID = schedule.cardID,
-               let linked = cards.first(where: { $0.id == cardID }) {
-                targetCard = linked
-            } else {
-                targetCard = cards[0]
+            // Find the target card — must be explicitly linked, no silent fallback
+            guard let cardID = schedule.cardID,
+                  let targetCard = cards.first(where: { $0.id == cardID }) else {
+                print("[SalaryCreditEngine] Skipping \(schedule.label) — no card linked")
+                continue
             }
 
-            // Create the income transaction
+            // Store the transaction in schedule.currency exactly as entered.
+            // Display-time conversion is handled by liveTransactionBalance() in
+            // BankCardHelpers.swift, which already converts each tx to the card's
+            // currency before summing. Converting here would corrupt amounts for
+            // schedules whose currency differs from the card (e.g. a USD freelance
+            // salary on an IDR card — the user typed 250 meaning $250, not Rp 250).
+            //
+            // ⚠️ type/notes use stable keys, NOT loc(...) results. Translation happens
+            // at display time — storing translated strings would freeze the language
+            // at the moment of auto-credit, breaking the UI when the user later switches locale.
             let salaryTx = TxRecord(
                 name: "\(schedule.label) - Salary",
                 date: payDate,
                 amount: schedule.amount,
-                type: "Income",
+                type: "tx.type.income",
                 icon: "S",
                 iconBgHex: "#1D9E75",
-                category: .transfer,
+                category: .salary,
                 currency: schedule.currency,
-                notes: "Auto-credited on payday"
+                notes: "tx.note.salary_auto"
             )
             targetCard.transactions.append(salaryTx)
+
+            // NOTE: Do NOT touch card.balance — balance is computed from transactions.
+            // Adding to both would double-count the salary.
 
             // Mark as credited for this month
             schedule.lastCreditedMonth = currentMonth

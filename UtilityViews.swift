@@ -1,40 +1,59 @@
 import SwiftUI
 import SwiftData
 
-// MARK: - Search
- Date Period
+
+// MARK: - Search Date Period
 
 enum SearchPeriod: String, CaseIterable {
-    case all       = "All time"
-    case today     = "Today"
-    case yesterday = "Yesterday"
-    case thisWeek  = "This week"
-    case lastMonth = "Last month"
-    case last3     = "Last 3 months"
-    case thisYear  = "This year"
+    case all_period, today_period, yesterday_period, week_period, month_period, three_month_period, year_period, custom
+
+    // rawValue is a stable identifier — never display it directly.
+    // title is resolved at render time via loc() so it follows the in-app language.
+    var title: String {
+        switch self {
+        case .all_period:          return loc("search.period.all")
+        case .today_period:        return loc("search.period.today")
+        case .yesterday_period:    return loc("search.period.yesterday")
+        case .week_period:         return loc("search.period.week")
+        case .month_period:        return loc("search.period.month")
+        case .three_month_period:  return loc("search.period.3month")
+        case .year_period:         return loc("search.period.year")
+        case .custom:              return loc("search.period.custom")
+        }
+    }
 
     func range() -> (start: Date, end: Date)? {
         let cal = Calendar.current
         let now = Date()
+
         switch self {
-        case .all:       return nil
-        case .today:     return (cal.startOfDay(for: now), now)
-        case .yesterday:
-            let yStart = cal.date(byAdding: .day, value: -1, to: cal.startOfDay(for: now))!
-            return (yStart, cal.startOfDay(for: now))
-        case .thisWeek:
-            return (cal.date(byAdding: .day, value: -7, to: now)!, now)
-        case .lastMonth:
+        case .all_period: return nil
+        case .today_period:
+            return (cal.startOfDay(for: now), now)
+
+        case .yesterday_period:
+            let start = cal.date(byAdding: .day, value: -1, to: cal.startOfDay(for: now))!
+            return (start, cal.startOfDay(for: now))
+
+        case .week_period:
+            let start = cal.date(from: cal.dateComponents([.yearForWeekOfYear, .weekOfYear], from: now))!
+            return (start, now)
+
+        case .month_period:
             return (cal.date(byAdding: .month, value: -1, to: now)!, now)
-        case .last3:
+
+        case .three_month_period:
             return (cal.date(byAdding: .month, value: -3, to: now)!, now)
-        case .thisYear:
+
+        case .year_period:
             let start = cal.date(from: cal.dateComponents([.year], from: now))!
             return (start, now)
+
+        case .custom:
+            return nil
         }
     }
 }
-
 // MARK: - Search View
 
 struct SearchView: View {
@@ -42,14 +61,21 @@ struct SearchView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var query = ""
     @State private var selectedFilter: TxCategory? = nil
-    @State private var selectedPeriod: SearchPeriod = .all
+    @State private var selectedPeriod: SearchPeriod = .all_period
     @State private var appeared = false
     @FocusState private var focused: Bool
     @State private var selectedTx: TxRecord? = nil
+    @State private var showCustomDateSheet = false
+    @State private var customStart: Date = Calendar.current.safeDate(byAdding: .month, value: -1, to: Date())
+    @State private var customEnd: Date = Date()
 
     var allTransactions: [TxRecord] { vm.recentTransactions }
 
     var periodFiltered: [TxRecord] {
+        if selectedPeriod == .custom {
+            let end = Calendar.current.date(bySettingHour: 23, minute: 59, second: 59, of: customEnd) ?? customEnd
+            return allTransactions.filter { $0.date >= customStart && $0.date <= end }
+        }
         guard let range = selectedPeriod.range() else { return allTransactions }
         return allTransactions.filter { $0.date >= range.start && $0.date <= range.end }
     }
@@ -74,6 +100,7 @@ struct SearchView: View {
     // Group filtered results by date section
     var grouped: [(label: String, date: Date, txs: [TxRecord])] {
         let cal = Calendar.current
+        let locale = LanguageManager.shared.currentLocale
         var dict: [Date: [TxRecord]] = [:]
         for tx in filtered {
             let day = cal.startOfDay(for: tx.date)
@@ -81,17 +108,20 @@ struct SearchView: View {
         }
         return dict.keys.sorted(by: >).map { day in
             let label: String
-            if cal.isDateInToday(day)          { label = "Today" }
-            else if cal.isDateInYesterday(day) { label = "Yesterday" }
+            if cal.isDateInToday(day)          { label = loc("common.today") }
+            else if cal.isDateInYesterday(day) { label = loc("common.yesterday") }
             else {
-                let weekAgo = cal.date(byAdding: .day, value: -7, to: Date())!
+                let weekAgo = cal.safeDate(byAdding: .day, value: -7, to: Date())
+                let df = DateFormatter()
+                df.locale = locale
                 if day >= weekAgo {
-                    label = day.formatted(.dateTime.weekday(.wide))
+                    df.dateFormat = DateFormatter.dateFormat(fromTemplate: "EEEE", options: 0, locale: locale)
                 } else {
-                    label = day.formatted(.dateTime.day().month(.wide).year())
+                    df.dateFormat = DateFormatter.dateFormat(fromTemplate: "d MMMM yyyy", options: 0, locale: locale)
                 }
+                label = df.string(from: day)
             }
-            return (label: label, date: day, txs: dict[day]!.sorted { $0.date > $1.date })
+            return (label: label, date: day, txs: (dict[day] ?? []).sorted { $0.date > $1.date })
         }
     }
 
@@ -103,18 +133,17 @@ struct SearchView: View {
     var totalAmount: Double { filtered.reduce(0) { $0 + $1.amount } }
 
     var body: some View {
-        NavigationStack {
-            ZStack {
-                AppTheme.bg.ignoresSafeArea()
+        ZStack(alignment: .top) {
+            AppTheme.bg.ignoresSafeArea()
 
-                VStack(spacing: 0) {
-                    // Search bar
+            VStack(spacing: 0) {
+                // Search bar
                     HStack(spacing: 12) {
                         HStack(spacing: 10) {
                             Image(systemName: "magnifyingglass")
                                 .font(.system(size: 16))
                                 .foregroundStyle(AppTheme.textSecondary)
-                            TextField("Search transactions...", text: $query)
+                            TextField(loc("search.placeholder"), text: $query)
                                 .font(.system(size: 16))
                                 .foregroundStyle(AppTheme.textPrimary)
                                 .focused($focused)
@@ -132,7 +161,7 @@ struct SearchView: View {
                         .overlay(RoundedRectangle(cornerRadius: 14)
                             .stroke(focused ? AppTheme.accent.opacity(0.5) : Color.clear, lineWidth: 1.5))
 
-                        Button("Cancel") { HapticManager.shared.tap(); dismiss() }
+                        Button(loc("common.cancel")) { HapticManager.shared.tap(); dismiss() }
                             .foregroundStyle(AppTheme.textSecondary).font(.system(size: 15))
                     }
                     .padding(.horizontal, 22).padding(.top, 16).padding(.bottom, 10)
@@ -144,14 +173,28 @@ struct SearchView: View {
                                 Button {
                                     HapticManager.shared.tap()
                                     withAnimation(.spring(response: 0.3)) { selectedPeriod = period }
+                                    if period == .custom { showCustomDateSheet = true }
                                 } label: {
                                     HStack(spacing: 5) {
-                                        if period != .all {
+                                        if period != .all_period {
                                             Image(systemName: "calendar")
                                                 .font(.system(size: 10, weight: .medium))
                                         }
-                                        Text(period.rawValue)
-                                            .font(.system(size: 12, weight: selectedPeriod == period ? .semibold : .regular))
+                                        if period == .custom && selectedPeriod == .custom {
+                                            // Show the selected date range, locale-aware
+                                            let locale = LanguageManager.shared.currentLocale
+                                            let df: DateFormatter = {
+                                                let f = DateFormatter()
+                                                f.locale = locale
+                                                f.dateFormat = DateFormatter.dateFormat(fromTemplate: "d MMM", options: 0, locale: locale)
+                                                return f
+                                            }()
+                                            Text("\(df.string(from: customStart)) – \(df.string(from: customEnd))")
+                                                .font(.system(size: 12, weight: .semibold))
+                                        } else {
+                                            Text(period.title)
+                                                .font(.system(size: 12, weight: selectedPeriod == period ? .semibold : .regular))
+                                        }
                                     }
                                     .foregroundStyle(selectedPeriod == period ? AppTheme.bg : AppTheme.textSecondary)
                                     .padding(.horizontal, 12).padding(.vertical, 7)
@@ -168,12 +211,12 @@ struct SearchView: View {
                     if !availableCategories.isEmpty {
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 8) {
-                                FilterPill(label: "All categories", isSelected: selectedFilter == nil) {
+                                FilterPill(label: loc("search.all_categories"), isSelected: selectedFilter == nil) {
                                     HapticManager.shared.tap()
                                     withAnimation(.spring(response: 0.3)) { selectedFilter = nil }
                                 }
                                 ForEach(availableCategories, id: \.self) { cat in
-                                    FilterPill(label: cat.rawValue, isSelected: selectedFilter == cat, color: cat.color) {
+                                    FilterPill(label: cat.shortLabel, isSelected: selectedFilter == cat, color: cat.color) {
                                         HapticManager.shared.tap()
                                         withAnimation(.spring(response: 0.3)) {
                                             selectedFilter = selectedFilter == cat ? nil : cat
@@ -192,7 +235,7 @@ struct SearchView: View {
                         VStack(spacing: 14) {
                             Image(systemName: "magnifyingglass")
                                 .font(.system(size: 40)).foregroundStyle(AppTheme.textSecondary)
-                            Text(query.isEmpty ? "No transactions in this period" : "No results for \"\(query)\"")
+                            Text(query.isEmpty ? loc("search.nil_period") : String(format: loc("search.no_results"), query))
                                 .font(.system(size: 15)).foregroundStyle(AppTheme.textSecondary)
                                 .multilineTextAlignment(.center)
                         }
@@ -202,7 +245,10 @@ struct SearchView: View {
                             VStack(spacing: 0) {
                                 // Summary bar
                                 HStack {
-                                    Text("\(filtered.count) transaction\(filtered.count == 1 ? "" : "s")")
+                                    let fmt = filtered.count == 1
+                                        ? loc("search.result_count")
+                                        : loc("search.results_count")
+                                    Text(String(format: fmt, filtered.count))
                                         .font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
                                     Spacer()
                                     Text(totalAmount >= 0
@@ -255,9 +301,7 @@ struct SearchView: View {
                     }
                 }
             }
-            .navigationBarHidden(true)
-        }
-        .onAppear {
+            .onAppear {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { focused = true }
         }
         .sheet(item: $selectedTx) { tx in
@@ -265,6 +309,14 @@ struct SearchView: View {
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
                 .presentationBackground(AppTheme.bg)
+                .preferredColorScheme(appColorScheme())
+        }
+        .sheet(isPresented: $showCustomDateSheet) {
+            CustomDateRangeSheet(startDate: $customStart, endDate: $customEnd)
+                .presentationDetents([.medium])
+                .presentationDragIndicator(.visible)
+                .presentationBackground(AppTheme.bg)
+                .preferredColorScheme(appColorScheme())
         }
     }
 }
@@ -294,9 +346,17 @@ struct SearchTxRow: View {
 
     private var formattedDate: String {
         let cal = Calendar.current
-        if cal.isDateInToday(tx.date)     { return "Today, \(tx.date.formatted(date: .omitted, time: .shortened))" }
-        if cal.isDateInYesterday(tx.date) { return "Yesterday, \(tx.date.formatted(date: .omitted, time: .shortened))" }
-        return tx.date.formatted(date: .abbreviated, time: .shortened)
+        let locale = LanguageManager.shared.currentLocale
+        let df = DateFormatter()
+        df.locale = locale
+        df.dateFormat = DateFormatter.dateFormat(fromTemplate: "j:mm", options: 0, locale: locale)
+        let timeStr = df.string(from: tx.date)
+        if cal.isDateInToday(tx.date)     { return "\(loc("common.today")), \(timeStr)" }
+        if cal.isDateInYesterday(tx.date) { return "\(loc("common.yesterday")), \(timeStr)" }
+        let df2 = DateFormatter()
+        df2.locale = locale
+        df2.dateFormat = DateFormatter.dateFormat(fromTemplate: "d MMM j:mm", options: 0, locale: locale)
+        return df2.string(from: tx.date)
     }
 
     var body: some View {
@@ -317,7 +377,7 @@ struct SearchTxRow: View {
                     Text(formattedDate)
                         .font(.system(size: 11))
                         .foregroundStyle(AppTheme.textSecondary)
-                    Text(tx.category.rawValue)
+                    Text(tx.category.shortLabel)
                         .font(.system(size: 10, weight: .medium))
                         .foregroundStyle(tx.category.color)
                         .padding(.horizontal, 6)
@@ -331,9 +391,9 @@ struct SearchTxRow: View {
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(tx.amount >= 0 ? AppTheme.green : AppTheme.textPrimary)
                 if tx.amount >= 0 {
-                    Text("Income").font(.system(size: 10)).foregroundStyle(AppTheme.textSecondary)
+                    Text(loc("home.income")).font(.system(size: 10)).foregroundStyle(AppTheme.textSecondary)
                 } else {
-                    Text(tx.type).font(.system(size: 10)).foregroundStyle(AppTheme.textSecondary)
+                    Text(tx.displayType).font(.system(size: 10)).foregroundStyle(AppTheme.textSecondary)
                 }
             }
         }
@@ -357,11 +417,30 @@ struct TransactionDetailSheet: View {
     @State private var editDate = Date()
     @State private var editNotes = ""
     @State private var showDeleteConfirm = false
+    
+    /// Locale-aware short time formatter (e.g. "12:30 PM" / "12.30")
+    static func shortTimeString(from date: Date) -> String {
+        let df = DateFormatter()
+        df.locale = LanguageManager.shared.currentLocale
+        df.timeStyle = .short
+        df.dateStyle = .none
+        return df.string(from: date)
+    }
 
     enum EditType: String, CaseIterable {
         case expense = "Expense"
         case income  = "Income"
         var color: Color { self == .expense ? AppTheme.red : AppTheme.accent }
+
+        /// Localized label for the segmented picker. The rawValue stays English
+        /// since it's used purely internally (Hashable for ForEach); it never
+        /// reaches the UI.
+        var localizedLabel: String {
+            switch self {
+            case .expense: return loc("tx.type.purchase")
+            case .income:  return loc("tx.type.income")
+            }
+        }
     }
 
     private var formattedAmount: String {
@@ -394,12 +473,12 @@ struct TransactionDetailSheet: View {
                     .padding(.top, 8)
                 }
             }
-            .navigationTitle(isEditing ? "Edit Transaction" : "Transaction")
+            .navigationTitle(isEditing ? loc("tx.edit.title") : loc("tx.detail.title"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(AppTheme.bg, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(isEditing ? "Cancel" : "Close") {
+                    Button(isEditing ? loc("common.cancel") : loc("common.close")) {
                         if isEditing {
                             withAnimation { isEditing = false }
                         } else {
@@ -410,7 +489,7 @@ struct TransactionDetailSheet: View {
                 }
                 ToolbarItem(placement: .primaryAction) {
                     if isEditing {
-                        Button("Save") { saveEdits() }
+                        Button(loc("common.save")) { saveEdits() }
                             .font(.system(size: 15, weight: .semibold))
                             .foregroundStyle(AppTheme.accent)
                     } else {
@@ -425,16 +504,16 @@ struct TransactionDetailSheet: View {
                 }
             }
         }
-        .confirmationDialog("Delete transaction?", isPresented: $showDeleteConfirm, titleVisibility: .visible) {
-            Button("Delete", role: .destructive) {
+        .confirmationDialog(loc("tx.delete_prompt"), isPresented: $showDeleteConfirm, titleVisibility: .visible) {
+            Button(loc("common.delete"), role: .destructive) {
                 context.delete(tx)
                 try? context.save()
                 HapticManager.shared.warning()
                 dismiss()
             }
-            Button("Cancel", role: .cancel) {}
+            Button(loc("common.cancel"), role: .cancel) {}
         } message: {
-            Text("This cannot be undone.")
+            Text(loc("tx.delete_confirm"))
         }
     }
 
@@ -453,6 +532,23 @@ struct TransactionDetailSheet: View {
                         .foregroundStyle(.white)
                 }
 
+                // Subtype badge — appears above the amount when the tx has
+                // been marked as Refund or Transfer. Visual cue that this tx
+                // is treated specially in budget calculations (refund
+                // subtracts from bucket; transfer is ignored entirely).
+                if tx.txSubtype != .normal {
+                    HStack(spacing: 5) {
+                        Image(systemName: tx.txSubtype.icon)
+                            .font(.system(size: 10, weight: .semibold))
+                        Text(tx.txSubtype.displayLabel)
+                            .font(.system(size: 11, weight: .bold))
+                    }
+                    .foregroundStyle(AppTheme.orange)
+                    .padding(.horizontal, 10).padding(.vertical, 4)
+                    .background(AppTheme.orange.opacity(0.15), in: Capsule())
+                    .overlay(Capsule().stroke(AppTheme.orange.opacity(0.3), lineWidth: 1))
+                }
+
                 Text(tx.amount >= 0 ? "+\(formattedAmount)" : "-\(formattedAmount)")
                     .font(.system(size: 34, weight: .bold))
                     .foregroundStyle(tx.amount >= 0 ? AppTheme.green : AppTheme.red)
@@ -464,10 +560,12 @@ struct TransactionDetailSheet: View {
                 if CurrencyManager.shared.isLoading {
                     HStack(spacing: 6) {
                         ProgressView().scaleEffect(0.7).tint(AppTheme.textSecondary)
-                        Text("Updating rate...").font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                        Text(loc("common.updating_rate")).font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
                     }
                 } else if let updated = CurrencyManager.shared.lastUpdated {
-                    Text("Rate: \(CurrencyManager.shared.rateLabel) as of \(updated.formatted(date: .omitted, time: .shortened))")
+                    Text(String(format: loc("common.rate_as_of"),
+                                CurrencyManager.shared.rateLabel,
+                                Self.shortTimeString(from: updated)))
                         .font(.system(size: 11))
                         .foregroundStyle(AppTheme.textSecondary)
                 }
@@ -476,22 +574,31 @@ struct TransactionDetailSheet: View {
 
             // Details card
             VStack(spacing: 0) {
-                DetailRow(label: "Name", value: tx.name)
+                DetailRow(label: loc("common.name"), value: tx.name)
                 Divider().background(AppTheme.cardMid).padding(.horizontal, 18)
-                DetailRow(label: "Date", value: tx.date.formatted(date: .complete, time: .shortened))
+                DetailRow(label: loc("common.date"), value: tx.displayDate)
                 Divider().background(AppTheme.cardMid).padding(.horizontal, 18)
-                DetailRow(label: "Category", value: tx.category.rawValue)
+                DetailRow(label: loc("common.category"), value: tx.category.displayLabel)
                 Divider().background(AppTheme.cardMid).padding(.horizontal, 18)
-                DetailRow(label: "Type", value: tx.type)
+                DetailRow(label: loc("common.type"), value: tx.displayType)
                 Divider().background(AppTheme.cardMid).padding(.horizontal, 18)
-                DetailRow(label: "Currency", value: tx.currency)
+                DetailRow(label: loc("common.currency"), value: tx.currency)
                 if !tx.notes.isEmpty {
                     Divider().background(AppTheme.cardMid).padding(.horizontal, 18)
-                    DetailRow(label: "Notes", value: tx.notes)
+                    DetailRow(label: loc("common.notes"), value: tx.displayNotes)
                 }
             }
             .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 18))
             .padding(.horizontal, 22)
+
+            // Subtype actions — only for expense tx since refund/transfer
+            // semantics don't apply to income (a refund of income doesn't
+            // make sense, and inter-account transfers are usually logged as
+            // expense tx pairs anyway).
+            if tx.amount < 0 {
+                subtypeActions
+                    .padding(.horizontal, 22)
+            }
 
             // Delete button
             Button {
@@ -500,7 +607,7 @@ struct TransactionDetailSheet: View {
             } label: {
                 HStack(spacing: 10) {
                     Image(systemName: "trash").font(.system(size: 16))
-                    Text("Delete Transaction").font(.system(size: 15, weight: .semibold))
+                    Text(loc("tx.delete")).font(.system(size: 15, weight: .semibold))
                 }
                 .foregroundStyle(AppTheme.red)
                 .frame(maxWidth: .infinity)
@@ -511,6 +618,115 @@ struct TransactionDetailSheet: View {
             .buttonStyle(ScaleButtonStyle())
             .padding(.horizontal, 22)
             .padding(.bottom, 20)
+        }
+    }
+
+    // MARK: - Subtype actions
+    //
+    // "Mark as Refund / Transfer" actions for an existing tx. This is the
+    // primary way users assign a subtype — at create time the picker felt
+    // out of place ("am I logging a brand-new refund?"), but here the
+    // semantic is clean: "this past tx came back / was a transfer".
+    //
+    // Layout: when subtype = .normal, show two equal-weight buttons (Refund
+    // + Transfer). When already non-normal, show the badge + a single
+    // "Reset to Normal" button so user can undo.
+    @ViewBuilder
+    private var subtypeActions: some View {
+        VStack(spacing: 10) {
+            HStack(spacing: 6) {
+                Image(systemName: "arrow.uturn.backward.circle")
+                    .font(.system(size: 12))
+                    .foregroundStyle(AppTheme.textSecondary)
+                Text(loc("tx.subtype.section_title"))
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(AppTheme.textSecondary)
+                Spacer()
+            }
+
+            if tx.txSubtype == .normal {
+                Text(loc("tx.subtype.section_hint"))
+                    .font(.system(size: 11))
+                    .foregroundStyle(AppTheme.textSecondary.opacity(0.8))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                HStack(spacing: 10) {
+                    subtypeButton(
+                        for: .refund,
+                        title: loc("tx.subtype.mark_refund"),
+                        subtitle: loc("tx.subtype.mark_refund_hint")
+                    )
+                    subtypeButton(
+                        for: .transfer,
+                        title: loc("tx.subtype.mark_transfer"),
+                        subtitle: loc("tx.subtype.mark_transfer_hint")
+                    )
+                }
+            } else {
+                // Already marked — show explanation + reset button.
+                Text(currentSubtypeExplanation)
+                    .font(.system(size: 11))
+                    .foregroundStyle(AppTheme.textSecondary.opacity(0.8))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Button {
+                    HapticManager.shared.tap()
+                    tx.txSubtype = .normal
+                    try? context.save()
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "arrow.uturn.backward")
+                            .font(.system(size: 13, weight: .semibold))
+                        Text(loc("tx.subtype.reset"))
+                            .font(.system(size: 13, weight: .semibold))
+                    }
+                    .foregroundStyle(AppTheme.textSecondary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 12))
+                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(AppTheme.cardMid, lineWidth: 1))
+                }
+                .buttonStyle(ScaleButtonStyle())
+            }
+        }
+    }
+
+    /// Compact "Mark as X" button used inside the subtypeActions HStack.
+    @ViewBuilder
+    private func subtypeButton(for subtype: TxSubtype, title: String, subtitle: String) -> some View {
+        Button {
+            HapticManager.shared.tap()
+            tx.txSubtype = subtype
+            try? context.save()
+        } label: {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 6) {
+                    Image(systemName: subtype.icon)
+                        .font(.system(size: 13, weight: .semibold))
+                    Text(title)
+                        .font(.system(size: 13, weight: .semibold))
+                }
+                Text(subtitle)
+                    .font(.system(size: 10))
+                    .foregroundStyle(AppTheme.textSecondary)
+                    .multilineTextAlignment(.leading)
+                    .lineLimit(2)
+            }
+            .foregroundStyle(AppTheme.orange)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(12)
+            .background(AppTheme.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12).stroke(AppTheme.orange.opacity(0.25), lineWidth: 1))
+        }
+        .buttonStyle(ScaleButtonStyle())
+    }
+
+    /// Loc string explaining what the current subtype means for budgeting.
+    /// Drives the explanation text that appears above the Reset button when
+    /// a tx is already marked non-normal.
+    private var currentSubtypeExplanation: String {
+        switch tx.txSubtype {
+        case .normal:   return ""
+        case .refund:   return loc("tx.subtype.refund_explainer")
+        case .transfer: return loc("tx.subtype.transfer_explainer")
         }
     }
 
@@ -525,7 +741,7 @@ struct TransactionDetailSheet: View {
                         HapticManager.shared.tap()
                         withAnimation(.spring(response: 0.3)) { editType = type }
                     } label: {
-                        Text(type.rawValue)
+                        Text(type.localizedLabel)
                             .font(.system(size: 15, weight: .semibold))
                             .foregroundStyle(editType == type ? AppTheme.bg : AppTheme.textSecondary)
                             .frame(maxWidth: .infinity)
@@ -540,7 +756,7 @@ struct TransactionDetailSheet: View {
 
             // Amount + currency
             VStack(spacing: 8) {
-                Text("Amount").font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
+                Text(loc("common.amount")).font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
                     .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 22)
                 HStack(spacing: 10) {
                     // Currency toggle
@@ -583,7 +799,7 @@ struct TransactionDetailSheet: View {
 
             // Category
             VStack(spacing: 8) {
-                Text("Category").font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
+                Text(loc("common.category")).font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
                     .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 22)
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
@@ -607,7 +823,7 @@ struct TransactionDetailSheet: View {
 
             // Date
             VStack(spacing: 8) {
-                Text("Date").font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
+                Text(loc("common.date")).font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
                     .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 22)
                 DatePicker("", selection: $editDate, displayedComponents: [.date, .hourAndMinute])
                     .datePickerStyle(.compact).labelsHidden().tint(AppTheme.accent)
@@ -615,6 +831,7 @@ struct TransactionDetailSheet: View {
             }
 
             SheetField(label: "Notes (optional)", placeholder: "Add a note...", text: $editNotes)
+                .padding(.horizontal, 22)
 
             Spacer(minLength: 40)
         }
@@ -639,7 +856,7 @@ struct TransactionDetailSheet: View {
         tx.iconBgHex = editCategory.iconBg
         tx.date      = editDate
         tx.notes     = editNotes
-        tx.type      = editType == .expense ? "Purchase" : "Income"
+        tx.type      = editType == .expense ? "tx.type.purchase" : "tx.type.income"
         try? context.save()
         HapticManager.shared.success()
         withAnimation { isEditing = false }
@@ -657,122 +874,6 @@ struct DetailRow: View {
                 .multilineTextAlignment(.trailing)
         }
         .padding(.horizontal, 18).padding(.vertical, 14)
-    }
-}
-
-// MARK: - Notification Center
-
-struct NotificationCenterView: View {
-    @Environment(\.dismiss) private var dismiss
-    @Query(sort: \SalarySchedule.createdAt) private var schedules: [SalarySchedule]
-    @Environment(\.modelContext) private var context
-
-    var notifications: [AppNotification] {
-        var result: [AppNotification] = []
-        for s in schedules where s.isActive {
-            let days = SalaryDateEngine.daysUntilPay(dayOfMonth: s.dayOfMonth)
-            let date = SalaryDateEngine.nextPayDate(dayOfMonth: s.dayOfMonth)
-            let adjusted = SalaryDateEngine.wasAdjusted(intended: s.dayOfMonth, actual: date)
-            if days == 0 {
-                result.append(AppNotification(
-                    icon: "banknote.fill", iconColor: AppTheme.accent,
-                    title: "Payday today!",
-                    body: "\(s.label) - \(CurrencyManager.shared.formatted(s.amount, currency: s.currency)) should arrive today.",
-                    time: "Today", isUrgent: true))
-            } else if days == 1 {
-                result.append(AppNotification(
-                    icon: "clock.fill", iconColor: AppTheme.orange,
-                    title: "Payday tomorrow",
-                    body: "\(s.label) arrives tomorrow\(adjusted ? " (date adjusted from weekend)" : "").",
-                    time: "Tomorrow", isUrgent: true))
-            } else if days <= 7 {
-                result.append(AppNotification(
-                    icon: "calendar.badge.clock", iconColor: AppTheme.blue,
-                    title: "Payday in \(days) days",
-                    body: "\(s.label) - \(date.formatted(.dateTime.weekday(.wide).day().month(.wide)))\(adjusted ? " (adjusted)" : "").",
-                    time: "In \(days) days", isUrgent: false))
-            }
-        }
-        if result.isEmpty {
-            result.append(AppNotification(
-                icon: "checkmark.circle.fill", iconColor: AppTheme.accent,
-                title: "All caught up!",
-                body: "No upcoming paydays in the next 7 days.",
-                time: "Now", isUrgent: false))
-        }
-        return result
-    }
-
-    var body: some View {
-        NavigationStack {
-            ZStack {
-                AppTheme.bg.ignoresSafeArea()
-                ScrollView(showsIndicators: false) {
-                    VStack(spacing: 12) {
-                        ForEach(Array(notifications.enumerated()), id: \.offset) { _, notif in
-                            NotificationRow(notif: notif)
-                                .padding(.horizontal, 22)
-                        }
-                        Spacer(minLength: 40)
-                    }
-                    .padding(.top, 8)
-                }
-            }
-            .navigationTitle("Notifications")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(AppTheme.bg, for: .navigationBar)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Done") { dismiss() }
-                        .foregroundStyle(AppTheme.textSecondary)
-                }
-            }
-        }
-    }
-}
-
-struct AppNotification {
-    let icon: String
-    let iconColor: Color
-    let title: String
-    let body: String
-    let time: String
-    let isUrgent: Bool
-}
-
-struct NotificationRow: View {
-    let notif: AppNotification
-    var body: some View {
-        HStack(spacing: 14) {
-            ZStack {
-                Circle()
-                    .fill(notif.iconColor.opacity(0.15))
-                    .frame(width: 44, height: 44)
-                Image(systemName: notif.icon)
-                    .font(.system(size: 20))
-                    .foregroundStyle(notif.iconColor)
-            }
-            VStack(alignment: .leading, spacing: 4) {
-                HStack {
-                    Text(notif.title)
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(AppTheme.textPrimary)
-                    Spacer()
-                    Text(notif.time)
-                        .font(.system(size: 11))
-                        .foregroundStyle(AppTheme.textSecondary)
-                }
-                Text(notif.body)
-                    .font(.system(size: 13))
-                    .foregroundStyle(AppTheme.textSecondary)
-                    .lineSpacing(2)
-            }
-        }
-        .padding(14)
-        .background(notif.isUrgent ? notif.iconColor.opacity(0.06) : AppTheme.cardDark,
-                    in: RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16)
-            .stroke(notif.isUrgent ? notif.iconColor.opacity(0.2) : Color.clear, lineWidth: 1))
     }
 }
 
@@ -800,9 +901,34 @@ struct AddTransactionSheet: View {
     @State private var saveInPreferred = false
     @State private var showBudgetAlert = false
     @State private var pendingBudgetAlert: BudgetAlert? = nil
+    @State private var showConversionPaywall = false
+    /// Receipt scanner moved here from the Home FAB. Royal-only feature; tapping
+    /// shows the paywall first when the user lacks access.
+    @State private var showScanFlow: Bool = false
+    @State private var showScanPaywall: Bool = false
+    // Subtype is intentionally NOT a field on the create form — assigning
+    // refund/transfer to a brand-new tx without a parent is rare and
+    // confusing. Instead, the user creates a normal tx, then taps it in
+    // the list to access "Mark as Refund/Transfer" actions where the
+    // intent is clear (this existing tx came back / this is a movement).
+    // See TransactionDetailSheet's subtypeActions section.
+    /// Observe PremiumManager so the currency menu, scan-receipt entry, and
+    /// effectiveCurrency/effectiveAmount logic re-render when the user
+    /// upgrades/downgrades while this sheet is open. Without this, finishing
+    /// a purchase in the paywall presented from inside the sheet leaves the
+    /// menu stuck in its locked state — user has to dismiss and re-open.
+    @State private var pm = PremiumManager.shared
 
     private var monthlyIncome: Double {
-        salarySchedules.filter { $0.isActive }.reduce(0) { $0 + $1.amount }
+        let scheduled = salarySchedules.filter { $0.isActive }.reduce(0) { $0 + $1.amount }
+        let cal = Calendar.current
+        let monthStart = cal.safeDate(from: cal.dateComponents([.year, .month], from: Date()))
+        // Add any extra income recorded this month (bonus, freelance, etc.) — exclude salary
+        // to avoid double-counting since salary schedules already cover that
+        let extraIncome = allCardTransactions
+            .filter { $0.amount > 0 && $0.date >= monthStart && $0.category != .salary }
+            .reduce(0) { $0 + $1.amount }
+        return scheduled + extraIncome
     }
 
     private var allCardTransactions: [TxRecord] {
@@ -810,26 +936,102 @@ struct AddTransactionSheet: View {
     }
 
     private var preferredCurrency: String { CurrencyManager.shared.preferredCurrency }
-    private var isForeignCurrency: Bool { currency != preferredCurrency }
 
-    private var convertedAmount: Double {
-        CurrencyManager.shared.convert(amount, from: currency, to: preferredCurrency)
+    /// Mata uang dari kartu yang sedang dipilih — ini yang jadi acuan konversi,
+    /// bukan preferredCurrency global. Bug lama pakai preferredCurrency sehingga
+    /// konversi salah ketika kartu punya currency berbeda dari setting user.
+    private var selectedCardCurrency: String {
+        guard !vm.cards.isEmpty else { return preferredCurrency }
+        let card = vm.cards[min(selectedCardIndex, vm.cards.count - 1)]
+        return card.currency.isEmpty ? preferredCurrency : card.currency
     }
 
-    private var effectiveCurrency: String { saveInPreferred ? preferredCurrency : currency }
-    private var effectiveAmount: Double   { saveInPreferred ? convertedAmount : amount }
+    /// Bug 2 fix: bandingkan dengan kartu yang dipilih, bukan preferredCurrency.
+    /// Sebelumnya: currency != preferredCurrency
+    /// Sesudah:    currency != selectedCardCurrency
+    /// Efek: panel "Konversi Cerdas" muncul kapanpun mata uang transaksi ≠ kartu.
+    private var isForeignCurrency: Bool { currency != selectedCardCurrency }
 
-    // Expense and income categories are now separate
+    /// Bug 1+2 fix: konversi ke mata uang kartu, bukan preferredCurrency.
+    private var convertedAmount: Double {
+        CurrencyManager.shared.convert(amount, from: currency, to: selectedCardCurrency)
+    }
+
+    /// Bug 1 fix: ketika mata uang transaksi berbeda dari kartu, SELALU konversi.
+    /// saveInPreferred dipakai hanya ketika currencies sama (sebagai opsional).
+    ///
+    /// Premium gate (defense-in-depth): if the user lacks Smart Conversion
+    /// access, we never trigger the converter at the save layer — even if
+    /// `currency` drifted away from `selectedCardCurrency` during a race
+    /// between init and onAppear, or via some future code path. The menu
+    /// itself is also gated (it shows the paywall instead), so in practice
+    /// these branches never differ. This guard is the last line of defense.
+    private var effectiveCurrency: String {
+        if !PremiumManager.shared.canAccess(.smartConversion) {
+            return selectedCardCurrency
+        }
+        return isForeignCurrency ? selectedCardCurrency : (saveInPreferred ? selectedCardCurrency : currency)
+    }
+    private var effectiveAmount: Double {
+        if !PremiumManager.shared.canAccess(.smartConversion) {
+            // Free users have currency forced to card currency above; the
+            // typed amount is therefore already in the right unit and needs
+            // no conversion.
+            return amount
+        }
+        return isForeignCurrency ? convertedAmount : (saveInPreferred ? convertedAmount : amount)
+    }
+
+    /// Bug 3 fix: jumlahkan semua transaksi dengan konversi mata uang yang benar.
+    /// Sebelumnya: card.transactions.reduce(0) { $0 + $1.amount } — tidak konversi!
+    ///   Kartu IDR dengan tx +5.000.000 IDR dan +1.000 USD → salah jadi 5.001.000.
+    /// Sesudah: tiap tx dikonversi ke mata uang kartu sebelum dijumlahkan,
+    ///   sama persis dengan liveTransactionBalance() di BankCardHelpers.
+    private var selectedCardBalance: Double {
+        guard !vm.cards.isEmpty else { return 0 }
+        let card = vm.cards[min(selectedCardIndex, vm.cards.count - 1)]
+        let cardCur = card.currency.isEmpty ? preferredCurrency : card.currency
+        let txBalance = card.transactions.reduce(0.0) { sum, tx in
+            sum + CurrencyManager.shared.convert(tx.amount, from: tx.currency, to: cardCur)
+        }
+        return card.balance + txBalance
+    }
+
+    /// Bug 3 fix: bandingkan dalam mata uang kartu secara konsisten.
+    /// Sebelumnya: selectedCardBalance (salah) - effectiveAmount (kadang IDR, kadang USD)
+    /// Sesudah:    selalu konversi ke selectedCardCurrency sebelum dibandingkan.
+    private var wouldGoNegative: Bool {
+        guard txType == .expense, amount > 0 else { return false }
+        let amountInCardCurrency: Double
+        if saveInPreferred {
+            // sudah dikonversi ke selectedCardCurrency
+            amountInCardCurrency = convertedAmount
+        } else {
+            // konversi amount ke selectedCardCurrency untuk perbandingan
+            amountInCardCurrency = CurrencyManager.shared.convert(
+                amount, from: currency, to: selectedCardCurrency
+            )
+        }
+        return selectedCardBalance - amountInCardCurrency < 0
+    }
     private var availableCategories: [TxCategory] {
         switch txType {
-        case .expense: return [.shopping, .food, .travel, .bills, .transport, .health, .other]
+        case .expense: return [.shopping, .food, .travel, .bills, .transport, .health, .investment, .other]
         case .income:  return [.salary, .freelance, .business, .investment, .bonus, .gift, .incomeOther]
         }
     }
 
     enum AddTxType: String, CaseIterable {
-        case expense = "Expense"
-        case income  = "Income"
+        case expense
+        case income
+        
+        var title: String {
+                switch self {
+                case .expense: return loc("tx.expense")
+                case .income:  return loc("tx.income")
+                }
+            }
+
         var color: Color { self == .expense ? AppTheme.red : AppTheme.accent }
         var icon: String { self == .expense ? "arrow.up.circle.fill" : "arrow.down.circle.fill" }
     }
@@ -837,19 +1039,102 @@ struct AddTransactionSheet: View {
     var amount: Double { Double(amountText) ?? 0 }
     var isValid: Bool  { !name.trimmingCharacters(in: .whitespaces).isEmpty && amount > 0 }
 
+    @ViewBuilder
+    var currencyButtonLabel: some View {
+        HStack(spacing: 6) {
+            Text(CurrencyManager.symbol(for: currency))
+                .font(.system(size: 15, weight: .bold))
+                .foregroundStyle(AppTheme.accent)
+            Text(currency)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(AppTheme.textSecondary)
+            Image(systemName: "chevron.up.chevron.down")
+                .font(.system(size: 10))
+                .foregroundStyle(AppTheme.textSecondary)
+        }
+        .padding(.horizontal, 14).padding(.vertical, 14)
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(AppTheme.accent.opacity(0.3), lineWidth: 1))
+    }
+
     var convertedPreview: String {
         guard amount > 0, currency != CurrencyManager.shared.preferredCurrency else { return "" }
         let pref = CurrencyManager.shared.preferredCurrency
         let conv = CurrencyManager.shared.convert(amount, from: currency, to: pref)
-        return "≈ \(CurrencyManager.shared.formatted(conv, currency: pref)) in \(pref)"
+        return String(format: loc("tx.converted_in"),
+                      CurrencyManager.shared.formatted(conv, currency: pref), pref)
     }
 
     var body: some View {
-        NavigationStack {
+        // Touch pm.plan so SwiftUI's @Observable tracking registers this body
+        // as a dependent of PremiumManager.shared. After a successful upgrade
+        // the body re-evaluates and the locked currency-menu / scan-receipt
+        // entry refresh without needing the user to re-open the sheet.
+        let _ = pm.plan
+        return NavigationStack {
             ZStack {
                 AppTheme.bg.ignoresSafeArea()
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 22) {
+
+                        // Scan Receipt entry — opens the redesigned 3-screen scan
+                        // flow inline. Only meaningful for expenses (you can't
+                        // scan a salary), and only when the user has at least
+                        // one card to save the resulting tx to.
+                        if !vm.cards.isEmpty && txType == .expense {
+                            Button {
+                                HapticManager.shared.tap()
+                                if PremiumManager.shared.canAccess(.scanReceipt) {
+                                    showScanFlow = true
+                                } else {
+                                    showScanPaywall = true
+                                }
+                            } label: {
+                                HStack(spacing: 12) {
+                                    ZStack {
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .fill(AppTheme.accent.opacity(0.15))
+                                            .frame(width: 44, height: 44)
+                                        Image(systemName: "doc.text.viewfinder")
+                                            .font(.system(size: 20, weight: .semibold))
+                                            .foregroundStyle(AppTheme.accent)
+                                    }
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        HStack(spacing: 6) {
+                                            Text(loc("receipt.entry.title"))
+                                                .font(.system(size: 15, weight: .bold))
+                                                .foregroundStyle(AppTheme.textPrimary)
+                                            if !PremiumManager.shared.canAccess(.scanReceipt) {
+                                                Image(systemName: "crown.fill")
+                                                    .font(.system(size: 9, weight: .bold))
+                                                    .foregroundStyle(.white)
+                                                    .padding(3)
+                                                    .background(Color(hex: "#F59E0B"), in: Circle())
+                                            }
+                                        }
+                                        Text(loc("receipt.entry.subtitle"))
+                                            .font(.system(size: 12))
+                                            .foregroundStyle(AppTheme.textSecondary)
+                                    }
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 13, weight: .semibold))
+                                        .foregroundStyle(AppTheme.textSecondary)
+                                }
+                                .padding(14)
+                                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 14)
+                                        .stroke(AppTheme.accent.opacity(0.25), lineWidth: 1)
+                                )
+                            }
+                            .buttonStyle(ScaleButtonStyle())
+                            .padding(.horizontal, 22)
+                            .padding(.top, 8)
+                            .opacity(appeared ? 1 : 0)
+                            .offset(y: appeared ? 0 : 20)
+                            .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.04), value: appeared)
+                        }
 
                         // Type
                         HStack(spacing: 0) {
@@ -864,7 +1149,7 @@ struct AddTransactionSheet: View {
                                 } label: {
                                     HStack(spacing: 8) {
                                         Image(systemName: type.icon).font(.system(size: 15))
-                                        Text(type.rawValue).font(.system(size: 15, weight: .semibold))
+                                        Text(type.title).font(.system(size: 15, weight: .semibold))
                                     }
                                     .foregroundStyle(txType == type ? AppTheme.bg : AppTheme.textSecondary)
                                     .frame(maxWidth: .infinity).padding(.vertical, 13)
@@ -878,34 +1163,45 @@ struct AddTransactionSheet: View {
 
                         // Amount + currency toggle
                         VStack(spacing: 8) {
-                            Text("Amount").font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
+                            Text(loc("common.amount")).font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
                                 .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 22)
                             HStack(spacing: 10) {
-                                Menu {
-                                    ForEach(CurrencyManager.supportedCurrencies, id: \.code) { c in
-                                        Button {
-                                            HapticManager.shared.tap()
-                                            currency = c.code
-                                            if c.code == preferredCurrency { saveInPreferred = false }
+                                Group {
+                                    if PremiumManager.shared.canAccess(.smartConversion) {
+                                        // Premium: full currency menu
+                                        Menu {
+                                            ForEach(CurrencyManager.supportedCurrencies, id: \.code) { c in
+                                                Button {
+                                                    HapticManager.shared.tap()
+                                                    currency = c.code
+                                                    // .onChange(of: currency) menangani auto-enable/disable
+                                                    // saveInPreferred berdasarkan selectedCardCurrency
+                                                } label: {
+                                                    Label("\(c.flag) \(c.code) — \(c.name)", systemImage: currency == c.code ? "checkmark" : "")
+                                                }
+                                            }
                                         } label: {
-                                            Label("\(c.flag) \(c.code) — \(c.name)", systemImage: currency == c.code ? "checkmark" : "")
+                                            currencyButtonLabel
                                         }
+                                    } else {
+                                        // Free: locked — tapping shows paywall
+                                        Button { HapticManager.shared.tap(); showConversionPaywall = true } label: {
+                                            currencyButtonLabel
+                                                .overlay(alignment: .topTrailing) {
+                                                    Image(systemName: "lock.fill")
+                                                        .font(.system(size: 8, weight: .bold))
+                                                        .foregroundStyle(.white)
+                                                        .padding(3)
+                                                        // Padlock badge uses Royal's purple now —
+                                                        // Premium tier (and its amber color) was
+                                                        // removed. Consistent with other paid-gate
+                                                        // affordances across the app.
+                                                        .background(PremiumPlan.royal.color, in: Circle())
+                                                        .offset(x: 4, y: -4)
+                                                }
+                                        }
+                                        .buttonStyle(.plain)
                                     }
-                                } label: {
-                                    HStack(spacing: 6) {
-                                        Text(CurrencyManager.symbol(for: currency))
-                                            .font(.system(size: 15, weight: .bold))
-                                            .foregroundStyle(AppTheme.accent)
-                                        Text(currency)
-                                            .font(.system(size: 13, weight: .medium))
-                                            .foregroundStyle(AppTheme.textSecondary)
-                                        Image(systemName: "chevron.up.chevron.down")
-                                            .font(.system(size: 10))
-                                            .foregroundStyle(AppTheme.textSecondary)
-                                    }
-                                    .padding(.horizontal, 14).padding(.vertical, 14)
-                                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 12))
-                                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(AppTheme.accent.opacity(0.3), lineWidth: 1))
                                 }
 
                                 TextField("0.00", text: $amountText)
@@ -918,6 +1214,17 @@ struct AddTransactionSheet: View {
                             if !convertedPreview.isEmpty {
                                 Text(convertedPreview).font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
                                     .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 22)
+                            } else if let p = AmountInputHelper.preview(amountText, currency: currency) {
+                                // Show formatted preview ("Rp 5.000.000") under
+                                // the raw input ("5000000") so users catch
+                                // digit-count typos before saving. Only when
+                                // there's no smart-conversion preview already
+                                // — keeps the UI from getting noisy.
+                                Text(p)
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundStyle(AppTheme.textSecondary)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(.horizontal, 22)
                             }
                             Text(CurrencyManager.shared.rateLabel).font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary.opacity(0.6))
                                 .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 22)
@@ -935,25 +1242,37 @@ struct AddTransactionSheet: View {
                                                 .foregroundStyle(AppTheme.accent)
                                         }
                                         VStack(alignment: .leading, spacing: 2) {
-                                            Text("Smart Conversion")
+                                            Text(loc("tx.smart_convert"))
                                                 .font(.system(size: 13, weight: .semibold))
                                                 .foregroundStyle(AppTheme.textPrimary)
-                                            Text("Save in \(preferredCurrency) using live rate")
+                                            Text(String(format: loc("tx.save_in_currency"), selectedCardCurrency))
                                                 .font(.system(size: 11))
                                                 .foregroundStyle(AppTheme.textSecondary)
                                         }
                                         Spacer()
-                                        Toggle("", isOn: $saveInPreferred)
-                                            .tint(AppTheme.accent)
-                                            .labelsHidden()
-                                            .onChange(of: saveInPreferred) { _, _ in HapticManager.shared.tap() }
+                                        if isForeignCurrency {
+                                            // Toggle dikunci ON — wajib konversi ketika
+                                            // mata uang transaksi ≠ mata uang kartu.
+                                            // User tidak bisa mematikannya.
+                                            Text(loc("tx.required"))
+                                                .font(.system(size: 10, weight: .semibold))
+                                                .foregroundStyle(AppTheme.accent)
+                                                .padding(.horizontal, 8)
+                                                .padding(.vertical, 4)
+                                                .background(AppTheme.accent.opacity(0.12), in: Capsule())
+                                        } else {
+                                            Toggle("", isOn: $saveInPreferred)
+                                                .tint(AppTheme.accent)
+                                                .labelsHidden()
+                                                .onChange(of: saveInPreferred) { _, _ in HapticManager.shared.tap() }
+                                        }
                                     }
 
                                     if saveInPreferred {
                                         Divider().background(AppTheme.cardMid)
                                         HStack {
                                             VStack(alignment: .leading, spacing: 2) {
-                                                Text("You entered")
+                                                Text(loc("tx.you_entered"))
                                                     .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
                                                 Text(CurrencyManager.shared.formatted(amount, currency: currency))
                                                     .font(.system(size: 14, weight: .semibold)).foregroundStyle(AppTheme.textSecondary)
@@ -962,9 +1281,9 @@ struct AddTransactionSheet: View {
                                                 .font(.system(size: 12)).foregroundStyle(AppTheme.accent)
                                                 .padding(.horizontal, 8)
                                             VStack(alignment: .leading, spacing: 2) {
-                                                Text("Saved as")
+                                                Text(loc("tx.saved_as"))
                                                     .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
-                                                Text(CurrencyManager.shared.formatted(convertedAmount, currency: preferredCurrency))
+                                                Text(CurrencyManager.shared.formatted(convertedAmount, currency: selectedCardCurrency))
                                                     .font(.system(size: 14, weight: .bold)).foregroundStyle(AppTheme.accent)
                                             }
                                             Spacer()
@@ -985,8 +1304,10 @@ struct AddTransactionSheet: View {
                         .opacity(appeared ? 1 : 0).offset(y: appeared ? 0 : 20)
                         .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.06), value: appeared)
 
-                        SheetField(label: "Name / Description",
-                                   placeholder: selectedCategory == .debtPayment ? "e.g. BCA Credit Card Payment" : "e.g. Spotify, Salary...",
+                        SheetField(label: loc("tx.name_label"),
+                                   placeholder: selectedCategory == .debtPayment
+                                       ? loc("tx.debt_placeholder")
+                                       : loc("tx.name_placeholder"),
                                    text: $name)
                             .opacity(appeared ? 1 : 0).offset(y: appeared ? 0 : 20)
                             .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.1), value: appeared)
@@ -1005,14 +1326,14 @@ struct AddTransactionSheet: View {
                            suggested != selectedCategory {
                             HStack(spacing: 8) {
                                 Image(systemName: suggested.icon).font(.system(size: 12)).foregroundStyle(suggested.color)
-                                Text("Auto-detected: \(suggested.rawValue)")
+                                Text(String(format: loc("tx.auto_detected"), suggested.displayLabel))
                                     .font(.system(size: 12, weight: .medium)).foregroundStyle(AppTheme.textSecondary)
                                 Spacer()
                                 Button {
                                     HapticManager.shared.tap()
                                     withAnimation { selectedCategory = suggested }
                                 } label: {
-                                    Text("Apply").font(.system(size: 11, weight: .semibold))
+                                    Text(loc("tx.apply")).font(.system(size: 11, weight: .semibold))
                                         .foregroundStyle(AppTheme.bg)
                                         .padding(.horizontal, 10).padding(.vertical, 4)
                                         .background(suggested.color, in: Capsule())
@@ -1024,7 +1345,7 @@ struct AddTransactionSheet: View {
 
                         // Category
                         VStack(spacing: 8) {
-                            Text("Category").font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
+                            Text(loc("common.category")).font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
                                 .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 22)
                             ScrollView(.horizontal, showsIndicators: false) {
                                 HStack(spacing: 10) {
@@ -1035,7 +1356,7 @@ struct AddTransactionSheet: View {
                                         } label: {
                                             HStack(spacing: 6) {
                                                 Image(systemName: cat.icon).font(.system(size: 13))
-                                                Text(cat.rawValue).font(.system(size: 13, weight: .medium))
+                                                Text(cat.displayLabel).font(.system(size: 13, weight: .medium))
                                             }
                                             .foregroundStyle(selectedCategory == cat ? AppTheme.bg : AppTheme.textSecondary)
                                             .padding(.horizontal, 16).padding(.vertical, 10)
@@ -1052,18 +1373,29 @@ struct AddTransactionSheet: View {
 
                         if vm.cards.count > 1 {
                             VStack(spacing: 8) {
-                                Text("Card").font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
+                                Text(loc("debt.card")).font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
                                     .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 22)
                                 ScrollView(.horizontal, showsIndicators: false) {
                                     HStack(spacing: 10) {
                                         ForEach(Array(vm.cards.enumerated()), id: \.element.id) { i, card in
+                                            let cardCur = card.currency.isEmpty ? CurrencyManager.shared.preferredCurrency : card.currency
                                             Button {
                                                 HapticManager.shared.tap(); selectedCardIndex = i
                                             } label: {
                                                 VStack(alignment: .leading, spacing: 4) {
                                                     Text(card.holderName).font(.system(size: 12, weight: .semibold))
-                                                    Text(".... \(card.cardNumber.suffix(4))").font(.system(size: 11))
-                                                        .foregroundStyle(selectedCardIndex == i ? AppTheme.bg.opacity(0.7) : AppTheme.textSecondary)
+                                                    if card.isDigitalWallet {
+                                                        Text(card.walletProvider.isEmpty ? loc("common.wallet") : card.walletProvider)
+                                                            .font(.system(size: 11))
+                                                            .foregroundStyle(selectedCardIndex == i ? AppTheme.bg.opacity(0.7) : AppTheme.textSecondary)
+                                                    } else {
+                                                        Text(".... \(card.cardNumber.suffix(4))")
+                                                            .font(.system(size: 11))
+                                                            .foregroundStyle(selectedCardIndex == i ? AppTheme.bg.opacity(0.7) : AppTheme.textSecondary)
+                                                    }
+                                                    Text(cardCur)
+                                                        .font(.system(size: 10, weight: .bold))
+                                                        .foregroundStyle(selectedCardIndex == i ? AppTheme.bg.opacity(0.6) : AppTheme.accent)
                                                 }
                                                 .foregroundStyle(selectedCardIndex == i ? AppTheme.bg : AppTheme.textPrimary)
                                                 .padding(.horizontal, 16).padding(.vertical, 10)
@@ -1077,10 +1409,27 @@ struct AddTransactionSheet: View {
                             }
                             .opacity(appeared ? 1 : 0)
                             .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.18), value: appeared)
+                            .onChange(of: selectedCardIndex) { _, i in
+                                guard i < vm.cards.count else { return }
+                                let card = vm.cards[i]
+                                let cardCur = card.currency.isEmpty
+                                    ? CurrencyManager.shared.preferredCurrency
+                                    : card.currency
+                                currency = cardCur
+                                saveInPreferred = false  // reset, kartu baru pasti sama currency-nya
+                            }
+                            // Bug 1 fix: auto-enable konversi saat user pilih mata uang
+                            // berbeda dari kartu. Tanpa ini user bisa simpan transaksi USD
+                            // ke kartu IDR tanpa konversi — balance jadi kacau.
+                            .onChange(of: currency) { _, newCur in
+                                withAnimation(.spring(response: 0.3)) {
+                                    saveInPreferred = newCur != selectedCardCurrency
+                                }
+                            }
                         }
 
                         VStack(spacing: 8) {
-                            Text("Date").font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
+                            Text(loc("common.date")).font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
                                 .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 22)
                             DatePicker("", selection: $selectedDate, displayedComponents: [.date, .hourAndMinute])
                                 .datePickerStyle(.compact).labelsHidden().tint(AppTheme.accent)
@@ -1089,52 +1438,54 @@ struct AddTransactionSheet: View {
                         .opacity(appeared ? 1 : 0)
                         .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.2), value: appeared)
 
-                        SheetField(label: "Notes (optional)", placeholder: "Add a note...", text: $notes)
+                        SheetField(label: loc("tx.notes"), placeholder: loc("tx.notes_placeholder"), text: $notes)
+                            .padding(.horizontal, 22)
                             .opacity(appeared ? 1 : 0)
                             .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.22), value: appeared)
 
-                        // No card warning
+                        // No card warning — uses warning tone (orange) since
+                        // the user can resolve this by adding a card; not
+                        // an error state in itself.
                         if vm.cards.isEmpty {
-                            HStack(spacing: 10) {
-                                Image(systemName: "exclamationmark.triangle.fill")
-                                    .font(.system(size: 14)).foregroundStyle(AppTheme.orange)
-                                Text("Add a card first before recording transactions")
-                                    .font(.system(size: 13)).foregroundStyle(AppTheme.orange)
-                            }
-                            .padding(.horizontal, 22).transition(.opacity)
+                            InlineBanner(tone: .warning, message: loc("common.add_card_tx"))
+                                .padding(.horizontal, 22)
                         }
 
-                        // Negative balance — HARD BLOCK
+                        // Negative balance — HARD BLOCK. Uses the standard
+                        // error InlineBanner. The original two-line content
+                        // (label + available-balance subtitle) is concatenated
+                        // into one message — InlineBanner supports multi-line
+                        // text via fixedSize(vertical:).
                         if wouldGoNegative && !vm.cards.isEmpty && txType == .expense {
-                            HStack(spacing: 10) {
-                                Image(systemName: "exclamationmark.octagon.fill")
-                                    .font(.system(size: 14)).foregroundStyle(AppTheme.red)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("Insufficient balance — cannot add expense")
-                                        .font(.system(size: 13, weight: .semibold)).foregroundStyle(AppTheme.red)
-                                    Text("Available: \(CurrencyManager.shared.formatted(Swift.abs(selectedCardBalance), currency: currency))")
-                                        .font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
-                                }
-                            }
-                            .padding(12)
-                            .background(AppTheme.red.opacity(0.1), in: RoundedRectangle(cornerRadius: 12))
-                            .overlay(RoundedRectangle(cornerRadius: 12).stroke(AppTheme.red.opacity(0.35), lineWidth: 1.5))
-                            .padding(.horizontal, 22).transition(.opacity)
+                            let msg = loc("tx.insufficient") + "\n"
+                                + String(format: loc("tx.available_balance"),
+                                         CurrencyManager.shared.formatted(Swift.abs(selectedCardBalance),
+                                                                          currency: selectedCardCurrency))
+                            InlineBanner(tone: .error, message: msg)
+                                .padding(.horizontal, 22)
                         }
 
                         if showError {
-                            Text("Please enter a name and a valid amount")
-                                .font(.system(size: 13)).foregroundStyle(AppTheme.red).padding(.horizontal, 22).transition(.opacity)
+                            InlineBanner(tone: .error, message: loc("tx.valid_error"))
+                                .padding(.horizontal, 22)
                         }
 
                         Button { saveTransaction() } label: {
+                            // `canSubmit` precomputed once for both background
+                            // and foreground styling — avoids the previous
+                            // bug where the foreground was always
+                            // `AppTheme.bg` (light text) over a 0.3-opacity
+                            // gray background, producing near-invisible label
+                            // when disabled.
+                            let canSubmit = isValid && !(wouldGoNegative && txType == .expense)
                             HStack(spacing: 10) {
                                 Image(systemName: txType.icon).font(.system(size: 16))
-                                Text("Add \(txType.rawValue)").font(.system(size: 16, weight: .bold))
+                                Text(String(format: loc("tx.add_type"), txType.title)).font(.system(size: 16, weight: .bold))
                             }
-                            .foregroundStyle(AppTheme.bg).frame(maxWidth: .infinity).padding(.vertical, 16)
-                            .background(isValid ? txType.color : AppTheme.textSecondary.opacity(0.3), in: Capsule())
-                            .shadow(color: isValid ? txType.color.opacity(0.4) : .clear, radius: 12, y: 6)
+                            .foregroundStyle(canSubmit ? AppTheme.bg : AppTheme.textSecondary)
+                            .frame(maxWidth: .infinity).padding(.vertical, 16)
+                            .background(canSubmit ? txType.color : AppTheme.textSecondary.opacity(0.3), in: Capsule())
+                            .shadow(color: canSubmit ? txType.color.opacity(0.4) : .clear, radius: 12, y: 6)
                         }
                         .buttonStyle(ScaleButtonStyle()).disabled(!isValid || vm.cards.isEmpty || (wouldGoNegative && txType == .expense)).padding(.horizontal, 22).padding(.top, 6)
                         .opacity(appeared ? 1 : 0)
@@ -1144,53 +1495,85 @@ struct AddTransactionSheet: View {
                     }
                 }
             }
-            .navigationTitle("New Transaction")
+            .navigationTitle(loc("tx.new"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(AppTheme.bg, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { HapticManager.shared.tap(); dismiss() }.foregroundStyle(AppTheme.textSecondary)
+                    Button(loc("common.cancel")) { HapticManager.shared.tap(); dismiss() }
+                        .foregroundStyle(AppTheme.textSecondary)
                 }
-
             }
         }
         .onAppear {
             CurrencyManager.shared.fetchRate()
+            // Start on the card the user was viewing on home
+            selectedCardIndex = min(vm.selectedCardIndex, max(vm.cards.count - 1, 0))
+            // Init currency from that card
+            if !vm.cards.isEmpty {
+                let card = vm.cards[min(selectedCardIndex, vm.cards.count - 1)]
+                let cardCur = card.currency.isEmpty ? CurrencyManager.shared.preferredCurrency : card.currency
+                currency = cardCur
+            }
             if let pre = preselectedCategory {
                 selectedCategory = pre
                 if pre == .debtPayment { txType = .expense }
             }
             withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.15)) { appeared = true }
         }
+        .sheet(isPresented: $showConversionPaywall) {
+            PaywallView()
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+                .presentationBackground(AppTheme.bg)
+                .preferredColorScheme(appColorScheme())
+        }
+        // Receipt scan flow — full screen so the camera has the whole canvas.
+        // We pass the currently-selected card's currency so the parser can
+        // disambiguate ambiguous amounts (e.g., "150" → IDR vs USD).
+        .fullScreenCover(isPresented: $showScanFlow) {
+            ReceiptScanFlow(
+                cardCurrency: selectedCardCurrency,
+                onCompleted: {
+                    // Scan flow saved the tx directly. Dismiss the parent
+                    // AddTransactionSheet so the user lands back on Home with
+                    // the new tx visible.
+                    dismiss()
+                }
+            )
+            .preferredColorScheme(appColorScheme())
+        }
+        .sheet(isPresented: $showScanPaywall) {
+            PaywallView()
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+                .presentationBackground(AppTheme.bg)
+                .preferredColorScheme(appColorScheme())
+        }
         .confirmationDialog(
             pendingBudgetAlert?.isExceeded == true
-                ? "⚠️ Budget Exceeded"
-                : "💡 Approaching Limit",
+                ? loc("tx.budget_exceed")
+                : loc("tx.approach_limit"),
             isPresented: $showBudgetAlert,
             titleVisibility: .visible
         ) {
-            Button("Add anyway", role: .destructive) { commitTransaction() }
-            Button("Cancel", role: .cancel) { pendingBudgetAlert = nil }
+            Button(loc("tx.add_anyway"), role: .destructive) { commitTransaction() }
+            Button(loc("common.cancel"), role: .cancel) { pendingBudgetAlert = nil }
         } message: {
             if let alert = pendingBudgetAlert {
                 if alert.isExceeded {
-                    Text("This will put your \(alert.group.label.lowercased()) spending \(CurrencyManager.shared.formatted(alert.over, currency: CurrencyManager.shared.preferredCurrency)) over your monthly limit of \(CurrencyManager.shared.formatted(alert.limit, currency: CurrencyManager.shared.preferredCurrency)). Are you sure?")
+                    Text(String(format: loc("tx.budget_over_msg"),
+                                alert.displayLabel.lowercased(),
+                                CurrencyManager.shared.formatted(alert.over, currency: CurrencyManager.shared.preferredCurrency),
+                                CurrencyManager.shared.formatted(alert.limit, currency: CurrencyManager.shared.preferredCurrency)))
                 } else {
-                    Text("You'll reach 90% of your \(alert.group.label.lowercased()) budget (\(CurrencyManager.shared.formatted(alert.limit, currency: CurrencyManager.shared.preferredCurrency))/month). You have \(CurrencyManager.shared.formatted(alert.limit - alert.spent, currency: CurrencyManager.shared.preferredCurrency)) left.")
+                    Text(String(format: loc("tx.budget_approach_msg"),
+                                alert.displayLabel.lowercased(),
+                                CurrencyManager.shared.formatted(alert.limit, currency: CurrencyManager.shared.preferredCurrency),
+                                CurrencyManager.shared.formatted(alert.limit - alert.spent, currency: CurrencyManager.shared.preferredCurrency)))
                 }
             }
         }
-    }
-
-    private var selectedCardBalance: Double {
-        guard !vm.cards.isEmpty else { return 0 }
-        let card = vm.cards[selectedCardIndex]
-        return card.balance + card.transactions.reduce(0) { $0 + $1.amount }
-    }
-
-    private var wouldGoNegative: Bool {
-        guard txType == .expense, effectiveAmount > 0 else { return false }
-        return selectedCardBalance - effectiveAmount < 0
     }
 
     private func saveTransaction() {
@@ -1219,8 +1602,10 @@ struct AddTransactionSheet: View {
 
     private func commitTransaction() {
         let finalAmount = txType == .expense ? -abs(effectiveAmount) : abs(effectiveAmount)
-        let txType_str  = selectedCategory == .debtPayment ? "Debt Payment"
-                        : txType == .expense ? "Purchase" : "Income"
+        // Stable keys stored in DB — never loc() at creation time.
+        // TransactionDetailSheet renders via tx.displayType which translates at display time.
+        let txType_str  = selectedCategory == .debtPayment ? "tx.type.debt_payment"
+                        : txType == .expense ? "tx.type.purchase" : "tx.type.income"
 
         let record = TxRecord(
             name: name.trimmingCharacters(in: .whitespaces),
@@ -1229,14 +1614,27 @@ struct AddTransactionSheet: View {
             icon: String(name.prefix(2).uppercased()),
             iconBgHex: selectedCategory.iconBg,
             category: selectedCategory, currency: effectiveCurrency, notes: notes
+            // subtype defaults to .normal at the model level — refund/transfer
+            // are assigned later via TransactionDetailSheet's "Mark as ..."
+            // actions, where the intent (this past tx came back / is a
+            // transfer) makes sense in context.
         )
         vm.cards[selectedCardIndex].transactions.append(record)
 
-        // Auto-reduce linked debt balance
+        // Auto-reduce linked debt balance.
+        // Convert the payment amount into the debt's currency before
+        // subtracting. Without this, paying a USD-denominated debt with an
+        // IDR card would subtract 750_000 (IDR) directly from a $1_000 USD
+        // balance — wiping the debt incorrectly. We use effectiveAmount/
+        // effectiveCurrency (i.e., what was actually written to the tx
+        // record) so the deduction stays consistent with the saved tx.
         if selectedCategory == .debtPayment,
            let debtID = selectedDebtID,
            let debt = activeDebts.first(where: { $0.id == debtID }) {
-            debt.currentBalance = max(debt.currentBalance - abs(amount), 0)
+            let paidInDebtCurrency = CurrencyManager.shared.convert(
+                abs(effectiveAmount), from: effectiveCurrency, to: debt.currency
+            )
+            debt.currentBalance = max(debt.currentBalance - paidInDebtCurrency, 0)
             if debt.currentBalance == 0 {
                 debt.isActive = false
                 HapticManager.shared.rigidImpact()
@@ -1246,5 +1644,99 @@ struct AddTransactionSheet: View {
         try? context.save()
         HapticManager.shared.success()
         dismiss()
+    }
+}
+
+// MARK: - Custom Date Range Sheet
+
+struct CustomDateRangeSheet: View {
+    @Binding var startDate: Date
+    @Binding var endDate: Date
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var localStart: Date = Date()
+    @State private var localEnd: Date = Date()
+
+    var body: some View {
+        VStack(spacing: 0) {
+            RoundedRectangle(cornerRadius: 3)
+                .fill(AppTheme.cardMid)
+                .frame(width: 36, height: 4)
+                .padding(.top, 12)
+
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(loc("tx.custom_range"))
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundStyle(AppTheme.textPrimary)
+                    Text(loc("tx.max_range"))
+                        .font(.system(size: 12))
+                        .foregroundStyle(AppTheme.textSecondary)
+                }
+                Spacer()
+            }
+            .padding(.horizontal, 22)
+            .padding(.top, 16)
+
+            VStack(spacing: 16) {
+                VStack(spacing: 6) {
+                    Text(loc("tx.start_date"))
+                        .font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    DatePicker("", selection: $localStart, in: ...Date(), displayedComponents: .date)
+                        .datePickerStyle(.compact).labelsHidden().tint(AppTheme.accent)
+                        .environment(\.locale, LanguageManager.shared.currentLocale)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .onChange(of: localStart) { _, newStart in
+                            let maxEnd = Calendar.current.safeDate(byAdding: .month, value: 1, to: newStart)
+                            if localEnd > maxEnd { localEnd = maxEnd }
+                            if localEnd < newStart { localEnd = newStart }
+                        }
+                }
+
+                VStack(spacing: 6) {
+                    Text(loc("tx.end_date"))
+                        .font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    let maxEnd = Calendar.current.safeDate(byAdding: .month, value: 1, to: localStart)
+                    DatePicker("", selection: $localEnd,
+                               in: localStart...min(maxEnd, Date()), displayedComponents: .date)
+                        .datePickerStyle(.compact).labelsHidden().tint(AppTheme.accent)
+                        .environment(\.locale, LanguageManager.shared.currentLocale)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+
+                let days = max(Calendar.current.dateComponents([.day], from: localStart, to: localEnd).day ?? 0, 0)
+                HStack(spacing: 8) {
+                    Image(systemName: "calendar.badge.clock").font(.system(size: 13)).foregroundStyle(AppTheme.accent)
+                    Text(days == 1 ? String(format: loc("search.day_results"), days) : String(format: loc("search.days_results"), days))
+                        .font(.system(size: 13, weight: .medium)).foregroundStyle(AppTheme.textSecondary)
+                    Spacer()
+                }
+                .padding(12)
+                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 12))
+            }
+            .padding(.horizontal, 22).padding(.top, 20)
+
+            Spacer()
+
+            Button {
+                startDate = Calendar.current.startOfDay(for: localStart)
+                var comps = Calendar.current.dateComponents([.year, .month, .day], from: localEnd)
+                comps.hour = 23; comps.minute = 59; comps.second = 59
+                endDate = Calendar.current.date(from: comps) ?? localEnd
+                HapticManager.shared.success()
+                dismiss()
+            } label: {
+                Text(loc("tx.apply_range"))
+                    .font(.system(size: 16, weight: .bold)).foregroundStyle(AppTheme.bg)
+                    .frame(maxWidth: .infinity).padding(.vertical, 16)
+                    .background(AppTheme.accent, in: Capsule())
+                    .shadow(color: AppTheme.accent.opacity(0.35), radius: 12, y: 6)
+            }
+            .buttonStyle(ScaleButtonStyle())
+            .padding(.horizontal, 22).padding(.bottom, 32)
+        }
+        .onAppear { localStart = startDate; localEnd = endDate }
     }
 }

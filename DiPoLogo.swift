@@ -1,11 +1,11 @@
 import SwiftUI
 
-// MARK: - Wall-E App Logo
-// WallELogo() = full icon with dark background (use anywhere in app)
-// WallELogoMark() = just the chart mark (use on colored backgrounds)
+// MARK: - DiPo App Logo
+// DiPoLogo() = full icon with dark background (use anywhere in app)
+// DiPoLogoMark() = just the chart mark (use on colored backgrounds)
 // TabLogoButton() = the center tab bar button
 
-struct WallELogo: View {
+struct DiPoLogo: View {
     var size: CGFloat = 52
     var showBackground: Bool = true
 
@@ -19,7 +19,7 @@ struct WallELogo: View {
                     .frame(width: size, height: size)
                     .shadow(color: Color(hex: "#1DB87A").opacity(0.35), radius: size * 0.18, y: size * 0.06)
             }
-            WallELogoMark(size: size * 0.62)
+            DiPoLogoMark(size: size * 0.62)
         }
         .frame(width: size, height: size)
     }
@@ -27,7 +27,7 @@ struct WallELogo: View {
 
 // MARK: - Logo Mark (ascending bars + trend line)
 
-struct WallELogoMark: View {
+struct DiPoLogoMark: View {
     var size: CGFloat = 32
 
     var body: some View {
@@ -86,22 +86,19 @@ struct TabLogoButton: View {
     var body: some View {
         Button(action: action) {
             ZStack {
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(isEnabled
-                        ? LinearGradient(colors: [Color(hex: "#1DB87A"), Color(hex: "#159960")],
-                                         startPoint: .topLeading, endPoint: .bottomTrailing)
-                        : LinearGradient(colors: [AppTheme.textSecondary.opacity(0.3), AppTheme.textSecondary.opacity(0.2)],
-                                         startPoint: .top, endPoint: .bottom))
-                    .frame(width: 52, height: 52)
-                    .shadow(color: isEnabled ? Color(hex: "#1DB87A").opacity(0.5) : .clear, radius: 14, y: 4)
+                RoundedRectangle(cornerRadius: 18)
+                    .fill(AppTheme.accent)
+                    .frame(width: 58, height: 58)
+                    .shadow(
+                        color: AppTheme.accent.opacity(0.5),
+                        radius: 10,
+                        y: 4
+                    )
 
-                if isEnabled {
-                    WallELogoMark(size: 28)
-                } else {
-                    Image(systemName: "creditcard.fill")
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundStyle(AppTheme.textSecondary)
-                }
+                Image(systemName: "plus")
+                    .font(.system(size: 26, weight: .bold))
+                    .foregroundStyle(.white)
+                    .opacity(isEnabled ? 1 : 0.5)
             }
             .frame(maxWidth: .infinity)
         }

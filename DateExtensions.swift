@@ -18,4 +18,13 @@ extension Date {
         formatter.timeStyle = .none
         return formatter.string(from: self)
     }
+    
+    /// Locale-aware short date + time: "24 Apr 2026, 12:30"
+    var displayDateTimeShort: String {
+        let formatter = DateFormatter()
+        formatter.locale = LanguageManager.shared.currentLocale
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        return formatter.string(from: self)
+    }
 }
