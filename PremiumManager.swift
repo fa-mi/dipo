@@ -205,8 +205,19 @@ final class PremiumManager {
                 let product = package.storeProduct
                 let d = UserDefaults.standard
 
-                royalPriceString = product.localizedPriceString
-                d.set(product.localizedPriceString, forKey: Self.cachePriceKey)
+                // Build the price string OURSELVES from the raw amount + currency
+                // code instead of using `localizedPriceString`. Apple's localized
+                // string for the Indonesian storefront renders as "Rp 9ribu"
+                // (compact form), which we don't want. Formatting the raw
+                // `product.price` (e.g. 9000) with a currency NumberFormatter
+                // yields a clean "Rp 9.000". This stays fully dynamic — the
+                // amount is read live from StoreKit, so changing the price in
+                // App Store Connect updates it automatically. Falls back to
+                // Apple's localized string if anything is missing.
+                let formatted = Self.formatPrice(product.price, currencyCode: product.currencyCode)
+                    ?? product.localizedPriceString
+                royalPriceString = formatted
+                d.set(formatted, forKey: Self.cachePriceKey)
 
                 // Billing period unit → human label.
                 if let period = product.subscriptionPeriod {
@@ -245,6 +256,25 @@ final class PremiumManager {
             return "\(price) / \(period)"
         }
         return price
+    }
+
+    /// Format a raw price + ISO currency code into a clean localized string
+    /// (e.g. 9000 + "IDR" → "Rp 9.000"; 0.99 + "USD" → "$0.99"). Uses the
+    /// currency's natural fraction digits, so whole-rupiah currencies show no
+    /// decimals while USD keeps its cents — the displayed amount always equals
+    /// the billed amount (App Store Guideline 3.1.2c). Returns nil if the
+    /// currency code is missing so the caller can fall back to StoreKit's own
+    /// localized string.
+    private static func formatPrice(_ price: Decimal, currencyCode: String?) -> String? {
+        guard let currencyCode, !currencyCode.isEmpty else { return nil }
+        let f = NumberFormatter()
+        f.numberStyle = .currency
+        f.currencyCode = currencyCode
+        // Device locale drives the symbol/grouping (Indonesian device → "Rp"
+        // with dot grouping); the currency style picks the correct number of
+        // fraction digits per currency automatically.
+        f.locale = Locale.autoupdatingCurrent
+        return f.string(from: price as NSDecimalNumber)
     }
 
     private static func periodLabel(for period: SubscriptionPeriod) -> String {
@@ -612,7 +642,11 @@ struct PaywallView: View {
         let trial = mgr.royalIntroString
             ?? (PremiumPlan.royal.trialLabel.isEmpty ? nil : PremiumPlan.royal.trialLabel)
         if let trial {
-            return String(format: loc("premium.billing_disclosure_trial"), trial, price)
+            // Leading with the BILLED amount (Guideline 3.1.2c): price first,
+            // trial second — so the disclosure text itself reads "Rp 9.000/
+            // month after a 7-day free trial …", reinforcing the billed amount
+            // as the dominant pricing signal even in the small print.
+            return String(format: loc("premium.billing_disclosure_trial"), price, trial)
         }
         return String(format: loc("premium.billing_disclosure"), price)
     }
@@ -768,15 +802,21 @@ struct PaywallView: View {
                                         } else {
                                             Image(systemName: selectedPlan.icon).font(.system(size: 16))
                                         }
-                                        // CTA text: trial-aware. Free user
-                                        // selecting Royal → "Start Free Trial".
-                                        // Free user selecting Premium → direct
-                                        // "Upgrade to Premium" (no trial copy).
-                                        // Already-paid user → "Upgrade to <plan>".
+                                        // CTA copy — App Store 3.1.2(c):
+                                        // The CTA is the most visually dominant
+                                        // element on the screen (size, color,
+                                        // glow). Whatever it SAYS therefore
+                                        // becomes the most conspicuous pricing
+                                        // signal. We put the BILLED AMOUNT in
+                                        // the CTA itself ("Subscribe · Rp 9.000
+                                        // / month") so the dominant element
+                                        // promotes the price, not the trial.
+                                        // Trial info lives in the subordinate
+                                        // disclosure below.
                                         let ctaText: String = {
                                             if mgr.isLoading { return loc("premium.processing") }
-                                            if mgr.plan == .free && selectedPlan.hasTrial {
-                                                return loc("premium.start_trial")
+                                            if mgr.plan == .free {
+                                                return String(format: loc("premium.cta_subscribe"), mgr.royalDisplayPrice)
                                             }
                                             return String(format: loc("premium.upgrade_to"), selectedPlan.label)
                                         }()

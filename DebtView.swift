@@ -19,6 +19,7 @@ struct DebtView: View {
     @State private var vm = DebtViewModel()
     @State private var appeared = false
     @State private var simulatorDebt: DebtRecord? = nil
+    @State private var showSalarySetup = false
 
     /// Total income this month, converted to preferred currency.
     /// Captures salary auto-credits, bonus, freelance — everything actually received.
@@ -156,13 +157,24 @@ struct DebtView: View {
                                 .offset(y: appeared ? 0 : 20)
                                 .animation(.spring(response: 0.55, dampingFraction: 0.8).delay(0.08), value: appeared)
 
-                            // Smart allocation
+                            // Smart allocation — needs income. When no salary/
+                            // income exists this month, the debt allocation &
+                            // health-ratio math can't run, so prompt the user to
+                            // set up their salary instead of silently hiding it.
                             if monthlyIncome > 0 {
                                 AllocationCard(engine: engine, monthlyIncome: monthlyIncome, totalBalance: totalBalance)
                                     .padding(.horizontal, 22)
                                     .opacity(appeared ? 1 : 0)
                                     .offset(y: appeared ? 0 : 20)
                                     .animation(.spring(response: 0.55, dampingFraction: 0.8).delay(0.14), value: appeared)
+                            } else {
+                                SalarySetupCTA(message: loc("salary.cta.debt")) {
+                                    showSalarySetup = true
+                                }
+                                .padding(.horizontal, 22)
+                                .opacity(appeared ? 1 : 0)
+                                .offset(y: appeared ? 0 : 20)
+                                .animation(.spring(response: 0.55, dampingFraction: 0.8).delay(0.14), value: appeared)
                             }
 
                             // Overspending warning
@@ -242,6 +254,63 @@ struct DebtView: View {
                 .presentationDragIndicator(.visible)
                 .presentationBackground(AppTheme.bg)
         }
+        .sheet(isPresented: $showSalarySetup) {
+            SalaryView()
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+                .presentationBackground(AppTheme.bg)
+                .preferredColorScheme(appColorScheme())
+        }
+    }
+}
+
+// MARK: - Salary Setup CTA (shared empty-state for income-based features)
+
+/// Empty-state card shown by Smart Budget and Debt when no salary/income is
+/// set for the current month — those features compute everything as a ratio of
+/// income, so they're inert without it. Gives the user a clear one-tap path to
+/// set up their salary rather than showing zeros or a silent blank.
+struct SalarySetupCTA: View {
+    let message: String
+    let action: () -> Void
+
+    var body: some View {
+        VStack(spacing: 14) {
+            ZStack {
+                Circle().fill(AppTheme.accent.opacity(0.12)).frame(width: 56, height: 56)
+                Image(systemName: "banknote.fill")
+                    .font(.system(size: 24))
+                    .foregroundStyle(AppTheme.accent)
+            }
+            VStack(spacing: 6) {
+                Text(loc("salary.cta.title"))
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundStyle(AppTheme.textPrimary)
+                Text(message)
+                    .font(.system(size: 13))
+                    .foregroundStyle(AppTheme.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .lineSpacing(2)
+            }
+            Button {
+                HapticManager.shared.tap()
+                action()
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "plus.circle.fill").font(.system(size: 15))
+                    Text(loc("salary.cta.button")).font(.system(size: 15, weight: .bold))
+                }
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+                .background(AppTheme.accent, in: RoundedRectangle(cornerRadius: 14))
+            }
+            .buttonStyle(ScaleButtonStyle())
+        }
+        .padding(20)
+        .frame(maxWidth: .infinity)
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 20))
+        .overlay(RoundedRectangle(cornerRadius: 20).stroke(AppTheme.accent.opacity(0.2), lineWidth: 1))
     }
 }
 

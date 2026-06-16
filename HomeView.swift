@@ -1389,6 +1389,15 @@ struct TransactionSection: View {
     @State private var showAll        = false
     @State private var showAllCards   = false
     @State private var selectedTx: TxRecord? = nil
+    @State private var pendingDelete: TxRecord? = nil
+    @Environment(\.modelContext) private var context
+
+    /// Bridges the optional `pendingDelete` to the Bool the confirmation dialog
+    /// needs; clearing it on dismiss cancels the pending delete.
+    private var deleteDialogBinding: Binding<Bool> {
+        Binding(get: { pendingDelete != nil },
+                set: { if !$0 { pendingDelete = nil } })
+    }
 
     // Home shows the CURRENT MONTH only — recent, relevant activity. The
     // full history (all months, searchable) lives behind "View all".
@@ -1543,16 +1552,31 @@ struct TransactionSection: View {
 
                             VStack(spacing: 10) {
                                 ForEach(group.txs) { tx in
-                                    Button { selectedTx = tx } label: {
+                                    SwipeToDeleteRow(
+                                        onTap: { selectedTx = tx },
+                                        onDelete: { pendingDelete = tx }
+                                    ) {
                                         TxRow(tx: tx, sourceCard: cardFor(tx), showCard: cards.count > 1)
                                     }
-                                    .buttonStyle(ScaleButtonStyle())
                                 }
                             }
                         }
                     }
                 }
             }
+        }
+        .confirmationDialog(loc("tx.delete_prompt"), isPresented: deleteDialogBinding, titleVisibility: .visible) {
+            Button(loc("common.delete"), role: .destructive) {
+                if let tx = pendingDelete {
+                    context.delete(tx)
+                    try? context.save()
+                    HapticManager.shared.warning()
+                }
+                pendingDelete = nil
+            }
+            Button(loc("common.cancel"), role: .cancel) { pendingDelete = nil }
+        } message: {
+            Text(loc("tx.delete_confirm"))
         }
         .sheet(item: $selectedTx) { tx in
             TransactionDetailSheet(tx: tx)
@@ -1577,7 +1601,14 @@ struct AllTransactionsSheet: View {
     let transactions: [TxRecord]
     let cards: [BankCard]
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var context
     @State private var selectedTx: TxRecord? = nil
+    @State private var pendingDelete: TxRecord? = nil
+
+    private var deleteDialogBinding: Binding<Bool> {
+        Binding(get: { pendingDelete != nil },
+                set: { if !$0 { pendingDelete = nil } })
+    }
 
     private var grouped: [(key: String, date: Date, txs: [TxRecord])] {
         let cal = Calendar.current
@@ -1633,10 +1664,12 @@ struct AllTransactionsSheet: View {
                                     }
                                     VStack(spacing: 10) {
                                         ForEach(group.txs) { tx in
-                                            Button { selectedTx = tx } label: {
+                                            SwipeToDeleteRow(
+                                                onTap: { selectedTx = tx },
+                                                onDelete: { pendingDelete = tx }
+                                            ) {
                                                 TxRow(tx: tx, sourceCard: cardFor(tx), showCard: cards.count > 1)
                                             }
-                                            .buttonStyle(ScaleButtonStyle())
                                         }
                                     }
                                 }
@@ -1647,6 +1680,19 @@ struct AllTransactionsSheet: View {
                         .padding(.bottom, 40)
                     }
                 }
+            }
+            .confirmationDialog(loc("tx.delete_prompt"), isPresented: deleteDialogBinding, titleVisibility: .visible) {
+                Button(loc("common.delete"), role: .destructive) {
+                    if let tx = pendingDelete {
+                        context.delete(tx)
+                        try? context.save()
+                        HapticManager.shared.warning()
+                    }
+                    pendingDelete = nil
+                }
+                Button(loc("common.cancel"), role: .cancel) { pendingDelete = nil }
+            } message: {
+                Text(loc("tx.delete_confirm"))
             }
             .navigationTitle(loc("tx.all"))
             .navigationBarTitleDisplayMode(.inline)
@@ -1663,6 +1709,78 @@ struct AllTransactionsSheet: View {
                 .presentationDragIndicator(.visible)
                 .presentationBackground(AppTheme.bg)
                 .preferredColorScheme(appColorScheme())
+        }
+    }
+}
+
+// MARK: - Swipe-to-Delete Row
+
+/// Reusable swipe-to-delete wrapper for rows rendered inside a `ScrollView`
+/// (where SwiftUI's native `List.swipeActions` isn't available). Swipe a row
+/// left to reveal a Delete button; tap it to fire `onDelete`. Tapping the row
+/// while closed runs `onTap` (open detail); tapping while open just closes it.
+///
+/// The drag only engages on horizontal-dominant movement, so vertical
+/// scrolling stays smooth. Pairs with a single confirmation dialog at the list
+/// level so an accidental swipe can't delete financial data in one motion.
+struct SwipeToDeleteRow<Content: View>: View {
+    var onTap: () -> Void
+    var onDelete: () -> Void
+    @ViewBuilder var content: Content
+
+    @State private var offset: CGFloat = 0
+    @GestureState private var drag: CGFloat = 0
+    private let actionWidth: CGFloat = 84
+    private let openThreshold: CGFloat = 48
+
+    private var visibleOffset: CGFloat { max(-actionWidth, min(0, offset + drag)) }
+
+    var body: some View {
+        ZStack(alignment: .trailing) {
+            // Delete affordance revealed behind the row as it slides left.
+            Button {
+                HapticManager.shared.tap()
+                withAnimation(.spring(response: 0.3)) { offset = 0 }
+                onDelete()
+            } label: {
+                VStack(spacing: 3) {
+                    Image(systemName: "trash.fill").font(.system(size: 16, weight: .semibold))
+                    Text(loc("common.delete")).font(.system(size: 11, weight: .bold))
+                }
+                .foregroundStyle(.white)
+                .frame(width: actionWidth)
+                .frame(maxHeight: .infinity)
+                .background(AppTheme.red, in: RoundedRectangle(cornerRadius: 14))
+            }
+            .buttonStyle(.plain)
+            .opacity(visibleOffset < -2 ? 1 : 0)
+
+            content
+                // Opaque background so the red action is hidden when closed.
+                .background(AppTheme.bg)
+                .offset(x: visibleOffset)
+                .gesture(
+                    DragGesture(minimumDistance: 18)
+                        .updating($drag) { value, state, _ in
+                            // Horizontal-dominant only — let vertical drags scroll.
+                            if abs(value.translation.width) > abs(value.translation.height) {
+                                state = value.translation.width
+                            }
+                        }
+                        .onEnded { value in
+                            let combined = offset + value.translation.width
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.82)) {
+                                offset = combined < -openThreshold ? -actionWidth : 0
+                            }
+                        }
+                )
+                .onTapGesture {
+                    if offset != 0 {
+                        withAnimation(.spring(response: 0.3)) { offset = 0 }
+                    } else {
+                        onTap()
+                    }
+                }
         }
     }
 }

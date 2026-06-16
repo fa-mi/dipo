@@ -21,6 +21,7 @@ struct SmartBudgetSettingsSheet: View {
     /// When false, edits go to global defaults (used when no card is selected
     /// or when the user explicitly chooses "Default for all cards").
     @State private var editingPerCard: Bool = false
+    @State private var showSalarySetup = false
 
     enum BudgetTab: String, CaseIterable { case overview = "Overview"; case settings = "Settings" }
 
@@ -272,6 +273,13 @@ struct SmartBudgetSettingsSheet: View {
                 selectedCardID = cards.first?.id.uuidString
             }
         }
+        .sheet(isPresented: $showSalarySetup) {
+            SalaryView()
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+                .presentationBackground(AppTheme.bg)
+                .preferredColorScheme(appColorScheme())
+        }
         }
     }
 
@@ -332,9 +340,19 @@ struct SmartBudgetSettingsSheet: View {
         }
         .padding(.horizontal, 22)
 
-        ForEach(BudgetGroup.allCases, id: \.rawValue) { grp in
-            BudgetGroupCard(group: grp, budgetTx: budgetTx, income: monthlyIncome, currency: cardCurrency)
-                .padding(.horizontal, 22)
+        if monthlyIncome > 0 {
+            ForEach(BudgetGroup.allCases, id: \.rawValue) { grp in
+                BudgetGroupCard(group: grp, budgetTx: budgetTx, income: monthlyIncome, currency: cardCurrency)
+                    .padding(.horizontal, 22)
+            }
+        } else {
+            // No income this month → budget limits would all be 0 and useless.
+            // Prompt the user to set up their salary instead of showing empty
+            // budget bars. (Smart Budget = income × ratio, so it needs income.)
+            SalarySetupCTA(message: loc("salary.cta.budget")) {
+                showSalarySetup = true
+            }
+            .padding(.horizontal, 22)
         }
         } // end else (card selected)
     }

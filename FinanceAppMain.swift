@@ -6,6 +6,37 @@ import RevenueCat
 import FirebaseCore
 import FirebaseMessaging
 import FirebaseAuth
+import FirebaseCrashlytics
+
+// MARK: - Crash Reporting (Firebase Crashlytics)
+//
+// Crashes are captured automatically once the SDK is linked and
+// FirebaseApp.configure() has run (see AppDelegate below) — no per-crash code
+// needed. This thin wrapper adds optional CONTEXT so reports are actionable:
+// a user id to correlate reports, breadcrumbs, and non-fatal error recording.
+//
+// To verify it works after install: call CrashReporter.testCrash() once (DEBUG
+// only), relaunch the app, then check Firebase Console → Crashlytics (the
+// report uploads on the NEXT launch, not at crash time).
+enum CrashReporter {
+    /// Associate subsequent crashes with the signed-in user. Pass nil on logout.
+    static func setUser(_ id: String?) {
+        Crashlytics.crashlytics().setUserID(id ?? "")
+    }
+    /// Breadcrumb in the crash timeline (shows what happened before a crash).
+    static func log(_ message: String) {
+        Crashlytics.crashlytics().log(message)
+    }
+    /// Record a handled/non-fatal error — appears in the dashboard without
+    /// crashing the app. Use in `catch` blocks you currently swallow.
+    static func record(_ error: Error) {
+        Crashlytics.crashlytics().record(error: error)
+    }
+    #if DEBUG
+    /// DEBUG-only smoke test. Never ships (compiled out of Release).
+    static func testCrash() { fatalError("Crashlytics test crash") }
+    #endif
+}
 
 // MARK: - AppDelegate (needed for FCM remote push token handling)
 

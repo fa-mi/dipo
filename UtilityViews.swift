@@ -31,22 +31,25 @@ enum SearchPeriod: String, CaseIterable {
         case .today_period:
             return (cal.startOfDay(for: now), now)
 
+        // Calendar date math returns Optionals the compiler can't prove
+        // non-nil. In practice these never fail for simple offsets near `now`,
+        // but force-unwrapping is a latent crash; fall back to `now` instead.
         case .yesterday_period:
-            let start = cal.date(byAdding: .day, value: -1, to: cal.startOfDay(for: now))!
+            let start = cal.date(byAdding: .day, value: -1, to: cal.startOfDay(for: now)) ?? cal.startOfDay(for: now)
             return (start, cal.startOfDay(for: now))
 
         case .week_period:
-            let start = cal.date(from: cal.dateComponents([.yearForWeekOfYear, .weekOfYear], from: now))!
+            let start = cal.date(from: cal.dateComponents([.yearForWeekOfYear, .weekOfYear], from: now)) ?? now
             return (start, now)
 
         case .month_period:
-            return (cal.date(byAdding: .month, value: -1, to: now)!, now)
+            return (cal.date(byAdding: .month, value: -1, to: now) ?? now, now)
 
         case .three_month_period:
-            return (cal.date(byAdding: .month, value: -3, to: now)!, now)
+            return (cal.date(byAdding: .month, value: -3, to: now) ?? now, now)
 
         case .year_period:
-            let start = cal.date(from: cal.dateComponents([.year], from: now))!
+            let start = cal.date(from: cal.dateComponents([.year], from: now)) ?? now
             return (start, now)
 
         case .custom:
@@ -795,7 +798,7 @@ struct TransactionDetailSheet: View {
                 }
             }
 
-            SheetField(label: "Name", placeholder: "Transaction name", text: $editName)
+            SheetField(label: loc("tx.name_label"), placeholder: loc("tx.name_placeholder"), text: $editName)
 
             // Category
             VStack(spacing: 8) {
@@ -808,7 +811,7 @@ struct TransactionDetailSheet: View {
                                 HapticManager.shared.tap()
                                 editCategory = cat
                             } label: {
-                                Text(cat.rawValue)
+                                Text(cat.displayLabel)
                                     .font(.system(size: 13, weight: editCategory == cat ? .semibold : .regular))
                                     .foregroundStyle(editCategory == cat ? AppTheme.bg : AppTheme.textSecondary)
                                     .padding(.horizontal, 14).padding(.vertical, 8)
@@ -830,7 +833,7 @@ struct TransactionDetailSheet: View {
                     .padding(.horizontal, 22).frame(maxWidth: .infinity, alignment: .leading)
             }
 
-            SheetField(label: "Notes (optional)", placeholder: "Add a note...", text: $editNotes)
+            SheetField(label: loc("tx.notes"), placeholder: loc("tx.notes_placeholder"), text: $editNotes)
                 .padding(.horizontal, 22)
 
             Spacer(minLength: 40)
@@ -1109,7 +1112,9 @@ struct AddTransactionSheet: View {
                                                     .font(.system(size: 9, weight: .bold))
                                                     .foregroundStyle(.white)
                                                     .padding(3)
-                                                    .background(Color(hex: "#F59E0B"), in: Circle())
+                                                    // Royal purple — must match PremiumPlan.royal.color
+                                                    // (#A78BFA) so the crown is consistent app-wide.
+                                                    .background(PremiumPlan.royal.color, in: Circle())
                                             }
                                         }
                                         Text(loc("receipt.entry.subtitle"))

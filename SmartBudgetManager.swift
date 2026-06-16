@@ -759,8 +759,13 @@ final class SmartBudgetManager {
             title: String(format: loc("insight.goal_linked_title"),
                           goal.emoji.isEmpty ? "🎯" : goal.emoji,
                           goal.name),
+            // Format is "Cut %d%% of lifestyle (~%@) → reach \"%@\" %d weeks
+            // earlier." → order MUST be (Int pct, String amount, String goal
+            // name, Int weeks). The goal name and weeks were swapped, so the
+            // 3rd %@ received the Int `weeksEarlier` — when it was 1, that's a
+            // 0x1 pointer → EXC_BAD_ACCESS in String(format:). Correct order:
             body: String(format: loc("insight.goal_linked_body"),
-                         Int(cutPercent * 100), savingFmt, weeksEarlier, goal.name),
+                         Int(cutPercent * 100), savingFmt, goal.name, weeksEarlier),
             action: SmartInsightAction(
                 label: loc("insight.action.view_goal"),
                 kind: .openSavingsGoals
@@ -975,7 +980,12 @@ final class SmartBudgetManager {
                 icon: "chart.line.downtrend.xyaxis",
                 color: AppTheme.accent,
                 title: String(format: loc("insight.yoy_saving_title"), monthName),
-                body: String(format: loc("insight.yoy_saving_body"), absPct, savedFmt)
+                // Body format is "%d%% lower than %@ last year — saved ~%@":
+                // (pct, monthName, amount). monthName was previously omitted,
+                // leaving the 2nd %@ to read garbage off the va_list → a
+                // EXC_BAD_ACCESS crash inside String(format:) when this insight
+                // rendered. All three args must be supplied, in order.
+                body: String(format: loc("insight.yoy_saving_body"), absPct, monthName, savedFmt)
             )
         } else {
             // Spent more — but we don't immediately alarm; just inform.
@@ -985,7 +995,10 @@ final class SmartBudgetManager {
                 icon: "chart.line.uptrend.xyaxis",
                 color: AppTheme.orange,
                 title: String(format: loc("insight.yoy_higher_title"), monthName),
-                body: String(format: loc("insight.yoy_higher_body"), absPct, savedFmt)
+                // Body format is "%d%% higher than %@ last year — about %@ more":
+                // (pct, monthName, amount). Same missing-arg crash as the
+                // saving branch — supply monthName for the middle %@.
+                body: String(format: loc("insight.yoy_higher_body"), absPct, monthName, savedFmt)
             )
         }
     }
