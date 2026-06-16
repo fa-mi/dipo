@@ -55,6 +55,7 @@
 		9BCDED992F7978C5006F70F9 /* UtilityViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BCDED982F7978C5006F70F9 /* UtilityViews.swift */; };
 		9BCF249D2FB63FE40070A483 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9BCF249C2FB63FE40070A483 /* WidgetKit.framework */; };
 		9BCF24AC2FB63FE60070A483 /* DiPoWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 9BCF249B2FB63FE40070A483 /* DiPoWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		9BCFA1751CA0000000000002 /* FirebaseCrashlytics in Frameworks */ = {isa = PBXBuildFile; productRef = 9BCFA1751CA0000000000001 /* FirebaseCrashlytics */; };
 		9BD4AD702FA1B70900B4EA52 /* ReceiptScannerEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BD4AD6F2FA1B70800B4EA52 /* ReceiptScannerEngine.swift */; };
 		9BD4AD712FA1B70900B4EA52 /* ReceiptCameraView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BD4AD692FA1B70800B4EA52 /* ReceiptCameraView.swift */; };
 		9BD4AD722FA1B70900B4EA52 /* ReceiptParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BD4AD6A2FA1B70800B4EA52 /* ReceiptParser.swift */; };
@@ -199,6 +200,7 @@
 				9BC564B22F935F1A0081E8F7 /* FirebaseFirestore in Frameworks */,
 				9B8320222F7B8DA1000CE046 /* GoogleSignInSwift in Frameworks */,
 				9BC564B42F935F230081E8F7 /* FirebaseStorage in Frameworks */,
+				9BCFA1751CA0000000000002 /* FirebaseCrashlytics in Frameworks */,
 				9BFC17B52F91206C00D80402 /* RevenueCat in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -332,6 +334,7 @@
 				9BC564B32F935F230081E8F7 /* FirebaseStorage */,
 				9B944DB22F949ABB00C5892D /* FirebaseAuth */,
 				9B944DB42F94F45F00C5892D /* FirebaseMessaging */,
+				9BCFA1751CA0000000000001 /* FirebaseCrashlytics */,
 			);
 			productName = "Wall-E";
 			productReference = 9BE64C362F7513F000662EC1 /* DiPo.app */;
@@ -476,7 +479,7 @@
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
 				CODE_SIGN_ENTITLEMENTS = DiPoWidgetExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 38;
+				CURRENT_PROJECT_VERSION = 42;
 				DEVELOPMENT_TEAM = 3C6KN7P2NC;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = DiPoWidget/Info.plist;
@@ -488,7 +491,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.3;
 				PRODUCT_BUNDLE_IDENTIFIER = com.fahmiaquinas.DiPo.DiPoWidget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -508,7 +511,7 @@
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
 				CODE_SIGN_ENTITLEMENTS = DiPoWidgetExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 38;
+				CURRENT_PROJECT_VERSION = 42;
 				DEVELOPMENT_TEAM = 3C6KN7P2NC;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = DiPoWidget/Info.plist;
@@ -520,7 +523,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.3;
 				PRODUCT_BUNDLE_IDENTIFIER = com.fahmiaquinas.DiPo.DiPoWidget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -664,7 +667,7 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = DiPo/DiPo.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 38;
+				CURRENT_PROJECT_VERSION = 42;
 				DEVELOPMENT_TEAM = 3C6KN7P2NC;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -681,7 +684,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.3;
 				PRODUCT_BUNDLE_IDENTIFIER = com.fahmiaquinas.DiPo;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -706,7 +709,7 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = DiPo/DiPo.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 38;
+				CURRENT_PROJECT_VERSION = 42;
 				DEVELOPMENT_TEAM = 3C6KN7P2NC;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -723,7 +726,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.3;
 				PRODUCT_BUNDLE_IDENTIFIER = com.fahmiaquinas.DiPo;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -829,6 +832,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 9B8320252F7B9610000CE046 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
 			productName = FirebaseStorage;
+		};
+		9BCFA1751CA0000000000001 /* FirebaseCrashlytics */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 9B8320252F7B9610000CE046 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseCrashlytics;
 		};
 		9BFC17B42F91206C00D80402 /* RevenueCat */ = {
 			isa = XCSwiftPackageProductDependency;

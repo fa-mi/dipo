@@ -209,16 +209,25 @@ struct RootView: View {
                     .transition(.asymmetric(
                         insertion: .move(edge: .bottom).combined(with: .opacity),
                         removal: .opacity))
-            case .biometric:
-                BiometricGateView(authVM: authVM)
-                    .transition(.asymmetric(
-                        insertion: .move(edge: .bottom).combined(with: .opacity),
-                        removal: .scale(scale: 1.05).combined(with: .opacity)))
-            case .authenticated:
+            case .biometric, .authenticated:
+                // Keep MainTabView MOUNTED across the biometric re-lock that
+                // fires on every app-switch. The lock is an opaque OVERLAY, not
+                // a sibling branch of the switch — previously `.biometric` and
+                // `.authenticated` were separate cases, so re-locking destroyed
+                // MainTabView and recreated it on unlock, wiping the user's
+                // place (active tab reset to Home, open sheets/pushed screens
+                // dismissed). Overlaying preserves all of that; the gate's
+                // opaque background still hides the content while locked.
                 MainTabView(vm: appVM, authVM: authVM)
-                    .transition(.asymmetric(
-                        insertion: .opacity,
-                        removal: .scale(scale: 0.95).combined(with: .opacity)))
+                    .transition(.opacity)
+                    .overlay {
+                        if authVM.authState == .biometric {
+                            BiometricGateView(authVM: authVM)
+                                .transition(.asymmetric(
+                                    insertion: .opacity,
+                                    removal: .scale(scale: 1.05).combined(with: .opacity)))
+                        }
+                    }
             }
         }
         .animation(.spring(response: 0.5, dampingFraction: 0.82), value: authVM.authState)
@@ -262,6 +271,8 @@ struct RootView: View {
                 // This must come before the notification listener below so the
                 // notifications queue is also cleared.
                 UserSwitchDetector.handleSignIn(userID: newID, context: context)
+                // Tag crash reports with the signed-in user for correlation.
+                CrashReporter.setUser(newID)
                 // Admin broadcast + ticket-reply listener — replays anything
                 // the admin sent (including support replies, which the admin
                 // panel writes to user_notifications) straight into the bell.
@@ -278,6 +289,7 @@ struct RootView: View {
                 Task { await FirebaseSupportService.shared.registerCurrentDeviceToken() }
             } else {
                 FirebaseSupportService.shared.stopListening()
+                CrashReporter.setUser(nil)
             }
         }
 
@@ -290,6 +302,9 @@ struct RootView: View {
                 // This catches Royal activation after the deferred billing date
                 // without needing a backend webhook or push notification.
                 PremiumManager.shared.checkActiveSubscription()
+                // Reconcile the app-icon badge with real unread count — clears
+                // the stuck "1" badge that local pushes left behind.
+                NotificationManager.shared.syncAppBadge()
                 // Foregrounding is a cheap opportunity to recompute widget
                 // totals — handles month rollover, FX rate refresh, and any
                 // background-modified data we missed.
@@ -327,6 +342,11 @@ struct RootView: View {
             let rcKey = Bundle.main.object(forInfoDictionaryKey: "REVENUECAT_API_KEY") as? String ?? ""
             Purchases.configure(withAPIKey: rcKey)
             PremiumManager.shared.checkActiveSubscription()
+            // Clear any stuck app-icon badge left by a prior local push.
+            NotificationManager.shared.syncAppBadge()
+            // Tag crash reports with the current user (covers returning users
+            // restored from Keychain, where the userID onChange doesn't fire).
+            CrashReporter.setUser(UserSession.shared.userID)
             // Admin broadcast + ticket-reply listener — on launch its initial
             // snapshot replays any admin notification (broadcasts AND support
             // replies) written to user_notifications while the app was closed,

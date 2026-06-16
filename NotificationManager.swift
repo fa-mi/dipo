@@ -251,18 +251,38 @@ final class NotificationManager {
     func markAllRead() {
         withAnimation { items = items.map { var i = $0; i.isRead = true; return i } }
         save()
+        syncAppBadge()
     }
 
     func markRead(_ id: UUID) {
         if let idx = items.firstIndex(where: { $0.id == id }) {
             items[idx].isRead = true
             save()
+            syncAppBadge()
         }
     }
 
     func clearAll() {
         withAnimation { items = [] }
         save()
+        syncAppBadge()
+    }
+
+    /// Reconcile the iOS app-icon badge with the REAL in-app unread count.
+    ///
+    /// Local pushes hard-code `badge = 1` ("you have something new"), but
+    /// nothing ever reset it — so the icon kept showing "1" forever even when
+    /// the bell was empty. This sets the OS badge to the actual unread count
+    /// (0 → badge disappears). Call on app foreground and whenever unread
+    /// changes. Also clears stale delivered notifications from Notification
+    /// Center when nothing is unread, so the badge and the center agree.
+    func syncAppBadge() {
+        let count = unreadCount
+        let center = UNUserNotificationCenter.current()
+        center.setBadgeCount(count) { _ in }
+        if count == 0 {
+            center.removeAllDeliveredNotifications()
+        }
     }
 
     // MARK: - Persistence
