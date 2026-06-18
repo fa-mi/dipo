@@ -652,18 +652,14 @@ struct TransactionDetailSheet: View {
                     .font(.system(size: 11))
                     .foregroundStyle(AppTheme.textSecondary.opacity(0.8))
                     .frame(maxWidth: .infinity, alignment: .leading)
-                HStack(spacing: 10) {
-                    subtypeButton(
-                        for: .refund,
-                        title: loc("tx.subtype.mark_refund"),
-                        subtitle: loc("tx.subtype.mark_refund_hint")
-                    )
-                    subtypeButton(
-                        for: .transfer,
-                        title: loc("tx.subtype.mark_transfer"),
-                        subtitle: loc("tx.subtype.mark_transfer_hint")
-                    )
-                }
+                // Transfer tagging was removed here — moving money between your
+                // own cards now has a dedicated Transfer feature (Cards tab).
+                // This retro-tag is just for refunds on existing transactions.
+                subtypeButton(
+                    for: .refund,
+                    title: loc("tx.subtype.mark_refund"),
+                    subtitle: loc("tx.subtype.mark_refund_hint")
+                )
             } else {
                 // Already marked — show explanation + reset button.
                 Text(currentSubtypeExplanation)
