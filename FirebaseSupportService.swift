@@ -66,6 +66,40 @@ final class FirebaseSupportService {
     var submitError: String?
     var fetchError: String?      // ← shown in UI so user can see what went wrong
 
+    // MARK: - Maintenance Mode (admin-controlled global gate)
+    //
+    // Mirrors a single Firestore doc `app_config/maintenance`:
+    //   { enabled: Bool, title: String, message: String }
+    // When `enabled` is true the app shows a full-screen blocking page instead
+    // of the main UI (see RootView). A real-time listener flips it the moment
+    // the admin toggles it — no app restart needed.
+    var isUnderMaintenance = false
+    var maintenanceTitle   = ""
+    var maintenanceMessage = ""
+    private var maintenanceListener: ListenerRegistration?
+
+    /// Attach the real-time maintenance listener. Safe to call repeatedly. Reads
+    /// a single app-wide config doc; requires a Firebase Auth session (anonymous
+    /// is established at launch), same as the other listeners here.
+    func startListeningForMaintenance() {
+        maintenanceListener?.remove()
+        maintenanceListener = db.collection("app_config").document("maintenance")
+            .addSnapshotListener { [weak self] snapshot, _ in
+                guard let self else { return }
+                let data = snapshot?.data()
+                let enabled = (data?["enabled"] as? Bool) ?? false
+                let title   = (data?["title"]   as? String) ?? ""
+                let message = (data?["message"] as? String) ?? ""
+                Task { @MainActor in
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        self.isUnderMaintenance = enabled
+                    }
+                    self.maintenanceTitle   = title
+                    self.maintenanceMessage = message
+                }
+            }
+    }
+
     // MARK: - Submit Ticket
 
     func submitTicket(
