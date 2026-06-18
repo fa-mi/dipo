@@ -1,0 +1,72 @@
+# ─────────────────────────────────────────────────────────────
+# macOS
+# ─────────────────────────────────────────────────────────────
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+
+# ─────────────────────────────────────────────────────────────
+# Xcode — user-specific state (causes merge conflicts; not shareable)
+# ─────────────────────────────────────────────────────────────
+xcuserdata/
+*.xcuserstate
+*.xcscmblueprint
+*.xccheckout
+
+# ─────────────────────────────────────────────────────────────
+# Xcode — build output
+# ─────────────────────────────────────────────────────────────
+build/
+DerivedData/
+*.moved-aside
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Legacy per-user project files
+*.pbxuser
+!default.pbxuser
+*.mode1v3
+!default.mode1v3
+*.mode2v3
+!default.mode2v3
+*.perspectivev3
+!default.perspectivev3
+
+# ─────────────────────────────────────────────────────────────
+# Swift Package Manager
+# (Package.resolved is intentionally NOT ignored — commit it so
+#  everyone resolves the exact same dependency versions.)
+# ─────────────────────────────────────────────────────────────
+.build/
+.swiftpm/xcode/package.xcworkspace/contents.xcworkspacedata
+.swiftpm/configuration/
+
+# ─────────────────────────────────────────────────────────────
+# Playgrounds
+# ─────────────────────────────────────────────────────────────
+timeline.xctimeline
+playground.xcworkspace
+
+# ─────────────────────────────────────────────────────────────
+# CocoaPods / Carthage (not used here, kept for safety)
+# ─────────────────────────────────────────────────────────────
+Pods/
+Carthage/Build/
+
+# ─────────────────────────────────────────────────────────────
+# Fastlane
+# ─────────────────────────────────────────────────────────────
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots/**/*.png
+fastlane/test_output
+
+# ─────────────────────────────────────────────────────────────
+# Misc
+# ─────────────────────────────────────────────────────────────
+*.log
+.env
+.env.local

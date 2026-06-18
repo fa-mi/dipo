@@ -1723,54 +1723,94 @@ struct AllTransactionsSheet: View {
 /// The drag only engages on horizontal-dominant movement, so vertical
 /// scrolling stays smooth. Pairs with a single confirmation dialog at the list
 /// level so an accidental swipe can't delete financial data in one motion.
+// Swipe-to-delete row modeled on the iOS Mail / Phone (Calls) behavior:
+//   • the row tracks the finger 1:1 while dragging (no animation lag),
+//   • the red action STRETCHES with the swipe and its icon nudges,
+//   • a FULL swipe past `fullSwipeThreshold` deletes on release (with a
+//     confirming haptic the moment you cross it),
+//   • a short swipe snaps open to a fixed Delete button; tapping it deletes,
+//   • everything springs on release; vertical drags still scroll the list.
 struct SwipeToDeleteRow<Content: View>: View {
     var onTap: () -> Void
     var onDelete: () -> Void
     @ViewBuilder var content: Content
 
     @State private var offset: CGFloat = 0
-    @GestureState private var drag: CGFloat = 0
-    private let actionWidth: CGFloat = 84
-    private let openThreshold: CGFloat = 48
+    @State private var gestureStart: CGFloat? = nil
+    @State private var crossedFull = false
 
-    private var visibleOffset: CGFloat { max(-actionWidth, min(0, offset + drag)) }
+    private let actionWidth: CGFloat = 88
+    private let openThreshold: CGFloat = 44
+    private let fullSwipeThreshold: CGFloat = 230   // drag this far → delete on release
+
+    /// Positive width of the red action currently revealed.
+    private var revealed: CGFloat { max(0, -offset) }
+    private var isFullSwipe: Bool { revealed >= fullSwipeThreshold }
 
     var body: some View {
         ZStack(alignment: .trailing) {
-            // Delete affordance revealed behind the row as it slides left.
-            Button {
-                HapticManager.shared.tap()
-                withAnimation(.spring(response: 0.3)) { offset = 0 }
-                onDelete()
-            } label: {
-                VStack(spacing: 3) {
-                    Image(systemName: "trash.fill").font(.system(size: 16, weight: .semibold))
-                    Text(loc("common.delete")).font(.system(size: 11, weight: .bold))
+            // Red action — width follows the swipe so it "stretches" like iOS.
+            ZStack(alignment: isFullSwipe ? .leading : .trailing) {
+                AppTheme.red
+                Button {
+                    HapticManager.shared.tap()
+                    withAnimation(.spring(response: 0.3)) { offset = 0 }
+                    onDelete()
+                } label: {
+                    VStack(spacing: 3) {
+                        Image(systemName: "trash.fill").font(.system(size: 16, weight: .semibold))
+                        Text(loc("common.delete")).font(.system(size: 11, weight: .bold))
+                    }
+                    .foregroundStyle(.white)
+                    .frame(width: actionWidth)
+                    .frame(maxHeight: .infinity)
+                    .scaleEffect(isFullSwipe ? 1.12 : 1)
                 }
-                .foregroundStyle(.white)
-                .frame(width: actionWidth)
-                .frame(maxHeight: .infinity)
-                .background(AppTheme.red, in: RoundedRectangle(cornerRadius: 14))
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
-            .opacity(visibleOffset < -2 ? 1 : 0)
+            .frame(width: revealed)
+            .clipShape(RoundedRectangle(cornerRadius: 14))
+            .opacity(revealed > 1 ? 1 : 0)
 
             content
                 // Opaque background so the red action is hidden when closed.
                 .background(AppTheme.bg)
-                .offset(x: visibleOffset)
+                .offset(x: offset)
                 .gesture(
-                    DragGesture(minimumDistance: 18)
-                        .updating($drag) { value, state, _ in
-                            // Horizontal-dominant only — let vertical drags scroll.
-                            if abs(value.translation.width) > abs(value.translation.height) {
-                                state = value.translation.width
+                    DragGesture(minimumDistance: 16)
+                        .onChanged { value in
+                            // Engage only on horizontal-dominant drags (or when
+                            // already open) so vertical scrolling stays smooth.
+                            if gestureStart == nil {
+                                guard abs(value.translation.width) > abs(value.translation.height) else { return }
+                                gestureStart = offset
+                            }
+                            guard let start = gestureStart else { return }
+                            var next = start + value.translation.width
+                            if next > 0 { next = 0 }                       // no right-swipe
+                            if next < -actionWidth {                        // rubber-band past the button
+                                next = -actionWidth - (-(next) - actionWidth) * 0.45
+                            }
+                            offset = next
+                            // Confirming haptic the instant you cross into full-swipe.
+                            if revealed >= fullSwipeThreshold, !crossedFull {
+                                crossedFull = true; HapticManager.shared.tap()
+                            } else if revealed < fullSwipeThreshold, crossedFull {
+                                crossedFull = false
                             }
                         }
-                        .onEnded { value in
-                            let combined = offset + value.translation.width
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.82)) {
-                                offset = combined < -openThreshold ? -actionWidth : 0
+                        .onEnded { _ in
+                            gestureStart = nil
+                            let didFull = revealed >= fullSwipeThreshold
+                            crossedFull = false
+                            if didFull {
+                                HapticManager.shared.warning()
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { offset = 0 }
+                                onDelete()
+                            } else {
+                                withAnimation(.spring(response: 0.32, dampingFraction: 0.8)) {
+                                    offset = revealed >= openThreshold ? -actionWidth : 0
+                                }
                             }
                         }
                 )
