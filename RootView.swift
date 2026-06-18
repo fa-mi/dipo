@@ -196,6 +196,9 @@ struct RootView: View {
 
     @State private var appVM  = AppViewModel()
     @State private var authVM = AuthViewModel()
+    /// Observe the support service so the maintenance gate flips live when the
+    /// admin toggles it.
+    @State private var support = FirebaseSupportService.shared
 
     var body: some View {
         ZStack {
@@ -233,6 +236,16 @@ struct RootView: View {
         .animation(.spring(response: 0.5, dampingFraction: 0.82), value: authVM.authState)
         .overlay { NoInternetOverlay() }      // full-screen offline view
         .overlay(alignment: .top) { ReconnectedToast() }  // brief "Back online" toast
+        // Admin-controlled maintenance gate — blocks the ENTIRE app (above
+        // auth, main UI, everything) with an opaque full-screen page when the
+        // admin flips `app_config/maintenance.enabled`. Outermost overlay so
+        // nothing is reachable behind it.
+        .overlay {
+            if support.isUnderMaintenance {
+                MaintenanceView(title: support.maintenanceTitle, message: support.maintenanceMessage)
+                    .transition(.opacity)
+            }
+        }
 
         // KEY: whenever SwiftData adds/removes/edits any BankCard,
         // liveCards updates automatically → sync straight into appVM
@@ -347,6 +360,8 @@ struct RootView: View {
             // Tag crash reports with the current user (covers returning users
             // restored from Keychain, where the userID onChange doesn't fire).
             CrashReporter.setUser(UserSession.shared.userID)
+            // Listen for an admin-triggered maintenance window (real-time).
+            FirebaseSupportService.shared.startListeningForMaintenance()
             // Admin broadcast + ticket-reply listener — on launch its initial
             // snapshot replays any admin notification (broadcasts AND support
             // replies) written to user_notifications while the app was closed,
@@ -373,5 +388,74 @@ struct RootView: View {
                 }
             }
         }
+    }
+}
+
+// MARK: - Maintenance View (full-screen admin-triggered block)
+//
+// Shown by RootView whenever `app_config/maintenance.enabled` is true. Opaque
+// and non-dismissable by design — the app is intentionally unusable until the
+// admin turns maintenance off (the Firestore listener flips it back live, so
+// the user doesn't even need to relaunch). Falls back to sensible localized
+// copy when the admin doesn't provide a custom title/message.
+struct MaintenanceView: View {
+    let title: String
+    let message: String
+    @State private var pulse = false
+
+    private var resolvedTitle: String {
+        title.isEmpty ? loc("maintenance.title") : title
+    }
+    private var resolvedMessage: String {
+        message.isEmpty ? loc("maintenance.message") : message
+    }
+
+    var body: some View {
+        ZStack {
+            AppTheme.bg.ignoresSafeArea()
+            RadialGradient(colors: [AppTheme.orange.opacity(0.10), .clear],
+                           center: .init(x: 0.5, y: 0.36), startRadius: 0, endRadius: 320)
+                .ignoresSafeArea()
+
+            VStack(spacing: 26) {
+                Spacer()
+                ZStack {
+                    ForEach(0..<3) { i in
+                        Circle()
+                            .stroke(AppTheme.orange.opacity(0.08 - Double(i) * 0.02), lineWidth: 1)
+                            .frame(width: CGFloat(120 + i * 44), height: CGFloat(120 + i * 44))
+                            .scaleEffect(pulse ? 1.06 : 1)
+                            .animation(.easeInOut(duration: 2.2).repeatForever(autoreverses: true).delay(Double(i) * 0.3), value: pulse)
+                    }
+                    Circle().fill(AppTheme.orange.opacity(0.12)).frame(width: 104, height: 104)
+                    Image(systemName: "wrench.and.screwdriver.fill")
+                        .font(.system(size: 40, weight: .semibold))
+                        .foregroundStyle(AppTheme.orange)
+                }
+
+                VStack(spacing: 12) {
+                    Text(resolvedTitle)
+                        .font(.system(size: 24, weight: .bold))
+                        .foregroundStyle(AppTheme.textPrimary)
+                        .multilineTextAlignment(.center)
+                    Text(resolvedMessage)
+                        .font(.system(size: 15))
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .multilineTextAlignment(.center)
+                        .lineSpacing(3)
+                        .padding(.horizontal, 36)
+                }
+
+                Spacer()
+
+                HStack(spacing: 6) {
+                    Image(systemName: "lock.fill").font(.system(size: 10))
+                    Text(loc("maintenance.footer")).font(.system(size: 12))
+                }
+                .foregroundStyle(AppTheme.textSecondary.opacity(0.7))
+                .padding(.bottom, 40)
+            }
+        }
+        .onAppear { pulse = true }
     }
 }

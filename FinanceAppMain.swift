@@ -73,6 +73,10 @@ class AppDelegate: NSObject, UIApplicationDelegate,
                     // Auth is ready now — re-run device-token registration
                     // in case the FCM token arrived before auth was up.
                     Task { await FirebaseSupportService.shared.registerCurrentDeviceToken() }
+                    // Start the maintenance listener now that auth (required by
+                    // Firestore rules) exists — covers cold launch where RootView
+                    // .onAppear may run before anonymous auth completes.
+                    Task { @MainActor in FirebaseSupportService.shared.startListeningForMaintenance() }
                 }
             }
         }

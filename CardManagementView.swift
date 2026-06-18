@@ -135,6 +135,9 @@ struct CardListView: View {
     @State private var showAddCard    = false
     @State private var editingCard: BankCard? = nil
     @State private var appeared       = false
+    @State private var showTransfer        = false
+    @State private var showTransferPaywall = false
+    @State private var pm = PremiumManager.shared
 
 
     /// Kelompokkan saldo per mata uang kartu. Tiap kartu dijumlah dalam currency-nya sendiri
@@ -177,6 +180,38 @@ struct CardListView: View {
                         }
                         Spacer()
                         HStack(spacing: 12) {
+                            // Transfer between cards — Royal-only. Needs ≥2 cards
+                            // to have somewhere to move money to.
+                            if vm.cards.count >= 2 {
+                                Button {
+                                    HapticManager.shared.tap()
+                                    let _ = pm.plan
+                                    if pm.canAccess(.cardTransfer) {
+                                        showTransfer = true
+                                    } else {
+                                        showTransferPaywall = true
+                                    }
+                                } label: {
+                                    ZStack {
+                                        Circle()
+                                            .fill(AppTheme.cardDark)
+                                            .frame(width: 42, height: 42)
+                                            .overlay(Circle().stroke(AppTheme.accent.opacity(0.3), lineWidth: 1))
+                                        Image(systemName: "arrow.left.arrow.right")
+                                            .font(.system(size: 16, weight: .semibold))
+                                            .foregroundStyle(AppTheme.accent)
+                                        if !pm.canAccess(.cardTransfer) {
+                                            Image(systemName: "crown.fill")
+                                                .font(.system(size: 8, weight: .bold))
+                                                .foregroundStyle(.white)
+                                                .padding(3)
+                                                .background(PremiumPlan.royal.color, in: Circle())
+                                                .offset(x: 15, y: -15)
+                                        }
+                                    }
+                                }
+                                .buttonStyle(ScaleButtonStyle())
+                            }
                             Button {
                                 HapticManager.shared.tap()
                                 showAddCard = true
@@ -299,6 +334,20 @@ struct CardListView: View {
         }
         .sheet(item: $editingCard) { card in
             CardFormSheet(vm: vm, editCard: card)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+                .presentationBackground(AppTheme.bg)
+                .preferredColorScheme(appColorScheme())
+        }
+        .sheet(isPresented: $showTransfer) {
+            CardTransferSheet(vm: vm)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+                .presentationBackground(AppTheme.bg)
+                .preferredColorScheme(appColorScheme())
+        }
+        .sheet(isPresented: $showTransferPaywall) {
+            PaywallView()
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
                 .presentationBackground(AppTheme.bg)
@@ -1252,5 +1301,214 @@ struct CardPreviewMini: View {
         .shadow(color: .black.opacity(0.3), radius: 16, y: 8)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isWallet)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: walletProvider?.rawValue)
+    }
+}
+
+// MARK: - Card Transfer Sheet (Royal-only)
+//
+// Moves money between the user's own cards/wallets. Implemented as a paired
+// .transfer-subtype transaction (debit on source, credit on destination) so it
+// flows through the same balance math as everything else and is correctly
+// excluded from spend/save analysis. Validates that the source can't go
+// negative; cross-currency transfers convert at the live rate.
+struct CardTransferSheet: View {
+    @Bindable var vm: AppViewModel
+    @Environment(\.modelContext) private var context
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var sourceIndex = 0
+    @State private var destIndex   = 1
+    @State private var amountText  = ""
+
+    private var cards: [BankCard] { vm.cards }
+    private var sourceCard: BankCard? { cards.indices.contains(sourceIndex) ? cards[sourceIndex] : nil }
+    private var destCard:   BankCard? { cards.indices.contains(destIndex)   ? cards[destIndex]   : nil }
+
+    /// Amount is entered in the SOURCE card's currency.
+    private var amount: Double { Double(amountText.replacingOccurrences(of: ",", with: ".")) ?? 0 }
+    private var sourceBalance: Double { sourceCard?.computedBalance() ?? 0 }
+    private var convertedToDest: Double {
+        guard let s = sourceCard, let d = destCard else { return 0 }
+        return CurrencyManager.shared.convert(amount, from: s.resolvedCurrency, to: d.resolvedCurrency)
+    }
+    private var sameCard: Bool { sourceIndex == destIndex }
+    /// The core rule: a transfer must never push the source balance negative.
+    private var insufficient: Bool { amount > sourceBalance + 0.0001 }
+    private var canTransfer: Bool {
+        !sameCard && amount > 0 && !insufficient && sourceCard != nil && destCard != nil
+    }
+    private var crossCurrency: Bool {
+        (sourceCard?.resolvedCurrency ?? "") != (destCard?.resolvedCurrency ?? "")
+    }
+
+    private func label(_ card: BankCard) -> String {
+        if card.isDigitalWallet, !card.walletProvider.isEmpty { return card.walletProvider }
+        let l4 = card.last4
+        return l4.isEmpty ? (card.holderName.isEmpty ? loc("transfer.card") : card.holderName) : "•••• \(l4)"
+    }
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                AppTheme.bg.ignoresSafeArea()
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 18) {
+                        header
+                        cardSelector(title: loc("transfer.from"), index: $sourceIndex, isSource: true)
+                        swapButton
+                        cardSelector(title: loc("transfer.to"), index: $destIndex, isSource: false)
+                        amountField
+                        if let err = validationError {
+                            HStack(spacing: 8) {
+                                Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 13))
+                                Text(err).font(.system(size: 13, weight: .medium))
+                            }
+                            .foregroundStyle(AppTheme.red)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 22)
+                            .transition(.opacity)
+                        }
+                        transferButton
+                        Spacer(minLength: 30)
+                    }
+                    .padding(.top, 12)
+                }
+            }
+            .navigationTitle(loc("transfer.title"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(AppTheme.bg, for: .navigationBar)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(loc("common.cancel")) { dismiss() }.foregroundStyle(AppTheme.textSecondary)
+                }
+            }
+        }
+    }
+
+    private var validationError: String? {
+        if sameCard { return loc("transfer.same_card") }
+        if amount > 0 && insufficient { return loc("transfer.insufficient") }
+        return nil
+    }
+
+    private var header: some View {
+        VStack(spacing: 6) {
+            ZStack {
+                Circle().fill(AppTheme.accent.opacity(0.12)).frame(width: 56, height: 56)
+                Image(systemName: "arrow.left.arrow.right").font(.system(size: 24)).foregroundStyle(AppTheme.accent)
+            }
+            Text(loc("transfer.subtitle")).font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
+                .multilineTextAlignment(.center).padding(.horizontal, 32)
+        }
+        .padding(.bottom, 4)
+    }
+
+    private func cardSelector(title: String, index: Binding<Int>, isSource: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title).font(.system(size: 12, weight: .semibold)).foregroundStyle(AppTheme.textSecondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Menu {
+                ForEach(Array(cards.enumerated()), id: \.element.id) { i, card in
+                    Button { index.wrappedValue = i } label: {
+                        Text("\(label(card)) · \(card.formattedBalance)")
+                    }
+                }
+            } label: {
+                HStack {
+                    let card = cards.indices.contains(index.wrappedValue) ? cards[index.wrappedValue] : nil
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(card.map(label) ?? "—").font(.system(size: 15, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                        if let card {
+                            Text(String(format: loc("transfer.available"), card.formattedBalance))
+                                .font(.system(size: 11)).foregroundStyle(isSource && insufficient ? AppTheme.red : AppTheme.textSecondary)
+                        }
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.up.chevron.down").font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
+                }
+                .padding(14)
+                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
+                .overlay(RoundedRectangle(cornerRadius: 14).stroke(AppTheme.cardMid.opacity(0.6), lineWidth: 1))
+            }
+        }
+        .padding(.horizontal, 22)
+    }
+
+    private var swapButton: some View {
+        Button {
+            HapticManager.shared.tap()
+            withAnimation(.spring(response: 0.3)) { swap(&sourceIndex, &destIndex) }
+        } label: {
+            Image(systemName: "arrow.up.arrow.down")
+                .font(.system(size: 14, weight: .bold)).foregroundStyle(AppTheme.accent)
+                .frame(width: 36, height: 36)
+                .background(AppTheme.cardDark, in: Circle())
+                .overlay(Circle().stroke(AppTheme.accent.opacity(0.3), lineWidth: 1))
+        }
+        .buttonStyle(ScaleButtonStyle())
+    }
+
+    private var amountField: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(loc("transfer.amount")).font(.system(size: 12, weight: .semibold)).foregroundStyle(AppTheme.textSecondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            HStack(spacing: 10) {
+                Text(sourceCard?.resolvedCurrency ?? "")
+                    .font(.system(size: 15, weight: .bold)).foregroundStyle(AppTheme.accent)
+                    .padding(.horizontal, 14).padding(.vertical, 14)
+                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 12))
+                TextField("0", text: $amountText)
+                    .font(.system(size: 26, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
+                    .keyboardType(.decimalPad)
+                    .padding(.horizontal, 16).padding(.vertical, 12)
+                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
+            }
+            if crossCurrency && amount > 0 {
+                Text(String(format: loc("transfer.converted"),
+                            CurrencyManager.shared.formatted(convertedToDest, currency: destCard?.resolvedCurrency ?? "")))
+                    .font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
+            }
+        }
+        .padding(.horizontal, 22)
+    }
+
+    private var transferButton: some View {
+        Button {
+            performTransfer()
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "arrow.left.arrow.right").font(.system(size: 16, weight: .semibold))
+                Text(loc("transfer.button")).font(.system(size: 16, weight: .bold))
+            }
+            .foregroundStyle(canTransfer ? AppTheme.bg : AppTheme.textSecondary)
+            .frame(maxWidth: .infinity).padding(.vertical, 17)
+            .background(canTransfer ? AppTheme.accent : AppTheme.cardMid, in: RoundedRectangle(cornerRadius: 16))
+        }
+        .buttonStyle(ScaleButtonStyle())
+        .disabled(!canTransfer)
+        .padding(.horizontal, 22).padding(.top, 6)
+    }
+
+    private func performTransfer() {
+        guard let s = sourceCard, let d = destCard, canTransfer else { return }
+        let outAmt = amount               // source currency
+        let inAmt  = convertedToDest      // destination currency
+
+        let debit = TxRecord(
+            name: String(format: loc("transfer.to_name"), label(d)),
+            date: Date(), amount: -outAmt, type: "tx.type.purchase",
+            icon: "⇄", iconBgHex: "#38BDF8", category: .other,
+            currency: s.resolvedCurrency, notes: "", subtype: .transfer)
+        let credit = TxRecord(
+            name: String(format: loc("transfer.from_name"), label(s)),
+            date: Date(), amount: inAmt, type: "tx.type.income",
+            icon: "⇄", iconBgHex: "#38BDF8", category: .other,
+            currency: d.resolvedCurrency, notes: "", subtype: .transfer)
+
+        s.transactions.append(debit)
+        d.transactions.append(credit)
+        try? context.save()
+        HapticManager.shared.success()
+        dismiss()
     }
 }

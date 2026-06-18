@@ -77,6 +77,7 @@ enum PremiumFeature: String {
     case smartBudget     = "smartBudget"
     case scanReceipt     = "scanReceipt"
     case aiAdvisor       = "aiAdvisor"
+    case cardTransfer    = "cardTransfer"
 
     var icon: String {
         switch self {
@@ -86,6 +87,7 @@ enum PremiumFeature: String {
         case .smartBudget:     return "brain.fill"
         case .scanReceipt:     return "doc.text.viewfinder"
         case .aiAdvisor:       return "sparkles"
+        case .cardTransfer:    return "arrow.left.arrow.right"
         }
     }
 
@@ -97,6 +99,7 @@ enum PremiumFeature: String {
         case .smartBudget:     return Color(hex: "#A78BFA")
         case .scanReceipt:     return Color(hex: "#10B981")
         case .aiAdvisor:       return Color(hex: "#A78BFA")
+        case .cardTransfer:    return Color(hex: "#38BDF8")
         }
     }
 
@@ -107,7 +110,7 @@ enum PremiumFeature: String {
     var requiredPlan: PremiumPlan {
         switch self {
         case .smartConversion, .savingsGoals, .smartDebt,
-             .smartBudget, .scanReceipt, .aiAdvisor:
+             .smartBudget, .scanReceipt, .aiAdvisor, .cardTransfer:
             return .royal
         }
     }
@@ -121,6 +124,7 @@ enum PremiumFeature: String {
         case .smartBudget:     return loc("premium.feature.smart_budget")
         case .scanReceipt:     return loc("premium.feature.scan_receipt")
         case .aiAdvisor:       return loc("premium.feature.ai_advisor")
+        case .cardTransfer:    return loc("premium.feature.transfer")
         }
     }
 
@@ -132,6 +136,7 @@ enum PremiumFeature: String {
         case .smartBudget:     return loc("premium.feature.smart_budget_desc")
         case .scanReceipt:     return loc("premium.feature.scan_receipt_desc")
         case .aiAdvisor:       return loc("premium.feature.ai_advisor_desc")
+        case .cardTransfer:    return loc("premium.feature.transfer_desc")
         }
     }
 }
