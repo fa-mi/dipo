@@ -1203,7 +1203,7 @@ struct DebtPaymentSheet: View {
                             .foregroundStyle(remaining == 0 ? AppTheme.accent : AppTheme.textSecondary)
                         Text(remaining == 0
                              ? String(format: loc("debt.payoff_full"), debt.name)
-                             : String(format: loc("debt.remaining"), CurrencyManager.shared.formatted(remaining, currency: debt.currency)))
+                             : String(format: loc("debt.remaining_amount"), CurrencyManager.shared.formatted(remaining, currency: debt.currency)))
                             .font(.system(size: 13))
                             .foregroundStyle(remaining == 0 ? AppTheme.accent : AppTheme.textSecondary)
                     }
