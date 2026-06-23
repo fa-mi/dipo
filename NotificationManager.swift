@@ -136,24 +136,66 @@ final class NotificationManager {
         )
     }
 
+    /// Seed (or refresh) the in-app payday reminder for one salary schedule.
+    ///
+    /// IDEMPOTENT — this is re-run every time the notification center opens
+    /// (`seedFromSchedules`), so it must NOT stack duplicates. Previously it
+    /// went through `post()`, whose duplicate guard only looks back 60s, so
+    /// re-opening the bell after a minute kept adding identical "Payday in N
+    /// days" rows. We now tag each schedule's reminder with a stable
+    /// `kind = "payday:<label>"` and replace any prior reminder for that
+    /// schedule in place — fixing both the duplication AND a stale day-count
+    /// lingering (e.g. an old "in 7 days" next to the current "in 2 days").
+    /// No device push is fired here; the actual payday push reminders are
+    /// scheduled separately by NotificationScheduler.
     func postPayday(label: String, amount: String, daysUntil: Int) {
+        let key = "payday:\(label)"
+        let icon: String, hex: String, title: String, body: String, time: String
         switch daysUntil {
         case 0:
-            post(AppNotificationItem(icon: "banknote.fill", iconColorHex: "#1DB87A",
-                title: loc("notif.payday.today_title"),
-                body:  String(format: loc("notif.payday.today_body"), label, amount),
-                time:  loc("notif.time.today"), isUrgent: true))
+            icon = "banknote.fill"; hex = "#1DB87A"
+            title = loc("notif.payday.today_title")
+            body  = String(format: loc("notif.payday.today_body"), label, amount)
+            time  = loc("notif.time.today")
         case 1:
-            post(AppNotificationItem(icon: "clock.fill", iconColorHex: "#FB923C",
-                title: loc("notif.payday.tomorrow_title"),
-                body:  String(format: loc("notif.payday.tomorrow_body"), label),
-                time:  loc("notif.time.tomorrow"), isUrgent: true))
+            icon = "clock.fill"; hex = "#FB923C"
+            title = loc("notif.payday.tomorrow_title")
+            body  = String(format: loc("notif.payday.tomorrow_body"), label)
+            time  = loc("notif.time.tomorrow")
         default:
-            post(AppNotificationItem(icon: "calendar.badge.clock", iconColorHex: "#38BDF8",
-                title: String(format: loc("notif.payday.future_title"), daysUntil),
-                body:  String(format: loc("notif.payday.future_body"), label),
-                time:  String(format: loc("notif.time.in_days"), daysUntil)))
+            icon = "calendar.badge.clock"; hex = "#38BDF8"
+            title = String(format: loc("notif.payday.future_title"), daysUntil)
+            body  = String(format: loc("notif.payday.future_body"), label)
+            time  = String(format: loc("notif.time.in_days"), daysUntil)
         }
+
+        // Already showing this exact reminder → no-op (avoids needless redraws).
+        if let existing = items.first(where: { $0.kind == key }),
+           existing.title == title, existing.body == body {
+            return
+        }
+
+        // Bodies any prior payday row for THIS schedule could have — used to
+        // also sweep up legacy duplicates created before `kind` tagging existed
+        // (they have kind == nil). The "future" body is identical for every
+        // day-count ≥ 2, so this catches the stacked "in N days" rows.
+        let legacyBodies: Set<String> = [
+            String(format: loc("notif.payday.future_body"), label),
+            String(format: loc("notif.payday.tomorrow_body"), label),
+            String(format: loc("notif.payday.today_body"), label, amount),
+        ]
+        let wasRead = items.first(where: { $0.kind == key })?.isRead ?? false
+
+        withAnimation(.spring(response: 0.4)) {
+            items.removeAll { $0.kind == key || ($0.kind == nil && legacyBodies.contains($0.body)) }
+            var item = AppNotificationItem(
+                icon: icon, iconColorHex: hex, title: title, body: body,
+                time: time, isUrgent: daysUntil <= 1, kind: key)
+            item.isRead = wasRead
+            items.insert(item, at: 0)
+            if items.count > 50 { items = Array(items.prefix(50)) }
+        }
+        save()
     }
 
     func postBudgetAlert(group: String, pct: Int) {
