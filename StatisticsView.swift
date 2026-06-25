@@ -247,7 +247,9 @@ struct StatisticsView: View {
                 from: cal.safeDate(byAdding: .month, value: offset, to: now)))
             let mEnd = cal.safeDate(byAdding: .month, value: 1, to: mStart)
             let net = card.transactions
-                .filter { $0.date >= mStart && $0.date < mEnd }
+                // Exclude transfers so the trend matches the Income/Expenses/Net
+                // balance cards above (a transfer out isn't a real monthly loss).
+                .filter { $0.date >= mStart && $0.date < mEnd && $0.txSubtype != .transfer }
                 .reduce(0.0) { $0 + convertedAmount($1) }
             points.append((fmt.string(from: mStart), net))
         }

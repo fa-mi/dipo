@@ -96,7 +96,7 @@ struct HomeView: View {
         // Per-card mode: only count income on the selected card
         if let card = budgetCard {
             return card.transactions
-                .filter { $0.amount > 0 && $0.date >= monthStart }
+                .filter { $0.amount > 0 && $0.txSubtype != .transfer && $0.date >= monthStart }
                 .reduce(0.0) { sum, tx in
                     let txCur = tx.currency.isEmpty ? budgetCurrency : tx.currency
                     return sum + CurrencyManager.shared.convert(tx.amount, from: txCur, to: budgetCurrency)
@@ -107,7 +107,7 @@ struct HomeView: View {
         let scheduled = salarySchedules.filter { $0.isActive }.reduce(0.0) { $0 + $1.amount }
         if scheduled > 0 { return scheduled }
         return vm.cards.flatMap { $0.transactions }
-            .filter { $0.amount > 0 && $0.date >= monthStart }
+            .filter { $0.amount > 0 && $0.txSubtype != .transfer && $0.date >= monthStart }
             .reduce(0.0) { $0 + CurrencyManager.shared.toPreferred($1.amount, from: $1.currency) }
     }
 
