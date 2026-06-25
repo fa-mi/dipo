@@ -29,6 +29,9 @@ struct SalaryCreditEngine {
 
         for schedule in schedules {
             guard schedule.isActive else { continue }
+            // Respect the per-schedule auto-record toggle — when off, the
+            // schedule is still shown for planning but no income tx is created.
+            guard schedule.autoRecord else { continue }
 
             // Already credited this month?
             if schedule.lastCreditedMonth == currentMonth &&
