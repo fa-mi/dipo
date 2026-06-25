@@ -30,7 +30,9 @@ struct DebtView: View {
         let monthStart = cal.safeDate(from: cal.dateComponents([.year, .month], from: Date()))
         let pref = CurrencyManager.shared.preferredCurrency
         return cards.flatMap { $0.transactions }
-            .filter { $0.amount > 0 && $0.date >= monthStart }
+            // Exclude transfers — moving money between your own cards isn't
+            // income (the credit leg is tagged .transfer) and would inflate DTI.
+            .filter { $0.amount > 0 && $0.txSubtype != .transfer && $0.date >= monthStart }
             .reduce(0) { sum, tx in
                 let txCur = tx.currency.isEmpty ? pref : tx.currency
                 return sum + CurrencyManager.shared.convert(tx.amount, from: txCur, to: pref)
@@ -46,6 +48,7 @@ struct DebtView: View {
         // via recommendedMonthlyDebtPayment, so including them would double-count
         return allTx.filter {
             $0.amount < 0 &&
+            $0.txSubtype != .transfer &&   // transfers aren't spending
             $0.category != .debtPayment &&
             cal.component(.month, from: $0.date) == cal.component(.month, from: now) &&
             cal.component(.year,  from: $0.date) == cal.component(.year,  from: now)

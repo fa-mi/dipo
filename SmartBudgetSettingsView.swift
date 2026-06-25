@@ -91,7 +91,7 @@ struct SmartBudgetSettingsSheet: View {
         let cal = Calendar.current
         let monthStart = cal.safeDate(from: cal.dateComponents([.year, .month], from: Date()))
         return budgetTx
-            .filter { $0.amount > 0 && $0.date >= monthStart }
+            .filter { $0.amount > 0 && $0.txSubtype != .transfer && $0.date >= monthStart }
             .reduce(0.0) { sum, tx in
                 sum + mgr.convert(tx.amount, from: tx.currency, to: cardCurrency)
             }
@@ -118,7 +118,7 @@ struct SmartBudgetSettingsSheet: View {
         guard monthlyIncome > 0 else { return [] }
         let r = SmartBudgetManager.shared.ratios(forCardID: selectedCardID, configs: cardConfigs)
         return BudgetGroup.allCases.compactMap { grp in
-            let s = budgetTx.filter { $0.amount < 0 && Calendar.current.isDate($0.date, equalTo: Date(), toGranularity: .month) && SmartBudgetManager.shared.categories(for: grp).contains($0.category) }.reduce(0) { $0 + CurrencyManager.shared.convert(abs($1.amount), from: $1.currency, to: cardCurrency) }
+            let s = budgetTx.filter { $0.amount < 0 && $0.txSubtype != .transfer && Calendar.current.isDate($0.date, equalTo: Date(), toGranularity: .month) && SmartBudgetManager.shared.categories(for: grp).contains($0.category) }.reduce(0) { $0 + CurrencyManager.shared.convert(abs($1.amount), from: $1.currency, to: cardCurrency) }
             let ratio: Double = {
                 switch grp {
                 case .daily:      return r.daily
@@ -729,7 +729,7 @@ struct BudgetGroupCard: View {
     private var monthStart: Date { Calendar.current.safeDate(from: Calendar.current.dateComponents([.year, .month], from: Date())) }
     private var groupTx: [TxRecord] {
         let cats = SmartBudgetManager.shared.categories(for: group)
-        return budgetTx.filter { $0.amount < 0 && $0.date >= monthStart && cats.contains($0.category) }.sorted { $0.date > $1.date }
+        return budgetTx.filter { $0.amount < 0 && $0.txSubtype != .transfer && $0.date >= monthStart && cats.contains($0.category) }.sorted { $0.date > $1.date }
     }
     private var spent: Double  { groupTx.reduce(0) { $0 + CurrencyManager.shared.convert(abs($1.amount), from: $1.currency, to: currency) } }
     private var ratio: Double  { SmartBudgetManager.shared.ratio(for: group) }
@@ -832,7 +832,7 @@ struct BudgetGroupDetailView: View {
 
     private var groupTx: [TxRecord] {
         let cats = SmartBudgetManager.shared.categories(for: group)
-        return budgetTx.filter { $0.amount < 0 && $0.date >= monthStart && cats.contains($0.category) }.sorted { $0.date > $1.date }
+        return budgetTx.filter { $0.amount < 0 && $0.txSubtype != .transfer && $0.date >= monthStart && cats.contains($0.category) }.sorted { $0.date > $1.date }
     }
     private var spent: Double    { groupTx.reduce(0) { $0 + CurrencyManager.shared.convert(abs($1.amount), from: $1.currency, to: currency) } }
     private var ratio: Double    { SmartBudgetManager.shared.ratio(for: group) }
