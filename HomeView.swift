@@ -1749,28 +1749,33 @@ struct SwipeToDeleteRow<Content: View>: View {
 
     var body: some View {
         ZStack(alignment: .trailing) {
-            // Red action — width follows the swipe so it "stretches" like iOS.
-            ZStack(alignment: isFullSwipe ? .leading : .trailing) {
-                AppTheme.red
-                Button {
-                    HapticManager.shared.tap()
-                    withAnimation(.spring(response: 0.3)) { offset = 0 }
-                    onDelete()
-                } label: {
-                    VStack(spacing: 3) {
-                        Image(systemName: "trash.fill").font(.system(size: 16, weight: .semibold))
-                        Text(loc("common.delete")).font(.system(size: 11, weight: .bold))
+            // Red action — a DIRECT sibling of the content so a flexible Color
+            // fills the ZStack and ends up EXACTLY the row's height (the old
+            // nested `maxHeight: .infinity` overflowed, making the button taller
+            // than the row). Flush & square — no corner radius — to sit cleanly
+            // behind the flat transaction rows like iOS Mail / Phone. Width
+            // grows with the swipe; the Delete glyph stays pinned and nudges
+            // toward the leading edge once you cross the full-swipe threshold.
+            AppTheme.red
+                .frame(width: revealed)
+                .overlay(alignment: isFullSwipe ? .leading : .trailing) {
+                    Button {
+                        HapticManager.shared.tap()
+                        withAnimation(.spring(response: 0.3)) { offset = 0 }
+                        onDelete()
+                    } label: {
+                        VStack(spacing: 3) {
+                            Image(systemName: "trash.fill").font(.system(size: 16, weight: .semibold))
+                            Text(loc("common.delete")).font(.system(size: 11, weight: .bold))
+                        }
+                        .foregroundStyle(.white)
+                        .frame(width: actionWidth)
+                        .scaleEffect(isFullSwipe ? 1.1 : 1)
                     }
-                    .foregroundStyle(.white)
-                    .frame(width: actionWidth)
-                    .frame(maxHeight: .infinity)
-                    .scaleEffect(isFullSwipe ? 1.12 : 1)
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
-            }
-            .frame(width: revealed)
-            .clipShape(RoundedRectangle(cornerRadius: 14))
-            .opacity(revealed > 1 ? 1 : 0)
+                .clipped()
+                .opacity(revealed > 1 ? 1 : 0)
 
             content
                 // Opaque background so the red action is hidden when closed.

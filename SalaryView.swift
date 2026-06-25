@@ -16,6 +16,13 @@ final class SalarySchedule {
     var lastCreditedMonth: Int
     var lastCreditedYear: Int
     var isPinned: Bool
+    /// When true, the credit engine auto-creates an income transaction on
+    /// payday. When false, the schedule still shows upcoming paydays (planning)
+    /// but records NOTHING — for users who receive salary on an account not
+    /// tracked in DiPo, or who prefer to log income manually. Defaults to true
+    /// so existing schedules keep their current auto-record behavior (SwiftData
+    /// lightweight migration fills this in for older rows).
+    var autoRecord: Bool = true
 
     init(label: String, amount: Double, dayOfMonth: Int,
          currency: String = CurrencyManager.shared.preferredCurrency, cardID: UUID? = nil) {
@@ -30,6 +37,7 @@ final class SalarySchedule {
         self.lastCreditedMonth = 0
         self.lastCreditedYear = 0
         self.isPinned = false
+        self.autoRecord = true
     }
 }
 
@@ -159,6 +167,7 @@ final class SalaryViewModel {
     var formDay: Int = 25
     var formCurrency: String = CurrencyManager.shared.preferredCurrency
     var formCardID: UUID? = nil
+    var formAutoRecord: Bool = true
     var formError: String? = nil
 
     let currencies = ["USD", "IDR"]
@@ -169,6 +178,7 @@ final class SalaryViewModel {
         formDay      = 25
         formCurrency = CurrencyManager.shared.preferredCurrency
         formCardID   = nil
+        formAutoRecord = true
         formError    = nil
         editingSchedule = nil
     }
@@ -178,6 +188,7 @@ final class SalaryViewModel {
         formAmount = String(s.amount)
         formDay    = s.dayOfMonth
         formCardID = s.cardID
+        formAutoRecord = s.autoRecord
         // Lock to card currency — corrects any old mismatched schedules on edit
         if let id = s.cardID, let card = cards.first(where: { $0.id == id }) {
             formCurrency = card.currency
@@ -404,6 +415,17 @@ struct SalaryCard: View {
                                     .padding(.horizontal, 8)
                                     .padding(.vertical, 3)
                                     .background(AppTheme.cardMid, in: Capsule())
+                            } else if !schedule.autoRecord {
+                                // Auto-record off: schedule still shows upcoming
+                                // paydays for planning but creates no income tx.
+                                HStack(spacing: 3) {
+                                    Image(systemName: "hand.raised.fill").font(.system(size: 8, weight: .bold))
+                                    Text(loc("salary.manual")).font(.system(size: 10, weight: .semibold))
+                                }
+                                .foregroundStyle(AppTheme.orange)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 3)
+                                .background(AppTheme.orange.opacity(0.15), in: Capsule())
                             }
                         }
                         Text(String(format: loc("salary.every_day"), schedule.dayOfMonth))
@@ -552,6 +574,11 @@ struct SalaryCard: View {
             Button(schedule.isActive ? loc("salary.pause") : loc("salary.resume")) {
                 schedule.isActive.toggle()
                 try? context.save()
+            }
+            Button(schedule.autoRecord ? loc("salary.autorecord_off") : loc("salary.autorecord_on")) {
+                schedule.autoRecord.toggle()
+                try? context.save()
+                HapticManager.shared.tap()
             }
             Button(loc("common.delete"), role: .destructive) { showDeleteConfirm = true }
             Button(loc("common.cancel"), role: .cancel) {}
@@ -796,6 +823,32 @@ struct SalaryFormSheet: View {
                         .opacity(appeared ? 1 : 0)
                         .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.18), value: appeared)
 
+                        // Auto-record toggle — when off, the schedule still shows
+                        // upcoming paydays but creates no income transaction.
+                        HStack(spacing: 12) {
+                            Image(systemName: "wand.and.stars")
+                                .font(.system(size: 16))
+                                .foregroundStyle(AppTheme.accent)
+                                .frame(width: 36, height: 36)
+                                .background(AppTheme.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(loc("salary.autorecord_label"))
+                                    .font(.system(size: 14, weight: .medium)).foregroundStyle(AppTheme.textPrimary)
+                                Text(loc("salary.autorecord_hint"))
+                                    .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            Spacer()
+                            Toggle("", isOn: $vm.formAutoRecord)
+                                .labelsHidden().tint(AppTheme.accent)
+                        }
+                        .padding(14)
+                        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
+                        .overlay(RoundedRectangle(cornerRadius: 16).stroke(AppTheme.cardMid.opacity(0.6), lineWidth: 1))
+                        .padding(.horizontal, 22)
+                        .opacity(appeared ? 1 : 0)
+                        .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.2), value: appeared)
+
                         // Live preview
                         VStack(spacing: 8) {
                             Text(loc("salary.actual_this"))
@@ -927,6 +980,7 @@ struct SalaryFormSheet: View {
             existing.dayOfMonth = vm.formDay
             existing.currency   = vm.formCurrency
             existing.cardID     = vm.formCardID
+            existing.autoRecord = vm.formAutoRecord
         } else {
             let cal = Calendar.current
             let now = Date()
@@ -937,6 +991,7 @@ struct SalaryFormSheet: View {
                 currency: vm.formCurrency,
                 cardID: vm.formCardID
             )
+            schedule.autoRecord = vm.formAutoRecord
             // Skip the current month — user should add this month's income manually
             schedule.lastCreditedMonth = cal.component(.month, from: now)
             schedule.lastCreditedYear  = cal.component(.year, from: now)
