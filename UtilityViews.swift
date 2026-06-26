@@ -594,14 +594,11 @@ struct TransactionDetailSheet: View {
             .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 18))
             .padding(.horizontal, 22)
 
-            // Subtype actions — only for expense tx since refund/transfer
-            // semantics don't apply to income (a refund of income doesn't
-            // make sense, and inter-account transfers are usually logged as
-            // expense tx pairs anyway).
-            if tx.amount < 0 {
-                subtypeActions
-                    .padding(.horizontal, 22)
-            }
+            // Refund/transfer tagging was removed — if a transaction was a
+            // refund, the user simply deletes it (the money came back, so the
+            // expense shouldn't exist). Transfers are still created/tagged by
+            // the dedicated Transfer feature; they just don't expose a manual
+            // tag/reset control here.
 
             // Delete button
             Button {
@@ -621,111 +618,6 @@ struct TransactionDetailSheet: View {
             .buttonStyle(ScaleButtonStyle())
             .padding(.horizontal, 22)
             .padding(.bottom, 20)
-        }
-    }
-
-    // MARK: - Subtype actions
-    //
-    // "Mark as Refund / Transfer" actions for an existing tx. This is the
-    // primary way users assign a subtype — at create time the picker felt
-    // out of place ("am I logging a brand-new refund?"), but here the
-    // semantic is clean: "this past tx came back / was a transfer".
-    //
-    // Layout: when subtype = .normal, show two equal-weight buttons (Refund
-    // + Transfer). When already non-normal, show the badge + a single
-    // "Reset to Normal" button so user can undo.
-    @ViewBuilder
-    private var subtypeActions: some View {
-        VStack(spacing: 10) {
-            HStack(spacing: 6) {
-                Image(systemName: "arrow.uturn.backward.circle")
-                    .font(.system(size: 12))
-                    .foregroundStyle(AppTheme.textSecondary)
-                Text(loc("tx.subtype.section_title"))
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(AppTheme.textSecondary)
-                Spacer()
-            }
-
-            if tx.txSubtype == .normal {
-                Text(loc("tx.subtype.section_hint"))
-                    .font(.system(size: 11))
-                    .foregroundStyle(AppTheme.textSecondary.opacity(0.8))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                // Transfer tagging was removed here — moving money between your
-                // own cards now has a dedicated Transfer feature (Cards tab).
-                // This retro-tag is just for refunds on existing transactions.
-                subtypeButton(
-                    for: .refund,
-                    title: loc("tx.subtype.mark_refund"),
-                    subtitle: loc("tx.subtype.mark_refund_hint")
-                )
-            } else {
-                // Already marked — show explanation + reset button.
-                Text(currentSubtypeExplanation)
-                    .font(.system(size: 11))
-                    .foregroundStyle(AppTheme.textSecondary.opacity(0.8))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                Button {
-                    HapticManager.shared.tap()
-                    tx.txSubtype = .normal
-                    try? context.save()
-                } label: {
-                    HStack(spacing: 8) {
-                        Image(systemName: "arrow.uturn.backward")
-                            .font(.system(size: 13, weight: .semibold))
-                        Text(loc("tx.subtype.reset"))
-                            .font(.system(size: 13, weight: .semibold))
-                    }
-                    .foregroundStyle(AppTheme.textSecondary)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 12))
-                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(AppTheme.cardMid, lineWidth: 1))
-                }
-                .buttonStyle(ScaleButtonStyle())
-            }
-        }
-    }
-
-    /// Compact "Mark as X" button used inside the subtypeActions HStack.
-    @ViewBuilder
-    private func subtypeButton(for subtype: TxSubtype, title: String, subtitle: String) -> some View {
-        Button {
-            HapticManager.shared.tap()
-            tx.txSubtype = subtype
-            try? context.save()
-        } label: {
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 6) {
-                    Image(systemName: subtype.icon)
-                        .font(.system(size: 13, weight: .semibold))
-                    Text(title)
-                        .font(.system(size: 13, weight: .semibold))
-                }
-                Text(subtitle)
-                    .font(.system(size: 10))
-                    .foregroundStyle(AppTheme.textSecondary)
-                    .multilineTextAlignment(.leading)
-                    .lineLimit(2)
-            }
-            .foregroundStyle(AppTheme.orange)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(12)
-            .background(AppTheme.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
-            .overlay(RoundedRectangle(cornerRadius: 12).stroke(AppTheme.orange.opacity(0.25), lineWidth: 1))
-        }
-        .buttonStyle(ScaleButtonStyle())
-    }
-
-    /// Loc string explaining what the current subtype means for budgeting.
-    /// Drives the explanation text that appears above the Reset button when
-    /// a tx is already marked non-normal.
-    private var currentSubtypeExplanation: String {
-        switch tx.txSubtype {
-        case .normal:   return ""
-        case .refund:   return loc("tx.subtype.refund_explainer")
-        case .transfer: return loc("tx.subtype.transfer_explainer")
         }
     }
 
