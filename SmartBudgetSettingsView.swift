@@ -22,6 +22,11 @@ struct SmartBudgetSettingsSheet: View {
     /// or when the user explicitly chooses "Default for all cards").
     @State private var editingPerCard: Bool = false
     @State private var showSalarySetup = false
+    /// The preset the user explicitly tapped. Tracked by identity (not by
+    /// ratios) so that two presets sharing the same split — e.g. Student Saver
+    /// and Mortgage Payer are both 50/20/30 — never light up together. nil
+    /// means "no preset is the active choice" (custom/manual ratios).
+    @State private var selectedPreset: BudgetProfile? = nil
 
     enum BudgetTab: String, CaseIterable { case overview = "Overview"; case settings = "Settings" }
 
@@ -49,6 +54,12 @@ struct SmartBudgetSettingsSheet: View {
 
     private var hasChanges: Bool {
         if isEnabled != SmartBudgetManager.shared.isEnabled { return true }
+        // Choosing a specific card with no override yet is itself a change:
+        // the user is explicitly pinning this card's budget so it stops
+        // following the global default. This must be savable even when the
+        // ratios happen to equal the current global default — otherwise the
+        // card silently keeps inheriting global and "can't be saved".
+        if editingPerCard, selectedCardID != nil, selectedCardConfig == nil { return true }
         let baseline = currentBaselineRatios
         return dailyPct != baseline.daily ||
                lifestylePct != baseline.lifestyle ||
@@ -272,7 +283,15 @@ struct SmartBudgetSettingsSheet: View {
             if selectedCardID == nil {
                 selectedCardID = cards.first?.id.uuidString
             }
+            // Highlight whichever preset matches the loaded ratios.
+            reconcileSelectedPreset()
         }
+        // Any ratio change that isn't a preset tap (manual +/-, numeric quick
+        // presets, switching cards) keeps the highlighted preset in sync. The
+        // reconcile is a no-op when an explicitly-tapped preset still matches.
+        .onChange(of: dailyPct)     { _, _ in reconcileSelectedPreset() }
+        .onChange(of: lifestylePct) { _, _ in reconcileSelectedPreset() }
+        .onChange(of: investPct)    { _, _ in reconcileSelectedPreset() }
         .sheet(isPresented: $showSalarySetup) {
             SalaryView()
                 .presentationDetents([.large])
@@ -342,7 +361,7 @@ struct SmartBudgetSettingsSheet: View {
 
         if monthlyIncome > 0 {
             ForEach(BudgetGroup.allCases, id: \.rawValue) { grp in
-                BudgetGroupCard(group: grp, budgetTx: budgetTx, income: monthlyIncome, currency: cardCurrency)
+                BudgetGroupCard(group: grp, budgetTx: budgetTx, income: monthlyIncome, currency: cardCurrency, cardID: selectedCardID, configs: cardConfigs)
                     .padding(.horizontal, 22)
             }
         } else {
@@ -388,7 +407,7 @@ struct SmartBudgetSettingsSheet: View {
                     ForEach(BudgetProfile.allCases) { preset in
                         BudgetPresetCard(
                             preset: preset,
-                            isSelected: matchesCurrentRatios(preset),
+                            isSelected: isPresetSelected(preset),
                             onSelect: { applyPreset(preset) }
                         )
                     }
@@ -572,24 +591,43 @@ struct SmartBudgetSettingsSheet: View {
 
     // MARK: - Profile Preset Helpers
 
-    /// Tests whether the current ratio editor values match a given preset.
-    /// Used to highlight the active preset card. We check the editor state
-    /// (`dailyPct` etc.) rather than the persisted ratios so the highlight
-    /// updates immediately when the user taps a different preset.
-    private func matchesCurrentRatios(_ preset: BudgetProfile) -> Bool {
+    /// Whether a preset's ratios equal the current editor values. Pure ratio
+    /// test — used only as a tie-broken fallback by `reconcileSelectedPreset`,
+    /// never directly for highlighting (two presets can share a ratio).
+    private func ratiosMatch(_ preset: BudgetProfile) -> Bool {
         let r = preset.ratios
         return Int(r.daily * 100)      == dailyPct
             && Int(r.lifestyle * 100)  == lifestylePct
             && Int(r.investDebt * 100) == investPct
     }
 
-    /// Tap handler for a preset card. Loads the preset's ratios into the
-    /// editor (doesn't persist yet — user still has to tap Save). This
-    /// matches the rest of the form which is also unsaved-on-edit, so the
-    /// preset behaves like any other ratio change.
+    /// Highlight rule for a preset card: a preset is "selected" only when it
+    /// is the exact one the user chose (identity match). This guarantees at
+    /// most one card is ever highlighted, even when several presets share the
+    /// same 50/20/30 split.
+    private func isPresetSelected(_ preset: BudgetProfile) -> Bool {
+        selectedPreset == preset
+    }
+
+    /// Keeps `selectedPreset` consistent after any ratio change that did NOT
+    /// come from tapping a preset card (manual +/-, the numeric quick presets,
+    /// switching cards, first appear). If the user's explicitly-chosen preset
+    /// still matches the current ratios we keep it (preserves the Mortgage-vs-
+    /// Student identity); otherwise we fall back to the first preset whose
+    /// ratios match, or nil when nothing matches (truly custom).
+    private func reconcileSelectedPreset() {
+        if let sel = selectedPreset, ratiosMatch(sel) { return }
+        selectedPreset = BudgetProfile.allCases.first(where: ratiosMatch)
+    }
+
+    /// Tap handler for a preset card. Records the explicit identity and loads
+    /// the preset's ratios into the editor (doesn't persist yet — user still
+    /// has to tap Save). This matches the rest of the form which is also
+    /// unsaved-on-edit, so the preset behaves like any other ratio change.
     private func applyPreset(_ preset: BudgetProfile) {
         HapticManager.shared.tap()
         let r = preset.ratios
+        selectedPreset = preset
         withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
             dailyPct      = Int(r.daily * 100)
             lifestylePct  = Int(r.lifestyle * 100)
@@ -724,6 +762,10 @@ struct BudgetGroupCard: View {
     let budgetTx: [TxRecord]
     let income: Double
     let currency: String
+    /// Card whose budget is being previewed. Drives per-card ratio lookup so
+    /// a saved CardBudgetConfig override is reflected here (nil = global).
+    var cardID: String? = nil
+    var configs: [CardBudgetConfig] = []
     @State private var animatedProgress: Double = 0
 
     private var monthStart: Date { Calendar.current.safeDate(from: Calendar.current.dateComponents([.year, .month], from: Date())) }
@@ -732,7 +774,7 @@ struct BudgetGroupCard: View {
         return budgetTx.filter { $0.amount < 0 && $0.txSubtype != .transfer && $0.date >= monthStart && cats.contains($0.category) }.sorted { $0.date > $1.date }
     }
     private var spent: Double  { groupTx.reduce(0) { $0 + CurrencyManager.shared.convert(abs($1.amount), from: $1.currency, to: currency) } }
-    private var ratio: Double  { SmartBudgetManager.shared.ratio(for: group) }
+    private var ratio: Double  { SmartBudgetManager.shared.ratio(for: group, cardID: cardID, configs: configs) }
     private var limit: Double  { income * ratio }
     private var progress: Double { limit > 0 ? min(spent / limit, 1.5) : 0 }
     private var isOver: Bool   { spent > limit && limit > 0 }
@@ -740,7 +782,7 @@ struct BudgetGroupCard: View {
     private var targetPct: Int { Int(ratio * 100) }
 
     var body: some View {
-        NavigationLink(destination: BudgetGroupDetailView(group: group, budgetTx: budgetTx, income: income, currency: currency)) {
+        NavigationLink(destination: BudgetGroupDetailView(group: group, budgetTx: budgetTx, income: income, currency: currency, cardID: cardID, configs: configs)) {
             VStack(spacing: 12) {
                 HStack {
                     HStack(spacing: 8) {
@@ -818,6 +860,9 @@ struct BudgetGroupDetailView: View {
     let budgetTx: [TxRecord]
     let income: Double
     let currency: String
+    /// Card whose budget is shown — drives per-card ratio (nil = global).
+    var cardID: String? = nil
+    var configs: [CardBudgetConfig] = []
     @State private var appeared = false
 
     private var cal: Calendar  { Calendar.current }
@@ -835,7 +880,7 @@ struct BudgetGroupDetailView: View {
         return budgetTx.filter { $0.amount < 0 && $0.txSubtype != .transfer && $0.date >= monthStart && cats.contains($0.category) }.sorted { $0.date > $1.date }
     }
     private var spent: Double    { groupTx.reduce(0) { $0 + CurrencyManager.shared.convert(abs($1.amount), from: $1.currency, to: currency) } }
-    private var ratio: Double    { SmartBudgetManager.shared.ratio(for: group) }
+    private var ratio: Double    { SmartBudgetManager.shared.ratio(for: group, cardID: cardID, configs: configs) }
     private var limit: Double    { income * ratio }
     private var progress: Double { limit > 0 ? min(spent / limit, 1.5) : 0 }
     private var isOver: Bool     { spent > limit && limit > 0 }

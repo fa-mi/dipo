@@ -105,6 +105,19 @@ final class SmartBudgetManager {
         else { return (dailyRatio, lifestyleRatio, investDebtRatio) }
         return (cfg.dailyRatio, cfg.lifestyleRatio, cfg.investDebtRatio)
     }
+
+    /// Per-card single-group ratio. Same as `ratio(for:)` but honors a card's
+    /// CardBudgetConfig override (falling back to global when the card has no
+    /// config). Views that show a specific card's budget MUST use this — using
+    /// the global `ratio(for:)` makes per-card overrides invisible.
+    func ratio(for group: BudgetGroup, cardID: String?, configs: [CardBudgetConfig]) -> Double {
+        let r = ratios(forCardID: cardID, configs: configs)
+        switch group {
+        case .daily:      return r.daily
+        case .lifestyle:  return r.lifestyle
+        case .investDebt: return r.investDebt
+        }
+    }
     
     /// Convenience: monthly limit for a group using per-card ratios.
     func monthlyLimit(for group: BudgetGroup, income: Double, cardID: String?, configs: [CardBudgetConfig]) -> Double {

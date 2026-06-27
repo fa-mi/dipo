@@ -457,8 +457,15 @@ struct TransactionDetailSheet: View {
         return "= \(CurrencyManager.shared.formatted(converted, currency: other))"
     }
 
+    /// Categories valid for the current edit type. Mirrors AddTransactionSheet
+    /// exactly so editing feels identical to creating: pick Income and you only
+    /// see income categories, pick Expense and only expense ones — never the
+    /// two mixed together.
     private var availableCategories: [TxCategory] {
-        TxCategory.allCases
+        switch editType {
+        case .expense: return [.shopping, .food, .travel, .bills, .transport, .health, .investment, .other]
+        case .income:  return [.salary, .freelance, .business, .investment, .bonus, .gift, .incomeOther]
+        }
     }
     
     var body: some View {
@@ -631,6 +638,12 @@ struct TransactionDetailSheet: View {
                     Button {
                         HapticManager.shared.tap()
                         withAnimation(.spring(response: 0.3)) { editType = type }
+                        // Keep category valid for the new type — an expense
+                        // category left selected after switching to Income (or
+                        // vice-versa) would save a nonsensical pairing.
+                        if !availableCategories.contains(editCategory) {
+                            editCategory = type == .expense ? .shopping : .salary
+                        }
                     } label: {
                         Text(type.localizedLabel)
                             .font(.system(size: 15, weight: .semibold))
@@ -650,20 +663,22 @@ struct TransactionDetailSheet: View {
                 Text(loc("common.amount")).font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
                     .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 22)
                 HStack(spacing: 10) {
-                    // Currency toggle
-                    Button {
-                        HapticManager.shared.tap()
-                        let p = CurrencyManager.shared.preferredCurrency; editCurrency = editCurrency == p ? "USD" : p
-                    } label: {
+                    // Currency — locked while editing. Changing a transaction's
+                    // currency after the fact would silently rewrite the amount
+                    // that hits the card balance (the stored figure is in this
+                    // currency), so it's read-only here. Currency is chosen up
+                    // front when the transaction is created.
+                    HStack(spacing: 5) {
                         Text(editCurrency)
                             .font(.system(size: 15, weight: .bold))
-                            .foregroundStyle(AppTheme.accent)
-                            .padding(.horizontal, 14).padding(.vertical, 14)
-                            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 12))
-                            .overlay(RoundedRectangle(cornerRadius: 12)
-                                .stroke(AppTheme.accent.opacity(0.3), lineWidth: 1))
+                        Image(systemName: "lock.fill")
+                            .font(.system(size: 10))
                     }
-                    .buttonStyle(ScaleButtonStyle())
+                    .foregroundStyle(AppTheme.textSecondary)
+                    .padding(.horizontal, 14).padding(.vertical, 14)
+                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 12))
+                    .overlay(RoundedRectangle(cornerRadius: 12)
+                        .stroke(AppTheme.cardMid.opacity(0.6), lineWidth: 1))
 
                     TextField("0.00", text: $editAmount)
                         .font(.system(size: 28, weight: .bold))
