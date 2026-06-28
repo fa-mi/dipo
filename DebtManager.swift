@@ -24,6 +24,13 @@ final class DebtRecord {
     /// payments keeps existing behavior.
     var hasBeenTracked: Bool = false
 
+    /// Set when the user taps "Mark as paid" to close a debt outright. Without
+    /// it, `syncDebtBalances()` would recompute `currentBalance` from the
+    /// linked payment transactions on the next view and *resurrect* a debt the
+    /// user explicitly closed (any debt that ever had a tracked payment).
+    /// Default false keeps existing data behaving as before.
+    var manuallyClosed: Bool = false
+
     init(name: String, type: String = "credit_card",
          totalAmount: Double, currentBalance: Double,
          minimumPayment: Double, annualInterestRate: Double,
@@ -50,6 +57,33 @@ final class DebtRecord {
     var monthlyInterestRate: Double { annualInterestRate / 12.0 / 100.0 }
 
     var monthlyInterestCost: Double { currentBalance * monthlyInterestRate }
+
+    /// Minimum payment to use for *planning* (salary allocation, months-to-
+    /// payoff, reminders). Users very often leave `minimumPayment` at 0 —
+    /// especially for 0% APR installments (Kredivo, Akulaku, Home Credit) that
+    /// don't print a formal minimum. Taking that 0 literally makes the whole
+    /// planner recommend paying nothing toward a real outstanding balance,
+    /// which is the opposite of what a debt tracker should do. When no minimum
+    /// is set we derive a sensible one from the balance:
+    ///   • interest-bearing: cover the monthly interest + 1% of principal
+    ///     (typical credit-card minimum — guarantees the balance shrinks)
+    ///   • 0% APR: clear the balance over ~12 months (reasonable default
+    ///     horizon when the real term is unknown)
+    /// Returns 0 only when nothing is actually owed.
+    var effectiveMinimumPayment: Double {
+        if minimumPayment > 0 { return minimumPayment }
+        guard currentBalance > 0 else { return 0 }
+        let derived = annualInterestRate > 0
+            ? monthlyInterestCost + currentBalance * 0.01
+            : currentBalance / 12.0
+        // Never suggest paying more than what's still owed.
+        return min(derived, currentBalance)
+    }
+
+    /// True when `effectiveMinimumPayment` is app-derived (user left the
+    /// minimum at 0). UI uses this to label the figure "Suggested" rather than
+    /// misrepresenting it as a lender-required minimum.
+    var isMinimumDerived: Bool { minimumPayment <= 0 && currentBalance > 0 }
     
     /// Sums all linked debt-payment transactions across all cards. Converts each
     /// payment to this debt's currency. This is the single source of truth for
@@ -83,7 +117,7 @@ final class DebtRecord {
     /// or input is invalid). Delegates to `monthsToPayoff(monthlyPayment:)` so
     /// both paths share the same defensive guards and 0% APR handling.
     var monthsToPayoffMinimum: Int? {
-        monthsToPayoff(monthlyPayment: minimumPayment)
+        monthsToPayoff(monthlyPayment: effectiveMinimumPayment)
     }
 
     /// Months to payoff at a given monthly payment. Returns nil for any invalid
@@ -125,7 +159,7 @@ final class DebtRecord {
     /// Total interest paid at minimum payment
     var totalInterestAtMinimum: Double {
         guard let m = monthsToPayoffMinimum else { return currentBalance * 0.5 }
-        return (minimumPayment * Double(m)) - currentBalance
+        return (effectiveMinimumPayment * Double(m)) - currentBalance
     }
 
     var payoffDate: Date? {
@@ -207,6 +241,20 @@ struct FinancialHealthEngine {
         }
     }
 
+    /// Sum of each active debt's *effective* minimum (the planning figure that
+    /// never collapses to 0 while a balance is still owed). This is what the
+    /// salary allocation recommendation is built on, so a debt with no user-set
+    /// minimum still gets a sensible payoff allocation that shrinks as the
+    /// balance is paid down. DTI deliberately keeps using `totalMinimumPayments`
+    /// (the *real* contractual obligation) — DTI measures what you must pay, not
+    /// what we advise.
+    var totalEffectiveMinimums: Double {
+        let pref = CurrencyManager.shared.preferredCurrency
+        return debts.filter { $0.isActive }.reduce(0) {
+            $0 + CurrencyManager.shared.convert($1.effectiveMinimumPayment, from: $1.currency, to: pref)
+        }
+    }
+
     /// Debt-to-Income Ratio (monthly debt payments / monthly income)
     var dtiRatio: Double {
         guard monthlyIncome > 0 else { return 0 }
@@ -223,8 +271,11 @@ struct FinancialHealthEngine {
     var recommendedDebtAllocationPercent: Double {
         guard monthlyIncome > 0 else { return 0 }
 
-        // Base = minimum payments percentage
-        let minPct = (totalMinimumPayments / monthlyIncome) * 100
+        // Base = effective minimum payments percentage. Using the *effective*
+        // total (not the raw one) is what makes the plan recommend real
+        // progress on debts whose minimum is 0 — and makes the recommendation
+        // respond as the balance is paid down.
+        let minPct = (totalEffectiveMinimums / monthlyIncome) * 100
 
         // Add buffer based on DTI severity
         let buffer: Double
@@ -248,7 +299,7 @@ struct FinancialHealthEngine {
 
     /// Extra payment above minimums available to accelerate debt
     var extraPaymentAvailable: Double {
-        max(recommendedMonthlyDebtPayment - totalMinimumPayments, 0)
+        max(recommendedMonthlyDebtPayment - totalEffectiveMinimums, 0)
     }
 
     /// AVALANCHE ORDER: highest interest rate first (saves most money)
@@ -374,6 +425,12 @@ struct FinancialHealthEngine {
                           CurrencyManager.shared.formatted(overspendAmount, currency: CurrencyManager.shared.preferredCurrency))
         }
         if let highestInterest = avalancheOrder.first {
+            // "Save the most interest" is meaningless when nothing charges
+            // interest — give 0% APR debts a payoff-pace nudge instead.
+            if highestInterest.annualInterestRate <= 0 {
+                return String(format: loc("debt.advice.zero_interest_focus"),
+                              highestInterest.name)
+            }
             return String(format: loc("debt.advice.focus_extra"),
                           highestInterest.name,
                           String(format: "%.1f", highestInterest.annualInterestRate))

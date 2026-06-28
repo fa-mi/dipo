@@ -62,6 +62,7 @@ struct ReceiptPreviewSheet: View {
                     VStack(spacing: 18) {
                         receiptThumbnail
                         infoCard
+                        cardSelector
                         if let err = saveError {
                             errorBanner(err)
                         }
@@ -212,20 +213,9 @@ struct ReceiptPreviewSheet: View {
                         .foregroundStyle(AppTheme.textPrimary)
                 }
             }
-            // Card selector — only when multiple cards exist
-            if availableCards.count > 1 {
-                divider
-                row(label: loc("receipt.field.card")) {
-                    Picker("", selection: $selectedCardIndex) {
-                        ForEach(availableCards.indices, id: \.self) { i in
-                            Text(cardLabel(availableCards[i])).tag(i)
-                        }
-                    }
-                    .pickerStyle(.menu)
-                    .tint(AppTheme.textPrimary)
-                    .labelsHidden()
-                }
-            }
+            // Card selection moved out to its own horizontal chip section
+            // below (clearer than a cramped dropdown that wraps and overlaps
+            // the rows beneath it).
             divider
             // Notes
             row(label: loc("receipt.field.notes")) {
@@ -249,6 +239,63 @@ struct ReceiptPreviewSheet: View {
             RoundedRectangle(cornerRadius: 16)
                 .stroke(AppTheme.cardMid.opacity(0.4), lineWidth: 1)
         )
+    }
+
+    // Horizontal card picker — tap a card to choose where this receipt is
+    // saved. Cards scroll sideways so long names never wrap into the rows
+    // above/below. The selected card is highlighted; its currency is shown so
+    // the user understands any conversion that will happen on save.
+    @ViewBuilder
+    private var cardSelector: some View {
+        if !availableCards.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 6) {
+                    Image(systemName: "creditcard.fill")
+                        .font(.system(size: 12)).foregroundStyle(AppTheme.accent)
+                    Text(loc("receipt.field.card"))
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(AppTheme.textSecondary)
+                }
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 10) {
+                        ForEach(availableCards.indices, id: \.self) { i in
+                            let card = availableCards[i]
+                            let isSel = i == selectedCardIndex
+                            Button {
+                                HapticManager.shared.tap()
+                                withAnimation(.spring(response: 0.3)) { selectedCardIndex = i }
+                            } label: {
+                                HStack(spacing: 9) {
+                                    Image(systemName: card.isDigitalWallet ? "wallet.pass.fill" : "creditcard.fill")
+                                        .font(.system(size: 14))
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(cardTitle(card))
+                                            .font(.system(size: 13, weight: .semibold))
+                                            .lineLimit(1)
+                                        Text(cardSubtitle(card))
+                                            .font(.system(size: 10))
+                                            .foregroundStyle(isSel ? .white.opacity(0.85) : AppTheme.textSecondary)
+                                    }
+                                    if isSel {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .font(.system(size: 14))
+                                    }
+                                }
+                                .foregroundStyle(isSel ? .white : AppTheme.textPrimary)
+                                .padding(.horizontal, 14).padding(.vertical, 10)
+                                .background(isSel ? AppTheme.accent : AppTheme.cardDark,
+                                            in: RoundedRectangle(cornerRadius: 12))
+                                .overlay(RoundedRectangle(cornerRadius: 12)
+                                    .stroke(isSel ? Color.clear : AppTheme.cardMid.opacity(0.5), lineWidth: 1))
+                            }
+                            .buttonStyle(ScaleButtonStyle())
+                        }
+                    }
+                    .padding(.vertical, 2)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
     }
 
     private var tipBanner: some View {
@@ -355,10 +402,19 @@ struct ReceiptPreviewSheet: View {
         [.shopping, .food, .travel, .bills, .transport, .health, .other]
     }
 
-    private func cardLabel(_ card: BankCard) -> String {
+    /// Primary name shown on a card chip.
+    private func cardTitle(_ card: BankCard) -> String {
         if card.isDigitalWallet, !card.walletProvider.isEmpty { return card.walletProvider }
+        return card.holderName
+    }
+
+    /// Secondary line on a card chip: last-4 (if any) + the card's currency,
+    /// so the user can see the destination and any conversion at a glance.
+    private func cardSubtitle(_ card: BankCard) -> String {
+        let cur = card.resolvedCurrency
         let last4 = card.cardNumber.filter { $0.isNumber }.suffix(4)
-        return "\(card.holderName) ••\(last4)"
+        if card.isDigitalWallet || last4.isEmpty { return cur }
+        return "••\(last4) · \(cur)"
     }
 
     private func formatDate(_ date: Date) -> String {

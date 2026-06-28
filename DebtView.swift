@@ -87,6 +87,9 @@ struct DebtView: View {
         let linkedDebtIDs = Set(allTransactions.compactMap { $0.linkedDebtID.isEmpty ? nil : $0.linkedDebtID })
         var didChange = false
         for debt in debts {
+            // User explicitly closed this debt via "Mark as paid" — don't let
+            // tx-derived recompute resurrect it.
+            if debt.manuallyClosed { continue }
             let hasLinkedTx = linkedDebtIDs.contains(debt.id.uuidString)
             // Only sync if debt has linked txs OR has previously been synced.
             // hasBeenTracked flag prevents accidentally overwriting manual edits.
@@ -610,8 +613,13 @@ struct DebtCard: View {
                     }
                     Spacer()
                     VStack(alignment: .trailing, spacing: 3) {
-                        Text(loc("debt.min_payment")).font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
-                        Text(CurrencyManager.shared.formatted(debt.minimumPayment, currency: debt.currency))
+                        // Show the effective (planning) minimum so a debt with no
+                        // user-set minimum reads a real, actionable figure instead
+                        // of a confusing "Rp 0". Labelled "Suggested" when derived
+                        // so we never misrepresent it as a lender requirement.
+                        Text(debt.isMinimumDerived ? loc("debt.suggested_payment") : loc("debt.min_payment"))
+                            .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                        Text(CurrencyManager.shared.formatted(debt.effectiveMinimumPayment, currency: debt.currency))
                             .font(.system(size: 16, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
                     }
                     Spacer()
@@ -629,7 +637,7 @@ struct DebtCard: View {
                             .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
                         Spacer()
                         if let months = debt.monthsToPayoffMinimum {
-                            Text("\(months) months to payoff")
+                            Text(String(format: loc("debt.months_to_payoff"), months))
                                 .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
                         }
                     }
@@ -697,6 +705,7 @@ struct DebtCard: View {
 
     private func markPaid() {
         debt.currentBalance = 0; debt.isActive = false
+        debt.manuallyClosed = true   // keep it closed; don't let sync revive it
         try? modelContext.save()
         HapticManager.shared.success()
     }
@@ -957,7 +966,7 @@ struct DebtFormSheet: View {
                                 HStack(spacing: 20) {
                                     if let m = previewDebt.monthsToPayoffMinimum {
                                         VStack(alignment: .leading, spacing: 2) {
-                                            Text("\(m) months").font(.system(size: 16, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
+                                            Text(String(format: loc("debt.month"), m)).font(.system(size: 16, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
                                             Text(loc("debt.at_min")).font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
                                         }
                                     }
@@ -1040,6 +1049,12 @@ struct DebtFormSheet: View {
             existing.totalAmount = total; existing.minimumPayment = min
             existing.annualInterestRate = rate; existing.dueDayOfMonth = vm.formDueDay
             existing.currency = vm.formCurrency; existing.notes = vm.formNotes
+            // Re-opening a previously closed debt with a real balance: clear the
+            // manual-close flag and re-activate so it tracks normally again.
+            if bal > 0 {
+                existing.manuallyClosed = false
+                existing.isActive = true
+            }
         } else {
             let debt = DebtRecord(name: vm.formName.trimmingCharacters(in: .whitespaces),
                                   type: vm.formType.rawValue, totalAmount: total,
