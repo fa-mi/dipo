@@ -65,6 +65,9 @@ struct SearchView: View {
     @State private var query = ""
     @State private var selectedFilter: TxCategory? = nil
     @State private var selectedPeriod: SearchPeriod = .all_period
+    /// Sort results by time. Newest-first by default; user can flip to
+    /// oldest-first via the sort menu in the results summary bar.
+    @State private var sortNewestFirst = true
     @State private var appeared = false
     @FocusState private var focused: Bool
     @State private var selectedTx: TxRecord? = nil
@@ -109,7 +112,7 @@ struct SearchView: View {
             let day = cal.startOfDay(for: tx.date)
             dict[day, default: []].append(tx)
         }
-        return dict.keys.sorted(by: >).map { day in
+        return dict.keys.sorted(by: sortNewestFirst ? (>) : (<)).map { day in
             let label: String
             if cal.isDateInToday(day)          { label = loc("common.today") }
             else if cal.isDateInYesterday(day) { label = loc("common.yesterday") }
@@ -124,7 +127,8 @@ struct SearchView: View {
                 }
                 label = df.string(from: day)
             }
-            return (label: label, date: day, txs: (dict[day] ?? []).sorted { $0.date > $1.date })
+            let dayTxs = (dict[day] ?? []).sorted { sortNewestFirst ? $0.date > $1.date : $0.date < $1.date }
+            return (label: label, date: day, txs: dayTxs)
         }
     }
 
@@ -253,6 +257,32 @@ struct SearchView: View {
                                         : loc("search.results_count")
                                     Text(String(format: fmt, filtered.count))
                                         .font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
+                                    // Sort-by-time toggle (newest / oldest)
+                                    Menu {
+                                        Button {
+                                            HapticManager.shared.tap()
+                                            withAnimation(.spring(response: 0.3)) { sortNewestFirst = true }
+                                        } label: {
+                                            Label(loc("search.sort.newest"), systemImage: sortNewestFirst ? "checkmark" : "arrow.down")
+                                        }
+                                        Button {
+                                            HapticManager.shared.tap()
+                                            withAnimation(.spring(response: 0.3)) { sortNewestFirst = false }
+                                        } label: {
+                                            Label(loc("search.sort.oldest"), systemImage: !sortNewestFirst ? "checkmark" : "arrow.up")
+                                        }
+                                    } label: {
+                                        HStack(spacing: 4) {
+                                            Image(systemName: "arrow.up.arrow.down")
+                                                .font(.system(size: 10, weight: .semibold))
+                                            Text(sortNewestFirst ? loc("search.sort.newest") : loc("search.sort.oldest"))
+                                                .font(.system(size: 12, weight: .medium))
+                                        }
+                                        .foregroundStyle(AppTheme.accent)
+                                        .padding(.horizontal, 10).padding(.vertical, 5)
+                                        .background(AppTheme.accent.opacity(0.1), in: Capsule())
+                                    }
+                                    .padding(.leading, 10)
                                     Spacer()
                                     Text(totalAmount >= 0
                                          ? "+\(CurrencyManager.shared.formatted(totalAmount, currency: filtered.first?.currency ?? CurrencyManager.shared.preferredCurrency))"
