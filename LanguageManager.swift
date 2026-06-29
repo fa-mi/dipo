@@ -151,6 +151,8 @@ final class LanguageManager {
         "search.days_results":     "%d days selected",
         "search.result_count":     "%d transaction",
         "search.results_count":    "%d transactions",
+        "search.sort.newest":      "Newest",
+        "search.sort.oldest":      "Oldest",
         "search.all_categories":   "All",
 
         // Search period filter pills
@@ -1190,7 +1192,7 @@ final class LanguageManager {
 
         // Coaching snippets — shown ONCE per topic for first-time users
         "coaching.got_it":                 "Got it",
-        "coaching.savings_rate.body":      "Savings rate = % of income that you didn't spend. Aim for 20%+ to build wealth steadily. Start small if you're below — even 5% beats 0%.",
+        "coaching.savings_rate.body":      "Savings rate = the share of income you didn't spend. Aim for 20%+ to build wealth steadily. Start small if you're below — even 5% beats 0%.",
         "coaching.overspend.body":         "Going over budget happens. The number tells you how much you'd need to claw back next month to stay on plan. Hide this banner if you've already noted it.",
         "coaching.goal_tradeoff.body":     "Small daily cuts compound fast on goals. Skipping one Rp 50k coffee a week = ~Rp 200k/month freed up — your goals notice that.",
         "coaching.debt_focus.body":        "Aggressive debt repayment is great long-term, but very high allocation (>70% income) can leave you no buffer. Make sure you also have emergency savings.",
@@ -1345,6 +1347,8 @@ final class LanguageManager {
         "search.days_results":     "%d hari dipilih",
         "search.result_count":     "%d transaksi",
         "search.results_count":    "%d transaksi",
+        "search.sort.newest":      "Terbaru",
+        "search.sort.oldest":      "Terlama",
         "search.all_categories":   "Semua",
 
         // Search period filter pills
@@ -2373,7 +2377,7 @@ final class LanguageManager {
 
         // Coaching snippets (ID)
         "coaching.got_it":                 "Mengerti",
-        "coaching.savings_rate.body":      "Saving rate = % income yang tidak kamu spend. Target ideal 20%+ untuk membangun kekayaan. Mulai kecil ngga apa — 5% lebih baik dari 0%.",
+        "coaching.savings_rate.body":      "Saving rate = porsi pemasukan yang tidak kamu belanjakan. Target ideal 20%+ untuk membangun kekayaan. Mulai kecil ngga apa — 5% lebih baik dari 0%.",
         "coaching.overspend.body":         "Overspend itu wajar. Angka ini kasih tahu berapa yang harus kamu kompensasi bulan depan supaya balik ke plan. Sembunyikan kalau sudah dicatat.",
         "coaching.goal_tradeoff.body":     "Pemotongan kecil setiap hari berdampak besar untuk goal. Skip 1 kopi Rp 50rb/minggu = ~Rp 200rb/bulan — goal kamu kerasa.",
         "coaching.debt_focus.body":        "Bayar hutang agresif bagus jangka panjang, tapi alokasi >70% income tidak meninggalkan buffer. Pastikan kamu juga punya dana darurat.",

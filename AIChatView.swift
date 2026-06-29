@@ -64,6 +64,11 @@ final class AIChatViewModel {
         let userPlan: String
         let message: String
         let currencyHint: String
+        /// Compact snapshot of the user's in-app finances (income, expenses,
+        /// categories, budget, debts, goals) so the assistant can ANALYZE and
+        /// give data-driven insights — not just log transactions. Built fresh
+        /// per message by the view from SwiftData.
+        let context: String
     }
     private struct ChatResponse: Decodable {
         let reply: String
@@ -103,7 +108,7 @@ final class AIChatViewModel {
 
     // ── Send a message ────────────────────────────────────────────────────
 
-    func send() async {
+    func send(context: String = "") async {
         let text = input.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty, !isLoading else { return }
         guard let userId = UserSession.shared.userID else { return }
@@ -117,7 +122,8 @@ final class AIChatViewModel {
             userId: userId,
             userPlan: PremiumManager.shared.plan.rawValue,
             message: text,
-            currencyHint: CurrencyManager.shared.preferredCurrency
+            currencyHint: CurrencyManager.shared.preferredCurrency,
+            context: context
         )
         guard let body = try? JSONEncoder().encode(payload) else {
             messages.append(AIChatMessage(role: .assistant,
@@ -193,6 +199,8 @@ struct AIChatView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
     @Query(sort: \BankCard.sortOrder) private var cards: [BankCard]
+    @Query private var debts: [DebtRecord]
+    @Query private var goals: [SavingsGoal]
 
     @State private var vm = AIChatViewModel()
     @State private var selectedCardID: UUID? = nil
@@ -444,7 +452,8 @@ struct AIChatView: View {
                     .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 18))
                 Button {
                     inputFocused = false
-                    Task { await vm.send() }
+                    let snapshot = buildFinancialContext()
+                    Task { await vm.send(context: snapshot) }
                 } label: {
                     Image(systemName: "arrow.up")
                         .font(.system(size: 16, weight: .bold))
@@ -505,5 +514,82 @@ struct AIChatView: View {
            let ti = vm.messages[mi].transactions.firstIndex(where: { $0.id == tx.id }) {
             vm.messages[mi].transactions[ti].added = true
         }
+    }
+
+    // MARK: - Financial snapshot for analysis
+
+    /// Builds a compact, plain-text snapshot of the user's current finances so
+    /// the assistant can answer "how am I doing", "where did my money go",
+    /// "am I overspending", etc. with REAL numbers instead of generic advice.
+    /// Everything is converted to the preferred currency and capped in length
+    /// to keep the prompt cheap. Sent fresh with every message.
+    private func buildFinancialContext() -> String {
+        let cm = CurrencyManager.shared
+        let pref = cm.preferredCurrency
+        let cal = Calendar.current
+        let monthStart = cal.safeDate(from: cal.dateComponents([.year, .month], from: Date()))
+        let allTx = cards.flatMap { $0.transactions }
+        // Transfers between own cards aren't income/expense — exclude from sums.
+        let monthTx = allTx.filter { $0.date >= monthStart && $0.txSubtype != .transfer }
+
+        func toPref(_ amount: Double, _ cur: String) -> Double {
+            cm.convert(amount, from: cur.isEmpty ? pref : cur, to: pref)
+        }
+
+        let income   = monthTx.filter { $0.amount > 0 }.reduce(0.0) { $0 + toPref($1.amount, $1.currency) }
+        let expenses = monthTx.filter { $0.amount < 0 }.reduce(0.0) { $0 + toPref(abs($1.amount), $1.currency) }
+        let net = income - expenses
+        let savingsRate = income > 0 ? Int((net / income) * 100) : 0
+
+        // Expense breakdown by category (preferred currency), biggest first.
+        var byCat: [TxCategory: Double] = [:]
+        for tx in monthTx where tx.amount < 0 {
+            byCat[tx.category, default: 0] += toPref(abs(tx.amount), tx.currency)
+        }
+        let topCats = byCat.sorted { $0.value > $1.value }.prefix(6)
+            .map { "\($0.key.rawValue) \(cm.formatted($0.value, currency: pref))" }
+            .joined(separator: ", ")
+
+        // A few most-recent transactions for concrete reference.
+        let recent = allTx.sorted { $0.date > $1.date }.prefix(8).map { tx -> String in
+            let sign = tx.amount < 0 ? "-" : "+"
+            return "\(sign)\(cm.formatted(abs(tx.amount), currency: tx.currency)) \(tx.name) [\(tx.category.rawValue)]"
+        }.joined(separator: "; ")
+
+        let monthName = Date().formatted(.dateTime.month(.wide).year())
+        var lines: [String] = [
+            "Currency: \(pref). Month: \(monthName).",
+            "Income this month: \(cm.formatted(income, currency: pref)).",
+            "Expenses this month: \(cm.formatted(expenses, currency: pref)).",
+            "Net saved: \(cm.formatted(net, currency: pref)) (savings rate \(savingsRate)%).",
+            "Transactions this month: \(monthTx.count).",
+        ]
+        if !topCats.isEmpty { lines.append("Top expense categories: \(topCats).") }
+        if !recent.isEmpty  { lines.append("Recent transactions: \(recent).") }
+
+        let sb = SmartBudgetManager.shared
+        if sb.hasActiveBudget {
+            lines.append("Budget plan: Daily \(Int(sb.dailyRatio*100))% / Lifestyle \(Int(sb.lifestyleRatio*100))% / Invest-Debt \(Int(sb.investDebtRatio*100))% of income.")
+        }
+
+        let activeDebts = debts.filter { $0.isActive }
+        if !activeDebts.isEmpty {
+            let d = activeDebts.prefix(5).map {
+                "\($0.name): owe \(cm.formatted($0.currentBalance, currency: $0.currency)) at \(String(format: "%.1f", $0.annualInterestRate))% APR"
+            }.joined(separator: "; ")
+            lines.append("Active debts: \(d).")
+        }
+
+        let activeGoals = goals.filter { !$0.isCompleted }
+        if !activeGoals.isEmpty {
+            let g = activeGoals.prefix(5).map {
+                "\($0.name) \(Int($0.progressPercent))% (\(cm.formatted($0.savedAmount, currency: $0.currency)) of \(cm.formatted($0.targetAmount, currency: $0.currency)))"
+            }.joined(separator: "; ")
+            lines.append("Savings goals: \(g).")
+        }
+
+        var ctx = lines.joined(separator: "\n")
+        if ctx.count > 1800 { ctx = String(ctx.prefix(1800)) }
+        return ctx
     }
 }
