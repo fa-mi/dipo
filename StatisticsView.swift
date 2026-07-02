@@ -6,6 +6,7 @@ import SwiftData
 enum StatPeriod: String, CaseIterable {
     case thisMonth  = "This Month"
     case lastMonth  = "Last month"
+    case payCycle   = "Pay cycle"
     case last3      = "3 months"
     case last6      = "6 months"
     case thisYear   = "This year"
@@ -17,6 +18,7 @@ enum StatPeriod: String, CaseIterable {
         switch self {
         case .thisMonth:  return loc("stats.period.this_month")
         case .lastMonth:  return loc("stats.period.last_month")
+        case .payCycle:   return loc("stats.period.pay_cycle")
         case .last3:      return loc("stats.period.3months")
         case .last6:      return loc("stats.period.6months")
         case .thisYear:   return loc("stats.period.this_year")
@@ -36,6 +38,12 @@ enum StatPeriod: String, CaseIterable {
             let thisMonthStart = cal.safeDate(from: cal.dateComponents([.year, .month], from: now))
             let start = cal.safeDate(byAdding: .month, value: -1, to: thisMonthStart)
             return (start, thisMonthStart)
+        case .payCycle:
+            // Fallback anchor = 1st of month. The view overrides this with the
+            // real payday via `StatPeriod.payCycleRange(payDay:)`; this branch
+            // only runs if there's no active salary schedule to anchor on.
+            let start = cal.safeDate(from: cal.dateComponents([.year, .month], from: now))
+            return (start, now)
         case .last3:
             return (cal.safeDate(byAdding: .month, value: -3, to: now), now)
         case .last6:
@@ -49,6 +57,28 @@ enum StatPeriod: String, CaseIterable {
             return (now, now) // overridden by custom state
         }
     }
+
+    /// Pay-cycle window (payday → now) anchored on a day-of-month. e.g. payday
+    /// 25 → the current cycle runs from the 25th of this-or-last month up to
+    /// today. Months without the exact day are handled by clamping the anchor
+    /// to the 28th so short months never skip it (fine for the common 1–28
+    /// paydays).
+    static func payCycleRange(payDay: Int, now: Date = Date()) -> (start: Date, end: Date) {
+        let cal = Calendar.current
+        let day = min(max(payDay, 1), 28)
+        let today = cal.startOfDay(for: now)
+        let currentDay = cal.component(.day, from: today)
+        var comps = cal.dateComponents([.year, .month], from: today)
+        // Before payday this month → the active cycle began last month.
+        if currentDay < day,
+           let firstOfMonth = cal.date(from: comps),
+           let lastMonth = cal.date(byAdding: .month, value: -1, to: firstOfMonth) {
+            comps = cal.dateComponents([.year, .month], from: lastMonth)
+        }
+        comps.day = day
+        let start = cal.date(from: comps).map { cal.startOfDay(for: $0) } ?? today
+        return (start, now)
+    }
 }
 
 // MARK: - Statistics View
@@ -57,6 +87,7 @@ struct StatisticsView: View {
     @State var statsVM: StatsViewModel
     let appVM: AppViewModel
     @Query private var cardBudgetConfigs: [CardBudgetConfig]
+    @Query(sort: \SalarySchedule.createdAt) private var salarySchedules: [SalarySchedule]
     @State private var selectedPeriod: StatPeriod = .thisMonth
     @State private var customStart: Date = Calendar.current.safeDate(byAdding: .month, value: -1, to: Date())
     @State private var customEnd: Date = Date()
@@ -64,10 +95,25 @@ struct StatisticsView: View {
     @State private var selectedCardID: String? = nil // Will auto-select first card on appear
     @State private var showExportSheet = false
 
+    /// Day-of-month the salary lands on (from the first active schedule), used
+    /// to anchor the "Pay cycle" period. nil when the user has no active
+    /// salary — in which case the Pay-cycle option is hidden entirely.
+    private var payCycleDay: Int? {
+        salarySchedules.first(where: { $0.isActive })?.dayOfMonth
+    }
+
+    /// Periods shown as chips. "Pay cycle" only appears when there's a salary
+    /// schedule to anchor it on; otherwise it would be meaningless.
+    private var availablePeriods: [StatPeriod] {
+        StatPeriod.allCases.filter { $0 != .payCycle || payCycleDay != nil }
+    }
+
     private var effectiveRange: (start: Date, end: Date) {
-        selectedPeriod == .custom
-            ? (customStart, customEnd)
-            : selectedPeriod.dateRange()
+        if selectedPeriod == .custom { return (customStart, customEnd) }
+        if selectedPeriod == .payCycle, let day = payCycleDay {
+            return StatPeriod.payCycleRange(payDay: day)
+        }
+        return selectedPeriod.dateRange()
     }
 
     /// Lock overlay shown on top of the blurred Smart Insights card for
@@ -108,7 +154,9 @@ struct StatisticsView: View {
         if selectedPeriod == .custom {
             return "\(fmt.string(from: customStart)) – \(fmt.string(from: customEnd))"
         }
-        let (start, end) = selectedPeriod.dateRange()
+        // Use effectiveRange so the pay-cycle window (payday → today) shows its
+        // real anchored dates, not the calendar-month fallback.
+        let (start, end) = effectiveRange
         if selectedPeriod == .allTime { return loc("stats.all_tx") }
         if selectedPeriod == .thisMonth || selectedPeriod == .lastMonth {
             let mfmt = DateFormatter()
@@ -338,7 +386,7 @@ struct StatisticsView: View {
                     // Period filter pills
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 8) {
-                            ForEach(StatPeriod.allCases, id: \.self) { period in
+                            ForEach(availablePeriods, id: \.self) { period in
                                 Button {
                                     HapticManager.shared.tap()
                                     withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
