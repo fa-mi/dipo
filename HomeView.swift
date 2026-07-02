@@ -1089,27 +1089,6 @@ struct BankCardView: View {
         card.currency.isEmpty ? CurrencyManager.shared.preferredCurrency : card.currency
     }
 
-    /// Sum of THIS month's transactions, converted to the card's currency.
-    /// Matches the period and conversion strategy used by `StatisticsView`'s
-    /// `filteredIncome - filteredExpenses` so the home card and stats net
-    /// balance show identical numbers when both default to "This Month".
-    /// Earlier this was `card.balance + liveBalance` (cumulative lifetime),
-    /// which produced a confusing mismatch whenever the user had any tx
-    /// outside the current month (e.g., a scanned receipt dated last month).
-    private var thisMonthBalance: Double {
-        let cal = Calendar.current
-        let now = Date()
-        let monthStart = cal.safeDate(from: cal.dateComponents([.year, .month], from: now))
-        guard let nextMonth = cal.date(byAdding: .month, value: 1, to: monthStart) else {
-            return 0
-        }
-        return card.transactions
-            .filter { $0.date >= monthStart && $0.date < nextMonth }
-            .reduce(0.0) { sum, tx in
-                sum + CurrencyManager.shared.convert(tx.amount, from: tx.currency, to: cardCurrency)
-            }
-    }
-
     /// Lifetime total (seed + every tx). Kept around because the negative-
     /// balance warning logic on Home reads from the underlying card
     /// computation — that warning is about overall solvency, not periodic
@@ -1121,24 +1100,17 @@ struct BankCardView: View {
         return card.balance + liveBalance
     }
 
-    /// The number actually shown on the card face. Aliased so existing call
-    /// sites (`totalBalance < 0`, `contentTransition(.numericText())`) keep
-    /// working without renaming everywhere.
-    private var totalBalance: Double { thisMonthBalance }
+    /// The number actually shown on the card face. Shows the card's TOTAL
+    /// balance (seed + every transaction, converted to the card currency) so
+    /// it matches the Cards tab exactly and can legitimately go negative —
+    /// a month-scoped figure hid overspending by resetting to 0 each month.
+    /// The Statistics tab remains month-scoped for period analysis.
+    private var totalBalance: Double { lifetimeBalance }
     private var network: CardNetwork { CardNetwork.detect(from: card.cardNumber) }
 
     private var formattedBalance: String {
         let abs = Swift.abs(totalBalance)
         return (totalBalance < 0 ? "-" : "") + CurrencyManager.shared.formatted(abs, currency: cardCurrency)
-    }
-
-    /// Human-readable label for the current month, e.g. "Mei 2026".
-    /// Locale-aware so it follows the user's language preference.
-    private var thisMonthLabel: String {
-        let f = DateFormatter()
-        f.locale = LanguageManager.shared.currentLocale
-        f.dateFormat = "MMMM yyyy"
-        return f.string(from: .now)
     }
 
     var body: some View {
@@ -1221,10 +1193,10 @@ struct BankCardView: View {
                 .padding(.top, 2)
                 HStack(alignment: .bottom) {
                     VStack(alignment: .leading, spacing: 2) {
-                        // Period label so the user immediately understands
-                        // why this number might differ from a "lifetime"
-                        // mental model — and matches Stats' default range.
-                        Text("\(loc("home.balance_this_month")) · \(thisMonthLabel)")
+                        // Total balance (matches the Cards tab). No month
+                        // suffix — this is the card's running balance, not a
+                        // periodic figure.
+                        Text(loc("home.balance_total"))
                             .font(.system(size: 9, weight: .medium))
                             .foregroundStyle(.white.opacity(0.65))
                         // Hidden → static dots. Visible → CountUpText that
@@ -1399,18 +1371,20 @@ struct TransactionSection: View {
                 set: { if !$0 { pendingDelete = nil } })
     }
 
-    // Home shows the CURRENT MONTH only — recent, relevant activity. The
-    // full history (all months, searchable) lives behind "View all".
-    private var currentMonthTransactions: [TxRecord] {
-        let cal = Calendar.current
-        let now = Date()
-        let monthStart = cal.date(from: cal.dateComponents([.year, .month], from: now)) ?? now
-        return transactions.filter { $0.date >= monthStart && $0.date <= now }
+    // Home shows the most RECENT activity across all time (newest first),
+    // capped to a handful of rows below. It deliberately does NOT filter to
+    // the current calendar month: doing so left Home looking empty on the 1st
+    // of a new month even when the card had plenty of recent history (the
+    // card's "this month" figure and the Statistics tab stay month-scoped —
+    // this list is just a recent-activity preview). Full searchable history
+    // lives behind "View all".
+    private var recentTransactions: [TxRecord] {
+        transactions.sorted { $0.date > $1.date }
     }
 
-    // Apply category filter on top of the current-month window.
+    // Apply category filter on top of the recent-activity window.
     private var filtered: [TxRecord] {
-        let base = currentMonthTransactions
+        let base = recentTransactions
         guard let filter = categoryFilter else { return base }
         return base.filter { $0.category == filter }
     }

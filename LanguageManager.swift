@@ -512,6 +512,7 @@ final class LanguageManager {
         "home.progress_to_go":  "%d%% — %@ to go",
         "home.negative":        "Negative balance",
         "home.balance_this_month": "This month",
+        "home.balance_total": "Balance",
         "home.add_first_tx":    "Add Transaction",
         "home.add_card_first":  "Add a card first before logging a transaction",
         "home.add_card_salary": "Add a card first to link salary",
@@ -563,6 +564,7 @@ final class LanguageManager {
         // Statistics period filter pills
         "stats.period.this_month":  "This Month",
         "stats.period.last_month":  "Last Month",
+        "stats.period.pay_cycle":   "Pay cycle",
         "stats.period.3months":     "3 Months",
         "stats.period.6months":     "6 Months",
         "stats.period.this_year":   "This Year",
@@ -1699,6 +1701,7 @@ final class LanguageManager {
         "home.progress_to_go":  "%d%% — kurang %@",
         "home.negative":        "Saldo negatif",
         "home.balance_this_month": "Saldo bulan ini",
+        "home.balance_total": "Saldo",
         "home.add_first_tx":    "Tambah Transaksi",
         "home.add_card_first":  "Tambahkan kartu terlebih dahulu sebelum mencatat transaksi",
         "home.add_card_salary": "Tambahkan kartu terlebih dahulu untuk menghubungkan gaji",
@@ -1747,6 +1750,7 @@ final class LanguageManager {
         // Statistics period filter pills
         "stats.period.this_month":  "Bulan Ini",
         "stats.period.last_month":  "Bulan Lalu",
+        "stats.period.pay_cycle":   "Siklus gaji",
         "stats.period.3months":     "3 Bulan",
         "stats.period.6months":     "6 Bulan",
         "stats.period.this_year":   "Tahun Ini",
