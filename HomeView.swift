@@ -663,21 +663,31 @@ struct RecurringReminderBanner: View {
         max(Calendar.current.dateComponents([.day], from: Date(), to: pattern.nextExpected).day ?? 0, 0)
     }
 
+    /// A fixed bill/subscription vs a frequent discretionary habit — drives all
+    /// the labels, colors, and copy so a warteg run never reads like a CC bill.
+    private var isBill: Bool { pattern.kind == .bill }
+    /// Bills keep the neutral blue "reminder" look; habits borrow the category
+    /// color + icon so they clearly read as "your food/transport spending".
+    private var tint: Color { isBill ? AppTheme.blue : pattern.category.color }
+    private var iconName: String { isBill ? "arrow.clockwise.circle.fill" : pattern.category.icon }
+    private var badgeText: String { isBill ? loc("tx.recurring") : loc("recurring.badge.habit") }
+
     var body: some View {
         HStack(spacing: 12) {
             ZStack {
-                Circle().fill(AppTheme.blue.opacity(0.15)).frame(width: 40, height: 40)
-                Image(systemName: "arrow.clockwise.circle.fill")
-                    .font(.system(size: 18)).foregroundStyle(AppTheme.blue)
+                Circle().fill(tint.opacity(0.15)).frame(width: 40, height: 40)
+                Image(systemName: iconName)
+                    .font(.system(size: 18)).foregroundStyle(tint)
             }
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
-                    Text(loc("tx.recurring"))
+                    Text(badgeText)
                         .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(AppTheme.blue)
+                        .foregroundStyle(tint)
                         .padding(.horizontal, 6).padding(.vertical, 2)
-                        .background(AppTheme.blue.opacity(0.15), in: Capsule())
-                    if daysUntil == 0 {
+                        .background(tint.opacity(0.15), in: Capsule())
+                    // "Due today" only makes sense for a bill — a habit isn't due.
+                    if isBill && daysUntil == 0 {
                         Text(loc("tx.due_today"))
                             .font(.system(size: 10, weight: .semibold))
                             .foregroundStyle(AppTheme.red)
@@ -685,22 +695,41 @@ struct RecurringReminderBanner: View {
                             .background(AppTheme.red.opacity(0.15), in: Capsule())
                     }
                 }
-                Text(pattern.name)
+                // Name + cadence so the user knows WHY it's flagged: "warteg ·
+                // every week".
+                Text("\(pattern.name) · \(pattern.frequencyLabel)")
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(AppTheme.textPrimary)
-                Text(daysUntil == 0
-                     ? "Expected payment due today"
-                     : "Expected in \(daysUntil) day\(daysUntil == 1 ? "" : "s") · \(CurrencyManager.shared.formatted(pattern.amount, currency: pattern.currency))")
+                    .lineLimit(1)
+                // Detail — bills get a "due" prediction; habits are framed as an
+                // average spend, no due-date pressure.
+                let amountStr = CurrencyManager.shared.formatted(pattern.amount, currency: pattern.currency)
+                Text(detailText(amountStr))
                     .font(.system(size: 11))
                     .foregroundStyle(AppTheme.textSecondary)
+                // One-line explainer so first-time users aren't confused.
+                Text(isBill ? loc("recurring.help.bill") : loc("recurring.help.habit"))
+                    .font(.system(size: 10))
+                    .foregroundStyle(AppTheme.textSecondary.opacity(0.7))
+                    .fixedSize(horizontal: false, vertical: true)
             }
             Spacer()
         }
         .padding(12)
-        .background(AppTheme.blue.opacity(0.06), in: RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).stroke(AppTheme.blue.opacity(0.2), lineWidth: 1))
+        .background(tint.opacity(0.06), in: RoundedRectangle(cornerRadius: 16))
+        .overlay(RoundedRectangle(cornerRadius: 16).stroke(tint.opacity(0.2), lineWidth: 1))
         .opacity(appeared ? 1 : 0)
         .onAppear { withAnimation(.spring(response: 0.5)) { appeared = true } }
+    }
+
+    private func detailText(_ amountStr: String) -> String {
+        if !isBill {
+            // Habit: an average per-visit spend, not a payment due.
+            return String(format: loc("recurring.detail_habit"), amountStr)
+        }
+        return daysUntil == 0
+            ? String(format: loc("recurring.detail_today"), amountStr)
+            : String(format: loc("recurring.detail"), amountStr, daysUntil)
     }
 }
 
@@ -1720,36 +1749,45 @@ struct SwipeToDeleteRow<Content: View>: View {
     /// Positive width of the red action currently revealed.
     private var revealed: CGFloat { max(0, -offset) }
     private var isFullSwipe: Bool { revealed >= fullSwipeThreshold }
+    /// 0→1 as the swipe grows to the resting open width. Drives the circular
+    /// delete button's spring-in (scale + fade), iOS Notes-style.
+    private var revealProgress: CGFloat { min(revealed / actionWidth, 1) }
 
     var body: some View {
         ZStack(alignment: .trailing) {
-            // Red action — a DIRECT sibling of the content so a flexible Color
-            // fills the ZStack and ends up EXACTLY the row's height (the old
-            // nested `maxHeight: .infinity` overflowed, making the button taller
-            // than the row). Flush & square — no corner radius — to sit cleanly
-            // behind the flat transaction rows like iOS Mail / Phone. Width
-            // grows with the swipe; the Delete glyph stays pinned and nudges
-            // toward the leading edge once you cross the full-swipe threshold.
-            AppTheme.red
-                .frame(width: revealed)
-                .overlay(alignment: isFullSwipe ? .leading : .trailing) {
-                    Button {
-                        HapticManager.shared.tap()
-                        withAnimation(.spring(response: 0.3)) { offset = 0 }
-                        onDelete()
-                    } label: {
-                        VStack(spacing: 3) {
-                            Image(systemName: "trash.fill").font(.system(size: 16, weight: .semibold))
-                            Text(loc("common.delete")).font(.system(size: 11, weight: .bold))
+            // iOS-style delete: a single round red button with a "Delete"
+            // label, sitting on the PLAIN list background — no red wash/slab
+            // behind it. It springs in (scale + fade) as the row slides and
+            // pops slightly larger once you cross the full-swipe threshold. A
+            // long swipe still deletes on release; a short swipe rests open so
+            // you can tap the button.
+            if revealed > 0 {
+                Button {
+                    HapticManager.shared.tap()
+                    withAnimation(.spring(response: 0.32, dampingFraction: 0.7)) { offset = 0 }
+                    onDelete()
+                } label: {
+                    VStack(spacing: 5) {
+                        ZStack {
+                            Circle()
+                                .fill(AppTheme.red)
+                                .frame(width: 44, height: 44)
+                                .shadow(color: AppTheme.red.opacity(0.22), radius: 4, y: 2)
+                            Image(systemName: "trash.fill")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(.white)
                         }
-                        .foregroundStyle(.white)
-                        .frame(width: actionWidth)
-                        .scaleEffect(isFullSwipe ? 1.1 : 1)
+                        Text(loc("common.delete"))
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(AppTheme.red)
                     }
-                    .buttonStyle(.plain)
+                    .scaleEffect(isFullSwipe ? 1.15 : max(revealProgress, 0.4))
+                    .opacity(min(Double(revealProgress) * 1.7, 1))
+                    .animation(.spring(response: 0.32, dampingFraction: 0.55), value: isFullSwipe)
                 }
-                .clipped()
-                .opacity(revealed > 1 ? 1 : 0)
+                .buttonStyle(.plain)
+                .frame(width: min(revealed, actionWidth))
+            }
 
             content
                 // Opaque background so the red action is hidden when closed.

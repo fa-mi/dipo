@@ -4,6 +4,7 @@ import UIKit
 import AuthenticationServices
 import GoogleSignIn
 import FirebaseAuth
+import CryptoKit
 
 // MARK: - Social Provider
 
@@ -35,6 +36,28 @@ final class UserSession {
     var email: String?
     var provider: SocialProvider?
     var isLoggedIn: Bool { userID != nil }
+
+    /// A short, shareable DiPo ID (e.g. "7Q3KX9A2").
+    /// Derived deterministically from the account's stable social `userID`, so:
+    ///   • the SAME user always gets the SAME ID across devices & reinstalls,
+    ///   • different users get different IDs,
+    ///   • no extra storage or server round-trip is needed.
+    /// It exists the moment the user is logged in (i.e. right after onboarding),
+    /// ready for future features (referrals, friends, sharing) that key on a
+    /// stable per-user identifier. nil only when signed out.
+    var dipoID: String? {
+        guard let uid = userID, !uid.isEmpty else { return nil }
+        return Self.dipoID(from: uid)
+    }
+
+    /// Deterministic 8-char code from an opaque social id: uppercase letters +
+    /// digits from an unambiguous base-32 alphabet (no 0/O/1/I). ~1.1 trillion
+    /// combinations, so per-user IDs stay distinct.
+    static func dipoID(from userID: String) -> String {
+        let digest = SHA256.hash(data: Data(userID.utf8))
+        let alphabet = Array("ABCDEFGHJKLMNPQRSTUVWXYZ23456789") // 32 chars
+        return String(digest.prefix(8).map { alphabet[Int($0) % alphabet.count] })
+    }
 
     // MARK: - Keychain Keys
 

@@ -22,6 +22,7 @@ struct SmartBudgetSettingsSheet: View {
     /// or when the user explicitly chooses "Default for all cards").
     @State private var editingPerCard: Bool = false
     @State private var showSalarySetup = false
+    @State private var showRecommendation = false
     /// The preset the user explicitly tapped. Tracked by identity (not by
     /// ratios) so that two presets sharing the same split — e.g. Student Saver
     /// and Mortgage Payer are both 50/20/30 — never light up together. nil
@@ -98,11 +99,10 @@ struct SmartBudgetSettingsSheet: View {
             }
         }
 
-        // 2. Income transactions on the selected card this month
-        let cal = Calendar.current
-        let monthStart = cal.safeDate(from: cal.dateComponents([.year, .month], from: Date()))
+        // 2. Income transactions on the selected card this period (pay cycle
+        //    when a schedule exists, else calendar month).
         return budgetTx
-            .filter { $0.amount > 0 && $0.txSubtype != .transfer && $0.date >= monthStart }
+            .filter { $0.amount > 0 && $0.txSubtype != .transfer && $0.date >= periodStart }
             .reduce(0.0) { sum, tx in
                 sum + mgr.convert(tx.amount, from: tx.currency, to: cardCurrency)
             }
@@ -124,12 +124,47 @@ struct SmartBudgetSettingsSheet: View {
         return cards.first(where: { $0.id.uuidString == id })
     }
 
+    /// Day-of-month the salary lands on (selected card's schedule, else any
+    /// active schedule). Anchors the budget period to the pay cycle.
+    private var payCycleDay: Int? {
+        if let s = schedules.first(where: { $0.isActive && $0.cardID == selectedCard?.id }) { return s.dayOfMonth }
+        return schedules.first(where: { $0.isActive })?.dayOfMonth
+    }
+
+    /// Whether spending is measured over the pay cycle (a salary schedule exists).
+    private var usesPayCycle: Bool { payCycleDay != nil }
+
+    /// Start of the budget period. With a salary schedule, spending is measured
+    /// over the PAY CYCLE (payday → today) instead of the calendar month — so
+    /// "spent vs budget" reflects the actual salary period. This matters when
+    /// payday is late in the month (e.g. the 25th): early in the new calendar
+    /// month almost nothing is "spent yet", which understated usage badly.
+    /// Falls back to the 1st of the month when there's no schedule.
+    private var periodStart: Date {
+        if let day = payCycleDay { return StatPeriod.payCycleRange(payDay: day).start }
+        let cal = Calendar.current
+        return cal.safeDate(from: cal.dateComponents([.year, .month], from: Date()))
+    }
+
+    /// Human label for the current budget window — a date range for the pay
+    /// cycle, or the month name for the calendar-month fallback.
+    private var periodLabel: String {
+        if let day = payCycleDay {
+            let (start, end) = StatPeriod.payCycleRange(payDay: day)
+            let f = DateFormatter()
+            f.locale = LanguageManager.shared.currentLocale
+            f.dateFormat = DateFormatter.dateFormat(fromTemplate: "dMMM", options: 0, locale: f.locale)
+            return "\(f.string(from: start)) – \(f.string(from: end))"
+        }
+        return Date().formatted(.dateTime.month(.wide).year())
+    }
+
     // Over-budget groups using ratios for the selected card (per-card with global fallback)
     private var overGroups: [(group: BudgetGroup, spent: Double, limit: Double, ratio: Double)] {
         guard monthlyIncome > 0 else { return [] }
         let r = SmartBudgetManager.shared.ratios(forCardID: selectedCardID, configs: cardConfigs)
         return BudgetGroup.allCases.compactMap { grp in
-            let s = budgetTx.filter { $0.amount < 0 && $0.txSubtype != .transfer && Calendar.current.isDate($0.date, equalTo: Date(), toGranularity: .month) && SmartBudgetManager.shared.categories(for: grp).contains($0.category) }.reduce(0) { $0 + CurrencyManager.shared.convert(abs($1.amount), from: $1.currency, to: cardCurrency) }
+            let s = budgetTx.filter { $0.amount < 0 && $0.txSubtype != .transfer && $0.date >= periodStart && SmartBudgetManager.shared.categories(for: grp).contains($0.category) }.reduce(0) { $0 + CurrencyManager.shared.convert(abs($1.amount), from: $1.currency, to: cardCurrency) }
             let ratio: Double = {
                 switch grp {
                 case .daily:      return r.daily
@@ -299,6 +334,21 @@ struct SmartBudgetSettingsSheet: View {
                 .presentationBackground(AppTheme.bg)
                 .preferredColorScheme(appColorScheme())
         }
+        .sheet(isPresented: $showRecommendation) {
+            SmartRecommendationView(onApply: {
+                // Sync the editor to the applied global ratios so the Settings
+                // sliders reflect what DiPo just set.
+                isEnabled     = true
+                editingPerCard = false
+                dailyPct      = Int(SmartBudgetManager.shared.dailyRatio * 100)
+                lifestylePct  = Int(SmartBudgetManager.shared.lifestyleRatio * 100)
+                investPct     = Int(SmartBudgetManager.shared.investDebtRatio * 100)
+            })
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+                .presentationBackground(AppTheme.bg)
+                .preferredColorScheme(appColorScheme())
+        }
         }
     }
 
@@ -339,8 +389,9 @@ struct SmartBudgetSettingsSheet: View {
 
         HStack {
             VStack(alignment: .leading, spacing: 2) {
-                Text(loc("budget.this_month")).font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
-                Text(Date().formatted(.dateTime.month(.wide).year()))
+                Text(usesPayCycle ? loc("stats.period.pay_cycle") : loc("budget.this_month"))
+                    .font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
+                Text(periodLabel)
                     .font(.system(size: 15, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
             }
             Spacer()
@@ -361,7 +412,7 @@ struct SmartBudgetSettingsSheet: View {
 
         if monthlyIncome > 0 {
             ForEach(BudgetGroup.allCases, id: \.rawValue) { grp in
-                BudgetGroupCard(group: grp, budgetTx: budgetTx, income: monthlyIncome, currency: cardCurrency, cardID: selectedCardID, configs: cardConfigs)
+                BudgetGroupCard(group: grp, budgetTx: budgetTx, income: monthlyIncome, currency: cardCurrency, cardID: selectedCardID, configs: cardConfigs, periodStart: periodStart)
                     .padding(.horizontal, 22)
             }
         } else {
@@ -379,6 +430,37 @@ struct SmartBudgetSettingsSheet: View {
     // MARK: - Settings Tab
 
     @ViewBuilder private var settingsTab: some View {
+        // ── DiPo's Recommendation — AI-analyzed personalized budget ───────
+        // Opens a full confirmation screen that reads the user's real
+        // transactions and proposes a smarter split + saving/investing plan.
+        Button {
+            HapticManager.shared.tap()
+            showRecommendation = true
+        } label: {
+            HStack(spacing: 12) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 12).fill(.white.opacity(0.18)).frame(width: 42, height: 42)
+                    Image(systemName: "sparkles").font(.system(size: 19, weight: .semibold)).foregroundStyle(.white)
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(loc("reco.cta_title")).font(.system(size: 15, weight: .bold)).foregroundStyle(.white)
+                    Text(loc("reco.cta_sub")).font(.system(size: 11)).foregroundStyle(.white.opacity(0.85))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 4)
+                Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(.white.opacity(0.9))
+            }
+            .padding(14)
+            .background(
+                LinearGradient(colors: [AppTheme.purple, AppTheme.purple.opacity(0.72)],
+                               startPoint: .topLeading, endPoint: .bottomTrailing),
+                in: RoundedRectangle(cornerRadius: 16))
+            .shadow(color: AppTheme.purple.opacity(0.3), radius: 10, y: 5)
+        }
+        .buttonStyle(ScaleButtonStyle())
+        .padding(.horizontal, 22)
+        .padding(.bottom, 6)
+
         // ── Profile Presets — quick-pick lifestyle templates ─────────────
         // The default 50/30/20 doesn't fit everyone (mahasiswa kost-an,
         // freelancer with variable income, KPR payer all need different
@@ -766,9 +848,12 @@ struct BudgetGroupCard: View {
     /// a saved CardBudgetConfig override is reflected here (nil = global).
     var cardID: String? = nil
     var configs: [CardBudgetConfig] = []
+    /// Start of the budget window (pay-cycle aware). Defaults to the 1st of the
+    /// month so any legacy call site keeps calendar-month behavior.
+    var periodStart: Date = Calendar.current.safeDate(from: Calendar.current.dateComponents([.year, .month], from: Date()))
     @State private var animatedProgress: Double = 0
 
-    private var monthStart: Date { Calendar.current.safeDate(from: Calendar.current.dateComponents([.year, .month], from: Date())) }
+    private var monthStart: Date { periodStart }
     private var groupTx: [TxRecord] {
         let cats = SmartBudgetManager.shared.categories(for: group)
         return budgetTx.filter { $0.amount < 0 && $0.txSubtype != .transfer && $0.date >= monthStart && cats.contains($0.category) }.sorted { $0.date > $1.date }
@@ -782,7 +867,7 @@ struct BudgetGroupCard: View {
     private var targetPct: Int { Int(ratio * 100) }
 
     var body: some View {
-        NavigationLink(destination: BudgetGroupDetailView(group: group, budgetTx: budgetTx, income: income, currency: currency, cardID: cardID, configs: configs)) {
+        NavigationLink(destination: BudgetGroupDetailView(group: group, budgetTx: budgetTx, income: income, currency: currency, cardID: cardID, configs: configs, periodStart: periodStart)) {
             VStack(spacing: 12) {
                 HStack {
                     HStack(spacing: 8) {
@@ -863,13 +948,21 @@ struct BudgetGroupDetailView: View {
     /// Card whose budget is shown — drives per-card ratio (nil = global).
     var cardID: String? = nil
     var configs: [CardBudgetConfig] = []
+    /// Start of the budget window (pay-cycle aware). Defaults to month start.
+    var periodStart: Date = Calendar.current.safeDate(from: Calendar.current.dateComponents([.year, .month], from: Date()))
     @State private var appeared = false
 
     private var cal: Calendar  { Calendar.current }
-    private var monthStart: Date { cal.safeDate(from: cal.dateComponents([.year, .month], from: Date())) }
-    private var daysInMonth: Int { cal.range(of: .day, in: .month, for: Date())?.count ?? 28 }
-    private var dayOfMonth: Int  { cal.component(.day, from: Date()) }
-    private var daysLeft: Int    { daysInMonth - dayOfMonth }
+    private var monthStart: Date { periodStart }
+    /// End of the current budget window: one month after its start — i.e. the
+    /// next payday for a pay cycle, or the 1st of next month in calendar mode.
+    private var periodEnd: Date { cal.date(byAdding: .month, value: 1, to: periodStart) ?? periodStart }
+    /// Days remaining until the window ends. Pay-cycle aware, so the
+    /// "remaining/day" hint paces against days left until the next payday
+    /// rather than the calendar month-end.
+    private var daysLeft: Int {
+        max(cal.dateComponents([.day], from: cal.startOfDay(for: Date()), to: periodEnd).day ?? 0, 0)
+    }
     private var primary: String  { currency }
     private func fmt(_ amount: Double) -> String {
         CurrencyManager.shared.formatted(amount, currency: primary)
@@ -1072,9 +1165,10 @@ struct BudgetGroupDetailView: View {
                                                         if tx.currency.uppercased() != currencyCode.uppercased() {
                                                             Text("≈ \(CurrencyManager.shared.formatted(converted, currency: currencyCode))").font(.system(size: 10)).foregroundStyle(AppTheme.textSecondary)
                                                         }
-                                                        if income > 0 {
-                                                            Text("\(Int((converted / income) * 100))% of income").font(.system(size: 10)).foregroundStyle(AppTheme.textSecondary)
-                                                        }
+                                                        // Per-transaction "% of income" removed — a single tx is a
+                                                        // tiny fraction of monthly income, so it always rounded to
+                                                        // "0% of income" and just looked broken. The category
+                                                        // breakdown above already shows a meaningful % of income.
                                                     }
                                                 }
                                                 .padding(.horizontal, 16).padding(.vertical, 12)

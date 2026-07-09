@@ -141,6 +141,7 @@ struct ProfileView: View {
     @State private var isEditingName      = false
     @State private var editNameText       = ""
     @State private var showEmailEdit      = false
+    @State private var idCopied           = false
     @State private var emailText          = ""
     @State private var showDebt           = false
     @State private var showPaywall        = false
@@ -247,6 +248,7 @@ struct ProfileView: View {
                     securityCard
                     if session.isLoggedIn { accountCard }
                     if session.isLoggedIn { emailSection }
+                    if session.isLoggedIn { dipoIDSection }
                     premiumBadge
                     featureLinksCard
                     appearanceCard
@@ -599,6 +601,53 @@ struct ProfileView: View {
         } message: {
             Text(loc("profile.email_desc"))
         }
+    }
+
+    /// Shows the user's stable, shareable DiPo ID with a tap-to-copy button.
+    /// Read-only — it's derived from the account, not editable.
+    @ViewBuilder
+    private var dipoIDSection: some View {
+        let id = session.dipoID ?? "—"
+        HStack(spacing: 12) {
+            Image(systemName: "person.text.rectangle.fill")
+                .font(.system(size: 18)).foregroundStyle(AppTheme.purple)
+                .frame(width: 36, height: 36)
+                .background(AppTheme.purple.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(loc("profile.dipo_id_title"))
+                    .font(.system(size: 14, weight: .medium)).foregroundStyle(AppTheme.textPrimary)
+                Text(id)
+                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(AppTheme.textSecondary)
+                    .lineLimit(1)
+            }
+            Spacer()
+            Button {
+                HapticManager.shared.tap()
+                UIPasteboard.general.string = id
+                withAnimation(.spring(response: 0.3)) { idCopied = true }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) {
+                    withAnimation(.easeOut) { idCopied = false }
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: idCopied ? "checkmark" : "doc.on.doc")
+                        .font(.system(size: 11, weight: .semibold))
+                    Text(idCopied ? loc("common.copied") : loc("common.copy"))
+                        .font(.system(size: 12, weight: .semibold))
+                }
+                .foregroundStyle(AppTheme.purple)
+                .padding(.horizontal, 14).padding(.vertical, 7)
+                .background(AppTheme.purple.opacity(0.12), in: Capsule())
+                .overlay(Capsule().stroke(AppTheme.purple.opacity(0.3), lineWidth: 1))
+            }
+            .buttonStyle(ScaleButtonStyle())
+        }
+        .padding(16)
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
+        .overlay(RoundedRectangle(cornerRadius: 16).stroke(AppTheme.purple.opacity(0.18), lineWidth: 1))
+        .padding(.horizontal, 22)
+        .opacity(appeared ? 1 : 0)
     }
 
     @ViewBuilder

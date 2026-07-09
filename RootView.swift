@@ -131,10 +131,14 @@ enum WidgetDataSync {
             return Int((top / expenses * 100).rounded())
         }()
 
-        // Weekly avg = total expenses ÷ (days elapsed this month ÷ 7).
-        // Same shape as StatisticsView so numbers agree across surfaces.
+        // Weekly avg = total expenses ÷ (weeks elapsed this month).
+        // Floor at 1.0 week: early in the month `daysElapsed` is tiny and a
+        // 0.1 floor made this explode ×10 (e.g. day 1 → expenses ÷ 0.1). The
+        // widget has no room for the "partial period" caveat we show in Stats,
+        // so instead we treat the first week as one whole week — never
+        // over-projecting a glanceable number.
         let daysElapsed = max(cal.dateComponents([.day], from: monthStart, to: now).day ?? 1, 1)
-        let weeks       = max(Double(daysElapsed) / 7.0, 0.1)
+        let weeks       = max(Double(daysElapsed) / 7.0, 1.0)
         let weeklyAvg   = expenses / weeks
         let weeklyAvgFormatted = CurrencyManager.shared.formatted(weeklyAvg, currency: preferred)
 

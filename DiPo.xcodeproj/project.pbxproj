@@ -63,6 +63,9 @@
 		9BD4AD752FA1B70900B4EA52 /* ReceiptPreviewSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BD4AD6B2FA1B70800B4EA52 /* ReceiptPreviewSheet.swift */; };
 		9BD4AD762FA1B70900B4EA52 /* ReceiptScanModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BD4AD6E2FA1B70800B4EA52 /* ReceiptScanModels.swift */; };
 		9BE64C782F75364800662EC1 /* SalaryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BE64C772F75364800662EC1 /* SalaryView.swift */; };
+		9BEA10012F000001000000B1 /* SmartRecommendationEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BEA10012F000001000000E1 /* SmartRecommendationEngine.swift */; };
+		9BEA10022F000002000000B2 /* SmartRecommendationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BEA10022F000002000000E2 /* SmartRecommendationView.swift */; };
+		9BEA10032F000003000000B3 /* SmartRecommendationDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BEA10032F000003000000E3 /* SmartRecommendationDetailView.swift */; };
 		9BFC17B52F91206C00D80402 /* RevenueCat in Frameworks */ = {isa = PBXBuildFile; productRef = 9BFC17B42F91206C00D80402 /* RevenueCat */; };
 /* End PBXBuildFile section */
 
@@ -142,6 +145,9 @@
 		9BE64C362F7513F000662EC1 /* DiPo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DiPo.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		9BE64C632F751CFD00662EC1 /* AuthViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthViews.swift; sourceTree = "<group>"; };
 		9BE64C772F75364800662EC1 /* SalaryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SalaryView.swift; sourceTree = "<group>"; };
+		9BEA10012F000001000000E1 /* SmartRecommendationEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmartRecommendationEngine.swift; sourceTree = "<group>"; };
+		9BEA10022F000002000000E2 /* SmartRecommendationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmartRecommendationView.swift; sourceTree = "<group>"; };
+		9BEA10032F000003000000E3 /* SmartRecommendationDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmartRecommendationDetailView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -241,6 +247,9 @@
 				9B944DB62F94FC2A00C5892D /* IndonesianHolidayService.swift */,
 				9B83202B2F7BC446000CE046 /* DiPoLogo.swift */,
 				9BCDED962F7978C5006F70F9 /* SmartBudgetSettingsView.swift */,
+				9BEA10012F000001000000E1 /* SmartRecommendationEngine.swift */,
+				9BEA10022F000002000000E2 /* SmartRecommendationView.swift */,
+				9BEA10032F000003000000E3 /* SmartRecommendationDetailView.swift */,
 				9B1C11CB2FA029540032CD2C /* CryptoManager.swift */,
 				9B1C11CD2FA029540032CD2C /* NetworkLayer.swift */,
 				9B1C11CE2FA029540032CD2C /* SecureDataLayerMigration.swift */,
@@ -458,6 +467,9 @@
 				9B37C39E2F7B7F3200035E23 /* DebtView.swift in Sources */,
 				9B37C39F2F7B7F3200035E23 /* AuthManager.swift in Sources */,
 				9B37C3A02F7B7F3200035E23 /* SmartBudgetSettingsView.swift in Sources */,
+				9BEA10012F000001000000B1 /* SmartRecommendationEngine.swift in Sources */,
+				9BEA10022F000002000000B2 /* SmartRecommendationView.swift in Sources */,
+				9BEA10032F000003000000B3 /* SmartRecommendationDetailView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -479,7 +491,7 @@
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
 				CODE_SIGN_ENTITLEMENTS = DiPoWidgetExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 50;
+				CURRENT_PROJECT_VERSION = 53;
 				DEVELOPMENT_TEAM = 3C6KN7P2NC;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = DiPoWidget/Info.plist;
@@ -491,7 +503,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.7;
+				MARKETING_VERSION = 1.10;
 				PRODUCT_BUNDLE_IDENTIFIER = com.fahmiaquinas.DiPo.DiPoWidget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -511,7 +523,7 @@
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
 				CODE_SIGN_ENTITLEMENTS = DiPoWidgetExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 50;
+				CURRENT_PROJECT_VERSION = 53;
 				DEVELOPMENT_TEAM = 3C6KN7P2NC;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = DiPoWidget/Info.plist;
@@ -523,7 +535,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.7;
+				MARKETING_VERSION = 1.10;
 				PRODUCT_BUNDLE_IDENTIFIER = com.fahmiaquinas.DiPo.DiPoWidget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -667,7 +679,7 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = DiPo/DiPo.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 50;
+				CURRENT_PROJECT_VERSION = 53;
 				DEVELOPMENT_TEAM = 3C6KN7P2NC;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -684,7 +696,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.7;
+				MARKETING_VERSION = 1.10;
 				PRODUCT_BUNDLE_IDENTIFIER = com.fahmiaquinas.DiPo;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -709,7 +721,7 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = DiPo/DiPo.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 50;
+				CURRENT_PROJECT_VERSION = 53;
 				DEVELOPMENT_TEAM = 3C6KN7P2NC;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -726,7 +738,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.7;
+				MARKETING_VERSION = 1.10;
 				PRODUCT_BUNDLE_IDENTIFIER = com.fahmiaquinas.DiPo;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
