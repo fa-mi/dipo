@@ -1270,8 +1270,10 @@ final class SmartBudgetManager {
         let amount: Double
         let currency: String
         let category: TxCategory
-        let intervalDays: Int // ~30 = monthly, ~7 = weekly
+        let intervalDays: Int // ~1 = daily, ~7 = weekly, ~14 = bi-weekly, ~30 = monthly
         let lastDate: Date
+        /// How many times this pattern was seen — higher = more reliable.
+        var occurrences: Int = 2
         var nextExpected: Date {
             Calendar.current.safeDate(byAdding: .day, value: intervalDays, to: lastDate)
         }
@@ -1279,20 +1281,57 @@ final class SmartBudgetManager {
             let days = Calendar.current.dateComponents([.day], from: Date(), to: nextExpected).day ?? 99
             return days <= 7
         }
+        /// Localized cadence label ("every week", "every month", …). Drives the
+        /// friendlier copy so users understand WHY a spend is flagged.
+        var frequencyLabel: String {
+            switch intervalDays {
+            case ...2:      return loc("recurring.freq.daily")
+            case 3...9:     return loc("recurring.freq.weekly")
+            case 10...18:   return loc("recurring.freq.biweekly")
+            default:        return loc("recurring.freq.monthly")
+            }
+        }
+
+        /// A repeating spend is one of two very different things, and lumping
+        /// them together confuses users:
+        ///   • `.bill`  — a fixed commitment (subscription, utility, insurance,
+        ///     installment). These live in the Bills category and it's useful
+        ///     to be reminded to prepare the money.
+        ///   • `.habit` — a frequent, variable, discretionary spend (warteg,
+        ///     kopi, ojek). It's NOT a bill; treating it like one feels wrong.
+        /// We split on category so food/transport habits read as habits, not
+        /// as "subscriptions".
+        enum Kind { case bill, habit }
+        var kind: Kind { category == .bills ? .bill : .habit }
     }
 
-    /// Finds transactions that recur on a regular interval (weekly/monthly)
+    /// Collapses merchant-name variants so "Warteg", "warteg pojok", and
+    /// "Warteg Bu Ani 2" all fold into one pattern. Lowercases, strips digits
+    /// and punctuation, and — when the first word is distinctive (≥5 letters,
+    /// so real merchant names like "warteg"/"cuangki" but not generic tokens
+    /// like "grab"/"gojek") — keys on that first word alone. Short/generic
+    /// first words fall back to the full cleaned name so "Grab Food" and
+    /// "Grab Car" stay separate.
+    private func recurringKey(for name: String) -> String {
+        let cleaned = name.lowercased()
+            .unicodeScalars.map { CharacterSet.letters.contains($0) || $0 == " " ? Character($0) : " " }
+            .reduce(into: "") { $0.append($1) }
+            .split(separator: " ").joined(separator: " ")
+        let firstWord = cleaned.split(separator: " ").first.map(String.init) ?? cleaned
+        return firstWord.count >= 5 ? firstWord : cleaned
+    }
+
+    /// Finds transactions that recur on a regular interval (daily / weekly /
+    /// bi-weekly / monthly), tolerant of small merchant-name variations.
     func detectRecurring(allTransactions: [TxRecord]) -> [RecurringPattern] {
         // Royal-only gate — same rationale as spendingAnomalies.
         guard hasActiveBudget else { return [] }
-        // Group expenses by normalized name. Skip transfers (they're not
-        // real spend; they're inter-account moves the user does on a
-        // schedule and we don't want flagged as "subscription").
+        // Group expenses by a fuzzy merchant key. Skip transfers (inter-account
+        // moves, not real spend) so they're never flagged as "subscriptions".
         let expenses = allTransactions.filter { $0.amount < 0 && $0.txSubtype != .transfer }
         var grouped: [String: [TxRecord]] = [:]
         for tx in expenses {
-            let key = tx.name.lowercased().trimmingCharacters(in: .whitespaces)
-            grouped[key, default: []].append(tx)
+            grouped[recurringKey(for: tx.name), default: []].append(tx)
         }
 
         var patterns: [RecurringPattern] = []
@@ -1300,7 +1339,7 @@ final class SmartBudgetManager {
             guard txs.count >= 2 else { continue }
             let sorted = txs.sorted { $0.date < $1.date }
 
-            // Calculate gaps between occurrences
+            // Calculate gaps (in days) between consecutive occurrences.
             var gaps: [Int] = []
             for i in 1..<sorted.count {
                 let days = Calendar.current.dateComponents([.day], from: sorted[i-1].date, to: sorted[i].date).day ?? 0
@@ -1309,21 +1348,25 @@ final class SmartBudgetManager {
             guard !gaps.isEmpty else { continue }
 
             let avgGap = gaps.reduce(0, +) / gaps.count
-            // Check consistency: all gaps within 5 days of average
-            let consistent = gaps.allSatisfy { abs($0 - avgGap) <= 5 }
-            guard consistent else { continue }
 
-            // Only flag weekly (~7 days) or monthly (~28-31 days)
+            // Map the average gap to a known cadence, with a tolerance that
+            // scales to the interval (a daily pattern must be tight; a monthly
+            // one can wobble more). Daily needs ≥4 sightings to avoid noise.
             let intervalDays: Int
-            if (6...8).contains(avgGap) { intervalDays = 7 }
-            else if (25...35).contains(avgGap) { intervalDays = 30 }
-            else { continue }
+            let tolerance: Int
+            switch avgGap {
+            case 1...2 where sorted.count >= 4: intervalDays = max(avgGap, 1); tolerance = 1
+            case 6...8:                          intervalDays = 7;  tolerance = 2
+            case 12...16:                        intervalDays = 14; tolerance = 3
+            case 25...35:                        intervalDays = 30; tolerance = 6
+            default: continue
+            }
+            guard gaps.allSatisfy({ abs($0 - avgGap) <= tolerance }) else { continue }
 
-            // Use most common amount
+            // Average amount across sightings (an estimate — hence "≈" in UI).
             let amounts = txs.map { abs($0.amount) }
             let avgAmt = amounts.reduce(0, +) / Double(amounts.count)
 
-            // ✅ guard replaces four sorted.last! force-unwraps
             guard let latest = sorted.last else { continue }
             patterns.append(RecurringPattern(
                 name: latest.name,
@@ -1331,13 +1374,15 @@ final class SmartBudgetManager {
                 currency: latest.currency,
                 category: latest.category,
                 intervalDays: intervalDays,
-                lastDate: latest.date
+                lastDate: latest.date,
+                occurrences: txs.count
             ))
         }
 
-        // Sort: due soon first, then by amount
+        // Sort: due soon first, then most-frequently-seen, then by amount.
         return patterns
-            .sorted { ($0.isDueSoon ? 0 : 1, $1.amount) < ($1.isDueSoon ? 0 : 1, $0.amount) }
+            .sorted { ($0.isDueSoon ? 0 : 1, -$0.occurrences, $1.amount)
+                    < ($1.isDueSoon ? 0 : 1, -$1.occurrences, $0.amount) }
             .prefix(5)
             .map { $0 }
     }

@@ -89,6 +89,9 @@ struct StatisticsView: View {
     @Query private var cardBudgetConfigs: [CardBudgetConfig]
     @Query(sort: \SalarySchedule.createdAt) private var salarySchedules: [SalarySchedule]
     @State private var selectedPeriod: StatPeriod = .thisMonth
+    /// Guards the one-time "default to pay cycle" so it can't override a manual
+    /// period choice on later re-appears.
+    @State private var didDefaultPeriod = false
     @State private var customStart: Date = Calendar.current.safeDate(byAdding: .month, value: -1, to: Date())
     @State private var customEnd: Date = Date()
     @State private var showCustomPicker = false
@@ -243,6 +246,20 @@ struct StatisticsView: View {
         let days = Calendar.current.dateComponents([.day], from: start, to: end).day ?? 1
         let weeks = max(Double(days) / 7.0, 0.1)
         return filteredExpenses / weeks
+    }
+
+    /// Number of whole days spanned by the current period.
+    private var periodDays: Int {
+        let (start, end) = effectiveRange
+        return max(Calendar.current.dateComponents([.day], from: start, to: end).day ?? 0, 0)
+    }
+
+    /// A window under ~2 weeks doesn't hold enough data for a stable weekly
+    /// pace — dividing a front-loaded, still-in-progress span (e.g. a pay
+    /// cycle 8 days in) by fractional weeks inflates the figure. Flag those so
+    /// the UI marks the weekly average as a partial estimate.
+    private var isPartialWeeklyPeriod: Bool {
+        periodDays < 14
     }
     
     private var topCategories: [(category: TxCategory, amount: Double, percentage: Double)] {
@@ -477,7 +494,9 @@ struct StatisticsView: View {
                             weeklyAverage: weeklyAverage,
                             topCategories: topCategories,
                             totalExpenses: filteredExpenses,
-                            currency: displayCurrency
+                            currency: displayCurrency,
+                            isPartialPeriod: isPartialWeeklyPeriod,
+                            periodDays: periodDays
                         )
                         if PremiumManager.shared.plan == .royal {
                             insightsCard
@@ -578,6 +597,14 @@ struct StatisticsView: View {
         }
         .onAppear {
             statsVM.animateIn()
+            // Default the period to the pay cycle (payday → today) when the
+            // user has a salary schedule — their financial month runs from
+            // payday, not the calendar 1st. One-time so it never overrides a
+            // manual choice.
+            if !didDefaultPeriod {
+                didDefaultPeriod = true
+                if payCycleDay != nil { selectedPeriod = .payCycle }
+            }
             // Auto-select first available card if none is selected.
             // Statistics is always per-card to avoid mixing currencies.
             if selectedCardID == nil, let first = availableCards.first {
@@ -1042,7 +1069,13 @@ struct SmartInsightsCard: View {
     let topCategories: [(category: TxCategory, amount: Double, percentage: Double)]
     let totalExpenses: Double
     let currency: String
-    
+    /// When the selected window is shorter than ~2 weeks the "per week" figure
+    /// is extrapolated from very little data (e.g. a pay cycle only 8 days in)
+    /// and reads much higher than a steady weekly pace. We keep showing it but
+    /// flag it as a partial-period estimate so it isn't mistaken for a rate.
+    var isPartialPeriod: Bool = false
+    var periodDays: Int = 0
+
     @State private var appeared = false
     
     var body: some View {
@@ -1070,14 +1103,28 @@ struct SmartInsightsCard: View {
                     Text(loc("stats.weekly_avg"))
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(AppTheme.textSecondary)
+                    if isPartialPeriod {
+                        // Caveat chip — this window is too short for a stable
+                        // weekly rate, so mark it as a partial estimate.
+                        HStack(spacing: 3) {
+                            Image(systemName: "info.circle.fill").font(.system(size: 8))
+                            Text(loc("stats.weekly_avg_partial_badge"))
+                                .font(.system(size: 9, weight: .semibold))
+                        }
+                        .foregroundStyle(AppTheme.orange)
+                        .padding(.horizontal, 6).padding(.vertical, 2)
+                        .background(AppTheme.orange.opacity(0.12), in: Capsule())
+                    }
                 }
                 Text(CurrencyManager.shared.formatted(weeklyAverage, currency: currency))
                     .font(.system(size: 26, weight: .bold))
                     .foregroundStyle(AppTheme.textPrimary)
                     .contentTransition(.numericText())
-                Text(loc("stats.weekly_avg_sub"))
+                Text(isPartialPeriod
+                     ? String(format: loc("stats.weekly_avg_partial_sub"), periodDays)
+                     : loc("stats.weekly_avg_sub"))
                     .font(.system(size: 11))
-                    .foregroundStyle(AppTheme.textSecondary.opacity(0.8))
+                    .foregroundStyle(isPartialPeriod ? AppTheme.orange.opacity(0.9) : AppTheme.textSecondary.opacity(0.8))
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(14)
