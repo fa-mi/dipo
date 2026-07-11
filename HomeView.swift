@@ -1319,7 +1319,7 @@ struct CategoryFilterBar: View {
     // Only the subset relevant to expense/home-screen filtering.
     private let filterCategories: [TxCategory] = [
         .shopping, .food, .travel, .bills,
-        .transport, .health, .investment, .debtPayment, .salary, .other
+        .transport, .health, .commitment, .investment, .debtPayment, .salary, .other
     ]
 
     private var isPad: Bool { UIDevice.current.userInterfaceIdiom == .pad }
@@ -1418,10 +1418,17 @@ struct TransactionSection: View {
         return base.filter { $0.category == filter }
     }
 
-    // Group by calendar day
-    private var grouped: [(key: String, date: Date, txs: [TxRecord])] {
+    // Group by calendar day. `txs` is the displayed (row-capped) slice, but
+    // `total` is the FULL day total across all filtered transactions — so the
+    // day header always shows the real amount, and "See more" only reveals
+    // more rows for detail (it never changes the header total).
+    private var grouped: [(key: String, date: Date, txs: [TxRecord], total: Double)] {
         let cal = Calendar.current
         let locale = LanguageManager.shared.currentLocale
+        // Real per-day totals from ALL filtered transactions (not the visible prefix).
+        var fullByDay: [Date: Double] = [:]
+        for tx in filtered { fullByDay[cal.startOfDay(for: tx.date), default: 0] += tx.amount }
+
         var dict: [Date: [TxRecord]] = [:]
         let displaySource = showAll ? Array(filtered.prefix(20)) : Array(filtered.prefix(6))
         for tx in displaySource {
@@ -1438,7 +1445,9 @@ struct TransactionSection: View {
                 df.dateFormat = DateFormatter.dateFormat(fromTemplate: "EEEEdMMM", options: 0, locale: locale)
                 label = df.string(from: day)
             }
-            return (key: label, date: day, txs: (dict[day] ?? []).sorted { $0.date > $1.date })
+            return (key: label, date: day,
+                    txs: (dict[day] ?? []).sorted { $0.date > $1.date },
+                    total: fullByDay[day] ?? 0)
         }
     }
 
@@ -1539,8 +1548,9 @@ struct TransactionSection: View {
                 VStack(spacing: 20) {
                     ForEach(grouped, id: \.key) { group in
                         VStack(alignment: .leading, spacing: 10) {
-                            // Date header with daily total
-                            let dayTotal = group.txs.reduce(0) { $0 + $1.amount }
+                            // Date header with the REAL daily total (all txs that
+                            // day, not just the visible rows).
+                            let dayTotal = group.total
                             HStack {
                                 Text(group.key)
                                     .font(.system(size: 13, weight: .semibold))
@@ -1653,6 +1663,8 @@ struct AllTransactionsSheet: View {
                         VStack(spacing: 20) {
                             ForEach(grouped, id: \.key) { group in
                                 VStack(alignment: .leading, spacing: 10) {
+                                    // This sheet shows ALL rows (no prefix cap), so the
+                                    // visible txs already equal the full day.
                                     let dayTotal = group.txs.reduce(0) { $0 + $1.amount }
                                     HStack {
                                         Text(group.key)

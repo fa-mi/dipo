@@ -604,21 +604,28 @@ struct ProfileView: View {
     }
 
     /// Shows the user's stable, shareable DiPo ID with a tap-to-copy button.
-    /// Read-only — it's derived from the account, not editable.
+    /// Read-only — derived from the account, not editable. Uses a distinct
+    /// sky→indigo gradient so it stands out from the green (security/email) and
+    /// purple (Royal) cards around it.
     @ViewBuilder
     private var dipoIDSection: some View {
         let id = session.dipoID ?? "—"
+        let brandA = Color(hex: "#38BDF8") // sky
+        let brandB = Color(hex: "#6366F1") // indigo
+        let grad = LinearGradient(colors: [brandA, brandB],
+                                  startPoint: .topLeading, endPoint: .bottomTrailing)
         HStack(spacing: 12) {
             Image(systemName: "person.text.rectangle.fill")
-                .font(.system(size: 18)).foregroundStyle(AppTheme.purple)
+                .font(.system(size: 18)).foregroundStyle(.white)
                 .frame(width: 36, height: 36)
-                .background(AppTheme.purple.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
+                .background(grad, in: RoundedRectangle(cornerRadius: 10))
+                .shadow(color: brandB.opacity(0.35), radius: 5, y: 2)
             VStack(alignment: .leading, spacing: 2) {
                 Text(loc("profile.dipo_id_title"))
                     .font(.system(size: 14, weight: .medium)).foregroundStyle(AppTheme.textPrimary)
                 Text(id)
-                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(AppTheme.textSecondary)
+                    .font(.system(size: 13, weight: .bold, design: .monospaced))
+                    .foregroundStyle(brandB)
                     .lineLimit(1)
             }
             Spacer()
@@ -636,16 +643,18 @@ struct ProfileView: View {
                     Text(idCopied ? loc("common.copied") : loc("common.copy"))
                         .font(.system(size: 12, weight: .semibold))
                 }
-                .foregroundStyle(AppTheme.purple)
+                .foregroundStyle(.white)
                 .padding(.horizontal, 14).padding(.vertical, 7)
-                .background(AppTheme.purple.opacity(0.12), in: Capsule())
-                .overlay(Capsule().stroke(AppTheme.purple.opacity(0.3), lineWidth: 1))
+                .background(idCopied ? AnyShapeStyle(AppTheme.accent) : AnyShapeStyle(grad), in: Capsule())
             }
             .buttonStyle(ScaleButtonStyle())
         }
         .padding(16)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).stroke(AppTheme.purple.opacity(0.18), lineWidth: 1))
+        .background(
+            LinearGradient(colors: [brandA.opacity(0.10), brandB.opacity(0.10)],
+                           startPoint: .topLeading, endPoint: .bottomTrailing),
+            in: RoundedRectangle(cornerRadius: 16))
+        .overlay(RoundedRectangle(cornerRadius: 16).stroke(brandB.opacity(0.30), lineWidth: 1))
         .padding(.horizontal, 22)
         .opacity(appeared ? 1 : 0)
     }

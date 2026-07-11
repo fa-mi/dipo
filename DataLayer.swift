@@ -214,6 +214,7 @@ enum TxCategory: String, CaseIterable, Codable {
     case bills       = "Bills"
     case transport   = "Transport"
     case health      = "Health"
+    case commitment  = "Commitment"   // fixed monthly: rent/kos, family transfer, memberships
     case other       = "Other"
     // ── Income categories ──
     case salary      = "Salary"
@@ -234,6 +235,7 @@ enum TxCategory: String, CaseIterable, Codable {
         case .bills:       return "bolt.fill"
         case .transport:   return "car.fill"
         case .health:      return "heart.fill"
+        case .commitment:  return "calendar.badge.clock"
         case .other:       return "ellipsis.circle.fill"
         case .salary:      return "banknote.fill"
         case .freelance:   return "laptopcomputer"
@@ -254,6 +256,7 @@ enum TxCategory: String, CaseIterable, Codable {
         case .bills:       return Color(hex: "#F59E0B")
         case .transport:   return Color(hex: "#6366F1")
         case .health:      return Color(hex: "#EC4899")
+        case .commitment:  return Color(hex: "#14B8A6")
         case .other:       return AppTheme.textSecondary
         case .salary:      return AppTheme.accent
         case .freelance:   return Color(hex: "#38BDF8")
@@ -274,6 +277,7 @@ enum TxCategory: String, CaseIterable, Codable {
         case .bills:       return "#F59E0B"
         case .transport:   return "#6366F1"
         case .health:      return "#EC4899"
+        case .commitment:  return "#0D9488"
         case .other:       return "#5B6F6B"
         case .salary:      return "#1D9E75"
         case .freelance:   return "#0EA5E9"
@@ -300,6 +304,7 @@ extension TxCategory {
         case .bills:       return loc("category.bills")
         case .transport:   return loc("category.transport")
         case .health:      return loc("category.health")
+        case .commitment:  return loc("category.commitment")
         case .other:       return loc("category.other")
         case .salary:      return loc("category.salary")
         case .freelance:   return loc("category.freelance")
