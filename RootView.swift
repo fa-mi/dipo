@@ -75,6 +75,11 @@ enum WidgetDataSync {
         let preferred = CurrencyManager.shared.preferredCurrency
         var expenses: Double = 0
         var income: Double   = 0
+        // Day-to-day (variable) spend only — excludes fixed monthly commitments
+        // so the weekly average matches StatisticsView (a one-off rent/debt
+        // shouldn't inflate a "per week" figure).
+        var variableExpenses: Double = 0
+        let fixedCats: Set<TxCategory> = [.bills, .investment, .debtPayment, .commitment]
         // Per-category running totals for Royal users' "top spend" insight.
         var perCategory: [TxCategory: Double] = [:]
 
@@ -83,22 +88,26 @@ enum WidgetDataSync {
         for tx in txs where tx.date >= monthStart && tx.date <= now {
             let txCurrency = tx.currency.isEmpty ? preferred : tx.currency
             let converted  = CurrencyManager.shared.convert(tx.amount, from: txCurrency, to: preferred)
+            let isVariable = !fixedCats.contains(tx.category)
             switch tx.txSubtype {
             case .transfer:
                 continue
             case .refund:
                 expenses -= abs(converted)
                 perCategory[tx.category, default: 0] -= abs(converted)
+                if isVariable { variableExpenses -= abs(converted) }
             case .normal:
                 if converted < 0 {
                     expenses += abs(converted)
                     perCategory[tx.category, default: 0] += abs(converted)
+                    if isVariable { variableExpenses += abs(converted) }
                 } else {
                     income += converted
                 }
             }
         }
         if expenses < 0 { expenses = 0 }
+        if variableExpenses < 0 { variableExpenses = 0 }
 
         let expensesFormatted = CurrencyManager.shared.formatted(expenses, currency: preferred)
         let incomeFormatted   = CurrencyManager.shared.formatted(income,   currency: preferred)
@@ -131,15 +140,15 @@ enum WidgetDataSync {
             return Int((top / expenses * 100).rounded())
         }()
 
-        // Weekly avg = total expenses ÷ (weeks elapsed this month).
-        // Floor at 1.0 week: early in the month `daysElapsed` is tiny and a
-        // 0.1 floor made this explode ×10 (e.g. day 1 → expenses ÷ 0.1). The
-        // widget has no room for the "partial period" caveat we show in Stats,
-        // so instead we treat the first week as one whole week — never
-        // over-projecting a glanceable number.
+        // Weekly avg = VARIABLE (day-to-day) spend ÷ weeks elapsed this month.
+        // Excludes fixed monthly commitments (bills/investment/debt/commitment)
+        // to match StatisticsView. Floor at 1.0 week: early in the month
+        // `daysElapsed` is tiny and a 0.1 floor made this explode ×10 (day 1 →
+        // ÷ 0.1). The widget has no room for the "partial period" caveat, so we
+        // treat the first week as one whole week — never over-projecting.
         let daysElapsed = max(cal.dateComponents([.day], from: monthStart, to: now).day ?? 1, 1)
         let weeks       = max(Double(daysElapsed) / 7.0, 1.0)
-        let weeklyAvg   = expenses / weeks
+        let weeklyAvg   = variableExpenses / weeks
         let weeklyAvgFormatted = CurrencyManager.shared.formatted(weeklyAvg, currency: preferred)
 
         // ── Localized labels ───────────────────────────────────────────

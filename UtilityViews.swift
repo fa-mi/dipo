@@ -493,7 +493,7 @@ struct TransactionDetailSheet: View {
     /// two mixed together.
     private var availableCategories: [TxCategory] {
         switch editType {
-        case .expense: return [.shopping, .food, .travel, .bills, .transport, .health, .investment, .other]
+        case .expense: return [.shopping, .food, .travel, .bills, .transport, .health, .commitment, .investment, .other]
         case .income:  return [.salary, .freelance, .business, .investment, .bonus, .gift, .incomeOther]
         }
     }
@@ -952,7 +952,7 @@ struct AddTransactionSheet: View {
     }
     private var availableCategories: [TxCategory] {
         switch txType {
-        case .expense: return [.shopping, .food, .travel, .bills, .transport, .health, .investment, .other]
+        case .expense: return [.shopping, .food, .travel, .bills, .transport, .health, .commitment, .investment, .other]
         case .income:  return [.salary, .freelance, .business, .investment, .bonus, .gift, .incomeOther]
         }
     }

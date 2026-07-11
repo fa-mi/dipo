@@ -57,7 +57,9 @@ final class SmartBudgetManager {
 
     // MARK: - Category Groups
 
-    static let dailyCategories: [TxCategory]   = [.food, .transport, .bills, .health]
+    // Commitment (rent/kos, family transfer, memberships) is an essential
+    // fixed cost, so it belongs with daily needs for budgeting purposes.
+    static let dailyCategories: [TxCategory]   = [.food, .transport, .bills, .health, .commitment]
     static let lifestyleCategories: [TxCategory] = [.shopping, .travel, .other]
     static let investDebtCategories: [TxCategory] = [.investment, .bonus, .debtPayment]
 
@@ -66,7 +68,7 @@ final class SmartBudgetManager {
     /// daily", it's more useful to know the *variable* portion since fixed
     /// is already committed. Bills + recurring health (insurance) are the
     /// most common fixed buckets in Indonesian context.
-    static let fixedCategories: [TxCategory] = [.bills]
+    static let fixedCategories: [TxCategory] = [.bills, .commitment]
 
     /// True if the category is generally fixed (already-committed). Used
     /// to compute "variable remaining" insight: more actionable than the

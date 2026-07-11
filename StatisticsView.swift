@@ -245,7 +245,20 @@ struct StatisticsView: View {
         let (start, end) = effectiveRange
         let days = Calendar.current.dateComponents([.day], from: start, to: end).day ?? 1
         let weeks = max(Double(days) / 7.0, 0.1)
-        return filteredExpenses / weeks
+        // Exclude FIXED MONTHLY commitments — bills (rent, subscriptions,
+        // utilities), investments, and debt payments. These are paid once a
+        // month, so averaging them into a "per week" figure hugely inflates it
+        // and misrepresents day-to-day spending. Only variable/discretionary
+        // spend (food, transport, shopping, health, travel, other) is counted.
+        let fixed: Set<TxCategory> = [.bills, .investment, .debtPayment, .commitment]
+        let variable = filteredTx
+            .filter { $0.txSubtype != .transfer && !fixed.contains($0.category) }
+            .reduce(0.0) { sum, tx in
+                let amt = abs(convertedAmount(tx))
+                if tx.txSubtype == .refund { return sum - amt }
+                return tx.amount < 0 ? sum + amt : sum
+            }
+        return variable / weeks
     }
 
     /// Number of whole days spanned by the current period.
@@ -289,7 +302,12 @@ struct StatisticsView: View {
             .map { $0 }
     }
 
-    /// Last 6 months of net balance for trend chart — only for selected card, in display currency
+    /// Last 6 periods of net balance for the trend chart (selected card, display
+    /// currency). When the user has a salary schedule, the buckets follow the
+    /// PAY CYCLE (payday→payday) instead of the calendar month — otherwise the
+    /// current calendar month reads falsely negative (salary landed on the 25th
+    /// of the *previous* month, so a fresh calendar month has expenses but no
+    /// income yet).
     private var netWorthTrend: [(label: String, value: Double)] {
         let cal = Calendar.current
         let now = Date()
@@ -298,25 +316,39 @@ struct StatisticsView: View {
         fmt.locale = locale
         fmt.dateFormat = DateFormatter.dateFormat(fromTemplate: "MMM", options: 0, locale: locale)
         var points: [(label: String, value: Double)] = []
-        guard let card = selectedCard else {
-            // No card selected — return empty trend
-            for offset in stride(from: -5, through: 0, by: 1) {
-                let mStart = cal.safeDate(from: cal.dateComponents([.year, .month],
-                    from: cal.safeDate(byAdding: .month, value: offset, to: now)))
-                points.append((fmt.string(from: mStart), 0))
+
+        // Bucket boundaries: pay-cycle anchored (start of current cycle, then
+        // step back a month at a time) or calendar-month.
+        let bucketStarts: [(start: Date, end: Date)] = {
+            var out: [(Date, Date)] = []
+            if let day = payCycleDay {
+                let currentStart = StatPeriod.payCycleRange(payDay: day).start
+                for offset in stride(from: -5, through: 0, by: 1) {
+                    let s = cal.safeDate(byAdding: .month, value: offset, to: currentStart)
+                    let e = cal.safeDate(byAdding: .month, value: 1, to: s)
+                    out.append((s, e))
+                }
+            } else {
+                for offset in stride(from: -5, through: 0, by: 1) {
+                    let s = cal.safeDate(from: cal.dateComponents([.year, .month],
+                        from: cal.safeDate(byAdding: .month, value: offset, to: now)))
+                    let e = cal.safeDate(byAdding: .month, value: 1, to: s)
+                    out.append((s, e))
+                }
             }
-            return points
+            return out
+        }()
+
+        guard let card = selectedCard else {
+            // Label a pay-cycle bucket by the month it ends in (the "salary
+            // month"); a calendar bucket by its own month.
+            return bucketStarts.map { (fmt.string(from: payCycleDay != nil ? $0.end : $0.start), 0) }
         }
-        for offset in stride(from: -5, through: 0, by: 1) {
-            let mStart = cal.safeDate(from: cal.dateComponents([.year, .month],
-                from: cal.safeDate(byAdding: .month, value: offset, to: now)))
-            let mEnd = cal.safeDate(byAdding: .month, value: 1, to: mStart)
+        for (s, e) in bucketStarts {
             let net = card.transactions
-                // Exclude transfers so the trend matches the Income/Expenses/Net
-                // balance cards above (a transfer out isn't a real monthly loss).
-                .filter { $0.date >= mStart && $0.date < mEnd && $0.txSubtype != .transfer }
+                .filter { $0.date >= s && $0.date < e && $0.txSubtype != .transfer }
                 .reduce(0.0) { $0 + convertedAmount($1) }
-            points.append((fmt.string(from: mStart), net))
+            points.append((fmt.string(from: payCycleDay != nil ? e : s), net))
         }
         return points
     }
@@ -357,9 +389,13 @@ struct StatisticsView: View {
         // so the user can see them in chronological order. Only the
         // aggregated numbers (income/expenses/categories) filter by subtype.
         // This keeps the audit trail visible.
-        statsVM.selectedStatTab == .expenses
+        let base = statsVM.selectedStatTab == .expenses
             ? filteredTx.filter { $0.amount < 0 }
             : filteredTx.filter { $0.amount > 0 }
+        // Sort newest-first — the section is labelled "Recent", but
+        // `card.transactions` is in insertion order, so `prefix(5)` was
+        // showing arbitrary rows, not the latest ones.
+        return base.sorted { $0.date > $1.date }
     }
     
     /// Compact card label for filter pills and exports.
@@ -481,7 +517,8 @@ struct StatisticsView: View {
                         .padding(.top, 10)
 
                     // Net worth trend — 6 month sparkline
-                    NetWorthTrendCard(trend: netWorthTrend)
+                    NetWorthTrendCard(trend: netWorthTrend,
+                                      subtitle: payCycleDay != nil ? loc("stats.net_worth_sub_cycle") : loc("stats.net_worth_sub"))
                         .padding(.horizontal, 22)
                         .padding(.top, 12)
                     
@@ -946,9 +983,20 @@ struct StatSegmentPicker: View {
 
 struct NetWorthTrendCard: View {
     let trend: [(label: String, value: Double)]
+    var subtitle: String = loc("stats.net_worth_sub")
+    @State private var appeared = false
 
     private var maxAbs: Double { trend.map { abs($0.value) }.max() ?? 1 }
     private var hasData: Bool { trend.contains { $0.value != 0 } }
+
+    /// A single gradient bar, with an optional soft glow for the current period.
+    private func bar(_ fill: LinearGradient, w: CGFloat, h: CGFloat, glow: Color?) -> some View {
+        RoundedRectangle(cornerRadius: 5)
+            .fill(fill)
+            .frame(width: w, height: h)
+            .shadow(color: (glow ?? .clear).opacity(glow == nil ? 0 : 0.45),
+                    radius: glow == nil ? 0 : 5, y: 2)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -957,7 +1005,7 @@ struct NetWorthTrendCard: View {
                     Text(loc("stats.net_worth"))
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(AppTheme.textPrimary)
-                    Text(loc("stats.net_worth_sub"))
+                    Text(subtitle)
                         .font(.system(size: 11))
                         .foregroundStyle(AppTheme.textSecondary)
                 }
@@ -1002,33 +1050,34 @@ struct NetWorthTrendCard: View {
                                     let barH = max(rawH, 3)
                                     let isPositive = point.value >= 0
                                     let isLast = i == trend.count - 1
-                                    let barColor = isPositive
-                                        ? (isLast ? AppTheme.accent : AppTheme.accent.opacity(0.5))
-                                        : (isLast ? AppTheme.red : AppTheme.red.opacity(0.5))
-                                    
+                                    let base: Color = isPositive ? AppTheme.accent : AppTheme.red
+                                    // Current period pops at full saturation; past
+                                    // periods are dimmed so the eye lands on "now".
+                                    let strength = isLast ? 1.0 : 0.45
+                                    let grad = LinearGradient(
+                                        colors: [base.opacity(strength), base.opacity(strength * 0.55)],
+                                        startPoint: isPositive ? .top : .bottom,
+                                        endPoint: isPositive ? .bottom : .top)
+                                    // Grow-in height (staggered) for a lively reveal.
+                                    let h = appeared ? barH : 0
+
                                     if hasNegative {
-                                        // Bars grow from center outward
                                         VStack(spacing: 0) {
                                             if isPositive {
                                                 Spacer(minLength: 0)
-                                                RoundedRectangle(cornerRadius: 4)
-                                                    .fill(barColor)
-                                                    .frame(width: barW, height: barH)
+                                                bar(grad, w: barW, h: h, glow: isLast ? base : nil)
                                                 Color.clear.frame(height: chartH * 0.5)
                                             } else {
                                                 Color.clear.frame(height: chartH * 0.5)
-                                                RoundedRectangle(cornerRadius: 4)
-                                                    .fill(barColor)
-                                                    .frame(width: barW, height: barH)
+                                                bar(grad, w: barW, h: h, glow: isLast ? base : nil)
                                                 Spacer(minLength: 0)
                                             }
                                         }
                                         .frame(height: chartH)
+                                        .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(Double(i) * 0.06), value: appeared)
                                     } else {
-                                        // All positive — bars grow up from bottom
-                                        RoundedRectangle(cornerRadius: 4)
-                                            .fill(barColor)
-                                            .frame(width: barW, height: barH)
+                                        bar(grad, w: barW, h: h, glow: isLast ? base : nil)
+                                            .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(Double(i) * 0.06), value: appeared)
                                     }
                                 }
                             }
@@ -1059,6 +1108,7 @@ struct NetWorthTrendCard: View {
         .padding(16)
         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
         .overlay(RoundedRectangle(cornerRadius: 16).stroke(AppTheme.accent.opacity(0.12), lineWidth: 1))
+        .onAppear { appeared = true }
     }
 }
 
