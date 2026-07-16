@@ -78,9 +78,14 @@ struct WishlistView: View {
     @Query(sort: \SalarySchedule.createdAt) private var salaries: [SalarySchedule]
 
     @State private var showAddGoal    = false
+    /// Drives the "New Goal" flow: chooser → personal / shared create form.
+    @State private var goalSheet: GoalSheet? = nil
     @State private var editingGoal: SavingsGoal? = nil
     @State private var appeared       = false
     @State private var celebratingGoal: SavingsGoal? = nil
+
+    /// Max personal goals shown inline before collapsing behind "See all".
+    private let goalPreviewLimit = 3
 
     /// Sum savedAmount across active goals, converted to the user's preferred
     /// currency. Naive `+` would mix IDR with USD (5,000,000 IDR + 100 USD →
@@ -134,9 +139,10 @@ struct WishlistView: View {
                                 .foregroundStyle(AppTheme.textSecondary)
                         }
                         Spacer()
+                        // Single "+" → opens a "New Goal" page to choose the
+                        // type (personal vs shared) so there's no confusion.
                         Button {
-                            HapticManager.shared.tap()
-                            showAddGoal = true
+                            HapticManager.shared.tap(); goalSheet = .chooser
                         } label: {
                             ZStack {
                                 Circle()
@@ -153,6 +159,12 @@ struct WishlistView: View {
                     .padding(.horizontal, 22)
                     .padding(.top, 20)
                     .opacity(appeared ? 1 : 0)
+
+                    // Tabungan Bersama (Unity Savings) — collaborative goals.
+                    UnitySavingsSection(onCreate: { goalSheet = .shared })
+                        .padding(.top, 18)
+                        .opacity(appeared ? 1 : 0)
+                        .animation(.spring(response: 0.55, dampingFraction: 0.8).delay(0.04), value: appeared)
 
                     if goals.isEmpty {
                         GoalsEmptyState(showAdd: $showAddGoal)
@@ -182,7 +194,9 @@ struct WishlistView: View {
                                         .foregroundStyle(AppTheme.textSecondary)
                                         .padding(.horizontal, 22)
 
-                                    ForEach(Array(activeGoals.enumerated()), id: \.element.id) { i, goal in
+                                    // Keep the overview short: at most `goalPreviewLimit`
+                                    // cards inline; the rest live on a full-list page.
+                                    ForEach(Array(activeGoals.prefix(goalPreviewLimit).enumerated()), id: \.element.id) { i, goal in
                                         GoalCard(
                                             goal: goal,
                                             monthlyIncome: monthlyIncome,
@@ -196,6 +210,23 @@ struct WishlistView: View {
                                         .opacity(appeared ? 1 : 0)
                                         .offset(y: appeared ? 0 : 24)
                                         .animation(.spring(response: 0.55, dampingFraction: 0.8).delay(0.12 + Double(i) * 0.07), value: appeared)
+                                    }
+
+                                    if activeGoals.count > goalPreviewLimit {
+                                        NavigationLink {
+                                            AllPersonalGoalsView(
+                                                goals: activeGoals, monthlyIncome: monthlyIncome,
+                                                onDeposit: { g, amt in depositToGoal(g, amount: amt) },
+                                                onEdit: { editingGoal = $0 },
+                                                onDelete: { deleteGoal($0) },
+                                                onComplete: { completeGoal($0) },
+                                                onPin: { togglePin($0) })
+                                        } label: {
+                                            SeeAllLabel(count: activeGoals.count)
+                                        }
+                                        .padding(.horizontal, 22)
+                                        .opacity(appeared ? 1 : 0)
+                                        .animation(.spring(response: 0.55, dampingFraction: 0.8).delay(0.12 + Double(goalPreviewLimit) * 0.07), value: appeared)
                                     }
                                 }
                             }
@@ -238,6 +269,31 @@ struct WishlistView: View {
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
                 .presentationBackground(AppTheme.bg)
+        }
+        // New Goal flow: chooser page → personal or shared create form. Using a
+        // single item-driven sheet lets the chooser swap straight into the
+        // chosen form without nested-sheet juggling.
+        .sheet(item: $goalSheet) { which in
+            switch which {
+            case .chooser:
+                GoalTypeChooserView(
+                    onPersonal: { goalSheet = .personal },
+                    onShared:   { goalSheet = .shared }
+                )
+                .presentationDetents([.medium])
+                .presentationDragIndicator(.visible)
+                .presentationBackground(AppTheme.bg)
+            case .personal:
+                GoalFormSheet(editGoal: nil)
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
+                    .presentationBackground(AppTheme.bg)
+            case .shared:
+                SharedGoalFormSheet()
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
+                    .presentationBackground(AppTheme.bg)
+            }
         }
         .sheet(item: $editingGoal) { goal in
             GoalFormSheet(editGoal: goal)
@@ -298,6 +354,46 @@ struct WishlistView: View {
         let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)
         let request = UNNotificationRequest(identifier: goal.id.uuidString, content: content, trigger: trigger)
         UNUserNotificationCenter.current().add(request, withCompletionHandler: nil)
+    }
+}
+
+// MARK: - All Personal Goals (full-list page)
+//
+// Reached from the "See all" row when there are more than a few active goals.
+// The action closures are threaded down from WishlistView so edits/deposits
+// still drive the same state (edit sheet, celebration, deletes) it owns.
+struct AllPersonalGoalsView: View {
+    let goals: [SavingsGoal]
+    let monthlyIncome: Double
+    let onDeposit: (SavingsGoal, Double) -> Void
+    let onEdit: (SavingsGoal) -> Void
+    let onDelete: (SavingsGoal) -> Void
+    let onComplete: (SavingsGoal) -> Void
+    let onPin: (SavingsGoal) -> Void
+
+    var body: some View {
+        ZStack {
+            AppTheme.bg.ignoresSafeArea()
+            ScrollView(showsIndicators: false) {
+                LazyVStack(spacing: 16) {
+                    ForEach(goals) { goal in
+                        GoalCard(
+                            goal: goal,
+                            monthlyIncome: monthlyIncome,
+                            onDeposit: { onDeposit(goal, $0) },
+                            onEdit: { onEdit(goal) },
+                            onDelete: { onDelete(goal) },
+                            onComplete: { onComplete(goal) },
+                            onPin: { onPin(goal) }
+                        )
+                        .padding(.horizontal, 22)
+                    }
+                }
+                .padding(.vertical, 16)
+            }
+        }
+        .navigationTitle(loc("savings.in_progress"))
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
 
@@ -390,7 +486,7 @@ struct GoalCard: View {
                             .foregroundStyle(AppTheme.textPrimary)
                         HStack(spacing: 6) {
                             Circle().fill(goal.priorityColor).frame(width: 6, height: 6)
-                            Text("\(goal.priorityLabel) priority")
+                            Text(String(format: loc("savings.priority_fmt"), goal.priorityLabel))
                                 .font(.system(size: 12))
                                 .foregroundStyle(AppTheme.textSecondary)
                         }
@@ -449,12 +545,12 @@ struct GoalCard: View {
                     .frame(height: 10)
 
                     HStack {
-                        Text("\(String(format: "%.1f", goal.progressPercent))% saved")
+                        Text(String(format: loc("savings.saved_pct"), String(format: "%.1f", goal.progressPercent)))
                             .font(.system(size: 11))
                             .foregroundStyle(AppTheme.textSecondary)
                         Spacer()
                         if let months = goal.monthsToGoal {
-                            Text("\(months) months left")
+                            Text(String(format: loc("savings.months_left_fmt"), months))
                                 .font(.system(size: 11))
                                 .foregroundStyle(AppTheme.textSecondary)
                         } else if goal.monthlyContribution == 0 {
@@ -1176,7 +1272,7 @@ struct GoalDetailView: View {
                         Text(goal.name).font(.system(size: 24, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
                         HStack(spacing: 8) {
                             Circle().fill(goal.priorityColor).frame(width: 7, height: 7)
-                            Text("\(goal.priorityLabel) priority")
+                            Text(String(format: loc("savings.priority_fmt"), goal.priorityLabel))
                                 .font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
                             if goal.isPinned {
                                 Image(systemName: "pin.fill").font(.system(size: 11)).foregroundStyle(AppTheme.accent)

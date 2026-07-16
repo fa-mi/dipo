@@ -92,6 +92,12 @@ struct StatisticsView: View {
     /// Guards the one-time "default to pay cycle" so it can't override a manual
     /// period choice on later re-appears.
     @State private var didDefaultPeriod = false
+    // Memoized heavy derivations. `filteredTx` was recomputed by EVERY derived
+    // property (income, expenses, weekly avg, categories, list) — the date
+    // filter ran ~6× per render. `netWorthTrend` scans all tx across 6 buckets.
+    // We now compute both once, only when inputs change (see recomputeStats).
+    @State private var cachedFilteredTx: [TxRecord] = []
+    @State private var cachedNetWorthTrend: [(label: String, value: Double)] = []
     @State private var customStart: Date = Calendar.current.safeDate(byAdding: .month, value: -1, to: Date())
     @State private var customEnd: Date = Date()
     @State private var showCustomPicker = false
@@ -179,12 +185,12 @@ struct StatisticsView: View {
     // MARK: - Card Filter & Analytics
     
     private var availableCards: [BankCard] {
-        // Show only cards that have at least one tx in current period
-        appVM.cards.filter { card in
-            card.transactions.contains(where: { tx in
-                let (start, end) = effectiveRange
-                return tx.date >= start && tx.date <= end
-            })
+        // Show only cards with at least one tx in the current period. Compute
+        // the range ONCE (it was recomputed for every transaction of every
+        // card — O(cards × tx) range calls).
+        let (start, end) = effectiveRange
+        return appVM.cards.filter { card in
+            card.transactions.contains { $0.date >= start && $0.date <= end }
         }
     }
     
@@ -201,11 +207,24 @@ struct StatisticsView: View {
     }
     
     /// Transactions belonging to the selected card, within the selected period.
-    /// Returns empty array if no card is selected.
-    private var filteredTx: [TxRecord] {
+    /// Reads the memoized cache — populated by `recomputeStats()`.
+    private var filteredTx: [TxRecord] { cachedFilteredTx }
+
+    /// Total transaction count across cards — cheap change-signal that triggers
+    /// a stats recompute when a tx is added/removed.
+    private var statTxCount: Int { appVM.cards.reduce(0) { $0 + $1.transactions.count } }
+
+    private func computeFilteredTx() -> [TxRecord] {
         guard let card = selectedCard else { return [] }
         let (start, end) = effectiveRange
         return card.transactions.filter { $0.date >= start && $0.date <= end }
+    }
+
+    /// Recompute the memoized heavy derivations. Called on appear and whenever
+    /// period / card / custom dates / tx count change — never per render.
+    private func recomputeStats() {
+        cachedFilteredTx = computeFilteredTx()
+        cachedNetWorthTrend = computeNetWorthTrend()
     }
     
     /// Convert a tx amount to the display currency (the selected card's currency).
@@ -308,7 +327,9 @@ struct StatisticsView: View {
     /// current calendar month reads falsely negative (salary landed on the 25th
     /// of the *previous* month, so a fresh calendar month has expenses but no
     /// income yet).
-    private var netWorthTrend: [(label: String, value: Double)] {
+    private var netWorthTrend: [(label: String, value: Double)] { cachedNetWorthTrend }
+
+    private func computeNetWorthTrend() -> [(label: String, value: Double)] {
         let cal = Calendar.current
         let now = Date()
         let locale = LanguageManager.shared.currentLocale
@@ -647,6 +668,8 @@ struct StatisticsView: View {
             if selectedCardID == nil, let first = availableCards.first {
                 selectedCardID = first.id.uuidString
             }
+            // Populate the memoized derivations before reading realCategories.
+            recomputeStats()
             // Update categories with real data on appear
             withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
                 statsVM.categories = realCategories.isEmpty
@@ -686,21 +709,30 @@ struct StatisticsView: View {
             } else if selectedCardID == nil, let first = availableCards.first {
                 selectedCardID = first.id.uuidString
             }
+            recomputeStats()
             withAnimation { statsVM.categories = realCategories }
             statsVM.animateIn()
         }
         .onChange(of: selectedCardID) { _, _ in
             statsVM.selectedSliceIndex = nil
+            recomputeStats()
             withAnimation { statsVM.categories = realCategories }
             statsVM.animateIn()
         }
         .onChange(of: customStart) { _, _ in
+            recomputeStats()
             withAnimation { statsVM.categories = realCategories }
             statsVM.animateIn()
         }
         .onChange(of: customEnd) { _, _ in
+            recomputeStats()
             withAnimation { statsVM.categories = realCategories }
             statsVM.animateIn()
+        }
+        // A tx added/removed anywhere → refresh the memoized derivations.
+        .onChange(of: statTxCount) { _, _ in
+            recomputeStats()
+            withAnimation { statsVM.categories = realCategories }
         }
         .sheet(isPresented: $showCustomPicker) {
             CustomDateRangeSheet(startDate: $customStart, endDate: $customEnd)

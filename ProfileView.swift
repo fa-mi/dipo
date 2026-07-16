@@ -134,6 +134,7 @@ struct ProfileView: View {
     @State private var appeared           = false
     @State private var showResetConfirm   = false
     @State private var showSalary         = false
+    @State private var showRecurring      = false
     @State private var showAIChat         = false
     @State private var showWishlist       = false
     @State private var showCardManager    = false
@@ -305,6 +306,10 @@ struct ProfileView: View {
         }
         .sheet(isPresented: $showSalary) {
             SalaryView().presentationDetents([.large]).presentationDragIndicator(.visible)
+                .presentationBackground(AppTheme.bg).preferredColorScheme(appColorScheme())
+        }
+        .sheet(isPresented: $showRecurring) {
+            RecurringExpensesView().presentationDetents([.large]).presentationDragIndicator(.visible)
                 .presentationBackground(AppTheme.bg).preferredColorScheme(appColorScheme())
         }
         .sheet(isPresented: $showAIChat) {
@@ -808,6 +813,9 @@ struct ProfileView: View {
             ProfileFeatureLink(icon: "banknote.fill", color: AppTheme.accent,
                                title: loc("profile.salary"),
                                subtitle: loc("profile.salary_sub")) { showSalary = true }
+            ProfileFeatureLink(icon: "arrow.triangle.2.circlepath", color: AppTheme.orange,
+                               title: loc("profile.recurring"),
+                               subtitle: loc("profile.recurring_sub")) { showRecurring = true }
             PremiumLockedFeatureLink(
                 feature: .savingsGoals, title: loc("profile.savings"),
                 // Savings Goals moved from Premium-tier to Royal-tier when
@@ -1222,6 +1230,7 @@ struct ProfileView: View {
         // delete, orphan rows linger in the store referencing deleted card IDs
         // and accumulate forever every time the user resets.
         try? context.delete(model: CardBudgetConfig.self)
+        try? context.delete(model: RecurringExpense.self)
         try? context.save()
         UserDefaults.standard.removeObject(forKey: "profile_photo")
         profileImage = nil

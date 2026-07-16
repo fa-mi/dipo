@@ -295,6 +295,7 @@ enum UserSwitchDetector {
         try? context.delete(model: DebtRecord.self)
         try? context.delete(model: SavingsGoal.self)
         try? context.delete(model: CardBudgetConfig.self)
+        try? context.delete(model: RecurringExpense.self)
         try? context.save()
 
         // UserDefaults — anything that persists user-specific state. We DO NOT

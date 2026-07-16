@@ -1352,12 +1352,19 @@ struct CardTransferSheet: View {
             ZStack {
                 AppTheme.bg.ignoresSafeArea()
                 ScrollView(showsIndicators: false) {
-                    VStack(spacing: 18) {
+                    VStack(spacing: 16) {
                         header
-                        cardSelector(title: loc("transfer.from"), index: $sourceIndex, isSource: true)
+
+                        sectionLabel(loc("transfer.from"))
+                        cardCarousel(index: $sourceIndex, isSource: true)
+
                         swapButton
-                        cardSelector(title: loc("transfer.to"), index: $destIndex, isSource: false)
+
+                        sectionLabel(loc("transfer.to"))
+                        cardCarousel(index: $destIndex, isSource: false)
+
                         amountField
+
                         if let err = validationError {
                             HStack(spacing: 8) {
                                 Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 13))
@@ -1371,7 +1378,7 @@ struct CardTransferSheet: View {
                         transferButton
                         Spacer(minLength: 30)
                     }
-                    .padding(.top, 12)
+                    .padding(.top, 8)
                 }
             }
             .navigationTitle(loc("transfer.title"))
@@ -1382,6 +1389,8 @@ struct CardTransferSheet: View {
                     Button(loc("common.cancel")) { dismiss() }.foregroundStyle(AppTheme.textSecondary)
                 }
             }
+            .animation(.spring(response: 0.3), value: sourceIndex)
+            .animation(.spring(response: 0.3), value: destIndex)
         }
     }
 
@@ -1400,68 +1409,92 @@ struct CardTransferSheet: View {
             Text(loc("transfer.subtitle")).font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
                 .multilineTextAlignment(.center).padding(.horizontal, 32)
         }
-        .padding(.bottom, 4)
+        .padding(.bottom, 2)
     }
 
-    private func cardSelector(title: String, index: Binding<Int>, isSource: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(title).font(.system(size: 12, weight: .semibold)).foregroundStyle(AppTheme.textSecondary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            Menu {
+    private func sectionLabel(_ title: String) -> some View {
+        Text(title)
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundStyle(AppTheme.textSecondary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 24)
+    }
+
+    // Swipeable card deck — pick source/destination by swiping left/right.
+    // Uses a custom index row instead of the built-in page dots, which sit too
+    // tight against the card and can't be styled.
+    private func cardCarousel(index: Binding<Int>, isSource: Bool) -> some View {
+        VStack(spacing: 0) {
+            TabView(selection: index) {
                 ForEach(Array(cards.enumerated()), id: \.element.id) { i, card in
-                    Button { index.wrappedValue = i } label: {
-                        Text("\(label(card)) · \(card.formattedBalance)")
-                    }
+                    TransferCardTile(
+                        card: card,
+                        title: label(card),
+                        highlightInsufficient: isSource && i == index.wrappedValue && insufficient,
+                        inUse: i == (isSource ? destIndex : sourceIndex)
+                    )
+                    .padding(.horizontal, 22)
+                    .tag(i)
                 }
-            } label: {
-                HStack {
-                    let card = cards.indices.contains(index.wrappedValue) ? cards[index.wrappedValue] : nil
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(card.map(label) ?? "—").font(.system(size: 15, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
-                        if let card {
-                            Text(String(format: loc("transfer.available"), card.formattedBalance))
-                                .font(.system(size: 11)).foregroundStyle(isSource && insufficient ? AppTheme.red : AppTheme.textSecondary)
-                        }
-                    }
-                    Spacer()
-                    Image(systemName: "chevron.up.chevron.down").font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
-                }
-                .padding(14)
-                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
-                .overlay(RoundedRectangle(cornerRadius: 14).stroke(AppTheme.cardMid.opacity(0.6), lineWidth: 1))
+            }
+            .tabViewStyle(.page(indexDisplayMode: .never))
+            .frame(height: 150)
+
+            pageDots(selected: index.wrappedValue)
+                .padding(.top, 16)
+        }
+    }
+
+    /// Compact, breathing page indicator: the active card gets an accent pill.
+    private func pageDots(selected: Int) -> some View {
+        HStack(spacing: 6) {
+            ForEach(cards.indices, id: \.self) { i in
+                Capsule()
+                    .fill(i == selected ? AppTheme.accent : AppTheme.textSecondary.opacity(0.28))
+                    .frame(width: i == selected ? 18 : 6, height: 6)
+                    .animation(.spring(response: 0.3, dampingFraction: 0.75), value: selected)
             }
         }
-        .padding(.horizontal, 22)
     }
 
     private var swapButton: some View {
         Button {
             HapticManager.shared.tap()
-            withAnimation(.spring(response: 0.3)) { swap(&sourceIndex, &destIndex) }
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) { swap(&sourceIndex, &destIndex) }
         } label: {
             Image(systemName: "arrow.up.arrow.down")
-                .font(.system(size: 14, weight: .bold)).foregroundStyle(AppTheme.accent)
-                .frame(width: 36, height: 36)
+                .font(.system(size: 15, weight: .bold)).foregroundStyle(AppTheme.accent)
+                .frame(width: 40, height: 40)
                 .background(AppTheme.cardDark, in: Circle())
-                .overlay(Circle().stroke(AppTheme.accent.opacity(0.3), lineWidth: 1))
+                .overlay(Circle().stroke(AppTheme.accent.opacity(0.35), lineWidth: 1.5))
+                .shadow(color: .black.opacity(0.12), radius: 6, y: 3)
         }
         .buttonStyle(ScaleButtonStyle())
     }
 
     private var amountField: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             Text(loc("transfer.amount")).font(.system(size: 12, weight: .semibold)).foregroundStyle(AppTheme.textSecondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            HStack(spacing: 10) {
+            HStack(spacing: 12) {
                 Text(sourceCard?.resolvedCurrency ?? "")
                     .font(.system(size: 15, weight: .bold)).foregroundStyle(AppTheme.accent)
-                    .padding(.horizontal, 14).padding(.vertical, 14)
-                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 12))
+                    .frame(width: 58, height: 56)
+                    .background(AppTheme.accent.opacity(0.10), in: RoundedRectangle(cornerRadius: 14))
                 TextField("0", text: $amountText)
-                    .font(.system(size: 26, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
+                    .font(.system(size: 28, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
                     .keyboardType(.decimalPad)
-                    .padding(.horizontal, 16).padding(.vertical, 12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 16)
+                    .frame(height: 56)
                     .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
+                    .overlay(RoundedRectangle(cornerRadius: 14).stroke(insufficient ? AppTheme.red.opacity(0.5) : AppTheme.cardMid.opacity(0.5), lineWidth: 1))
+            }
+            // Quick-fill chips (percentage of the source balance).
+            HStack(spacing: 8) {
+                quickChip("25%", fraction: 0.25)
+                quickChip("50%", fraction: 0.50)
+                quickChip(loc("transfer.max"), fraction: 1.0)
             }
             if crossCurrency && amount > 0 {
                 Text(String(format: loc("transfer.converted"),
@@ -1470,6 +1503,28 @@ struct CardTransferSheet: View {
             }
         }
         .padding(.horizontal, 22)
+        .padding(.top, 4)
+    }
+
+    private func quickChip(_ title: String, fraction: Double) -> some View {
+        Button {
+            HapticManager.shared.tap()
+            let value = sourceBalance * fraction
+            let noDecimals: Set<String> = ["IDR", "JPY", "KRW", "VND"]
+            let cur = (sourceCard?.resolvedCurrency ?? "").uppercased()
+            amountText = noDecimals.contains(cur)
+                ? String(Int(value.rounded()))
+                : String(format: "%.2f", value)
+        } label: {
+            Text(title)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(AppTheme.accent)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 9)
+                .background(AppTheme.accent.opacity(0.10), in: Capsule())
+        }
+        .buttonStyle(ScaleButtonStyle())
+        .disabled(sourceBalance <= 0)
     }
 
     private var transferButton: some View {
@@ -1510,5 +1565,84 @@ struct CardTransferSheet: View {
         try? context.save()
         HapticManager.shared.success()
         dismiss()
+    }
+}
+
+// MARK: - Transfer Card Tile
+//
+// Purpose-built gradient tile for the transfer carousel: shows the card's
+// identity + its available balance front-and-center (the number that matters
+// when moving money). Reuses the same gradient/network styling as the real
+// card previews so the deck feels like flipping through your own wallet.
+private struct TransferCardTile: View {
+    let card: BankCard
+    let title: String
+    let highlightInsufficient: Bool
+    let inUse: Bool
+
+    private var network: CardNetwork { CardNetwork.detect(from: card.cardNumber) }
+    private var gStart: String { card.gradientStart.isEmpty ? network.gradientStart : card.gradientStart }
+    private var gEnd:   String { card.gradientEnd.isEmpty   ? network.gradientEnd   : card.gradientEnd }
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            RoundedRectangle(cornerRadius: 22)
+                .fill(LinearGradient(
+                    colors: [Color(hex: gStart), Color(hex: gEnd)],
+                    startPoint: .topLeading, endPoint: .bottomTrailing))
+
+            // Soft gloss sweep.
+            GeometryReader { g in
+                Path { p in
+                    p.move(to: .init(x: g.size.width * 0.32, y: 0))
+                    p.addCurve(
+                        to: .init(x: g.size.width, y: g.size.height * 0.7),
+                        control1: .init(x: g.size.width * 0.74, y: -12),
+                        control2: .init(x: g.size.width + 8, y: g.size.height * 0.32))
+                    p.addLine(to: .init(x: g.size.width, y: 0))
+                    p.closeSubpath()
+                }
+                .fill(LinearGradient(
+                    colors: [Color.white.opacity(0.12), Color.white.opacity(0.02)],
+                    startPoint: .top, endPoint: .bottom))
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 22))
+
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(alignment: .top) {
+                    HStack(spacing: 7) {
+                        Image(systemName: card.isDigitalWallet ? "wallet.pass.fill" : "wave.3.right")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(Color.white.opacity(0.75))
+                        Text(title)
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundStyle(.white)
+                    }
+                    Spacer()
+                    if inUse {
+                        Text(loc("transfer.in_use"))
+                            .font(.system(size: 9, weight: .heavy))
+                            .foregroundStyle(.white.opacity(0.9))
+                            .padding(.horizontal, 9).padding(.vertical, 4)
+                            .background(Color.white.opacity(0.20), in: Capsule())
+                    } else if !card.isDigitalWallet {
+                        CardNetworkLogo(network: network)
+                    }
+                }
+                Spacer()
+                Text(loc("transfer.available_label").uppercased())
+                    .font(.system(size: 10, weight: .semibold))
+                    .tracking(0.5)
+                    .foregroundStyle(.white.opacity(0.7))
+                Text(card.formattedBalance)
+                    .font(.system(size: 26, weight: .heavy))
+                    .foregroundStyle(highlightInsufficient ? Color(hex: "#FFD1D1") : .white)
+                    .minimumScaleFactor(0.6)
+                    .lineLimit(1)
+            }
+            .padding(18)
+        }
+        .frame(height: 150)
+        .shadow(color: .black.opacity(0.28), radius: 14, y: 7)
     }
 }

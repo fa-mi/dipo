@@ -57,6 +57,9 @@ struct BackupPayload: Codable {
     let goals:        [BackupGoal]
     let cardBudgets:  [BackupCardBudget]
     let smartBudget:  BackupSmartBudgetSettings
+    /// Optional so backups exported before recurring expenses existed still
+    /// decode (nil → treated as empty on import).
+    var recurrings:   [BackupRecurring]? = nil
 }
 
 // MARK: - DTOs (mirror SwiftData @Model classes 1:1)
@@ -153,6 +156,21 @@ struct BackupSalary: Codable {
     let lastCreditedMonth: Int
     let lastCreditedYear: Int
     let isPinned: Bool
+}
+
+struct BackupRecurring: Codable {
+    let id: UUID
+    let label: String
+    let amount: Double
+    let dayOfMonth: Int
+    let currency: String
+    let categoryRaw: String
+    let isActive: Bool
+    let cardID: UUID?
+    let createdAt: Date
+    let lastChargedMonth: Int
+    let lastChargedYear: Int
+    let autoRecord: Bool
 }
 
 struct BackupDebt: Codable {
@@ -367,6 +385,7 @@ enum BackupService {
         let debts:    [DebtRecord]       = (try? context.fetch(FetchDescriptor<DebtRecord>())) ?? []
         let goals:    [SavingsGoal]      = (try? context.fetch(FetchDescriptor<SavingsGoal>())) ?? []
         let configs:  [CardBudgetConfig] = (try? context.fetch(FetchDescriptor<CardBudgetConfig>())) ?? []
+        let recurrings: [RecurringExpense] = (try? context.fetch(FetchDescriptor<RecurringExpense>())) ?? []
 
         // Build a card-id → list-of-tx index so we know which card each tx
         // belongs to without traversing relationships at write time.
@@ -462,7 +481,18 @@ enum BackupService {
                 lifestyleRatio:  SmartBudgetManager.shared.lifestyleRatio,
                 investDebtRatio: SmartBudgetManager.shared.investDebtRatio,
                 budgetCardID:    SmartBudgetManager.shared.budgetCardID
-            )
+            ),
+            recurrings: recurrings.map { r in
+                BackupRecurring(
+                    id: r.id, label: r.label, amount: r.amount,
+                    dayOfMonth: r.dayOfMonth, currency: r.currency,
+                    categoryRaw: r.categoryRaw, isActive: r.isActive,
+                    cardID: r.cardID, createdAt: r.createdAt,
+                    lastChargedMonth: r.lastChargedMonth,
+                    lastChargedYear: r.lastChargedYear,
+                    autoRecord: r.autoRecord
+                )
+            }
         )
 
         let encoder = JSONEncoder()
@@ -543,6 +573,7 @@ enum BackupService {
             try? context.delete(model: DebtRecord.self)
             try? context.delete(model: SavingsGoal.self)
             try? context.delete(model: CardBudgetConfig.self)
+            try? context.delete(model: RecurringExpense.self)
             try context.save()
 
         // ---- INSERT FROM PAYLOAD ----
@@ -605,6 +636,21 @@ enum BackupService {
             salary.lastCreditedYear = s.lastCreditedYear
             salary.isPinned = s.isPinned
             context.insert(salary)
+        }
+
+        for r in (payload.recurrings ?? []) {
+            let rec = RecurringExpense(
+                label: r.label, amount: r.amount, dayOfMonth: r.dayOfMonth,
+                category: TxCategory(rawValue: r.categoryRaw) ?? .commitment,
+                currency: r.currency, cardID: r.cardID
+            )
+            rec.id = r.id
+            rec.isActive = r.isActive
+            rec.createdAt = r.createdAt
+            rec.lastChargedMonth = r.lastChargedMonth
+            rec.lastChargedYear = r.lastChargedYear
+            rec.autoRecord = r.autoRecord
+            context.insert(rec)
         }
 
         for d in payload.debts {
@@ -682,6 +728,7 @@ enum BackupService {
                 try? context.delete(model: DebtRecord.self)
                 try? context.delete(model: SavingsGoal.self)
                 try? context.delete(model: CardBudgetConfig.self)
+                try? context.delete(model: RecurringExpense.self)
                 try? context.save()
                 Self.applyPayload(snap, context: context)
                 try? context.save()
@@ -742,6 +789,20 @@ enum BackupService {
             salary.lastCreditedYear = s.lastCreditedYear
             salary.isPinned = s.isPinned
             context.insert(salary)
+        }
+        for r in (payload.recurrings ?? []) {
+            let rec = RecurringExpense(
+                label: r.label, amount: r.amount, dayOfMonth: r.dayOfMonth,
+                category: TxCategory(rawValue: r.categoryRaw) ?? .commitment,
+                currency: r.currency, cardID: r.cardID
+            )
+            rec.id = r.id
+            rec.isActive = r.isActive
+            rec.createdAt = r.createdAt
+            rec.lastChargedMonth = r.lastChargedMonth
+            rec.lastChargedYear = r.lastChargedYear
+            rec.autoRecord = r.autoRecord
+            context.insert(rec)
         }
         for d in payload.debts {
             let debt = DebtRecord(

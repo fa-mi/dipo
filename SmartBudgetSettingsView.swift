@@ -975,7 +975,6 @@ struct BudgetGroupDetailView: View {
     private var spent: Double    { groupTx.reduce(0) { $0 + CurrencyManager.shared.convert(abs($1.amount), from: $1.currency, to: currency) } }
     private var ratio: Double    { SmartBudgetManager.shared.ratio(for: group, cardID: cardID, configs: configs) }
     private var limit: Double    { income * ratio }
-    private var progress: Double { limit > 0 ? min(spent / limit, 1.5) : 0 }
     private var isOver: Bool     { spent > limit && limit > 0 }
     private var remaining: Double { max(limit - spent, 0) }
     private var overAmt: Double  { max(spent - limit, 0) }
@@ -993,9 +992,101 @@ struct BudgetGroupDetailView: View {
         var dict: [Date: [TxRecord]] = [:]
         for tx in groupTx { let d = cal.startOfDay(for: tx.date); dict[d, default: []].append(tx) }
         return dict.keys.sorted(by: >).map { d in
-            let lbl = cal.isDateInToday(d) ? "Today" : cal.isDateInYesterday(d) ? "Yesterday" : d.formatted(.dateTime.weekday(.wide).day().month(.abbreviated))
+            let lbl = cal.isDateInToday(d) ? loc("common.today")
+                    : cal.isDateInYesterday(d) ? loc("search.period.yesterday")
+                    : d.formatted(.dateTime.weekday(.wide).day().month(.abbreviated))
             return (lbl, d, (dict[d] ?? []).sorted { $0.date > $1.date })
         }
+    }
+
+    // MARK: - Budget Bar
+    //
+    // The track is scaled to max(spent, limit), so the bar never just "pegs at
+    // full" the moment you go 1% over — it shows the budgeted part in the group
+    // colour and the overspill in red, with a tick marking exactly where the
+    // limit sits. Under budget, the right edge of the track IS the limit.
+    private var barScale: Double { max(spent, limit, 1) }
+    /// Share of the track occupied by spending that is still inside the limit.
+    private var withinFraction: Double { min(spent, limit) / barScale }
+    /// Share of the track occupied by the overspill (0 when under budget).
+    private var overFraction: Double { max(spent - limit, 0) / barScale }
+    /// Where the limit tick sits along the track.
+    private var limitFraction: Double { limit / barScale }
+    /// Percentage of the budget consumed (can exceed 100).
+    private var usedOfBudgetPct: Int { limit > 0 ? Int(((spent / limit) * 100).rounded()) : 0 }
+
+    private var budgetBar: some View {
+        HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 5) {
+                GeometryReader { g in
+                    let W = g.size.width
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(AppTheme.cardMid).frame(height: 12)
+
+                        HStack(spacing: 0) {
+                            Capsule()
+                                .fill(LinearGradient(colors: [group.color.opacity(0.75), group.color],
+                                                     startPoint: .leading, endPoint: .trailing))
+                                .frame(width: W * CGFloat(appeared ? withinFraction : 0))
+                            if overFraction > 0 {
+                                Capsule()
+                                    .fill(LinearGradient(colors: [AppTheme.orange, AppTheme.red],
+                                                         startPoint: .leading, endPoint: .trailing))
+                                    .frame(width: W * CGFloat(appeared ? overFraction : 0))
+                            }
+                        }
+                        .frame(height: 12)
+                        .clipShape(Capsule())
+                        .animation(.spring(response: 0.9, dampingFraction: 0.85).delay(0.1), value: appeared)
+
+                        // Limit tick — only drawn when spending has run past it.
+                        if isOver {
+                            Capsule().fill(Color.white.opacity(0.92))
+                                .frame(width: 2.5, height: 20)
+                                .shadow(color: .black.opacity(0.4), radius: 2)
+                                .offset(x: W * CGFloat(limitFraction) - 1.25)
+                        }
+                    }
+                    .frame(height: 20)
+                }
+                .frame(height: 20)
+
+                // Caption anchored under the limit tick.
+                if isOver {
+                    GeometryReader { g in
+                        Text(loc("budget.limit_marker"))
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(AppTheme.textSecondary)
+                            .offset(x: max(min(g.size.width * CGFloat(limitFraction) - 12, g.size.width - 30), 0))
+                    }
+                    .frame(height: 11)
+                }
+            }
+            Text("\(usedOfBudgetPct)%")
+                .font(.system(size: 15, weight: .heavy))
+                .foregroundStyle(isOver ? AppTheme.red : group.color)
+                .lineLimit(1).minimumScaleFactor(0.7)
+                .frame(width: 46, alignment: .trailing)
+        }
+    }
+
+    /// One stacked bar showing how the group's spending splits across categories.
+    private var compositionStrip: some View {
+        GeometryReader { g in
+            let gaps = CGFloat(max(catBreakdown.count - 1, 0)) * 2
+            let usable = max(g.size.width - gaps, 1)
+            HStack(spacing: 2) {
+                ForEach(catBreakdown, id: \.cat) { item in
+                    Capsule()
+                        .fill(item.cat.color)
+                        .frame(width: max(usable * CGFloat(item.amount / max(spent, 1)), 3))
+                }
+            }
+            .frame(height: 8)
+            .opacity(appeared ? 1 : 0)
+            .animation(.easeOut(duration: 0.5).delay(0.25), value: appeared)
+        }
+        .frame(height: 8)
     }
 
     var body: some View {
@@ -1025,34 +1116,26 @@ struct BudgetGroupDetailView: View {
                         }
                         .padding(.horizontal, 18).padding(.top, 18).padding(.bottom, 14)
 
-                        GeometryReader { g in
-                            ZStack(alignment: .leading) {
-                                RoundedRectangle(cornerRadius: 6).fill(AppTheme.cardMid).frame(height: 10)
-                                RoundedRectangle(cornerRadius: 6)
-                                    .fill(isOver ? LinearGradient(colors: [AppTheme.orange, AppTheme.red], startPoint: .leading, endPoint: .trailing)
-                                          : LinearGradient(colors: [group.color, group.color.opacity(0.7)], startPoint: .leading, endPoint: .trailing))
-                                    .frame(width: g.size.width * min(CGFloat(appeared ? progress : 0), 1.0), height: 10)
-                                    .animation(.spring(response: 1.0, dampingFraction: 0.8).delay(0.1), value: appeared)
-                                if isOver {
-                                    Rectangle().fill(Color.white.opacity(0.7)).frame(width: 2, height: 16)
-                                        .offset(x: g.size.width * min(CGFloat(limit / max(spent, 1)), 1.0) - 1, y: -3)
-                                }
-                            }
-                        }.frame(height: 10).padding(.horizontal, 18)
+                        budgetBar
+                            .padding(.horizontal, 18)
 
-                        HStack {
-                            HStack(spacing: 5) {
-                                Circle().fill(isOver ? AppTheme.red : group.color).frame(width: 6, height: 6)
+                        HStack(alignment: .top) {
+                            HStack(alignment: .top, spacing: 5) {
+                                Circle().fill(isOver ? AppTheme.red : group.color).frame(width: 6, height: 6).padding(.top, 4)
                                 Text(isOver
-                                     ? "Using \(actualPct)% of income — \(overPct)% above your \(targetPct)% target"
-                                     : "Using \(actualPct)% of income (target: \(targetPct)%)")
+                                     ? String(format: loc("budget.over_detail"), actualPct, overPct, targetPct)
+                                     : String(format: loc("budget.under_detail"), actualPct, targetPct))
                                     .font(.system(size: 11, weight: .medium))
                                     .foregroundStyle(isOver ? AppTheme.red : AppTheme.textSecondary)
                             }
-                            Spacer()
-                            Text("\(groupTx.count) transaction\(groupTx.count == 1 ? "" : "s")").font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                            Spacer(minLength: 10)
+                            Text(groupTx.count == 1
+                                 ? loc("budget.tx_count_one")
+                                 : String(format: loc("budget.tx_count"), groupTx.count))
+                                .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                                .fixedSize()
                         }
-                        .padding(.horizontal, 18).padding(.top, 8)
+                        .padding(.horizontal, 18).padding(.top, 10)
 
                         Divider().background(AppTheme.cardMid).padding(.horizontal, 18).padding(.vertical, 14)
 
@@ -1060,19 +1143,19 @@ struct BudgetGroupDetailView: View {
                             VStack(spacing: 5) {
                                 HStack(spacing: 4) { Circle().fill(isOver ? AppTheme.red : AppTheme.textSecondary).frame(width: 6, height: 6); Text(loc("budget.spent")).font(.system(size: 11, weight: .medium)).foregroundStyle(AppTheme.textSecondary) }
                                 Text(fmt(spent)).font(.system(size: 14, weight: .bold)).foregroundStyle(isOver ? AppTheme.red : AppTheme.textPrimary).minimumScaleFactor(0.6).lineLimit(1)
-                                Text("\(actualPct)% of income").font(.system(size: 10)).foregroundStyle(AppTheme.textSecondary)
+                                Text(String(format: loc("budget.pct_income"), actualPct)).font(.system(size: 10)).foregroundStyle(AppTheme.textSecondary)
                             }.frame(maxWidth: .infinity).padding(.vertical, 4)
                             Rectangle().fill(AppTheme.cardMid).frame(width: 1, height: 52)
                             VStack(spacing: 5) {
                                 HStack(spacing: 4) { Circle().fill(group.color).frame(width: 6, height: 6); Text(loc("debt.budget")).font(.system(size: 11, weight: .medium)).foregroundStyle(AppTheme.textSecondary) }
                                 Text(limit > 0 ? fmt(limit) : "—").font(.system(size: 14, weight: .bold)).foregroundStyle(group.color).minimumScaleFactor(0.6).lineLimit(1)
-                                Text("\(targetPct)% of income").font(.system(size: 10)).foregroundStyle(AppTheme.textSecondary)
+                                Text(String(format: loc("budget.pct_income"), targetPct)).font(.system(size: 10)).foregroundStyle(AppTheme.textSecondary)
                             }.frame(maxWidth: .infinity).padding(.vertical, 4)
                             Rectangle().fill(AppTheme.cardMid).frame(width: 1, height: 52)
                             VStack(spacing: 5) {
-                                HStack(spacing: 4) { Circle().fill(isOver ? AppTheme.red : AppTheme.accent).frame(width: 6, height: 6); Text(isOver ? "Over by" : "Left").font(.system(size: 11, weight: .medium)).foregroundStyle(AppTheme.textSecondary) }
+                                HStack(spacing: 4) { Circle().fill(isOver ? AppTheme.red : AppTheme.accent).frame(width: 6, height: 6); Text(isOver ? loc("budget.over_by") : loc("budget.left")).font(.system(size: 11, weight: .medium)).foregroundStyle(AppTheme.textSecondary) }
                                 Text(isOver ? fmt(overAmt) : fmt(remaining)).font(.system(size: 14, weight: .bold)).foregroundStyle(isOver ? AppTheme.red : AppTheme.accent).minimumScaleFactor(0.6).lineLimit(1)
-                                Text(isOver ? "+\(overPct)%" : "\(income > 0 ? Int((remaining/income)*100) : 0)% of income").font(.system(size: 10)).foregroundStyle(AppTheme.textSecondary)
+                                Text(isOver ? "+\(overPct)%" : String(format: loc("budget.pct_income"), income > 0 ? Int((remaining/income)*100) : 0)).font(.system(size: 10)).foregroundStyle(AppTheme.textSecondary)
                             }.frame(maxWidth: .infinity).padding(.vertical, 4)
                         }
                         .padding(.horizontal, 10).padding(.bottom, 14)
@@ -1081,7 +1164,7 @@ struct BudgetGroupDetailView: View {
                             Divider().background(AppTheme.cardMid).padding(.horizontal, 18)
                             HStack(spacing: 8) {
                                 Image(systemName: "calendar").font(.system(size: 12)).foregroundStyle(group.color)
-                                Text("\(fmt(remaining / Double(daysLeft)))/day for the remaining \(daysLeft) days to stay within \(targetPct)%")
+                                Text(String(format: loc("budget.pace_hint"), fmt(remaining / Double(daysLeft)), daysLeft, targetPct))
                                     .font(.system(size: 12, weight: .medium)).foregroundStyle(AppTheme.textSecondary)
                                 Spacer()
                             }.padding(.horizontal, 18).padding(.vertical, 12)
@@ -1093,32 +1176,42 @@ struct BudgetGroupDetailView: View {
                     .opacity(appeared ? 1 : 0).offset(y: appeared ? 0 : 20)
                     .animation(.spring(response: 0.55, dampingFraction: 0.8).delay(0.05), value: appeared)
 
-                    // Category breakdown
+                    // Category breakdown — every number here is a share of THIS
+                    // group's spending, so the bars and the % labels agree.
                     if !catBreakdown.isEmpty && income > 0 {
-                        VStack(alignment: .leading, spacing: 12) {
+                        VStack(alignment: .leading, spacing: 14) {
                             Text(loc("tx.by_category")).font(.system(size: 14, weight: .semibold)).foregroundStyle(AppTheme.textPrimary).padding(.horizontal, 22)
-                            VStack(spacing: 10) {
+
+                            compositionStrip.padding(.horizontal, 22)
+
+                            VStack(spacing: 14) {
                                 ForEach(catBreakdown, id: \.cat) { item in
-                                    let catPct = Int((item.amount / income) * 100)
-                                    VStack(spacing: 6) {
-                                        HStack(spacing: 10) {
-                                            ZStack {
-                                                RoundedRectangle(cornerRadius: 8).fill(item.cat.color.opacity(0.12)).frame(width: 32, height: 32)
-                                                Image(systemName: item.cat.icon).font(.system(size: 14)).foregroundStyle(item.cat.color)
-                                            }
-                                            Text(item.cat.rawValue).font(.system(size: 13, weight: .medium)).foregroundStyle(AppTheme.textPrimary)
-                                            Spacer()
-                                            Text(fmt(item.amount)).font(.system(size: 13, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
-                                            Text("\(catPct)% of income").font(.system(size: 10)).foregroundStyle(AppTheme.textSecondary).frame(width: 72, alignment: .trailing)
+                                    let share = item.amount / max(spent, 1)
+                                    HStack(spacing: 12) {
+                                        ZStack {
+                                            RoundedRectangle(cornerRadius: 9).fill(item.cat.color.opacity(0.14)).frame(width: 36, height: 36)
+                                            Image(systemName: item.cat.icon).font(.system(size: 15)).foregroundStyle(item.cat.color)
                                         }
-                                        GeometryReader { g in
-                                            ZStack(alignment: .leading) {
-                                                RoundedRectangle(cornerRadius: 3).fill(AppTheme.cardMid).frame(height: 4)
-                                                RoundedRectangle(cornerRadius: 3).fill(item.cat.color)
-                                                    .frame(width: g.size.width * CGFloat(appeared ? item.amount / max(spent, 1) : 0), height: 4)
-                                                    .animation(.spring(response: 0.8, dampingFraction: 0.8).delay(0.2), value: appeared)
+                                        VStack(alignment: .leading, spacing: 6) {
+                                            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                                                Text(item.cat.rawValue).font(.system(size: 13, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                                                Text("\(Int((share * 100).rounded()))%")
+                                                    .font(.system(size: 11, weight: .bold)).foregroundStyle(item.cat.color)
+                                                Spacer(minLength: 6)
+                                                Text(fmt(item.amount)).font(.system(size: 13, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                                                    .lineLimit(1).minimumScaleFactor(0.7)
                                             }
-                                        }.frame(height: 4)
+                                            GeometryReader { g in
+                                                ZStack(alignment: .leading) {
+                                                    Capsule().fill(AppTheme.cardMid).frame(height: 5)
+                                                    Capsule()
+                                                        .fill(LinearGradient(colors: [item.cat.color.opacity(0.75), item.cat.color],
+                                                                             startPoint: .leading, endPoint: .trailing))
+                                                        .frame(width: max(g.size.width * CGFloat(appeared ? share : 0), share > 0 ? 5 : 0), height: 5)
+                                                        .animation(.spring(response: 0.8, dampingFraction: 0.85).delay(0.2), value: appeared)
+                                                }
+                                            }.frame(height: 5)
+                                        }
                                     }.padding(.horizontal, 22)
                                 }
                             }

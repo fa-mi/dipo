@@ -324,6 +324,7 @@ struct RootView: View {
             if newPhase == .active {
                 appVM.cards = liveCards
                 SalaryCreditEngine.processIfNeeded(context: context)
+                RecurringExpenseEngine.processIfNeeded(context: context)
                 // Re-check entitlement every time app comes to foreground.
                 // This catches Royal activation after the deferred billing date
                 // without needing a backend webhook or push notification.
@@ -353,6 +354,7 @@ struct RootView: View {
             HapticManager.shared.prepare()
             CurrencyManager.shared.fetchRate()
             SalaryCreditEngine.processIfNeeded(context: context)
+            RecurringExpenseEngine.processIfNeeded(context: context)
             // First write of widget data so the Home Screen shows real
             // numbers instead of the gallery placeholder on first launch.
             WidgetDataSync.refresh(context: context)

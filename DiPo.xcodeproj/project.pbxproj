@@ -66,6 +66,8 @@
 		9BEA10012F000001000000B1 /* SmartRecommendationEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BEA10012F000001000000E1 /* SmartRecommendationEngine.swift */; };
 		9BEA10022F000002000000B2 /* SmartRecommendationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BEA10022F000002000000E2 /* SmartRecommendationView.swift */; };
 		9BEA10032F000003000000B3 /* SmartRecommendationDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BEA10032F000003000000E3 /* SmartRecommendationDetailView.swift */; };
+		9BEA10042F000004000000B4 /* UnitySavings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BEA10042F000004000000E4 /* UnitySavings.swift */; };
+		9BEA10052F000005000000B4 /* RecurringExpense.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BEA10052F000005000000E4 /* RecurringExpense.swift */; };
 		9BFC17B52F91206C00D80402 /* RevenueCat in Frameworks */ = {isa = PBXBuildFile; productRef = 9BFC17B42F91206C00D80402 /* RevenueCat */; };
 /* End PBXBuildFile section */
 
@@ -148,6 +150,8 @@
 		9BEA10012F000001000000E1 /* SmartRecommendationEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmartRecommendationEngine.swift; sourceTree = "<group>"; };
 		9BEA10022F000002000000E2 /* SmartRecommendationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmartRecommendationView.swift; sourceTree = "<group>"; };
 		9BEA10032F000003000000E3 /* SmartRecommendationDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmartRecommendationDetailView.swift; sourceTree = "<group>"; };
+		9BEA10042F000004000000E4 /* UnitySavings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnitySavings.swift; sourceTree = "<group>"; };
+		9BEA10052F000005000000E4 /* RecurringExpense.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecurringExpense.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -250,6 +254,8 @@
 				9BEA10012F000001000000E1 /* SmartRecommendationEngine.swift */,
 				9BEA10022F000002000000E2 /* SmartRecommendationView.swift */,
 				9BEA10032F000003000000E3 /* SmartRecommendationDetailView.swift */,
+				9BEA10042F000004000000E4 /* UnitySavings.swift */,
+				9BEA10052F000005000000E4 /* RecurringExpense.swift */,
 				9B1C11CB2FA029540032CD2C /* CryptoManager.swift */,
 				9B1C11CD2FA029540032CD2C /* NetworkLayer.swift */,
 				9B1C11CE2FA029540032CD2C /* SecureDataLayerMigration.swift */,
@@ -470,6 +476,8 @@
 				9BEA10012F000001000000B1 /* SmartRecommendationEngine.swift in Sources */,
 				9BEA10022F000002000000B2 /* SmartRecommendationView.swift in Sources */,
 				9BEA10032F000003000000B3 /* SmartRecommendationDetailView.swift in Sources */,
+				9BEA10042F000004000000B4 /* UnitySavings.swift in Sources */,
+				9BEA10052F000005000000B4 /* RecurringExpense.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -491,7 +499,7 @@
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
 				CODE_SIGN_ENTITLEMENTS = DiPoWidgetExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 54;
+				CURRENT_PROJECT_VERSION = 56;
 				DEVELOPMENT_TEAM = 3C6KN7P2NC;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = DiPoWidget/Info.plist;
@@ -503,7 +511,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.11;
+				MARKETING_VERSION = 2.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.fahmiaquinas.DiPo.DiPoWidget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -523,7 +531,7 @@
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
 				CODE_SIGN_ENTITLEMENTS = DiPoWidgetExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 54;
+				CURRENT_PROJECT_VERSION = 56;
 				DEVELOPMENT_TEAM = 3C6KN7P2NC;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = DiPoWidget/Info.plist;
@@ -535,7 +543,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.11;
+				MARKETING_VERSION = 2.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.fahmiaquinas.DiPo.DiPoWidget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -679,7 +687,7 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = DiPo/DiPo.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 54;
+				CURRENT_PROJECT_VERSION = 56;
 				DEVELOPMENT_TEAM = 3C6KN7P2NC;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -696,7 +704,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.11;
+				MARKETING_VERSION = 2.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.fahmiaquinas.DiPo;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -721,7 +729,7 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = DiPo/DiPo.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 54;
+				CURRENT_PROJECT_VERSION = 56;
 				DEVELOPMENT_TEAM = 3C6KN7P2NC;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -738,7 +746,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.11;
+				MARKETING_VERSION = 2.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.fahmiaquinas.DiPo;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
