@@ -20,23 +20,46 @@ struct DebtView: View {
     @State private var appeared = false
     @State private var simulatorDebt: DebtRecord? = nil
     @State private var showSalarySetup = false
+    @State private var showAllDebts = false
 
-    /// Total income this month, converted to preferred currency.
-    /// Captures salary auto-credits, bonus, freelance — everything actually received.
-    /// Conversion is essential: a card holding USD income mixed with IDR cards
-    /// must not be summed as raw numbers.
+    /// Max debts shown inline before collapsing behind "See all".
+    private let debtPreviewLimit = 5
+
+    /// Monthly income in the preferred currency.
+    ///
+    /// Priority:
+    ///   1. Active salary schedule(s) — the user's STATED monthly income. This
+    ///      is the signal even before payday lands this month, so the Debt
+    ///      Tracker stops showing "set up income" all month until the salary tx
+    ///      is auto-credited (a late-month payday like the 25th made income read
+    ///      as 0 for most of the month).
+    ///   2. Extra income transactions this month (bonus/freelance) are ADDED —
+    ///      excluding the salary category to avoid double-counting once the
+    ///      scheduled salary is auto-credited.
+    ///   3. No schedule → fall back to all income transactions this month.
     private var monthlyIncome: Double {
         let cal = Calendar.current
         let monthStart = cal.safeDate(from: cal.dateComponents([.year, .month], from: Date()))
         let pref = CurrencyManager.shared.preferredCurrency
-        return cards.flatMap { $0.transactions }
-            // Exclude transfers — moving money between your own cards isn't
-            // income (the credit leg is tagged .transfer) and would inflate DTI.
+        let conv: (TxRecord) -> Double = { tx in
+            let c = tx.currency.isEmpty ? pref : tx.currency
+            return CurrencyManager.shared.convert(tx.amount, from: c, to: pref)
+        }
+        let thisMonthIncome = cards.flatMap { $0.transactions }
             .filter { $0.amount > 0 && $0.txSubtype != .transfer && $0.date >= monthStart }
-            .reduce(0) { sum, tx in
-                let txCur = tx.currency.isEmpty ? pref : tx.currency
-                return sum + CurrencyManager.shared.convert(tx.amount, from: txCur, to: pref)
-            }
+
+        let activeSalaries = salaries.filter { $0.isActive }
+        guard !activeSalaries.isEmpty else {
+            // No schedule — use whatever income was actually logged.
+            return thisMonthIncome.reduce(0) { $0 + conv($1) }
+        }
+        let scheduled = activeSalaries.reduce(0.0) {
+            $0 + CurrencyManager.shared.convert($1.amount, from: $1.currency, to: pref)
+        }
+        let extra = thisMonthIncome
+            .filter { $0.category != .salary }   // avoid double-counting the auto-credited salary
+            .reduce(0.0) { $0 + conv($1) }
+        return scheduled + extra
     }
 
     private var monthlyExpenses: Double {
@@ -203,17 +226,28 @@ struct DebtView: View {
                                 HStack {
                                     Text(loc("debt.your_debts")).font(.system(size: 17, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
                                     Spacer()
-                                    Text("\(debts.filter { $0.isActive }.count) active")
+                                    Text(String(format: loc("debt.active_count"), debts.filter { $0.isActive }.count))
                                         .font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
                                 }
                                 .padding(.horizontal, 22)
 
-                                ForEach(Array(engine.avalancheOrder.enumerated()), id: \.element.id) { i, debt in
+                                // Overview shows at most `debtPreviewLimit` cards;
+                                // the rest live on a dedicated full-list page.
+                                ForEach(Array(engine.avalancheOrder.prefix(debtPreviewLimit).enumerated()), id: \.element.id) { i, debt in
                                     DebtCard(debt: debt, priority: i + 1, vm: vm)
                                         .padding(.horizontal, 22)
                                         .opacity(appeared ? 1 : 0)
                                         .offset(y: appeared ? 0 : 24)
                                         .animation(.spring(response: 0.55, dampingFraction: 0.8).delay(0.22 + Double(i) * 0.06), value: appeared)
+                                }
+                                if engine.avalancheOrder.count > debtPreviewLimit {
+                                    Button { HapticManager.shared.tap(); showAllDebts = true } label: {
+                                        SeeAllLabel(count: engine.avalancheOrder.count)
+                                    }
+                                    .buttonStyle(ScaleButtonStyle())
+                                    .padding(.horizontal, 22)
+                                    .opacity(appeared ? 1 : 0)
+                                    .animation(.spring(response: 0.55, dampingFraction: 0.8).delay(0.22 + Double(debtPreviewLimit) * 0.06), value: appeared)
                                 }
                             }
 
@@ -266,6 +300,49 @@ struct DebtView: View {
                 .presentationDragIndicator(.visible)
                 .presentationBackground(AppTheme.bg)
                 .preferredColorScheme(appColorScheme())
+        }
+        .sheet(isPresented: $showAllDebts) {
+            AllDebtsView(order: engine.avalancheOrder, vm: vm)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+                .presentationBackground(AppTheme.bg)
+                .preferredColorScheme(appColorScheme())
+        }
+    }
+}
+
+// MARK: - All Debts (full-list page)
+//
+// Reached from the "See all" row when there are more than a few debts. Cards
+// are self-contained (each drives its own actions/detail), so this page just
+// re-lists them all in avalanche priority order.
+struct AllDebtsView: View {
+    let order: [DebtRecord]
+    @Bindable var vm: DebtViewModel
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                AppTheme.bg.ignoresSafeArea()
+                ScrollView(showsIndicators: false) {
+                    LazyVStack(spacing: 12) {
+                        ForEach(Array(order.enumerated()), id: \.element.id) { i, debt in
+                            DebtCard(debt: debt, priority: i + 1, vm: vm)
+                                .padding(.horizontal, 22)
+                        }
+                    }
+                    .padding(.vertical, 16)
+                }
+            }
+            .navigationTitle(loc("debt.your_debts"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(AppTheme.bg, for: .navigationBar)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(loc("common.done")) { dismiss() }.foregroundStyle(AppTheme.accent)
+                }
+            }
         }
     }
 }
@@ -742,9 +819,7 @@ struct PayoffStrategyCard: View {
             .padding(3).background(AppTheme.cardMid, in: Capsule())
 
             // Strategy description
-            Text(strategy == 0
-                 ? "Pay highest interest first. Mathematically optimal — saves the most money in interest."
-                 : "Pay smallest balance first. Quick wins keep you motivated.")
+            Text(strategy == 0 ? loc("debt.avalanche_desc") : loc("debt.snowball_desc"))
                 .font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary).lineSpacing(2)
 
             // Order list
@@ -1247,7 +1322,7 @@ struct DebtPaymentSheet: View {
                     HStack(spacing: 8) {
                         Image(systemName: "arrow.triangle.2.circlepath")
                             .font(.system(size: 12)).foregroundStyle(AppTheme.orange)
-                        Text("≈ \(CurrencyManager.shared.formatted(amountInDebtCurrency, currency: debt.currency)) in \(debt.currency)")
+                        Text(String(format: loc("debt.approx_in"), CurrencyManager.shared.formatted(amountInDebtCurrency, currency: debt.currency), debt.currency))
                             .font(.system(size: 12)).foregroundStyle(AppTheme.orange)
                         Text("(\(cardCur) → \(debt.currency))")
                             .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)

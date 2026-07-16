@@ -201,7 +201,7 @@ struct DiPoApp: App {
     private static let sharedModelContainer: ModelContainer = {
         let schema = Schema([
             BankCard.self, TxRecord.self, SalarySchedule.self,
-            DebtRecord.self, SavingsGoal.self,
+            DebtRecord.self, SavingsGoal.self, RecurringExpense.self,
             // Per-card Smart Budget allocations (50/30/20 daily/lifestyle/invest).
             // One row per card the user has configured; cards without a row fall
             // back to global defaults from SmartBudgetManager.

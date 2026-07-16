@@ -1021,12 +1021,15 @@ struct SalaryFormSheet: View {
 
 struct CardPickerSection: View {
     @Binding var selectedCardID: UUID?
+    /// Section heading. Defaults to the salary "Credit to" copy; the recurring
+    /// expenses form overrides it with a "Charge to" key.
+    var titleKey: String = "salary.credit_to"
     @Query(sort: \BankCard.sortOrder) private var cards: [BankCard]
 
     var body: some View {
         VStack(spacing: 8) {
             HStack {
-                Text(loc("salary.credit_to"))
+                Text(loc(titleKey))
                     .font(.system(size: 13))
                     .foregroundStyle(AppTheme.textSecondary)
                 Spacer()

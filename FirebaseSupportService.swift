@@ -270,6 +270,51 @@ final class FirebaseSupportService {
         }
     }
 
+    // MARK: - Unity Savings — user registry (F0)
+    //
+    // Foundation for collaborative "Tabungan Bersama" goals: so another user
+    // can invite you by DiPo ID, your account must be discoverable. We register:
+    //   users/{firebaseUid}  → { dipoID, socialUserID, displayName, plan, ... }
+    //   dipoIndex/{dipoID}   → { uid: firebaseUid, socialUserID, ... }
+    //
+    // Keyed by the Firebase Auth uid so Firestore security rules
+    // (request.auth.uid == uid) can enforce ownership. `socialUserID` is kept as
+    // a field because push targeting still uses device_tokens/{socialUserID}.
+    // `dipoIndex` is the reverse lookup that turns a typed DiPo ID into an
+    // account during the invite flow.
+
+    /// Register/refresh this user's public profile + DiPo-ID index. Safe to call
+    /// repeatedly (merge). No-op until both a social identity and a Firebase Auth
+    /// session exist — it retries on the next launch/login otherwise.
+    func registerUserProfile() async {
+        guard let socialID = UserSession.shared.userID,
+              let dipoID   = UserSession.shared.dipoID else { return }
+        guard let uid = Auth.auth().currentUser?.uid else {
+            // Firebase sign-in hasn't settled yet — retried on next launch.
+            print("[DiPo] registerUserProfile skipped — no Firebase uid yet")
+            return
+        }
+        let profile: [String: Any] = [
+            "dipoID":       dipoID,
+            "socialUserID": socialID,
+            "displayName":  UserSession.shared.displayName as Any,
+            "plan":         PremiumManager.shared.plan.rawValue,   // "free" | "royal"
+            "platform":     "ios",
+            "updatedAt":    FieldValue.serverTimestamp(),
+        ]
+        do {
+            try await db.collection("users").document(uid).setData(profile, merge: true)
+            try await db.collection("dipoIndex").document(dipoID).setData([
+                "uid":          uid,
+                "socialUserID": socialID,
+                "updatedAt":    FieldValue.serverTimestamp(),
+            ], merge: true)
+            print("[DiPo] users/\(uid) + dipoIndex/\(dipoID) registered ✓")
+        } catch {
+            print("[DiPo] registerUserProfile error: \(error)")
+        }
+    }
+
     /// Actively fetch the current FCM token from Firebase Messaging and
     /// register it. Prefer this over trusting the UserDefaults cache —
     /// `Messaging.token()` returns the live token (or triggers generation
@@ -281,6 +326,9 @@ final class FirebaseSupportService {
     /// Keychain at launch, so launch needs its own explicit call).
     func registerCurrentDeviceToken() async {
         guard UserSession.shared.userID != nil else { return }
+        // F0: piggy-back the Unity Savings user registry on the same triggers
+        // (login + launch) so it stays in sync without new call sites.
+        await registerUserProfile()
         do {
             let token = try await Messaging.messaging().token()
             UserDefaults.standard.set(token, forKey: "dipo_fcm_token")

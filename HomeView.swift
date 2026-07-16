@@ -34,6 +34,13 @@ struct HomeView: View {
     @State private var showDebtFromInsight = false
     @State private var headerAppeared    = false
     @State private var contentAppeared   = false
+    // Memoized Smart-Budget analyses. Each engine iterates ALL transactions
+    // (× categories), and they were previously recomputed on EVERY body render
+    // — the main source of scroll/carousel lag as the transaction count grows.
+    // Now they run only when inputs actually change (see recomputeHomeInsights).
+    @State private var cachedInsights:  [SmartInsight] = []
+    @State private var cachedAnomalies: [SmartInsight] = []
+    @State private var cachedRecurring: [SmartBudgetManager.RecurringPattern] = []
 
     private var nearestSalary: SalarySchedule? {
         salarySchedules.filter { $0.isActive }
@@ -121,6 +128,27 @@ struct HomeView: View {
         return vm.cards.flatMap { $0.transactions }
     }
 
+    /// Cheap change-signal for the memoized insights: total transaction count
+    /// across all cards. Recompute fires when a tx is added or removed.
+    private var totalTxCount: Int { vm.cards.reduce(0) { $0 + $1.transactions.count } }
+
+    /// Runs the three Smart-Budget analyses ONCE, off the render path, storing
+    /// the results in @State. Called on appear and whenever the inputs change
+    /// (selected card, tx count, budget on/off, ratios) — never per render.
+    private func recomputeHomeInsights() {
+        guard SmartBudgetManager.shared.hasActiveBudget else {
+            cachedInsights = []; cachedAnomalies = []; cachedRecurring = []
+            return
+        }
+        let tx = budgetTransactions
+        cachedInsights = SmartBudgetManager.shared.evaluateAll(
+            allTransactions: tx, income: totalMonthlyIncome,
+            cardID: budgetCard?.id.uuidString, configs: cardBudgetConfigs,
+            targetCurrency: budgetCurrency, goals: activeGoals)
+        cachedAnomalies = SmartBudgetManager.shared.spendingAnomalies(allTransactions: tx)
+        cachedRecurring = SmartBudgetManager.shared.detectRecurring(allTransactions: tx)
+    }
+
     var body: some View {
         ZStack {
             AppTheme.bg.ignoresSafeArea()
@@ -166,59 +194,40 @@ struct HomeView: View {
                         // canAccess check; using it here keeps the gate logic
                         // identical to the export view, transaction blocker,
                         // and any future caller — change once, propagates.
-                        if SmartBudgetManager.shared.hasActiveBudget {
-                            // Multi-banner stack: primary + up to 1 secondary
-                            // (positive feedback when primary is a warning).
-                            // Capped at 2 to avoid stack-spam on a small home
-                            // viewport. Power users can still see all 3 via
-                            // the Smart Budget settings sheet.
-                            let insights = SmartBudgetManager.shared.evaluateAll(
-                                allTransactions: budgetTransactions,
-                                income: totalMonthlyIncome,
-                                cardID: budgetCard?.id.uuidString,
-                                configs: cardBudgetConfigs,
-                                targetCurrency: budgetCurrency,
-                                goals: activeGoals
-                            )
-                            ForEach(Array(insights.prefix(2).enumerated()), id: \.offset) { idx, insight in
-                                Button { HapticManager.shared.tap(); showSmartBudget = true } label: {
-                                    SmartInsightBanner(
-                                        insight: insight,
-                                        tappable: idx == 0,  // chevron only on primary
-                                        onAction: { kind in routeInsightAction(kind) }
-                                    )
-                                }
-                                .buttonStyle(ScaleButtonStyle())
+                        // Multi-banner stack: primary + up to 1 secondary
+                        // (positive feedback when primary is a warning). Capped
+                        // at 2 to avoid stack-spam on a small home viewport.
+                        // Values are memoized (recomputeHomeInsights) so this
+                        // renders instantly without re-running the engine.
+                        ForEach(Array(cachedInsights.prefix(2).enumerated()), id: \.offset) { idx, insight in
+                            Button { HapticManager.shared.tap(); showSmartBudget = true } label: {
+                                SmartInsightBanner(
+                                    insight: insight,
+                                    tappable: idx == 0,  // chevron only on primary
+                                    onAction: { kind in routeInsightAction(kind) }
+                                )
+                            }
+                            .buttonStyle(ScaleButtonStyle())
+                            .padding(.horizontal, 22)
+                            .padding(.top, idx == 0 ? 10 : 6)
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                            .id("insight-\(budgetCard?.id.uuidString ?? "none")-\(idx)")
+                        }
+
+                        // Spending anomaly banner — Royal feature (memoized).
+                        ForEach(cachedAnomalies.prefix(1)) { anomaly in
+                            SmartInsightBanner(insight: anomaly)
                                 .padding(.horizontal, 22)
-                                .padding(.top, idx == 0 ? 10 : 6)
+                                .padding(.top, 8)
                                 .transition(.move(edge: .top).combined(with: .opacity))
-                                .id("insight-\(budgetCard?.id.uuidString ?? "none")-\(idx)")
-                            }
                         }
 
-                        // Spending anomaly banners — Royal feature
-                        if SmartBudgetManager.shared.hasActiveBudget {
-                            let anomalies = SmartBudgetManager.shared.spendingAnomalies(
-                                allTransactions: budgetTransactions)
-                            ForEach(anomalies.prefix(1)) { anomaly in
-                                SmartInsightBanner(insight: anomaly)
-                                    .padding(.horizontal, 22)
-                                    .padding(.top, 8)
-                                    .transition(.move(edge: .top).combined(with: .opacity))
-                            }
-                        }
-
-                        // Recurring transaction reminder — Royal feature
-                        if SmartBudgetManager.shared.hasActiveBudget {
-                            let recurring = SmartBudgetManager.shared.detectRecurring(
-                                allTransactions: budgetTransactions)
-                            let dueSoon = recurring.filter { $0.isDueSoon }
-                            if let next = dueSoon.first {
-                                RecurringReminderBanner(pattern: next)
-                                    .padding(.horizontal, 22)
-                                    .padding(.top, 8)
-                                    .transition(.move(edge: .top).combined(with: .opacity))
-                            }
+                        // Recurring reminder — Royal feature (memoized).
+                        if let next = cachedRecurring.first(where: { $0.isDueSoon }) {
+                            RecurringReminderBanner(pattern: next)
+                                .padding(.horizontal, 22)
+                                .padding(.top, 8)
+                                .transition(.move(edge: .top).combined(with: .opacity))
                         }
 
                         if selectedCardBalance < 0 {
@@ -279,10 +288,19 @@ struct HomeView: View {
         }
         .onChange(of: vm.selectedCardIndex) { _, _ in
             withAnimation(.spring(response: 0.3)) { categoryFilter = nil }
+            recomputeHomeInsights()
         }
+        // Recompute memoized insights only when their inputs actually change —
+        // not on every render. Keeps Home smooth as transactions pile up.
+        .onChange(of: totalTxCount)            { _, _ in recomputeHomeInsights() }
+        .onChange(of: budgetManager.isEnabled) { _, _ in recomputeHomeInsights() }
+        .onChange(of: budgetManager.dailyRatio)     { _, _ in recomputeHomeInsights() }
+        .onChange(of: budgetManager.lifestyleRatio) { _, _ in recomputeHomeInsights() }
+        .onChange(of: budgetManager.investDebtRatio){ _, _ in recomputeHomeInsights() }
         .onAppear {
             headerAppeared  = true
             contentAppeared = true
+            recomputeHomeInsights()
         }
         .sheet(isPresented: $vm.showCardManager) {
             CardListView(vm: vm)
@@ -1451,9 +1469,14 @@ struct TransactionSection: View {
         }
     }
 
-    // Find which card owns a transaction
-    func cardFor(_ tx: TxRecord) -> BankCard? {
-        cards.first { $0.transactions.contains(where: { $0.id == tx.id }) }
+    /// tx.id → owning card, built ONCE. The old `cardFor` scanned every card's
+    /// transactions per row (O(rows × total-tx)); this makes the per-row lookup
+    /// O(1). Empty for single-card users (the row falls back to the only card).
+    private var cardLookup: [UUID: BankCard] {
+        guard cards.count > 1 else { return [:] }
+        var map: [UUID: BankCard] = [:]
+        for card in cards { for tx in card.transactions { map[tx.id] = card } }
+        return map
     }
 
     var body: some View {
@@ -1546,6 +1569,8 @@ struct TransactionSection: View {
                 .padding(.vertical, 24)
             } else {
                 VStack(spacing: 20) {
+                    // Build the tx→card index once for this render, not per row.
+                    let cardIndex = cardLookup
                     ForEach(grouped, id: \.key) { group in
                         VStack(alignment: .leading, spacing: 10) {
                             // Date header with the REAL daily total (all txs that
@@ -1569,7 +1594,7 @@ struct TransactionSection: View {
                                         onTap: { selectedTx = tx },
                                         onDelete: { pendingDelete = tx }
                                     ) {
-                                        TxRow(tx: tx, sourceCard: cardFor(tx), showCard: cards.count > 1)
+                                        TxRow(tx: tx, sourceCard: cardIndex[tx.id] ?? cards.first, showCard: cards.count > 1)
                                     }
                                 }
                             }
@@ -1645,8 +1670,12 @@ struct AllTransactionsSheet: View {
         }
     }
 
-    func cardFor(_ tx: TxRecord) -> BankCard? {
-        cards.first { $0.transactions.contains(where: { $0.id == tx.id }) }
+    /// tx.id → owning card, built ONCE per render (this sheet spans all cards).
+    /// Replaces the per-row O(cards × total-tx) scan with an O(1) lookup.
+    private var cardLookup: [UUID: BankCard] {
+        var map: [UUID: BankCard] = [:]
+        for card in cards { for tx in card.transactions { map[tx.id] = card } }
+        return map
     }
 
     var body: some View {
@@ -1660,7 +1689,12 @@ struct AllTransactionsSheet: View {
                     }
                 } else {
                     ScrollView(showsIndicators: false) {
-                        VStack(spacing: 20) {
+                        // LazyVStack: this sheet lists the ENTIRE history, so
+                        // rows must render on demand — a plain VStack built every
+                        // row up front and lagged badly with many transactions.
+                        LazyVStack(spacing: 20) {
+                            // tx→card index built once, not per row.
+                            let cardIndex = cardLookup
                             ForEach(grouped, id: \.key) { group in
                                 VStack(alignment: .leading, spacing: 10) {
                                     // This sheet shows ALL rows (no prefix cap), so the
@@ -1683,7 +1717,7 @@ struct AllTransactionsSheet: View {
                                                 onTap: { selectedTx = tx },
                                                 onDelete: { pendingDelete = tx }
                                             ) {
-                                                TxRow(tx: tx, sourceCard: cardFor(tx), showCard: cards.count > 1)
+                                                TxRow(tx: tx, sourceCard: cardIndex[tx.id] ?? cards.first, showCard: cards.count > 1)
                                             }
                                         }
                                     }

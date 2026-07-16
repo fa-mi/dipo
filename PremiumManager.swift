@@ -881,9 +881,9 @@ struct PaywallView: View {
                                     // current billing period ends.
                                     mgr.downgradeToFree()
                                 } label: {
-                                    Label("Cancel Subscription", systemImage: "xmark.circle")
+                                    Label(loc("premium.cancel_sub"), systemImage: "xmark.circle")
                                 }
-                                Button("Dismiss", role: .cancel) {}
+                                Button(loc("premium.dismiss"), role: .cancel) {}
                             } label: {
                                 Text(loc("premium.change_plan"))
                                     .font(.system(size: 13))
