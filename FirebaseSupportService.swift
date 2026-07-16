@@ -146,10 +146,11 @@ final class FirebaseSupportService {
             ])
         }
 
-        let data: [String: Any] = [
+        // Same rule as registerDeviceToken: resolve, and omit rather than write
+        // null. A null userEmail here means the worker has no one to send the
+        // ticket confirmation to, and the admin panel shows a nameless ticket.
+        var data: [String: Any] = [
             "userId":         userId,
-            "userName":       UserSession.shared.displayName as Any,
-            "userEmail":      UserSession.shared.email as Any,
             "userPlan":       PremiumManager.shared.plan.label,
             "category":       category,
             "subject":        subject,
@@ -157,11 +158,15 @@ final class FirebaseSupportService {
             "mediaBase64":    mediaBase64,
             "status":         "open",
             "hasUnreadReply": false,
-            // ✅ FCM token so admin panel can push device notifications
-            "fcmToken":       UserDefaults.standard.string(forKey: "dipo_fcm_token") as Any,
             "createdAt":      FieldValue.serverTimestamp(),
             "updatedAt":      FieldValue.serverTimestamp()
         ]
+        if let name = resolvedName { data["userName"] = name }
+        if let mail = resolvedEmail { data["userEmail"] = mail }
+        // ✅ FCM token so admin panel can push device notifications
+        if let tok = UserDefaults.standard.string(forKey: "dipo_fcm_token"), !tok.isEmpty {
+            data["fcmToken"] = tok
+        }
 
         try await db.collection("support_tickets").document(ticketId).setData(data)
 
@@ -237,28 +242,71 @@ final class FirebaseSupportService {
     // this registers EVERY signed-in user — so admins can reach users who
     // never contacted support.
 
+    /// Detach this device's push token from an account at sign-out.
+    ///
+    /// Without this the token stays under `device_tokens/{userId}` forever: sign
+    /// out, hand the phone to someone else who signs in, and the previous
+    /// account's pushes still land on this device (the new account registers the
+    /// same token under its own id — both docs then point here). Must run BEFORE
+    /// Auth.signOut(), while the write is still authenticated.
+    func unregisterDeviceToken(userId: String) async {
+        do {
+            try await db.collection("device_tokens").document(userId).updateData([
+                "fcmToken":  FieldValue.delete(),
+                "updatedAt": FieldValue.serverTimestamp(),
+            ])
+            print("[DiPo] device_tokens/\(userId) token detached ✓")
+        } catch {
+            print("[DiPo] unregisterDeviceToken error: \(error)")
+        }
+    }
+
+    /// Best display name for this account: live session value, else the Firebase
+    /// user. Returns nil when we genuinely have nothing — callers must OMIT the
+    /// key rather than write null (see the warning on `registerDeviceToken`).
+    var resolvedName: String? {
+        let local = (UserSession.shared.displayName ?? "").trimmingCharacters(in: .whitespaces)
+        if !local.isEmpty { return local }
+        let auth = (Auth.auth().currentUser?.displayName ?? "").trimmingCharacters(in: .whitespaces)
+        return auth.isEmpty ? nil : auth
+    }
+
+    /// Same idea for the email address.
+    var resolvedEmail: String? {
+        let local = (UserSession.shared.email ?? "").trimmingCharacters(in: .whitespaces)
+        if !local.isEmpty { return local }
+        let auth = (Auth.auth().currentUser?.email ?? "").trimmingCharacters(in: .whitespaces)
+        return auth.isEmpty ? nil : auth
+    }
+
     /// Write/refresh this device's push token under `device_tokens/{userId}`.
     /// No-op for anonymous (not-signed-in) users — an anon doc can't be
     /// targeted anyway.
+    ///
+    /// ⚠️ Never write `x as Any` here. This is a merge:true write that runs on
+    /// EVERY launch, and a nil optional serialises to NULL — which merge happily
+    /// writes. That silently wiped `userName`/`email` off the doc on each launch,
+    /// breaking admin-panel broadcast emails for anyone whose session values
+    /// hadn't loaded. Omit the key instead; merge then preserves what's there.
     func registerDeviceToken(_ token: String) async {
         guard let userId = UserSession.shared.userID else {
             print("[DiPo] registerDeviceToken skipped — not signed in")
             return
         }
-        let data: [String: Any] = [
+        var data: [String: Any] = [
             // Field name MUST be `fcmToken` — the admin panel reads exactly
             // that key. Renaming it silently breaks admin push targeting.
             "fcmToken":  token,
-            "userName":  UserSession.shared.displayName as Any,
-            // Email enables the admin panel to send broadcast emails. Stored
-            // here (in addition to on each ticket) so broadcasts — which
-            // target device_tokens, not tickets — can reach users by email.
-            "email":     UserSession.shared.email as Any,
             "plan":      PremiumManager.shared.plan.rawValue,   // "free" | "royal"
             "locale":    LanguageManager.shared.current.rawValue,
             "platform":  "ios",
             "updatedAt": FieldValue.serverTimestamp(),
         ]
+        if let name = resolvedName { data["userName"] = name }
+        // Email enables the admin panel to send broadcast emails. Stored here
+        // (in addition to on each ticket) so broadcasts — which target
+        // device_tokens, not tickets — can reach users by email.
+        if let mail = resolvedEmail { data["email"] = mail }
         do {
             // merge:true — keeps the doc if it exists, just refreshes fields.
             try await db.collection("device_tokens")
@@ -294,14 +342,26 @@ final class FirebaseSupportService {
             print("[DiPo] registerUserProfile skipped — no Firebase uid yet")
             return
         }
-        let profile: [String: Any] = [
+        var profile: [String: Any] = [
             "dipoID":       dipoID,
             "socialUserID": socialID,
-            "displayName":  UserSession.shared.displayName as Any,
             "plan":         PremiumManager.shared.plan.rawValue,   // "free" | "royal"
             "platform":     "ios",
             "updatedAt":    FieldValue.serverTimestamp(),
         ]
+
+        // Only write displayName when we actually have one.
+        //
+        // This used to be `"displayName": UserSession.shared.displayName as Any`,
+        // which serialises to NULL whenever the session name is missing (Apple
+        // hands the name over only on the first authorization). merge:true does
+        // NOT skip explicit nulls — it writes them — so every launch wiped the
+        // profile's name back to null, including names fixed by hand.
+        let localName = (UserSession.shared.displayName ?? "").trimmingCharacters(in: .whitespaces)
+        let authName  = (Auth.auth().currentUser?.displayName ?? "").trimmingCharacters(in: .whitespaces)
+        let resolved  = localName.isEmpty ? authName : localName
+        if !resolved.isEmpty { profile["displayName"] = resolved }
+
         do {
             try await db.collection("users").document(uid).setData(profile, merge: true)
             try await db.collection("dipoIndex").document(dipoID).setData([
@@ -309,7 +369,17 @@ final class FirebaseSupportService {
                 "socialUserID": socialID,
                 "updatedAt":    FieldValue.serverTimestamp(),
             ], merge: true)
-            print("[DiPo] users/\(uid) + dipoIndex/\(dipoID) registered ✓")
+
+            // No name on this device? Adopt whatever the profile already holds
+            // (including a value set by hand in the console) so invites and
+            // member rows stop falling back to "Someone"/"Member".
+            if resolved.isEmpty,
+               let snap = try? await db.collection("users").document(uid).getDocument(),
+               let serverName = (snap.data()?["displayName"] as? String)?.trimmingCharacters(in: .whitespaces),
+               !serverName.isEmpty {
+                await MainActor.run { UserSession.shared.adoptDisplayName(serverName) }
+            }
+            print("[DiPo] users/\(uid) + dipoIndex/\(dipoID) registered ✓ (name='\(resolved.isEmpty ? "—" : resolved)')")
         } catch {
             print("[DiPo] registerUserProfile error: \(error)")
         }
