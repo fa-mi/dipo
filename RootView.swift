@@ -350,6 +350,9 @@ struct RootView: View {
             // fixed — so support/broadcast emails can reach them. Runs before
             // registerCurrentDeviceToken below so the email lands in device_tokens.
             UserSession.shared.backfillEmailFromFirebaseIfNeeded()
+            // Same rationale for the name: Apple only hands it over on the first
+            // authorization, so recover it from the Firebase user when missing.
+            UserSession.shared.backfillNameFromFirebaseIfNeeded()
             authVM.bootstrap()
             HapticManager.shared.prepare()
             CurrencyManager.shared.fetchRate()

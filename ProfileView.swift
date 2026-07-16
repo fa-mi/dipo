@@ -150,6 +150,9 @@ struct ProfileView: View {
     @State private var premiumMgr  = PremiumManager.shared
     @State private var session     = UserSession.shared
     @State private var showSignOut = false
+    @State private var showDeleteAccount = false
+    @State private var deletingAccount   = false
+    @State private var deleteAccountError: String? = nil
     @State private var showContact = false
     @State private var showContactAfterLogin = false  // ✅ opens support after login completes
     @State private var isSigningIn = false
@@ -278,6 +281,13 @@ struct ProfileView: View {
                     let uid = UserSession.shared.userID
                     if let uid { PremiumManager.shared.onLogout(userID: uid) }
                     HapticManager.shared.warning()
+                    // Detach this device's push token from the account BEFORE the
+                    // session (and Firebase auth) is torn down — otherwise the
+                    // next person to sign in on this phone keeps receiving the
+                    // previous account's notifications.
+                    if let uid {
+                        Task { await FirebaseSupportService.shared.unregisterDeviceToken(userId: uid) }
+                    }
                     authVM.resetApp()
                 }
             )
@@ -311,6 +321,39 @@ struct ProfileView: View {
         .sheet(isPresented: $showRecurring) {
             RecurringExpensesView().presentationDetents([.large]).presentationDragIndicator(.visible)
                 .presentationBackground(AppTheme.bg).preferredColorScheme(appColorScheme())
+        }
+        .sheet(isPresented: $showDeleteAccount) {
+            DangerConfirmSheet(
+                icon: "trash.fill",
+                tone: .danger,
+                title: loc("delete_acct.title"),
+                message: loc("delete_acct.message"),
+                confirmLabel: loc("delete_acct.confirm"),
+                onConfirm: { runDeleteAccount() }
+            )
+        }
+        .alert(loc("delete_acct.title"), isPresented: Binding(
+            get: { deleteAccountError != nil },
+            set: { if !$0 { deleteAccountError = nil } }
+        )) {
+            Button(loc("common.done"), role: .cancel) { deleteAccountError = nil }
+        } message: {
+            Text(deleteAccountError ?? "")
+        }
+        .overlay {
+            if deletingAccount {
+                ZStack {
+                    Color.black.opacity(0.45).ignoresSafeArea()
+                    VStack(spacing: 14) {
+                        ProgressView().tint(.white).scaleEffect(1.2)
+                        Text(loc("delete_acct.working"))
+                            .font(.system(size: 14, weight: .medium)).foregroundStyle(.white)
+                    }
+                    .padding(28)
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20))
+                }
+                .transition(.opacity)
+            }
         }
         .sheet(isPresented: $showAIChat) {
             AIChatView().presentationDetents([.large]).presentationDragIndicator(.visible)
@@ -984,6 +1027,21 @@ struct ProfileView: View {
                         .stroke((loggedIn ? AppTheme.red : AppTheme.accent).opacity(0.25), lineWidth: 1))
                 }
                 .buttonStyle(ScaleButtonStyle())
+
+                // Account deletion. Deliberately understated (a text link, not a
+                // button) — it's irreversible — but always reachable, which the
+                // App Store requires for any app that creates accounts.
+                Button {
+                    HapticManager.shared.tap()
+                    showDeleteAccount = true
+                } label: {
+                    Text(loc("profile.delete"))
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(AppTheme.red.opacity(0.85))
+                        .underline()
+                        .padding(.vertical, 6)
+                }
+                .buttonStyle(.plain)
             }
             if let err = loginError {
                 InlineBanner(tone: .error, message: err)
@@ -991,6 +1049,28 @@ struct ProfileView: View {
         }
         .padding(.horizontal, 22)
         .opacity(appeared ? 1 : 0)
+    }
+
+    private func runDeleteAccount() {
+        deletingAccount = true
+        Task {
+            if let uid = UserSession.shared.userID {
+                PremiumManager.shared.onLogout(userID: uid)
+            }
+            let result = await AccountDeletionService.shared.deleteAccount(context: context)
+            deletingAccount = false
+            switch result {
+            case .success:
+                HapticManager.shared.success()
+                authVM.resetApp()
+            case .requiresRecentLogin:
+                HapticManager.shared.error()
+                deleteAccountError = loc("delete_acct.relogin")
+            case .failed(let msg):
+                HapticManager.shared.error()
+                deleteAccountError = String(format: loc("delete_acct.failed"), msg)
+            }
+        }
     }
 
     // MARK: - Backup / Restore Section

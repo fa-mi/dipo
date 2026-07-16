@@ -307,6 +307,23 @@ final class UnitySavingsService {
         } catch { return [] }
     }
 
+    /// Delete every document in a collection, in batches. There is no
+    /// client-side recursive delete in Firestore — you must enumerate and remove
+    /// each document yourself.
+    private func deleteAll(in ref: CollectionReference, label: String, batchSize: Int = 300) async throws {
+        var removed = 0
+        while true {
+            let snap = try await ref.limit(to: batchSize).getDocuments()
+            if snap.documents.isEmpty { break }
+            let batch = db.batch()
+            snap.documents.forEach { batch.deleteDocument($0.reference) }
+            try await batch.commit()
+            removed += snap.documents.count
+            if snap.documents.count < batchSize { break }
+        }
+        if removed > 0 { print("[Unity][delete] ✓ removed \(removed) \(label)") }
+    }
+
     // MARK: - Owner / member controls (F5)
 
     /// A member leaves a goal. Their past contributions stay (the collective
@@ -341,24 +358,77 @@ final class UnitySavingsService {
         } catch { print("[Unity] removeUid error: \(error)"); return false }
     }
 
-    /// Owner deletes the goal for everyone.
+    /// Owner deletes the goal for everyone — including everything hanging off it.
+    ///
+    /// Firestore does NOT cascade: deleting the goal document alone leaves its
+    /// `members`/`contributions` subcollections orphaned in the database forever
+    /// (invisible in the console tree, but still billed and still readable by
+    /// anyone who kept the IDs), and leaves pending invitations pointing at a
+    /// goal that no longer exists. So tear the children down first, parent last.
     @discardableResult
     func deleteGoal(_ goal: SharedGoal) async -> Bool {
-        guard let uid = Auth.auth().currentUser?.uid, goal.ownerUid == uid else { return false }
-        do { try await db.collection("sharedGoals").document(goal.id).delete(); return true }
-        catch { print("[Unity] deleteGoal error: \(error)"); return false }
+        guard let uid = Auth.auth().currentUser?.uid, goal.ownerUid == uid else {
+            print("[Unity][delete] ✗ blocked: not the owner")
+            return false
+        }
+        let goalRef = db.collection("sharedGoals").document(goal.id)
+        do {
+            // 1. Subcollections.
+            try await deleteAll(in: goalRef.collection("contributions"), label: "contributions")
+            try await deleteAll(in: goalRef.collection("members"), label: "members")
+
+            // 2. Invitations for this goal. Query by fromUid only (single-field
+            //    index + the read rule allows it), then match goalId client-side.
+            let mine = try await db.collection("invitations")
+                .whereField("fromUid", isEqualTo: uid).getDocuments()
+            var invitesRemoved = 0
+            for doc in mine.documents where (doc.data()["goalId"] as? String) == goal.id {
+                try? await doc.reference.delete()
+                invitesRemoved += 1
+            }
+            if invitesRemoved > 0 { print("[Unity][delete] ✓ removed \(invitesRemoved) invitation(s)") }
+
+            // 3. The goal itself LAST — the contributions delete rule resolves the
+            //    owner via get() on this document, so it must still exist above.
+            try await goalRef.delete()
+            print("[Unity][delete] ✓ goal \(goal.id) fully removed")
+            return true
+        } catch {
+            let ns = error as NSError
+            print("[Unity][delete] ✗ \(ns.domain) code=\(ns.code): \(ns.localizedDescription)")
+            return false
+        }
     }
 
-    /// Call before account deletion: hand each owned goal to the oldest active
-    /// member, or archive it if there are none. Keeps shared goals from being
-    /// orphaned when the creator's account goes away. (Not called on plain
-    /// logout — only true account deletion.)
-    func transferOwnedGoalsBeforeLeaving() async {
+    /// Account-deletion cleanup for Unity Savings. For every goal I'm part of:
+    ///   • I own it and others are still active → hand it to the oldest member;
+    ///   • I own it and I'm the last one → delete it outright, subcollections
+    ///     included. (This used to set `status: "archived"`, which stranded the
+    ///     goal forever: the read rules gate on membership, so with nobody left
+    ///     no one could ever see it again — it was invisible, undeletable data.)
+    ///   • I'm only a member → leave; my past contributions stay for the rest.
+    ///
+    /// Finally removes every invitation I sent or received, so nobody is left
+    /// holding an invite to a goal I've walked away from.
+    func cleanupForAccountDeletion() async {
         guard let uid = Auth.auth().currentUser?.uid else { return }
         do {
-            let owned = try await db.collection("sharedGoals").whereField("ownerUid", isEqualTo: uid).getDocuments()
-            for doc in owned.documents {
+            // Query by MEMBERSHIP, not ownerUid: the rules only allow listing
+            // goals you belong to, so `whereField("ownerUid", ...)` would be
+            // denied outright. The owner is always in memberUids, so this still
+            // finds everything — including previously archived goals.
+            let mine = try await db.collection("sharedGoals")
+                .whereField("memberUids", arrayContains: uid).getDocuments()
+
+            for doc in mine.documents {
+                let data    = doc.data()
                 let goalRef = doc.reference
+                guard (data["ownerUid"] as? String) == uid else {
+                    _ = await removeUid(uid, from: doc.documentID, newStatus: "left")
+                    print("[Unity][account-delete] ✓ left goal \(doc.documentID)")
+                    continue
+                }
+
                 let members = try await goalRef.collection("members").getDocuments()
                 let heirs = members.documents.compactMap { d -> (uid: String, joined: Date, name: String)? in
                     let m = d.data()
@@ -367,20 +437,43 @@ final class UnitySavingsService {
                             (m["joinedAt"] as? Timestamp)?.dateValue() ?? .distantFuture,
                             m["displayName"] as? String ?? "Member")
                 }.sorted { $0.joined < $1.joined }
+
                 if let heir = heirs.first {
-                    var remaining = (doc.data()["memberUids"] as? [String] ?? []).filter { $0 != uid }
+                    var remaining = (data["memberUids"] as? [String] ?? []).filter { $0 != uid }
                     if !remaining.contains(heir.uid) { remaining.append(heir.uid) }
+
+                    // Write the member docs BEFORE handing over ownership. The
+                    // members rule authorises writes against the goal's CURRENT
+                    // ownerUid — the moment we set ownerUid to the heir we stop
+                    // being the owner (and drop out of memberUids), so anything
+                    // left to write after that point gets PERMISSION_DENIED.
+                    try await goalRef.collection("members").document(heir.uid).setData(["role": "owner"], merge: true)
+                    try await goalRef.collection("members").document(uid).setData(["status": "left", "role": "member"], merge: true)
+
                     try await goalRef.updateData([
                         "ownerUid": heir.uid, "ownerName": heir.name,
                         "memberUids": remaining, "memberCount": remaining.count,
                     ])
-                    try await goalRef.collection("members").document(heir.uid).setData(["role": "owner"], merge: true)
-                    try await goalRef.collection("members").document(uid).setData(["status": "left", "role": "member"], merge: true)
+                    print("[Unity][account-delete] ✓ goal \(doc.documentID) handed to \(heir.name)")
                 } else {
-                    try await goalRef.updateData(["status": "archived"])
+                    try await deleteAll(in: goalRef.collection("contributions"), label: "contributions")
+                    try await deleteAll(in: goalRef.collection("members"), label: "members")
+                    try await goalRef.delete()
+                    print("[Unity][account-delete] ✓ goal \(doc.documentID) deleted (no heirs)")
                 }
             }
-        } catch { print("[Unity] transfer error: \(error)") }
+
+            for field in ["fromUid", "toUid"] {
+                let snap = try await db.collection("invitations").whereField(field, isEqualTo: uid).getDocuments()
+                for d in snap.documents { try? await d.reference.delete() }
+                if !snap.documents.isEmpty {
+                    print("[Unity][account-delete] ✓ removed \(snap.documents.count) invitation(s) by \(field)")
+                }
+            }
+        } catch {
+            let ns = error as NSError
+            print("[Unity][account-delete] ✗ \(ns.domain) code=\(ns.code): \(ns.localizedDescription)")
+        }
     }
 
     /// Best-effort push to the invitee via the worker (which reads the real

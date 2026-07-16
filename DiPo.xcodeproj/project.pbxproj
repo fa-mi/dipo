@@ -68,6 +68,7 @@
 		9BEA10032F000003000000B3 /* SmartRecommendationDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BEA10032F000003000000E3 /* SmartRecommendationDetailView.swift */; };
 		9BEA10042F000004000000B4 /* UnitySavings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BEA10042F000004000000E4 /* UnitySavings.swift */; };
 		9BEA10052F000005000000B4 /* RecurringExpense.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BEA10052F000005000000E4 /* RecurringExpense.swift */; };
+		9BEA10062F000006000000B4 /* AccountDeletion.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BEA10062F000006000000E4 /* AccountDeletion.swift */; };
 		9BFC17B52F91206C00D80402 /* RevenueCat in Frameworks */ = {isa = PBXBuildFile; productRef = 9BFC17B42F91206C00D80402 /* RevenueCat */; };
 /* End PBXBuildFile section */
 
@@ -152,6 +153,7 @@
 		9BEA10032F000003000000E3 /* SmartRecommendationDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmartRecommendationDetailView.swift; sourceTree = "<group>"; };
 		9BEA10042F000004000000E4 /* UnitySavings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnitySavings.swift; sourceTree = "<group>"; };
 		9BEA10052F000005000000E4 /* RecurringExpense.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecurringExpense.swift; sourceTree = "<group>"; };
+		9BEA10062F000006000000E4 /* AccountDeletion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountDeletion.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -256,6 +258,7 @@
 				9BEA10032F000003000000E3 /* SmartRecommendationDetailView.swift */,
 				9BEA10042F000004000000E4 /* UnitySavings.swift */,
 				9BEA10052F000005000000E4 /* RecurringExpense.swift */,
+				9BEA10062F000006000000E4 /* AccountDeletion.swift */,
 				9B1C11CB2FA029540032CD2C /* CryptoManager.swift */,
 				9B1C11CD2FA029540032CD2C /* NetworkLayer.swift */,
 				9B1C11CE2FA029540032CD2C /* SecureDataLayerMigration.swift */,
@@ -478,6 +481,7 @@
 				9BEA10032F000003000000B3 /* SmartRecommendationDetailView.swift in Sources */,
 				9BEA10042F000004000000B4 /* UnitySavings.swift in Sources */,
 				9BEA10052F000005000000B4 /* RecurringExpense.swift in Sources */,
+				9BEA10062F000006000000B4 /* AccountDeletion.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -499,7 +503,7 @@
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
 				CODE_SIGN_ENTITLEMENTS = DiPoWidgetExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 56;
+				CURRENT_PROJECT_VERSION = 57;
 				DEVELOPMENT_TEAM = 3C6KN7P2NC;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = DiPoWidget/Info.plist;
@@ -531,7 +535,7 @@
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
 				CODE_SIGN_ENTITLEMENTS = DiPoWidgetExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 56;
+				CURRENT_PROJECT_VERSION = 57;
 				DEVELOPMENT_TEAM = 3C6KN7P2NC;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = DiPoWidget/Info.plist;
@@ -687,7 +691,7 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = DiPo/DiPo.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 56;
+				CURRENT_PROJECT_VERSION = 57;
 				DEVELOPMENT_TEAM = 3C6KN7P2NC;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -729,7 +733,7 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = DiPo/DiPo.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 56;
+				CURRENT_PROJECT_VERSION = 57;
 				DEVELOPMENT_TEAM = 3C6KN7P2NC;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;

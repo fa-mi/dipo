@@ -239,6 +239,30 @@ final class UserSession {
         }
     }
 
+    /// Recover the display name for users whose Keychain copy is empty. Apple
+    /// only returns the full name on the FIRST authorization, so a reinstall (or
+    /// a sign-in that pre-dates name capture) leaves this nil forever — which is
+    /// what made invites read "Someone" and member rows read "Member".
+    func backfillNameFromFirebaseIfNeeded() {
+        guard isLoggedIn, (displayName ?? "").trimmingCharacters(in: .whitespaces).isEmpty else { return }
+        if let fbName = Auth.auth().currentUser?.displayName?.trimmingCharacters(in: .whitespaces),
+           !fbName.isEmpty {
+            displayName = fbName
+            save()
+            print("[DiPo] displayName backfilled from Firebase ✓")
+        }
+    }
+
+    /// Adopt a name resolved elsewhere (e.g. the Firestore profile) into the
+    /// session + Keychain, so the whole app stops falling back to placeholders.
+    func adoptDisplayName(_ name: String) {
+        let clean = name.trimmingCharacters(in: .whitespaces)
+        guard !clean.isEmpty, clean != displayName else { return }
+        displayName = clean
+        save()
+        print("[DiPo] displayName adopted from profile → '\(clean)' ✓")
+    }
+
     // MARK: - Apple credential state check
 
     func checkAppleCredentialState(completion: @escaping (Bool) -> Void) {
