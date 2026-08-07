@@ -201,6 +201,8 @@ struct AIChatView: View {
     @Query(sort: \BankCard.sortOrder) private var cards: [BankCard]
     @Query private var debts: [DebtRecord]
     @Query private var goals: [SavingsGoal]
+    @Query private var recurrings: [RecurringExpense]
+    @Query private var cycleIntents: [CycleIntent]
 
     @State private var vm = AIChatViewModel()
     @State private var selectedCardID: UUID? = nil
@@ -572,6 +574,29 @@ struct AIChatView: View {
             lines.append("Budget plan: Daily \(Int(sb.dailyRatio*100))% / Lifestyle \(Int(sb.lifestyleRatio*100))% / Invest-Debt \(Int(sb.investDebtRatio*100))% of income.")
         }
 
+        // Recurring plan + duplicate suspicion. Without this the assistant
+        // treats a manual twin of an auto-recorded charge (same amount, often
+        // a different name) as extra "variable living costs" — the plan lets
+        // it separate fixed commitments, and the warning tells it to verify
+        // instead of double-counting.
+        let activeRecurrings = recurrings.filter { $0.isActive }
+        if !activeRecurrings.isEmpty {
+            let r = activeRecurrings.prefix(6).map {
+                "\($0.label) \(cm.formatted(toPref($0.amount, $0.currency), currency: pref)) (day \($0.dayOfMonth))"
+            }.joined(separator: "; ")
+            lines.append("Recurring plan (fixed commitments): \(r).")
+            let recentExpense = allTx.filter {
+                $0.amount < 0 && $0.txSubtype == .normal
+                    && $0.date >= Date().addingTimeInterval(-31 * 86_400)
+            }
+            let dupes = sb.detectRecurringDuplicates(
+                expenseTx: recentExpense, recurrings: activeRecurrings,
+                expectedPerPlan: 1, currency: pref)
+            for s in dupes {
+                lines.append("Possible duplicate: '\(s.label)' shows \(s.found) similar-amount charges (\(cm.formatted(s.chargeAmount, currency: pref)) each) in the last 31 days but the plan expects \(s.expected) — a manual entry may twin the auto-recorded one. Verify before counting both as variable living costs.")
+            }
+        }
+
         let activeDebts = debts.filter { $0.isActive }
         if !activeDebts.isEmpty {
             let d = activeDebts.prefix(5).map {
@@ -588,8 +613,21 @@ struct AIChatView: View {
             lines.append("Savings goals: \(g).")
         }
 
+        // Deliberate choices the user declared. The assistant must report the
+        // consequences but must not treat them as mistakes to correct.
+        let activeIntents = cycleIntents.filter { $0.kind != nil }
+        if !activeIntents.isEmpty {
+            let described = activeIntents.compactMap { row -> String? in
+                guard let kind = row.kind else { return nil }
+                return row.note.isEmpty ? kind.label : "\(kind.label) (\"\(row.note)\")"
+            }.joined(separator: "; ")
+            lines.append("Deliberate choices the user declared for recent cycles: \(described). Treat these as intentional: state consequences plainly, but do NOT advise reversing them or frame them as mistakes unless the user asks.")
+        }
+
         var ctx = lines.joined(separator: "\n")
-        if ctx.count > 1800 { ctx = String(ctx.prefix(1800)) }
+        // Cap sized so the recurring-plan and duplicate-warning lines never
+        // push debts/goals off the end (they truncate last).
+        if ctx.count > 2600 { ctx = String(ctx.prefix(2600)) }
         return ctx
     }
 }

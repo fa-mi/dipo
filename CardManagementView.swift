@@ -144,7 +144,9 @@ struct CardListView: View {
     /// sehingga IDR tidak dicampur dengan USD — display jujur tanpa estimasi kurs.
     private var balancePerCurrency: [(currency: String, total: Double)] {
         var dict: [String: Double] = [:]
-        for card in vm.cards {
+        // Credit cards are liabilities, not cash — exclude them from the cash
+        // totals shown here (they appear as owed in the Debt Tracker instead).
+        for card in vm.cards where !card.isCreditCard {
             let cardCur = card.currency.isEmpty
                 ? CurrencyManager.shared.preferredCurrency
                 : card.currency
@@ -364,6 +366,8 @@ struct CardDetailRow: View {
     let onEdit: () -> Void
     @Environment(\.modelContext) private var modelContext
     @Query private var allSchedules: [SalarySchedule]
+    @Query private var allRecurrings: [RecurringExpense]
+    @Query private var allBudgetConfigs: [CardBudgetConfig]
 
     @State private var showActions       = false
     @State private var showDeleteConfirm = false
@@ -372,11 +376,23 @@ struct CardDetailRow: View {
         allSchedules.filter { $0.cardID == card.id }
     }
 
+    /// Recurring plans that charge this card. Left behind, they stay "active"
+    /// in the UI while the engine silently skips them forever (it can't find
+    /// the card), so the user's kos or subscription just stops being recorded
+    /// with no visible reason.
+    private var linkedRecurrings: [RecurringExpense] {
+        allRecurrings.filter { $0.cardID == card.id }
+    }
+
     private var deleteSummary: String {
         var parts: [String] = []
         let txCount = card.transactions.count
         if txCount > 0 {
             parts.append(String(format: loc(txCount == 1 ? "cards.tx_count" : "cards.tx_counts"), txCount))
+        }
+        if !linkedRecurrings.isEmpty {
+            let names = linkedRecurrings.map { $0.label }.joined(separator: ", ")
+            parts.append(String(format: loc("cards.recurring_counts"), linkedRecurrings.count, names))
         }
         if !linkedSchedules.isEmpty {
             let names = linkedSchedules.map { $0.label }.joined(separator: ", ")
@@ -559,6 +575,20 @@ struct CardDetailRow: View {
 
     private func deleteCard() {
         for schedule in linkedSchedules { modelContext.delete(schedule) }
+        // Recurring plans pointing at this card would keep looking active while
+        // never charging again — delete them with the card they belonged to.
+        for plan in linkedRecurrings { modelContext.delete(plan) }
+        // Per-card budget override is meaningless once the card is gone, and
+        // its cardID is @Attribute(.unique) — leaving orphans around invites a
+        // collision if the same UUID is ever restored from a backup.
+        for cfg in allBudgetConfigs where cfg.cardID == card.id.uuidString {
+            modelContext.delete(cfg)
+        }
+        // Smart Budget was scoped to this card: without clearing it, budgets
+        // silently widen to "all cards" while settings still claim a card scope.
+        if SmartBudgetManager.shared.budgetCardID == card.id.uuidString {
+            SmartBudgetManager.shared.budgetCardID = nil
+        }
         modelContext.delete(card)  // cascade deletes all TxRecords
         try? modelContext.save()
         HapticManager.shared.warning()
@@ -615,6 +645,11 @@ struct CardFormSheet: View {
     @State private var phoneNumber = "+62"
     @State private var appeared    = false
     @State private var errorMsg: String? = nil
+    /// Chosen bank issuer id. nil = auto (BIN detect / deterministic fallback).
+    @State private var selectedIssuerID: String? = nil
+    /// True once the user picks a bank by hand, so BIN auto-suggest stops
+    /// overriding their choice as they keep typing.
+    @State private var issuerTouched = false
     @FocusState private var focusedField: CardField?
 
     enum CardField { case number, name, month, year }
@@ -632,11 +667,93 @@ struct CardFormSheet: View {
         return detectedNetwork
     }
 
+    /// Card number used for detection — falls back to the existing number when
+    /// editing without retyping.
+    private var numberForDetect: String {
+        (isEditing && cardNumber.isEmpty) ? (editCard?.cardNumber ?? "") : cardNumber
+    }
+    private var resolvedBankGradient: BankGradient {
+        BankIssuer.resolveGradient(issuerID: selectedIssuerID, cardNumber: numberForDetect)
+    }
     private var activeGradientStart: String {
-        isWallet ? walletProvider.gradientStart : effectiveNetwork.gradientStart
+        isWallet ? walletProvider.gradientStart : resolvedBankGradient.start
     }
     private var activeGradientEnd: String {
-        isWallet ? walletProvider.gradientEnd : effectiveNetwork.gradientEnd
+        isWallet ? walletProvider.gradientEnd : resolvedBankGradient.end
+    }
+
+    // MARK: - Bank Issuer Picker
+
+    @ViewBuilder private var bankIssuerPicker: some View {
+        let autoDetected = BankIssuer.detect(from: numberForDetect)
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Text(loc("cards.issuer")).font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
+                if let d = autoDetected, !issuerTouched {
+                    Text(String(format: loc("cards.issuer_detected"), d.name))
+                        .font(.system(size: 11, weight: .semibold)).foregroundStyle(AppTheme.accent)
+                }
+                Spacer()
+            }
+            .padding(.horizontal, 22)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    // Auto chip — clears the manual pick and re-enables detection.
+                    issuerChip(title: loc("cards.issuer_auto"), start: "#3A4450", end: "#232A33",
+                               selected: !issuerTouched, systemIcon: "wand.and.stars") {
+                        issuerTouched = false; selectedIssuerID = autoDetected?.id
+                    }
+                    ForEach(BankIssuer.all) { issuer in
+                        issuerChip(title: issuer.name, start: issuer.gradient.start, end: issuer.gradient.end,
+                                   selected: issuerTouched && selectedIssuerID == issuer.id) {
+                            issuerTouched = true; selectedIssuerID = issuer.id
+                        }
+                    }
+                    // Neutral custom colours (manual override for any other bank).
+                    ForEach(Array(BankIssuer.neutralPalette.enumerated()), id: \.offset) { i, g in
+                        issuerChip(title: String(format: loc("cards.issuer_other"), i + 1),
+                                   start: g.start, end: g.end,
+                                   selected: issuerTouched && selectedIssuerID == "neutral-\(i)") {
+                            issuerTouched = true; selectedIssuerID = "neutral-\(i)"
+                        }
+                    }
+                }
+                .padding(.horizontal, 22)
+            }
+        }
+    }
+
+    private func issuerChip(title: String, start: String, end: String, selected: Bool,
+                            systemIcon: String? = nil, action: @escaping () -> Void) -> some View {
+        Button {
+            HapticManager.shared.select()
+            withAnimation(.spring(response: 0.3)) { action() }
+        } label: {
+            VStack(spacing: 6) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(LinearGradient(colors: [Color(hex: start), Color(hex: end)],
+                                             startPoint: .topLeading, endPoint: .bottomTrailing))
+                        .frame(width: 54, height: 36)
+                        .overlay(RoundedRectangle(cornerRadius: 10)
+                            .stroke(selected ? AppTheme.accent : .clear, lineWidth: 2.5))
+                    if let systemIcon {
+                        Image(systemName: systemIcon).font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.9))
+                    }
+                    if selected {
+                        Image(systemName: "checkmark.circle.fill").font(.system(size: 13))
+                            .foregroundStyle(.white).background(AppTheme.accent, in: Circle())
+                            .offset(x: 20, y: -13)
+                    }
+                }
+                Text(title).font(.system(size: 10, weight: selected ? .bold : .medium))
+                    .foregroundStyle(selected ? AppTheme.textPrimary : AppTheme.textSecondary)
+                    .lineLimit(1).frame(width: 62)
+            }
+        }
+        .buttonStyle(ScaleButtonStyle())
     }
 
     private var expireDate: String {
@@ -741,6 +858,12 @@ struct CardFormSheet: View {
                             }
                             .padding(.horizontal, 22)
                             .opacity(appeared ? 1 : 0)
+                        }
+
+                        // ── Bank issuer picker (physical cards only) ───────────
+                        if !isWallet {
+                            bankIssuerPicker
+                                .opacity(appeared ? 1 : 0)
                         }
 
                         // ── Wallet provider picker (wallets only) ──────────────
@@ -1109,8 +1232,18 @@ struct CardFormSheet: View {
                     walletProvider = wp
                 }
                 phoneNumber = card.phoneNumber
+                if !card.issuerID.isEmpty {
+                    selectedIssuerID = card.issuerID
+                    issuerTouched = true
+                }
             }
             withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.1)) { appeared = true }
+        }
+        .onChange(of: displayText) { _, _ in
+            // Auto-suggest the issuer from the BIN as the user types — but never
+            // clobber a bank they've already picked by hand.
+            guard !issuerTouched, !isWallet else { return }
+            selectedIssuerID = BankIssuer.detect(from: cardNumber)?.id
         }
     }
 
@@ -1174,26 +1307,32 @@ struct CardFormSheet: View {
             if yearInt < currentYear || (yearInt == currentYear && monthInt < currentMonth) {
                 errorMsg = loc("cards.error_expired"); return
             }
-            let network = CardNetwork.detect(from: num)
+            // Persist the resolved issuer + its brand gradient. `selectedIssuerID`
+            // is the manual pick, the BIN auto-suggest, or nil (→ deterministic
+            // fallback stored as the concrete gradient below).
+            let issuerID = issuerTouched ? (selectedIssuerID ?? "") : (BankIssuer.detect(from: num)?.id ?? "")
+            let grad = BankIssuer.resolveGradient(issuerID: selectedIssuerID, cardNumber: num)
             if let card = editCard {
                 card.holderName    = name
                 card.cardNumber    = num
                 card.expireDate    = expireDate
-                card.gradientStart = network.gradientStart
-                card.gradientEnd   = network.gradientEnd
+                card.issuerID      = issuerID
+                card.gradientStart = grad.start
+                card.gradientEnd   = grad.end
             } else {
                 let newCard = BankCard(
                     holderName: name,
                     cardNumber: num,
                     balance: 0.0,
                     expireDate: expireDate,
-                    gradientStart: network.gradientStart,
-                    gradientEnd: network.gradientEnd,
+                    gradientStart: grad.start,
+                    gradientEnd: grad.end,
                     sortOrder: vm.cards.count,
                     currency: cardCurrency,
                     isDigitalWallet: false,
                     walletProvider: ""
                 )
+                newCard.issuerID = issuerID
                 modelContext.insert(newCard)
             }
         }
@@ -1619,7 +1758,12 @@ private struct TransferCardTile: View {
                             .foregroundStyle(.white)
                     }
                     Spacer()
-                    if inUse {
+                    if card.isCreditCard {
+                        Text(loc("cc.badge"))
+                            .font(.system(size: 9, weight: .heavy)).foregroundStyle(.white)
+                            .padding(.horizontal, 8).padding(.vertical, 3)
+                            .background(Color.white.opacity(0.22), in: Capsule())
+                    } else if inUse {
                         Text(loc("transfer.in_use"))
                             .font(.system(size: 9, weight: .heavy))
                             .foregroundStyle(.white.opacity(0.9))
@@ -1630,15 +1774,21 @@ private struct TransferCardTile: View {
                     }
                 }
                 Spacer()
-                Text(loc("transfer.available_label").uppercased())
+                // A credit card shows what's OWED + available (paying it reduces
+                // owed), not a cash balance.
+                Text((card.isCreditCard ? loc("cc.owed") : loc("transfer.available_label")).uppercased())
                     .font(.system(size: 10, weight: .semibold))
                     .tracking(0.5)
                     .foregroundStyle(.white.opacity(0.7))
-                Text(card.formattedBalance)
+                Text(card.isCreditCard ? card.formattedOwed : card.formattedBalance)
                     .font(.system(size: 26, weight: .heavy))
                     .foregroundStyle(highlightInsufficient ? Color(hex: "#FFD1D1") : .white)
                     .minimumScaleFactor(0.6)
                     .lineLimit(1)
+                if card.isCreditCard {
+                    Text(String(format: loc("cc.avail_short"), card.formattedAvailable))
+                        .font(.system(size: 11, weight: .medium)).foregroundStyle(.white.opacity(0.8))
+                }
             }
             .padding(18)
         }

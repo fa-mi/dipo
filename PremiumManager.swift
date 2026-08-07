@@ -428,6 +428,12 @@ final class PremiumManager {
         if let userID = UserSession.shared.userID {
             UserDefaults.standard.set(newPlan.rawValue, forKey: "premium_plan_\(userID)")
         }
+        // The Home Screen widget reads its own cached `isRoyal` flag. Nothing
+        // rewrote it when a subscription lapsed, so the widget kept showing
+        // Royal-only insights until some unrelated event (a new transaction,
+        // the app being foregrounded) happened to refresh the bridge. Push the
+        // flag the moment entitlement changes.
+        WidgetDataSync.setRoyalFlag(newPlan == .royal)
     }
 
     /// Downgrade to Free = cancel the active subscription via Apple.

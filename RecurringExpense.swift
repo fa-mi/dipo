@@ -111,38 +111,81 @@ struct RecurringExpenseEngine {
             guard e.isActive, e.autoRecord else { continue }
             if e.lastChargedMonth == month && e.lastChargedYear == year { continue }
 
-            let due = RecurringDateEngine.dueDate(dayOfMonth: e.dayOfMonth, month: month, year: year)
-            guard today >= cal.startOfDay(for: due) else { continue }
-
             guard let cardID = e.cardID,
                   let card = cards.first(where: { $0.id == cardID }) else {
                 print("[RecurringExpenseEngine] Skipping \(e.label) — no card linked")
                 continue
             }
 
-            // Stable keys only (type/notes) — translated at display time, never
-            // frozen into the DB. Same rule the salary engine follows.
-            let tx = TxRecord(
-                name: e.label,
-                date: due,
-                amount: -abs(e.amount),
-                type: "tx.type.purchase",
-                icon: String(e.label.prefix(2).uppercased()),
-                iconBgHex: e.category.iconBg,
-                category: e.category,
-                currency: e.currency,
-                notes: "tx.note.recurring_auto"
-            )
-            card.transactions.append(tx)
+            // Catch up on months the app wasn't opened — same reasoning as the
+            // salary engine. Missing a kos charge makes that cycle look cheap
+            // and quietly flatters every ratio built on it. Bounded by the
+            // plan's creation date, the last charge, and 12 months.
+            for (m, y) in pendingMonths(for: e, currentMonth: month,
+                                        currentYear: year, cal: cal) {
+                let due = RecurringDateEngine.dueDate(dayOfMonth: e.dayOfMonth, month: m, year: y)
+                guard today >= cal.startOfDay(for: due) else { continue }
 
-            e.lastChargedMonth = month
-            e.lastChargedYear  = year
-            didCharge = true
+                // Stable keys only (type/notes) — translated at display time,
+                // never frozen into the DB. Same rule the salary engine follows.
+                let tx = TxRecord(
+                    name: e.label,
+                    date: due,
+                    amount: -abs(e.amount),
+                    type: "tx.type.purchase",
+                    icon: String(e.label.prefix(2).uppercased()),
+                    iconBgHex: e.category.iconBg,
+                    category: e.category,
+                    currency: e.currency,
+                    notes: "tx.note.recurring_auto"
+                )
+                // Insert BEFORE appending: TxRecord has no `inverse:` on the
+                // relationship, so SwiftData won't always auto-persist a child
+                // added only via the parent's array. Insert-then-append is safe.
+                context.insert(tx)
+                card.transactions.append(tx)
 
-            print("[RecurringExpenseEngine] Charged \(e.currency) \(e.amount) for \(e.label)")
+                // Stamp the month actually charged, not "now".
+                e.lastChargedMonth = m
+                e.lastChargedYear  = y
+                didCharge = true
+
+                print("[RecurringExpenseEngine] Charged \(e.currency) \(e.amount) for \(e.label) (\(m)/\(y))")
+            }
         }
 
         if didCharge { try? context.save() }
+    }
+
+    /// Months still owing a charge, oldest first. Mirrors the salary engine's
+    /// bounds so the two never drift apart.
+    private static func pendingMonths(for e: RecurringExpense,
+                                      currentMonth: Int, currentYear: Int,
+                                      cal: Calendar) -> [(Int, Int)] {
+        let createdM = cal.component(.month, from: e.createdAt)
+        let createdY = cal.component(.year,  from: e.createdAt)
+
+        var startM: Int, startY: Int
+        if e.lastChargedYear > 0 {
+            startM = e.lastChargedMonth + 1
+            startY = e.lastChargedYear
+            if startM > 12 { startM = 1; startY += 1 }
+        } else {
+            startM = createdM; startY = createdY
+        }
+        if startY < createdY || (startY == createdY && startM < createdM) {
+            startM = createdM; startY = createdY
+        }
+
+        var out: [(Int, Int)] = []
+        var m = startM, y = startY
+        while (y < currentYear) || (y == currentYear && m <= currentMonth) {
+            out.append((m, y))
+            if out.count >= 12 { break }
+            m += 1
+            if m > 12 { m = 1; y += 1 }
+        }
+        return out
     }
 }
 
@@ -214,9 +257,23 @@ struct RecurringExpensesView: View {
     @Query(sort: \BankCard.sortOrder) private var cards: [BankCard]
     @State private var vm = RecurringExpenseViewModel()
     @State private var appeared = false
+    @State private var showOrphanCleanup = false
 
     /// Max rows shown inline before collapsing behind "See all".
     static let previewLimit = 5
+
+    /// Transactions the engine auto-posted (`notes == tx.note.recurring_auto`)
+    /// whose schedule has since been deleted — deleting the schedule never
+    /// removed them, so they linger and quietly inflate the budget. Matched by
+    /// name against surviving schedules; anything without a match is orphaned.
+    private var orphanedAutoCharges: [TxRecord] {
+        let liveLabels = Set(expenses.map { $0.label.trimmingCharacters(in: .whitespaces).lowercased() })
+        return cards.flatMap { $0.transactions }.filter { tx in
+            tx.notes == "tx.note.recurring_auto"
+            && !liveLabels.contains(tx.name.trimmingCharacters(in: .whitespaces).lowercased())
+        }
+        .sorted { $0.date > $1.date }
+    }
 
     private var activeExpenses: [RecurringExpense] { expenses.filter { $0.isActive } }
 
@@ -244,6 +301,31 @@ struct RecurringExpensesView: View {
                         navBar
                             .padding(.horizontal, 22).padding(.top, 20)
                             .opacity(appeared ? 1 : 0).offset(y: appeared ? 0 : -12)
+
+                        // Orphaned auto-charge cleanup — surfaces only when there
+                        // are leftover transactions from deleted schedules.
+                        if !orphanedAutoCharges.isEmpty {
+                            Button {
+                                HapticManager.shared.tap(); showOrphanCleanup = true
+                            } label: {
+                                HStack(spacing: 10) {
+                                    Image(systemName: "wand.and.stars.inverse").font(.system(size: 16)).foregroundStyle(AppTheme.orange)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(String(format: loc("recurring.orphan_title"), orphanedAutoCharges.count))
+                                            .font(.system(size: 13, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                                        Text(loc("recurring.orphan_sub"))
+                                            .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                                    }
+                                    Spacer()
+                                    Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold)).foregroundStyle(AppTheme.textSecondary)
+                                }
+                                .padding(14)
+                                .background(AppTheme.orange.opacity(0.10), in: RoundedRectangle(cornerRadius: 14))
+                                .overlay(RoundedRectangle(cornerRadius: 14).stroke(AppTheme.orange.opacity(0.25), lineWidth: 1))
+                            }
+                            .buttonStyle(ScaleButtonStyle())
+                            .padding(.horizontal, 22).padding(.top, 14)
+                        }
 
                         if !activeExpenses.isEmpty {
                             summaryCard
@@ -280,6 +362,13 @@ struct RecurringExpensesView: View {
             .onAppear { withAnimation(.spring(response: 0.55, dampingFraction: 0.8)) { appeared = true } }
             .sheet(isPresented: $vm.showAddSheet, onDismiss: { vm.resetForm() }) {
                 RecurringFormSheet(vm: vm, context: context)
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
+                    .presentationBackground(AppTheme.bg)
+                    .preferredColorScheme(appColorScheme())
+            }
+            .sheet(isPresented: $showOrphanCleanup) {
+                OrphanedAutoChargesView(orphans: orphanedAutoCharges)
                     .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
                     .presentationBackground(AppTheme.bg)
@@ -697,5 +786,109 @@ struct AllRecurringExpensesView: View {
         }
         .navigationTitle(loc("recurring.title"))
         .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+// MARK: - Orphaned Auto-Charge Cleanup
+//
+// Lists transactions the recurring engine auto-created whose schedule was later
+// deleted, and removes the ones the user confirms. Deleting a schedule never
+// removed its past charges, so they linger and inflate the budget until wiped
+// here (which also restores the card balance).
+struct OrphanedAutoChargesView: View {
+    let orphans: [TxRecord]
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var context
+    @State private var selected: Set<UUID> = []
+    @State private var appeared = false
+
+    private var chosen: [TxRecord] { orphans.filter { selected.contains($0.id) } }
+    private var chosenTotal: Double {
+        chosen.reduce(0) { $0 + CurrencyManager.shared.convert(abs($1.amount),
+                                                               from: $1.currency.isEmpty ? CurrencyManager.shared.preferredCurrency : $1.currency,
+                                                               to: CurrencyManager.shared.preferredCurrency) }
+    }
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                AppTheme.bg.ignoresSafeArea()
+                if orphans.isEmpty {
+                    VStack(spacing: 14) {
+                        Image(systemName: "checkmark.seal.fill").font(.system(size: 40)).foregroundStyle(AppTheme.accent)
+                        Text(loc("recurring.orphan_none")).font(.system(size: 16)).foregroundStyle(AppTheme.textSecondary)
+                    }
+                } else {
+                    ScrollView(showsIndicators: false) {
+                        LazyVStack(spacing: 10) {
+                            Text(loc("recurring.orphan_explain"))
+                                .font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, 22).padding(.bottom, 4)
+                            ForEach(orphans) { tx in
+                                row(tx)
+                            }
+                            .padding(.horizontal, 22)
+                            Spacer(minLength: 100)
+                        }
+                        .padding(.top, 8)
+                    }
+                    VStack { Spacer(); deleteButton }
+                }
+            }
+            .navigationTitle(loc("recurring.orphan_nav"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(AppTheme.bg, for: .navigationBar)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(loc("common.done")) { dismiss() }.foregroundStyle(AppTheme.textSecondary)
+                }
+            }
+            .onAppear {
+                if !appeared { selected = Set(orphans.map(\.id)); appeared = true }  // pre-select all
+            }
+        }
+    }
+
+    private func row(_ tx: TxRecord) -> some View {
+        let isOn = selected.contains(tx.id)
+        return Button {
+            HapticManager.shared.tap()
+            if isOn { selected.remove(tx.id) } else { selected.insert(tx.id) }
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: isOn ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 20)).foregroundStyle(isOn ? AppTheme.red : AppTheme.textSecondary)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(tx.name).font(.system(size: 14, weight: .medium)).foregroundStyle(AppTheme.textPrimary).lineLimit(1)
+                    Text(tx.date.formatted(date: .abbreviated, time: .omitted))
+                        .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                }
+                Spacer()
+                Text(CurrencyManager.shared.formatted(abs(tx.amount), currency: tx.currency.isEmpty ? CurrencyManager.shared.preferredCurrency : tx.currency))
+                    .font(.system(size: 14, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+            }
+            .padding(12)
+            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var deleteButton: some View {
+        Button {
+            HapticManager.shared.warning()
+            for tx in chosen { context.delete(tx) }
+            try? context.save()
+            dismiss()
+        } label: {
+            Text(String(format: loc("recurring.orphan_delete"), chosen.count,
+                        CurrencyManager.shared.formatted(chosenTotal, currency: CurrencyManager.shared.preferredCurrency)))
+                .font(.system(size: 16, weight: .bold)).foregroundStyle(.white)
+                .frame(maxWidth: .infinity).padding(.vertical, 16)
+                .background(chosen.isEmpty ? AppTheme.cardMid : AppTheme.red, in: RoundedRectangle(cornerRadius: 16))
+        }
+        .buttonStyle(ScaleButtonStyle())
+        .disabled(chosen.isEmpty)
+        .padding(.horizontal, 22).padding(.bottom, 20)
     }
 }

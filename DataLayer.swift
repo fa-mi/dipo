@@ -18,6 +18,24 @@ final class BankCard {
     var walletProvider: String  // e.g. "GoPay", "OVO", "DANA", ""
     var phoneNumber: String     // for digital wallets
     var isHidden: Bool          // per-card hide/show for number & balance
+    /// Chosen bank-issuer id (see BankIssuer). Drives the card's brand colours.
+    /// Empty = auto (detect from BIN, else deterministic fallback). Default via
+    /// SwiftData lightweight migration for older rows.
+    var issuerID: String = ""
+
+    // MARK: - Credit card (liability) fields
+    // A credit card is the INVERSE of a cash card: spending increases what you
+    // OWE instead of reducing cash. These default to the cash-card behaviour so
+    // every existing card is unaffected (lightweight migration).
+    var isCreditCard: Bool = false
+    /// Total credit line. Available credit = creditLimit − owed.
+    var creditLimit: Double = 0
+    /// Amount owed at the moment the card became a credit card. `owed` grows
+    /// from here as purchases (−) and payments (+) are logged after `creditSince`.
+    var openingOwed: Double = 0
+    /// When the card started being tracked as credit. Transactions BEFORE this
+    /// don't recompute `owed` (they're history) — only those after it move it.
+    var creditSince: Date? = nil
 
     @Relationship(deleteRule: .cascade)
     var transactions: [TxRecord] = []
@@ -66,6 +84,14 @@ final class TxRecord {
     /// data. Not optional because SwiftData migrations are simpler this way.
     var linkedDebtID: String = ""
 
+    /// UUID string of the linked SavingsGoal when this tx is a goal deposit.
+    /// Money moved into a goal is not consumption — it leaves the spending
+    /// account and becomes savings — so the tx exists to make the movement
+    /// visible (in Smart Budget's Invest & Debt group, in statistics, and in
+    /// the card balance) while this link keeps it traceable back to the goal.
+    /// Default keeps SwiftData migration lightweight for existing rows.
+    var linkedGoalID: String = ""
+
     /// Transaction subtype — distinguishes normal expense/income from
     /// refunds (reversing a prior expense, NOT new income) and inter-account
     /// transfers (shouldn't count as income OR expense for budgeting math).
@@ -90,6 +116,7 @@ final class TxRecord {
          icon: String, iconBgHex: String, category: TxCategory,
          currency: String = "USD", notes: String = "",
          linkedDebtID: String = "",
+         linkedGoalID: String = "",
          subtype: TxSubtype = .normal) {
         self.id = UUID()
         self.name = name
@@ -102,6 +129,7 @@ final class TxRecord {
         self.currency = currency
         self.notes = notes
         self.linkedDebtID = linkedDebtID
+        self.linkedGoalID = linkedGoalID
         self.subtype = subtype.rawValue
     }
 }
@@ -627,4 +655,35 @@ final class CardBudgetConfig {
 
 struct DataSeeder {
     static func seedIfNeeded(context: ModelContext) {}
+}
+
+// MARK: - Transaction deletion with goal rollback
+
+/// Delete a transaction, giving the money back to its savings goal when the
+/// transaction is what put it there.
+///
+/// Debt payments already unwind themselves (the debt balance is derived from
+/// `linkedDebtID` transactions), but a goal's `savedAmount` is stored, so
+/// deleting a deposit used to leave the goal holding money that no longer left
+/// any account — and net worth kept counting it forever.
+///
+/// Only deposits made through the app (`tx.note.goal_deposit`) roll back.
+/// A back-dated record of a deposit that happened outside DiPo
+/// (`tx.note.goal_backfill`) never added to `savedAmount` in the first place,
+/// so removing it must not subtract either.
+@MainActor
+func deleteTransactionWithGoalRollback(_ tx: TxRecord, context: ModelContext) {
+    if tx.notes == "tx.note.goal_deposit", tx.amount < 0,
+       let goalUUID = UUID(uuidString: tx.linkedGoalID) {
+        let descriptor = FetchDescriptor<SavingsGoal>(
+            predicate: #Predicate<SavingsGoal> { $0.id == goalUUID })
+        if let goal = try? context.fetch(descriptor).first {
+            let cm = CurrencyManager.shared
+            let refund = cm.convert(abs(tx.amount),
+                                    from: tx.currency.isEmpty ? goal.currency : tx.currency,
+                                    to: goal.currency)
+            goal.savedAmount = max(goal.savedAmount - refund, 0)
+        }
+    }
+    context.delete(tx)
 }

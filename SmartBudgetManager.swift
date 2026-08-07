@@ -146,9 +146,15 @@ final class SmartBudgetManager {
     /// a different card's currency — causing wildly wrong ratios like
     /// "2,866,395% over budget" when comparing IDR-denominated spend against
     /// a USD-denominated limit.
-    func spent(in group: BudgetGroup, transactions: [TxRecord], targetCurrency: String? = nil) -> Double {
+    /// `periodStart` lets the caller scope spend to the PAY CYCLE instead of the
+    /// calendar month. That matters when payday falls late in the month: from
+    /// the 1st until payday the calendar month has almost no income logged, so
+    /// month-scoped budgets read as wildly over (e.g. "416% over").
+    func spent(in group: BudgetGroup, transactions: [TxRecord], targetCurrency: String? = nil,
+               periodStart: Date? = nil) -> Double {
         let cal = Calendar.current
-        let monthStart = cal.safeDate(from: cal.dateComponents([.year, .month], from: Date()))
+        let monthStart = periodStart
+            ?? cal.safeDate(from: cal.dateComponents([.year, .month], from: Date()))
         let cats = categories(for: group)
         let target = targetCurrency ?? CurrencyManager.shared.preferredCurrency
         // Transfer subtype: skip outright (movement between user's own
@@ -191,9 +197,11 @@ final class SmartBudgetManager {
     /// just "Daily 1.5jt of 2jt used" which doesn't tell them what's
     /// actually adjustable this week.
     func dailySpendBreakdown(transactions: [TxRecord],
-                             targetCurrency: String? = nil) -> (fixed: Double, variable: Double) {
+                             targetCurrency: String? = nil,
+                             periodStart: Date? = nil) -> (fixed: Double, variable: Double) {
         let cal = Calendar.current
-        let monthStart = cal.safeDate(from: cal.dateComponents([.year, .month], from: Date()))
+        let monthStart = periodStart
+            ?? cal.safeDate(from: cal.dateComponents([.year, .month], from: Date()))
         let target = targetCurrency ?? CurrencyManager.shared.preferredCurrency
         var fixed: Double = 0
         var variable: Double = 0
@@ -211,16 +219,18 @@ final class SmartBudgetManager {
     }
 
     /// % used for a group
-    func percentUsed(in group: BudgetGroup, transactions: [TxRecord], income: Double) -> Double {
+    func percentUsed(in group: BudgetGroup, transactions: [TxRecord], income: Double,
+                     periodStart: Date? = nil) -> Double {
         let limit = monthlyLimit(for: group, income: income)
         guard limit > 0 else { return 0 }
-        return min(spent(in: group, transactions: transactions) / limit, 1.5)
+        return min(spent(in: group, transactions: transactions, periodStart: periodStart) / limit, 1.5)
     }
 
     /// Check if a new transaction would exceed the group limit.
     /// Pass the currency of the transaction being added so amounts are correctly converted.
     func wouldExceed(category: TxCategory, amount: Double, currency: String = "IDR",
-                     transactions: [TxRecord], income: Double) -> BudgetAlert? {
+                     transactions: [TxRecord], income: Double,
+                     periodStart: Date? = nil) -> BudgetAlert? {
         // Defense-in-depth: bail on missing access too. Otherwise a logged-out
         // user with a stale `isEnabled = true` setting would get budget
         // exceedance prompts during transaction entry — visible leakage of a
@@ -234,16 +244,12 @@ final class SmartBudgetManager {
         let limit = monthlyLimit(for: grp, income: income)
         guard limit > 0 else { return nil }
 
-        let alreadySpent: Double
-        if grp == .investDebt {
-            let monthStart = Calendar.current.safeDate(from: Calendar.current.dateComponents([.year, .month], from: Date()))
-            alreadySpent = transactions
-                .filter { $0.amount < 0 && $0.date >= monthStart
-                    && ($0.category == .investment || $0.category == .bonus) }
-                .reduce(0) { $0 + CurrencyManager.shared.toPreferred(abs($1.amount), from: $1.currency) }
-        } else {
-            alreadySpent = spent(in: grp, transactions: transactions)
-        }
+        // Use the SAME accounting as everywhere else. The old investDebt branch
+        // hand-rolled a sum of investment+bonus that silently excluded debt
+        // payments — so the 20% invest/debt budget could be blown by debt
+        // payments without the "you'll exceed" warning ever firing on the next
+        // investment. `spent(in:)` already includes .debtPayment for this group.
+        let alreadySpent = spent(in: grp, transactions: transactions, periodStart: periodStart)
 
         // Convert the new amount to preferred currency before comparing
         let amountConverted = CurrencyManager.shared.toPreferred(abs(amount), from: currency)
@@ -293,14 +299,16 @@ final class SmartBudgetManager {
                     cardID: String? = nil,
                     configs: [CardBudgetConfig] = [],
                     targetCurrency: String? = nil,
-                    goals: [SavingsGoal] = []) -> SmartInsight? {
+                    goals: [SavingsGoal] = [],
+                    periodStart: Date? = nil) -> SmartInsight? {
         evaluateAll(
             allTransactions: allTransactions,
             income: income,
             cardID: cardID,
             configs: configs,
             targetCurrency: targetCurrency,
-            goals: goals
+            goals: goals,
+            periodStart: periodStart
         ).first
     }
 
@@ -313,7 +321,8 @@ final class SmartBudgetManager {
                      cardID: String? = nil,
                      configs: [CardBudgetConfig] = [],
                      targetCurrency: String? = nil,
-                     goals: [SavingsGoal] = []) -> [SmartInsight] {
+                     goals: [SavingsGoal] = [],
+                     periodStart: Date? = nil) -> [SmartInsight] {
         // Royal-only feature. Defense-in-depth: every public engine method
         // checks hasActiveBudget so a future caller that forgets to gate
         // can't accidentally leak premium output. The wrapped methods
@@ -329,7 +338,8 @@ final class SmartBudgetManager {
         if let primary = primaryInsight(
             allTransactions: allTransactions, income: income,
             cardID: cardID, configs: configs,
-            targetCurrency: targetCurrency, goals: goals
+            targetCurrency: targetCurrency, goals: goals,
+            periodStart: periodStart
         ) {
             results.append(primary)
         }
@@ -339,7 +349,11 @@ final class SmartBudgetManager {
         // doom). Don't duplicate any already-surfaced category.
         let target = targetCurrency ?? CurrencyManager.shared.preferredCurrency
         let cal = Calendar.current
-        let monthStart = cal.safeDate(from: cal.dateComponents([.year, .month], from: Date()))
+        // MUST use the same window as the primary insight. On a calendar month
+        // this measured only post-1st spending against a FULL month's income,
+        // so it cheerfully reported "saving 49%" right next to "over budget".
+        let monthStart = periodStart
+            ?? cal.safeDate(from: cal.dateComponents([.year, .month], from: Date()))
         let thisTx = allTransactions.filter { $0.date >= monthStart && $0.amount < 0 }
         let debtPaid = allTransactions
             .filter { $0.amount < 0 && $0.date >= monthStart && $0.category == .debtPayment }
@@ -356,7 +370,15 @@ final class SmartBudgetManager {
         // Add positive savings insight if primary was a warning AND user is
         // actually saving — this is the "balanced feedback" case.
         let primaryIsWarning = results.first?.color == AppTheme.red || results.first?.color == AppTheme.orange
-        if primaryIsWarning, savings > 0, income > 0 {
+        // Coherence guard: never celebrate savings while a consumption group is
+        // over its limit. Balanced feedback is good, self-contradiction is not.
+        let anyGroupOver = [BudgetGroup.daily, .lifestyle].contains { grp in
+            let limit = monthlyLimit(for: grp, income: income, cardID: cardID, configs: configs)
+            guard limit > 0 else { return false }
+            return spent(in: grp, transactions: allTransactions, targetCurrency: target,
+                         periodStart: periodStart) > limit
+        }
+        if primaryIsWarning, !anyGroupOver, savings > 0, income > 0 {
             let rate = Int((savings / income) * 100)
             if rate >= 10 {  // only celebrate ≥10% — below that it's noise
                 results.append(SmartInsight(
@@ -404,7 +426,8 @@ final class SmartBudgetManager {
     /// new `topInsight` wrapper + `evaluateAll` aggregator can share it.
     private func primaryInsight(allTransactions: [TxRecord], income: Double,
                                 cardID: String?, configs: [CardBudgetConfig],
-                                targetCurrency: String?, goals: [SavingsGoal]) -> SmartInsight? {
+                                targetCurrency: String?, goals: [SavingsGoal],
+                                periodStart: Date? = nil) -> SmartInsight? {
         // Premium gate: same defense-in-depth rationale as wouldExceed —
         // hasActiveBudget covers both "user toggled it off" and "user no
         // longer has Royal access".
@@ -421,8 +444,24 @@ final class SmartBudgetManager {
         let monthStart = cal.safeDate(from: cal.dateComponents([.year, .month], from: now))
         let lastMonthStart = cal.safeDate(byAdding: .month, value: -1, to: monthStart)
 
-        let thisTx = allTransactions.filter { $0.date >= monthStart && $0.amount < 0 }
-        let lastTx = allTransactions.filter { $0.date >= lastMonthStart && $0.date < monthStart && $0.amount < 0 }
+        // Spike comparison ("Food up X% vs last month") must use the SAME window
+        // as the budget — the pay cycle when we have one — otherwise, right after
+        // payday, the budget resets to zero while this still compares a full
+        // calendar month and shows an alarming "410%". It also compares only the
+        // ELAPSED portion of the previous cycle (same number of days in), so an
+        // in-progress cycle isn't measured against a complete one.
+        let cycleStart = periodStart ?? monthStart
+        let daysThis   = max(cal.dateComponents([.day], from: cycleStart, to: now).day ?? 0, 0)
+        let prevCycleStart = cal.safeDate(byAdding: .month, value: -1, to: cycleStart)
+        // Match the two windows by ELAPSED TIME, not by whole days. Truncating
+        // to days gave this cycle up to ~24h more than last cycle (e.g. 2.4
+        // days vs 2.0), which alone can inflate a "category up X%" headline by
+        // a fifth before any behaviour changed.
+        let elapsed = now.timeIntervalSince(cycleStart)
+        let prevCutoff = prevCycleStart.addingTimeInterval(elapsed)
+
+        let thisTx = allTransactions.filter { $0.date >= cycleStart && $0.amount < 0 }
+        let lastTx = allTransactions.filter { $0.date >= prevCycleStart && $0.date < prevCutoff && $0.amount < 0 }
 
         // Check each group for overspend using PER-CARD ratios.
         // spent() is called with targetCurrency so IDR spend and USD income
@@ -439,7 +478,9 @@ final class SmartBudgetManager {
             if grp == .investDebt {
                 // For investDebt, split into debt payments vs investment separately
                 let cal = Calendar.current
-                let mStart = cal.safeDate(from: cal.dateComponents([.year, .month], from: now))
+                // Pay-cycle aware like every other window in this method.
+                let mStart = periodStart
+                    ?? cal.safeDate(from: cal.dateComponents([.year, .month], from: now))
 
                 let debtSpent = allTransactions
                     .filter { $0.amount < 0 && $0.date >= mStart && $0.category == .debtPayment }
@@ -497,7 +538,8 @@ final class SmartBudgetManager {
                     )
                 }
             } else {
-                let spent = self.spent(in: grp, transactions: allTransactions, targetCurrency: target)
+                let spent = self.spent(in: grp, transactions: allTransactions, targetCurrency: target,
+                                       periodStart: periodStart)
                 if spent > limit {
                     // Guard against limit = 0 (user set this group's ratio to 0%).
                     // Without this guard, `spent / 0` blows up to infinity and we
@@ -522,9 +564,17 @@ final class SmartBudgetManager {
                     // dayOfMonth + daysInMonth give us the "days remaining"
                     // window. We also surface this in the action label so
                     // the user sees something concrete, not just "Adjust".
-                    let dayOfMonth = cal.component(.day, from: now)
-                    let daysInMonth = cal.range(of: .day, in: .month, for: now)?.count ?? 30
-                    let daysLeft = max(daysInMonth - dayOfMonth + 1, 1)
+                    // Days left in the BUDGET window — the pay cycle when we have
+                    // one, otherwise the calendar month.
+                    let daysLeft: Int = {
+                        if let start = periodStart,
+                           let end = cal.date(byAdding: .month, value: 1, to: start) {
+                            return max(cal.dateComponents([.day], from: cal.startOfDay(for: now), to: end).day ?? 1, 1)
+                        }
+                        let dayOfMonth = cal.component(.day, from: now)
+                        let daysInMonth = cal.range(of: .day, in: .month, for: now)?.count ?? 30
+                        return max(daysInMonth - dayOfMonth + 1, 1)
+                    }()
                     let remaining = max(limit - spent, 0)
                     let dailyTarget = remaining / Double(daysLeft)
                     let dailyFmt = CurrencyManager.shared.formatted(dailyTarget, currency: target)
@@ -532,16 +582,41 @@ final class SmartBudgetManager {
                     // (bills, already-committed) vs variable (food/transport,
                     // user-adjustable). User can act on the variable portion
                     // this week — not the fixed portion which is contracted.
-                    var bodyWithTarget = String(format: loc("insight.group_over_body"), pct, grp.label.lowercased())
+                    // Same framing as the Smart Budget screen: share-of-income vs
+                    // target. Reporting "28% over the limit" here while that
+                    // screen said "14% above your 50% target" described one fact
+                    // with two different numbers.
+                    let groupRatio: Double = {
+                        switch grp {
+                        case .daily:      return r.daily
+                        case .lifestyle:  return r.lifestyle
+                        case .investDebt: return r.investDebt
+                        }
+                    }()
+                    let actualPct = income > 0 ? Int(((spent / income) * 100).rounded()) : 0
+                    let targetPct = Int((groupRatio * 100).rounded())
+                    var bodyWithTarget = String(format: loc("insight.group_over_body"),
+                                                actualPct, max(actualPct - targetPct, 0), targetPct)
                     if grp == .daily {
-                        let bd = dailySpendBreakdown(transactions: allTransactions, targetCurrency: target)
+                        // Same window as `spent` above — otherwise the breakdown
+                        // in this sentence wouldn't add up to the figure it explains.
+                        let bd = dailySpendBreakdown(transactions: allTransactions, targetCurrency: target,
+                                                     periodStart: periodStart)
                         if bd.fixed > 0 || bd.variable > 0 {
                             let fixedFmt = CurrencyManager.shared.formatted(bd.fixed, currency: target)
                             let variableFmt = CurrencyManager.shared.formatted(bd.variable, currency: target)
                             bodyWithTarget += " " + String(format: loc("insight.daily_breakdown"), fixedFmt, variableFmt)
                         }
                     }
-                    bodyWithTarget += " " + String(format: loc("insight.target_per_day"), dailyFmt, daysLeft)
+                    // Once the limit is blown there is no budget left, so a
+                    // "spend Rp 0/day" target is noise. State the shortfall
+                    // instead — that's the number the user can actually act on.
+                    if remaining > 0 {
+                        bodyWithTarget += " " + String(format: loc("insight.target_per_day"), dailyFmt, daysLeft)
+                    } else {
+                        let overFmt = CurrencyManager.shared.formatted(spent - limit, currency: target)
+                        bodyWithTarget += " " + String(format: loc("insight.over_by_recover"), overFmt, daysLeft)
+                    }
                     return SmartInsight(
                         icon: "exclamationmark.triangle.fill",
                         color: AppTheme.red,
@@ -559,7 +634,11 @@ final class SmartBudgetManager {
         // Compare vs last month — all in target currency for consistency.
         // Use reliableSpikePct so we don't surface "Food up 1117%" when last
         // month barely had any food data. Minimum baseline = Rp 100k-equiv.
-        let cats = TxCategory.allCases
+        // A category comparison this early in a cycle is noise: two days in,
+        // one restaurant bill can read as "+273%" against a baseline of a few
+        // warung meals. Wait until the window is wide enough to describe a
+        // habit rather than a single evening.
+        let cats = daysThis >= 5 ? TxCategory.allCases : []
         var biggestSpike: (cat: TxCategory, pct: Int)? = nil
         for cat in cats {
             let thisAmt = thisTx.filter { $0.category == cat }.reduce(0.0) { sum, tx in
@@ -570,7 +649,8 @@ final class SmartBudgetManager {
                 let txCur = tx.currency.isEmpty ? target : tx.currency
                 return sum + CurrencyManager.shared.convert(abs(tx.amount), from: txCur, to: target)
             }
-            guard let pct = reliableSpikePct(this: thisAmt, last: lastAmt, target: target) else {
+            guard let pct = reliableSpikePct(this: thisAmt, last: lastAmt, target: target,
+                                             minimumBaselineIDR: 100_000 + 40_000 * Double(daysThis)) else {
                 continue
             }
             if biggestSpike == nil || pct > (biggestSpike?.pct ?? 0) {
@@ -590,12 +670,22 @@ final class SmartBudgetManager {
         // If we're past the 40% mark of the month and lifestyle spend is already
         // tracking high vs the limit, warn before they go over. This is the
         // "smart" insight users praise — catches problems before they happen.
-        let dayOfMonth = cal.component(.day, from: now)
-        let daysInMonth = cal.range(of: .day, in: .month, for: now)?.count ?? 30
-        let monthProgress = Double(dayOfMonth) / Double(daysInMonth)
+        // Progress through the BUDGET window (pay cycle when known), so the
+        // pacing check compares like with like against cycle-scoped spend.
+        let monthProgress: Double = {
+            if let start = periodStart, let end = cal.date(byAdding: .month, value: 1, to: start) {
+                let total = max(cal.dateComponents([.day], from: start, to: end).day ?? 30, 1)
+                let done  = max(cal.dateComponents([.day], from: start, to: now).day ?? 0, 0)
+                return min(max(Double(done) / Double(total), 0), 1)
+            }
+            let dayOfMonth = cal.component(.day, from: now)
+            let daysInMonth = cal.range(of: .day, in: .month, for: now)?.count ?? 30
+            return Double(dayOfMonth) / Double(daysInMonth)
+        }()
         if monthProgress >= 0.40 && monthProgress <= 0.85 {
             let lifestyleLimit = income * r.lifestyle
-            let lifestyleSpent = self.spent(in: .lifestyle, transactions: allTransactions, targetCurrency: target)
+            let lifestyleSpent = self.spent(in: .lifestyle, transactions: allTransactions, targetCurrency: target,
+                                            periodStart: periodStart)
             if lifestyleLimit > 0 {
                 let utilization = lifestyleSpent / lifestyleLimit
                 // Spent ratio outpacing month progress by 20%+ → on track to overspend
@@ -800,7 +890,17 @@ final class SmartBudgetManager {
           "gofood", "grabfood", "shopeefood", "restoran", "restaurant", "food",
           "hokben", "yoshinoya", "geprek", "ayam", "soto", "rendang",
           "j.co", "dunkin", "krispy kreme", "chatime", "xing fu tang",
-          "ranch market", "all fresh", "farmers market", "transmart", "carrefour"], .food),
+          "ranch market", "all fresh", "farmers market", "transmart", "carrefour",
+          // Indonesian dishes/outlets that were falling through to "Other" —
+          // together these accounted for a fifth of one user's real spend.
+          "famimart", "fami mart", "superindo", "yogya", "borma", "griya",
+          "pecel", "acai", "acaii", "seblak", "batagor", "siomay", "somay",
+          "martabak", "bakmi", "kwetiau", "kwetiaw", "gudeg", "rawon", "pempek",
+          "bubur", "lontong", "ketoprak", "gorengan", "cireng", "risol",
+          "roti", "bakery", "donat", "dimsum", "sushi", "ramen", "ricebowl",
+          "rice bowl", "seafood", "steak", "salad", "juice", "jus ", "smoothie",
+          "boba", "milk tea", "matcha", "es kopi", "kedai", "resto", "katering",
+          "catering", "prasmanan", "angkringan", "lesehan", "pujasera"], .food),
         // Transport — ride hailing, fuel, parking, public transit
         (["grab", "gojek", "gocar", "goride", "grabcar", "grabbike", "ojek", "taxi",
           "uber", "bluebird", "blue bird", "maxim", "indriver", "incar",
@@ -868,6 +968,107 @@ final class SmartBudgetManager {
 
     /// Suggest a category from merchant name. Default txType is "Expense" since
     /// receipt scans never produce income tx. Pass "Income" to skip suggestion.
+    // MARK: - Learned merchant categories
+    //
+    // The keyword map below is a generic guess. What the user does repeatedly
+    // is better evidence than any list we ship: if "warkop" has gone to Food &
+    // Drinks five times, that IS the answer for this person.
+    //
+    // Derived from transaction history rather than stored in its own model, on
+    // purpose. A stored table would need a migration, backup coverage, three
+    // wipe paths, and would drift out of sync the moment a transaction is
+    // deleted or recategorised. Deriving it means recategorising one merchant
+    // in Tidy Categories immediately changes what DiPo suggests next time.
+
+    /// What history says about a merchant name.
+    struct LearnedCategory {
+        let category: TxCategory
+        /// How many past transactions back this up — shown to the user so the
+        /// suggestion is evidence, not magic.
+        let count: Int
+        /// The name that matched ("warkop"), which may be shorter than what was
+        /// typed ("warkop pak budi").
+        let matchedTerm: String
+        /// True when the whole normalised name matched, false for a token match.
+        let isExact: Bool
+    }
+
+    /// Lowercased, punctuation- and digit-free, whitespace-collapsed. Makes
+    /// "Warkop Pak Budi 2" and "warkop pak budi" the same key.
+    static func normalizedMerchant(_ raw: String) -> String {
+        let stripped = raw.lowercased().unicodeScalars.map { sc -> Character in
+            CharacterSet.alphanumerics.contains(sc) ? Character(sc) : " "
+        }
+        return String(stripped)
+            .split(separator: " ")
+            .filter { !$0.allSatisfy(\.isNumber) }      // drop bare numbers
+            .joined(separator: " ")
+    }
+
+    /// Tokens worth matching on. Very short fragments ("di", "ke", "2") match
+    /// everything and would make the memory worse than useless.
+    private static func meaningfulTokens(_ normalized: String) -> [String] {
+        normalized.split(separator: " ").map(String.init).filter { $0.count >= 4 }
+    }
+
+    /// What this user's own history says `name` should be categorised as.
+    ///
+    /// Two tiers, because the evidence differs in strength:
+    ///   • exact normalised name — 2 matches is already a pattern
+    ///   • shared token ("warkop" inside "warkop pak budi") — needs 3, since a
+    ///     token can collide across unrelated merchants
+    /// Both require the winning category to be genuinely dominant: at least
+    /// 60% of matches and ahead by 2. A merchant the user splits between two
+    /// categories (Alfamart → sometimes Food, sometimes Shopping) is genuinely
+    /// ambiguous, and guessing there would train the user to distrust it.
+    static func learnedCategory(for name: String,
+                                transactions: [TxRecord]) -> LearnedCategory? {
+        let target = normalizedMerchant(name)
+        guard target.count >= 3 else { return nil }
+
+        // Only real spending teaches categories — transfers and refunds don't.
+        let history = transactions.filter { $0.amount < 0 && $0.txSubtype == .normal }
+        guard !history.isEmpty else { return nil }
+
+        func winner(_ matches: [TxRecord], minCount: Int) -> (TxCategory, Int)? {
+            guard matches.count >= minCount else { return nil }
+            var tally: [TxCategory: Int] = [:]
+            for tx in matches { tally[tx.category, default: 0] += 1 }
+            let ranked = tally.sorted { $0.value > $1.value }
+            guard let top = ranked.first else { return nil }
+            let runnerUp = ranked.dropFirst().first?.value ?? 0
+            let dominant = Double(top.value) / Double(matches.count) >= 0.6
+                        && (top.value - runnerUp) >= 2
+            return dominant ? (top.key, top.value) : nil
+        }
+
+        // Tier 1 — the same merchant, spelled the same way.
+        let exact = history.filter { normalizedMerchant($0.name) == target }
+        if let (cat, n) = winner(exact, minCount: 2) {
+            return LearnedCategory(category: cat, count: n, matchedTerm: target, isExact: true)
+        }
+
+        // Tier 2 — a distinctive word in common. Prefers the longest shared
+        // token so "warkop" beats a generic fragment.
+        for token in meaningfulTokens(target).sorted(by: { $0.count > $1.count }) {
+            let byToken = history.filter { normalizedMerchant($0.name).contains(token) }
+            if let (cat, n) = winner(byToken, minCount: 3) {
+                return LearnedCategory(category: cat, count: n, matchedTerm: token, isExact: false)
+            }
+        }
+        return nil
+    }
+
+    /// History first, shipped keyword map as the fallback.
+    static func suggestCategory(for name: String, txType: String,
+                                transactions: [TxRecord]) -> TxCategory? {
+        if txType == "Income" { return nil }
+        if let learned = learnedCategory(for: name, transactions: transactions) {
+            return learned.category
+        }
+        return suggestCategory(for: name, txType: txType)
+    }
+
     static func suggestCategory(for name: String, txType: String) -> TxCategory? {
         // Income txs go to .salary etc. — categorization isn't merchant-based.
         if txType == "Income" { return nil }
@@ -906,9 +1107,13 @@ final class SmartBudgetManager {
     ///   - target: currency for the minimum-baseline conversion
     ///   - minimumPctIncrease: minimum percent change to surface (default 30%)
     /// - Returns: integer percent change, or nil to suppress the insight
+    /// `minimumBaselineIDR` scales with how much of the window has elapsed:
+    /// a baseline that is fine for a full month is far too thin for a few days,
+    /// where a single meal swings the percentage wildly.
     func reliableSpikePct(this: Double, last: Double, target: String,
-                          minimumPctIncrease: Int = 30) -> Int? {
-        let minBaseline = CurrencyManager.shared.convert(100_000, from: "IDR", to: target)
+                          minimumPctIncrease: Int = 30,
+                          minimumBaselineIDR: Double = 100_000) -> Int? {
+        let minBaseline = CurrencyManager.shared.convert(minimumBaselineIDR, from: "IDR", to: target)
         guard last >= minBaseline, this > 0 else { return nil }
         let pctIncrease = ((this - last) / last) * 100
         let pctInt = Int(pctIncrease)
@@ -1063,17 +1268,149 @@ final class SmartBudgetManager {
     /// give meaningful comparisons (anomaly detection, spike, monthly
     /// trends).
     func dataMonthsAvailable(allTransactions: [TxRecord]) -> Int {
+        // Measure the ACTUAL span, not how many calendar months it touches.
+        //
+        // Counting distinct calendar months called 27 days of data (Jun 25 →
+        // Jul 22) "2 months", so every monthly average built on it was HALVED:
+        // Rp 10.8M of real spending was reported as Rp 5.4M/month, which made
+        // the engine believe in a ~46% savings rate and recommend investing a
+        // surplus that never existed.
+        let dates = allTransactions
+            .filter { $0.amount < 0 && $0.txSubtype != .transfer }
+            .map(\.date)
+        guard let first = dates.min(), let last = dates.max() else { return 0 }
+        let days = Calendar.current.dateComponents([.day], from: first, to: last).day ?? 0
+        return max(Int((Double(days) / 30.44).rounded()), 1)
+    }
+
+    /// Fractional variant of `dataMonthsAvailable` for use as an averaging
+    /// divisor: 46 days of data divides by 1.51, not by a rounded 2. Floored
+    /// at 1.0 so a few days of data never inflates into a huge projected month.
+    func dataSpanMonths(allTransactions: [TxRecord]) -> Double {
+        let dates = allTransactions
+            .filter { $0.amount < 0 && $0.txSubtype != .transfer }
+            .map(\.date)
+        guard let first = dates.min(), let last = dates.max() else { return 1 }
+        let days = last.timeIntervalSince(first) / 86_400
+        return max(days / 30.44, 1.0)
+    }
+
+    /// Payday-aligned analysis window: the COMPLETE salary cycles the data
+    /// covers, as [start, end) with `cycles` = how many payday→payday periods
+    /// that is. Boundaries are the *actual* credit dates (weekend/holiday
+    /// adjusted via SalaryDateEngine, same as the credit engine), so a day-25
+    /// salary that lands on the 24th splits spending exactly the way money
+    /// really arrived. The current, still-in-progress cycle is excluded — a
+    /// half-finished cycle would otherwise dilute every monthly average.
+    /// Returns nil when the data doesn't cover even one complete cycle;
+    /// callers should fall back to `dataSpanMonths`.
+    func paydayCycleWindow(allTransactions: [TxRecord], salaryDay: Int, now: Date = .now) -> (start: Date, end: Date, cycles: Int)? {
         let cal = Calendar.current
-        let monthsWithData = Set(
-            allTransactions
-                .filter { $0.amount < 0 }
-                .map { cal.dateComponents([.year, .month], from: $0.date) }
-                .compactMap { c -> String? in
-                    guard let y = c.year, let m = c.month else { return nil }
-                    return "\(y)-\(m)"
-                }
-        )
-        return monthsWithData.count
+        guard (1...31).contains(salaryDay),
+              let earliest = allTransactions
+                .filter({ $0.amount < 0 && $0.txSubtype != .transfer }).map(\.date).min()
+        else { return nil }
+
+        func boundary(year: Int, month: Int) -> Date {
+            cal.startOfDay(for: SalaryDateEngine.actualPayDate(dayOfMonth: salaryDay, month: month, year: year))
+        }
+        func yearMonth(_ d: Date) -> (Int, Int) {
+            let c = cal.dateComponents([.year, .month], from: d)
+            return (c.year ?? 2000, c.month ?? 1)
+        }
+
+        // End of the window = most recent payday ≤ now (start of current cycle).
+        var (y, m) = yearMonth(now)
+        var end = boundary(year: y, month: m)
+        if end > now {
+            let prev = cal.safeDate(byAdding: .month, value: -1, to: now)
+            (y, m) = yearMonth(prev)
+            end = boundary(year: y, month: m)
+        }
+
+        // Walk back one payday at a time while the data still covers the cycle.
+        // 3-day tolerance: users typically start logging a moment after payday,
+        // and that first cycle is still representative.
+        var start = end
+        var cycles = 0
+        while cycles < 12 {
+            let prev = cal.safeDate(byAdding: .month, value: -1, to: start.addingTimeInterval(86_400))
+            let (py, pm) = yearMonth(prev)
+            let candidate = boundary(year: py, month: pm)
+            guard candidate < start, earliest <= candidate.addingTimeInterval(3 * 86_400) else { break }
+            start = candidate
+            cycles += 1
+        }
+        return cycles > 0 ? (start, end, cycles) : nil
+    }
+
+    // MARK: - Recurring Duplicate Detection
+
+    /// A recurring plan that appears to be charged MORE times than the plan
+    /// expects within an analysis window — typically a manual entry coexisting
+    /// with the auto-recorded charge (the user pays and logs it by hand, and
+    /// the recurring engine also records it; or a manual log from before the
+    /// recurring was created falls inside the same pay cycle). These twins
+    /// silently inflate "variable living costs" in any analysis that treats
+    /// only the plan amount as fixed.
+    struct RecurringDuplicateSuspect: Identifiable {
+        let id = UUID()
+        let label: String
+        /// One charge, in the caller's preferred currency.
+        let chargeAmount: Double
+        let found: Int
+        let expected: Int
+        var excessAmount: Double { Double(max(found - expected, 0)) * chargeAmount }
+    }
+
+    /// Detect likely duplicate charges of active recurring plans inside
+    /// `expenseTx` (the caller's analysis window). `expectedPerPlan` is how
+    /// many charges of each plan the window should contain (1 per cycle or
+    /// month); plans younger than the window are only expected once per month
+    /// of their existence. Matching is by amount (±1%) within fixed-cost
+    /// categories (or the auto-record marker) rather than by name — the manual
+    /// twin usually has a different name than the plan ("Tranfer ibu bulanan"
+    /// vs plan "transfer mom"). Only FLAGS, never deletes or excludes: two
+    /// same-amount charges can both be real; only the user knows.
+    func detectRecurringDuplicates(expenseTx: [TxRecord],
+                                   recurrings: [RecurringExpense],
+                                   expectedPerPlan: Int,
+                                   currency: String,
+                                   now: Date = .now) -> [RecurringDuplicateSuspect] {
+        guard expectedPerPlan > 0, !recurrings.isEmpty else { return [] }
+        let cm = CurrencyManager.shared
+        let cal = Calendar.current
+        var used = Set<UUID>()
+        var result: [RecurringDuplicateSuspect] = []
+        // Larger plans claim transactions first so a big and a small plan with
+        // near amounts don't both count the same charge.
+        let plans = recurrings.filter { $0.isActive }.sorted {
+            cm.convert($0.amount, from: $0.currency, to: currency) >
+            cm.convert($1.amount, from: $1.currency, to: currency)
+        }
+        for plan in plans {
+            let amt = cm.convert(plan.amount, from: plan.currency, to: currency)
+            guard amt > 0 else { continue }
+            let tolerance = max(amt * 0.01, 1_000)
+            let matches = expenseTx.filter { tx in
+                guard !used.contains(tx.id) else { return false }
+                guard Self.fixedCategories.contains(tx.category)
+                        || tx.notes == "tx.note.recurring_auto" else { return false }
+                let txAmt = cm.convert(abs(tx.amount), from: tx.currency.isEmpty ? currency : tx.currency, to: currency)
+                return abs(txAmt - amt) <= tolerance
+            }
+            matches.forEach { used.insert($0.id) }
+            // A plan created mid-window can't owe a charge for every cycle the
+            // window covers — cap its expectation by its own age in months.
+            let ageMonths = (cal.dateComponents([.month], from: plan.createdAt, to: now).month ?? 0) + 1
+            let expected = min(expectedPerPlan, max(ageMonths, 1))
+            if matches.count > expected {
+                result.append(RecurringDuplicateSuspect(
+                    label: plan.label, chargeAmount: amt,
+                    found: matches.count, expected: expected))
+            }
+        }
+        return result
     }
 
     /// Convenience: derive an InsightConfidence level from data age.
@@ -1325,15 +1662,43 @@ final class SmartBudgetManager {
 
     /// Finds transactions that recur on a regular interval (daily / weekly /
     /// bi-weekly / monthly), tolerant of small merchant-name variations.
+    // MARK: - Dismissed recurring patterns
+    //
+    // `detectRecurring` recomputes from transaction history every time, so a
+    // detected "subscription" (e.g. weekly laundry) can't be removed the way a
+    // manually-created RecurringExpense can — deleting the schedule does nothing
+    // because this isn't reading a schedule, it's reading your transactions.
+    // This lets the user hide a specific detected pattern by its merchant key.
+    private static let dismissedRecurringKey = "sb_dismissed_recurring"
+    private var dismissedRecurring: Set<String> {
+        Set(UserDefaults.standard.stringArray(forKey: Self.dismissedRecurringKey) ?? [])
+    }
+    func dismissRecurring(name: String) {
+        var set = dismissedRecurring
+        set.insert(recurringKey(for: name))
+        UserDefaults.standard.set(Array(set), forKey: Self.dismissedRecurringKey)
+    }
+    func restoreDismissedRecurring() {
+        UserDefaults.standard.removeObject(forKey: Self.dismissedRecurringKey)
+    }
+
     func detectRecurring(allTransactions: [TxRecord]) -> [RecurringPattern] {
         // Royal-only gate — same rationale as spendingAnomalies.
         guard hasActiveBudget else { return [] }
-        // Group expenses by a fuzzy merchant key. Skip transfers (inter-account
-        // moves, not real spend) so they're never flagged as "subscriptions".
-        let expenses = allTransactions.filter { $0.amount < 0 && $0.txSubtype != .transfer }
+        // Skip transfers (inter-account moves). Also skip debt payments and
+        // investments: those are already tracked by the Debt Tracker and the
+        // Invest & Debt group, so surfacing them AGAIN as "detected
+        // subscriptions" double-reports the same commitment.
+        let expenses = allTransactions.filter {
+            $0.amount < 0 && $0.txSubtype != .transfer
+            && $0.category != .debtPayment && $0.category != .investment
+        }
+        let dismissed = dismissedRecurring
         var grouped: [String: [TxRecord]] = [:]
         for tx in expenses {
-            grouped[recurringKey(for: tx.name), default: []].append(tx)
+            let key = recurringKey(for: tx.name)
+            if dismissed.contains(key) { continue }   // user hid this pattern
+            grouped[key, default: []].append(tx)
         }
 
         var patterns: [RecurringPattern] = []

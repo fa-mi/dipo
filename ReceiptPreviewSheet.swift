@@ -21,6 +21,9 @@ struct ReceiptPreviewSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
     @Query(sort: \BankCard.sortOrder) private var cards: [BankCard]
+    /// Whole history — lets a scanned receipt benefit from the same learned
+    /// merchant categories a typed transaction gets.
+    @Query private var allTransactions: [TxRecord]
 
     /// The scan result. We mutate this locally as the user edits.
     @State var scan: ReceiptScanResult
@@ -94,6 +97,16 @@ struct ReceiptPreviewSheet: View {
                 amountText = formatAmountForEditing(scan.amount, currency: scan.currency)
                 if let idx = availableCards.firstIndex(where: { $0.resolvedCurrency == scan.currency }) {
                     selectedCardIndex = idx
+                }
+                // The parser only knows the shipped keyword map — it is a pure
+                // function with no access to the user's data. History is the
+                // better answer, so apply it here where the user can still see
+                // and change the result before saving. Without this, DiPo
+                // learned "warkop → Food & Drinks" from typed entries and then
+                // forgot it the moment the same place was scanned.
+                if let learned = SmartBudgetManager.learnedCategory(
+                    for: scan.merchantName, transactions: allTransactions) {
+                    scan.category = learned.category
                 }
             }
             .sheet(isPresented: $showImageZoom) {

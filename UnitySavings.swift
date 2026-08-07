@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 import FirebaseFirestore
 import FirebaseAuth
 
@@ -1148,13 +1149,55 @@ struct AddContributionSheet: View {
     let goal: SharedGoal
     let onDone: () async -> Void
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var context
+    @Query(sort: \BankCard.sortOrder) private var cards: [BankCard]
     @State private var unity = UnitySavingsService.shared
     @State private var amountText = ""
     @State private var note = ""
     @State private var saving = false
+    @State private var sourceCardID: UUID? = nil
 
     private var amount: Double { Double(amountText.replacingOccurrences(of: ",", with: ".")) ?? 0 }
-    private var canSave: Bool { amount > 0 && !saving }
+    /// Contributing to a shared goal moves the user's OWN money out of their
+    /// OWN account — it must leave the same transaction trail as any other
+    /// outflow, otherwise the spending record (and every analysis built on it)
+    /// has a hole.
+    private var fundingCards: [BankCard] { cards.filter { !$0.isCreditCard } }
+    private var selectedCard: BankCard? {
+        if let id = sourceCardID, let c = fundingCards.first(where: { $0.id == id }) { return c }
+        return fundingCards.first
+    }
+    private var canSave: Bool { amount > 0 && !saving && selectedCard != nil }
+
+    /// Book the contribution locally. The shared goal itself lives in
+    /// Firestore, but the cash left a local account, so DiPo records it the
+    /// same way it records a personal goal deposit.
+    private func recordLocalTransaction() {
+        guard let card = selectedCard else { return }
+        let cm = CurrencyManager.shared
+        let debited = cm.convert(amount, from: goal.currency, to: card.resolvedCurrency)
+        card.transactions.append(TxRecord(
+            name: String(format: loc("savings.tx_name"), goal.title),
+            date: .now, amount: -debited, type: "tx.type.purchase",
+            icon: goal.emoji, iconBgHex: TxCategory.investment.iconBg,
+            category: .investment, currency: card.resolvedCurrency,
+            notes: "tx.note.goal_deposit"))
+        do {
+            try context.save()
+        } catch {
+            // The contribution is already in Firestore at this point, so a
+            // failed local save means the two diverge: the shared goal shows
+            // the money, this device's spending record does not. Swallowing it
+            // with `try?` made that invisible — surface it so the user can
+            // re-add the expense by hand.
+            print("[DiPo][unity] ✗ local contribution tx not saved: \(error.localizedDescription)")
+            NotificationManager.shared.post(AppNotificationItem(
+                icon: "exclamationmark.triangle.fill", iconColorHex: "#FF6B6B",
+                title: loc("unity.local_save_failed_title"),
+                body: String(format: loc("unity.local_save_failed_body"), goal.title),
+                time: loc("notif.time.now"), isUrgent: true), pushToDevice: false)
+        }
+    }
 
     var body: some View {
         NavigationStack {
@@ -1173,12 +1216,46 @@ struct AddContributionSheet: View {
                     TextField(loc("unity.note_ph"), text: $note)
                         .font(.system(size: 14)).padding(.horizontal, 16).padding(.vertical, 12)
                         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14)).padding(.horizontal, 22)
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(loc("savings.source_account"))
+                            .font(.system(size: 13, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                        if fundingCards.isEmpty {
+                            Text(loc("savings.reconcile_no_account"))
+                                .font(.system(size: 11, weight: .medium)).foregroundStyle(AppTheme.orange)
+                                .fixedSize(horizontal: false, vertical: true)
+                        } else {
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 8) {
+                                    ForEach(fundingCards) { card in
+                                        let isOn = (selectedCard?.id == card.id)
+                                        Button {
+                                            HapticManager.shared.tap(); sourceCardID = card.id
+                                        } label: {
+                                            Text(card.pickerLabel)
+                                                .font(.system(size: 12, weight: .semibold))
+                                                .foregroundStyle(isOn ? .white : AppTheme.textSecondary)
+                                                .padding(.horizontal, 12).padding(.vertical, 7)
+                                                .background(isOn ? AppTheme.purple : AppTheme.cardDark, in: Capsule())
+                                                .overlay(Capsule().stroke(AppTheme.purple.opacity(isOn ? 0 : 0.25), lineWidth: 1))
+                                        }
+                                        .buttonStyle(ScaleButtonStyle())
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 22)
                     Button {
                         saving = true
                         Task {
                             let ok = await unity.addContribution(goal: goal, amount: amount, note: note.trimmingCharacters(in: .whitespaces))
                             saving = false
-                            if ok { HapticManager.shared.success(); await onDone(); dismiss() } else { HapticManager.shared.error() }
+                            if ok {
+                                recordLocalTransaction()
+                                HapticManager.shared.success(); await onDone(); dismiss()
+                            } else { HapticManager.shared.error() }
                         }
                     } label: {
                         Text(loc("unity.add_savings")).font(.system(size: 16, weight: .bold)).foregroundStyle(.white)
