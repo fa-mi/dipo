@@ -287,6 +287,11 @@ final class AuthViewModel {
         // sent through the setup flow again (they need to choose between
         // signing back in vs. continuing as guest).
         Keychain.delete(key: kSetupDone)
+        // Same rule as the Profile sign-out: reset entitlement state before
+        // clearing the session, or a Royal plan survives into the next account.
+        if let uid = UserSession.shared.userID {
+            PremiumManager.shared.onLogout(userID: uid)
+        }
         UserSession.shared.signOut()
         userName = ""
         setupStep = .socialLogin; errorMessage = nil

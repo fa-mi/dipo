@@ -20,6 +20,29 @@ extension UNNotificationSound {
 
 // MARK: - In-App Notification Item
 
+/// Where a notification can send the user next. Kept as raw strings on the
+/// item so persisted notifications survive adding new routes.
+enum NotificationRoute: String {
+    case smartBudget
+    case debt
+    case savingsGoals
+
+    var actionLabel: String {
+        switch self {
+        case .smartBudget:  return loc("notif.route.budget")
+        case .debt:         return loc("notif.route.debt")
+        case .savingsGoals: return loc("notif.route.goals")
+        }
+    }
+    var notificationName: Notification.Name {
+        switch self {
+        case .smartBudget:  return .requestOpenSmartBudget
+        case .debt:         return .requestOpenDebt
+        case .savingsGoals: return .requestOpenSavingsGoals
+        }
+    }
+}
+
 struct AppNotificationItem: Identifiable, Codable {
     let id: UUID
     let icon: String
@@ -48,13 +71,23 @@ struct AppNotificationItem: Identifiable, Codable {
     /// would fail to decode old items.
     var kind: String?
 
+    /// What to actually DO about this, in the user's own numbers. An alert that
+    /// only states a problem leaves the user to work out the remedy — this
+    /// carries the reasoning and the concrete next step. Optional for Codable
+    /// back-compat with items saved before it existed.
+    var advice: String?
+
+    /// Screen this notification can send the user to (see
+    /// `NotificationRoute`). Renders as a button in the detail sheet.
+    var route: String?
+
     /// True when this notification is an admin support-ticket reply.
     var isTicketReply: Bool { kind == "ticket_reply" }
 
     init(icon: String, iconColorHex: String, title: String, body: String,
          time: String, isUrgent: Bool = false,
          imageUrl: String? = nil, linkUrl: String? = nil,
-         kind: String? = nil) {
+         kind: String? = nil, advice: String? = nil, route: String? = nil) {
         self.id           = UUID()
         self.icon         = icon
         self.iconColorHex = iconColorHex
@@ -67,6 +100,8 @@ struct AppNotificationItem: Identifiable, Codable {
         self.imageUrl     = imageUrl
         self.linkUrl      = linkUrl
         self.kind         = kind
+        self.advice       = advice
+        self.route        = route
     }
 
     var iconColor: Color { Color(hex: iconColorHex) }
@@ -198,25 +233,68 @@ final class NotificationManager {
         save()
     }
 
-    func postBudgetAlert(group: String, pct: Int) {
-        post(AppNotificationItem(icon: "exclamationmark.triangle.fill", iconColorHex: "#FF6B6B",
-            title: String(format: loc("notif.budget_alert_title"), group),
-            body:  String(format: loc("notif.budget_alert_body"), pct, group.lowercased()),
-            time:  loc("notif.time.now"), isUrgent: true))
+    /// Smart Budget over-budget alert for one group (Daily needs / Lifestyle).
+    /// Fires a device push + an in-app bell item, at most once per pay-cycle per
+    /// group (`cycleKey` identifies the current cycle). Previously this method
+    /// existed but was never called — so users never got an over-budget alert
+    /// even while the Smart Budget screen showed "over budget" in red.
+    /// - Parameters:
+    ///   - overAmount: how much past the target, in money. A percentage alone
+    ///     ("1% above") tells the user nothing they can act on — Rp 82.000 does.
+    ///   - advice: reasoning plus the concrete next step, already formatted.
+    static func postBudgetGroupAlert(group: String, overAmount: Double, limit: Double,
+                                     currency: String, cycleKey: String,
+                                     advice: String) {
+        let dedupKey = "budget_alert_\(group.lowercased())_\(cycleKey)"
+        guard !UserDefaults.standard.bool(forKey: dedupKey) else { return }
+        UserDefaults.standard.set(true, forKey: dedupKey)
+
+        let cm = CurrencyManager.shared
+        let title = String(format: loc("notif.budget_alert_title"), group)
+        let body  = String(format: loc("notif.budget_alert_body"),
+                           cm.formatted(overAmount, currency: currency),
+                           group.lowercased(),
+                           cm.formatted(limit, currency: currency))
+
+        let content   = UNMutableNotificationContent()
+        content.title = title
+        content.body  = body
+        content.sound = .dipo
+        content.badge = 1
+        UNUserNotificationCenter.current().add(
+            UNNotificationRequest(
+                identifier: "smart_\(dedupKey)",
+                content: content,
+                trigger: UNTimeIntervalNotificationTrigger(timeInterval: 5, repeats: false)
+            )
+        )
+
+        NotificationManager.shared.post(AppNotificationItem(
+            icon: "exclamationmark.triangle.fill", iconColorHex: "#FF6B6B",
+            title: title, body: body, time: loc("notif.time.now"), isUrgent: true,
+            advice: advice, route: NotificationRoute.smartBudget.rawValue
+        ), pushToDevice: false)
     }
 
-    func postDebtReminder(name: String, amount: String, dueDay: Int) {
+    /// - Parameters:
+    ///   - advice: reasoning + next step. Missing a due date has a real cost
+    ///     (late fees, and on a revolving card, interest), so the reminder
+    ///     should say what happens and where to act — not just the date.
+    func postDebtReminder(name: String, amount: String, dueDay: Int,
+                          advice: String? = nil) {
         post(AppNotificationItem(icon: "creditcard.trianglebadge.exclamationmark", iconColorHex: "#FF6B6B",
             title: loc("notif.debt_due_title"),
             body:  String(format: loc("notif.debt_due_body"), name, amount, dueDay),
-            time:  loc("notif.time.upcoming"), isUrgent: true))
+            time:  loc("notif.time.upcoming"), isUrgent: true,
+            advice: advice, route: NotificationRoute.debt.rawValue))
     }
 
-    func postSavingsGoalReached(name: String, emoji: String) {
+    func postSavingsGoalReached(name: String, emoji: String, advice: String? = nil) {
         post(AppNotificationItem(icon: "star.fill", iconColorHex: "#FB923C",
             title: String(format: loc("notif.goal_reached_title"), emoji),
             body:  String(format: loc("notif.goal_reached_body"), name),
-            time:  loc("notif.time.now"), isUrgent: true))
+            time:  loc("notif.time.now"), isUrgent: true,
+            advice: advice, route: NotificationRoute.savingsGoals.rawValue))
     }
 
     func postSmartInsight(title: String, body: String) {
@@ -621,7 +699,15 @@ final class NotificationManager {
     /// De-duplicated to once per calendar day via UserDefaults so a user
     /// who opens the app five times doesn't get spammed.
     @MainActor
-    static func checkOverspendPush(income: Double, expense: Double, currencyCode: String) {
+    /// - Parameters:
+    ///   - topCategory: biggest spending category this month, if known.
+    ///   - topCategoryAmount: what it cost. Naming the driver is the only
+    ///     actionable thing available to a free user here — Smart Budget's
+    ///     shift-the-split advice is Royal-only, but "Food & Drinks is Rp X of
+    ///     it" is something anyone can act on.
+    static func checkOverspendPush(income: Double, expense: Double, currencyCode: String,
+                                   topCategory: String? = nil,
+                                   topCategoryAmount: Double = 0) {
         guard income > 0, expense > income else { return }
 
         // Once-per-day dedup. Key holds the yyyy-MM-dd of the last push.
@@ -648,11 +734,24 @@ final class NotificationManager {
 
         // In-app item too — so it shows in the notification center bell.
         // pushToDevice:false — the device push was already fired above.
+        let cm = CurrencyManager.shared
+        let advice: String = {
+            if let topCategory, topCategoryAmount > 0 {
+                let share = expense > 0 ? Int((topCategoryAmount / expense * 100).rounded()) : 0
+                return String(format: loc("notif.overspend_advice_category"),
+                              topCategory,
+                              cm.formatted(topCategoryAmount, currency: currencyCode),
+                              share, overBy)
+            }
+            return String(format: loc("notif.overspend_advice_generic"), overBy)
+        }()
+
         NotificationManager.shared.post(AppNotificationItem(
             icon: "exclamationmark.triangle.fill", iconColorHex: "#FF5B5B",
             title: loc("notif.overspend.title"),
             body:  String(format: loc("notif.overspend.body"), overBy),
-            time:  loc("notif.time.now"), isUrgent: true
+            time:  loc("notif.time.now"), isUrgent: true,
+            advice: advice
         ), pushToDevice: false)
     }
 }
@@ -916,6 +1015,59 @@ struct NotificationDetailView: View {
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         }
 
+                        // Reasoning + the concrete next step. An alert that only
+                        // states a problem makes the user work out the remedy
+                        // themselves; this is what turns the bell into a
+                        // decision aid rather than a scoreboard.
+                        if let advice = item.advice, !advice.isEmpty {
+                            VStack(alignment: .leading, spacing: 8) {
+                                HStack(spacing: 7) {
+                                    Image(systemName: "lightbulb.fill")
+                                        .font(.system(size: 13))
+                                        .foregroundStyle(AppTheme.orange)
+                                    Text(loc("notif.advice_title"))
+                                        .font(.system(size: 13, weight: .semibold))
+                                        .foregroundStyle(AppTheme.textPrimary)
+                                }
+                                Text(advice)
+                                    .font(.system(size: 14))
+                                    .foregroundStyle(AppTheme.textSecondary)
+                                    .lineSpacing(3)
+                                    .fixedSize(horizontal: false, vertical: true)
+
+                                if let routeRaw = item.route,
+                                   let route = NotificationRoute(rawValue: routeRaw) {
+                                    Button {
+                                        HapticManager.shared.tap()
+                                        // Dismiss first so the destination sheet
+                                        // isn't presented behind this one.
+                                        dismiss()
+                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                                            NotificationCenter.default.post(
+                                                name: route.notificationName, object: nil)
+                                        }
+                                    } label: {
+                                        HStack(spacing: 8) {
+                                            Text(route.actionLabel)
+                                                .font(.system(size: 14, weight: .semibold))
+                                            Image(systemName: "arrow.right")
+                                                .font(.system(size: 12, weight: .semibold))
+                                        }
+                                        .foregroundStyle(.white)
+                                        .frame(maxWidth: .infinity)
+                                        .padding(.vertical, 13)
+                                        .background(AppTheme.purple, in: Capsule())
+                                    }
+                                    .buttonStyle(ScaleButtonStyle())
+                                    .padding(.top, 4)
+                                }
+                            }
+                            .padding(14)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(AppTheme.orange.opacity(0.08),
+                                        in: RoundedRectangle(cornerRadius: 16))
+                        }
+
                         // "Learn more" link button — only when a valid URL
                         // is attached.
                         if let link {
@@ -1054,9 +1206,159 @@ enum NotificationScheduler {
         NotificationManager.scheduleInactivityNudge(lastTxDate: lastTxDate)
 
         // ── Overspend push ─────────────────────────────────────────────
+        let topCatEntry = perCategory.filter { $0.value > 0 }.max { $0.value < $1.value }
         NotificationManager.checkOverspendPush(
-            income: monthIncome, expense: monthExpense, currencyCode: preferred
+            income: monthIncome, expense: monthExpense, currencyCode: preferred,
+            topCategory: topCatEntry?.key.displayLabel,
+            topCategoryAmount: topCatEntry?.value ?? 0
         )
+
+        // ── Debt due-date reminders ────────────────────────────────────
+        scheduleDebtReminders(context: context, preferred: preferred, cal: cal, now: now)
+
+        // ── Smart Budget per-group over-budget alert ───────────────────
+        checkSmartBudgetAlerts(txs: txs, context: context, preferred: preferred)
+    }
+
+    /// Warn a few days before each active debt's due date. `postDebtReminder`
+    /// has existed since the debt tracker shipped but was never called, so
+    /// instalments could quietly fall past due with no nudge at all.
+    ///
+    /// Debt tracking is Royal-only, so this follows the same entitlement.
+    private static func scheduleDebtReminders(context: ModelContext, preferred: String,
+                                              cal: Calendar, now: Date) {
+        guard PremiumManager.shared.canAccess(.smartDebt) else { return }
+        let debts: [DebtRecord] = (try? context.fetch(FetchDescriptor<DebtRecord>())) ?? []
+        let cm = CurrencyManager.shared
+
+        for debt in debts where debt.isActive && debt.currentBalance > 0 && !debt.manuallyClosed {
+            let day = min(max(debt.dueDayOfMonth, 1), 28)
+            var comps = cal.dateComponents([.year, .month], from: now)
+            comps.day = day
+            var due = cal.safeDate(from: comps)
+            // Already past this month → aim at next month's due date.
+            if due < cal.startOfDay(for: now) {
+                due = cal.safeDate(byAdding: .month, value: 1, to: due)
+            }
+            let daysUntil = cal.dateComponents([.day], from: cal.startOfDay(for: now),
+                                               to: cal.startOfDay(for: due)).day ?? 99
+            // Three days out is early enough to move money, late enough not to
+            // be forgotten.
+            guard (0...3).contains(daysUntil) else { continue }
+
+            // Once per debt per month.
+            let key = "debt_due_\(debt.id.uuidString)_\(cal.component(.year, from: due))_\(cal.component(.month, from: due))"
+            guard !UserDefaults.standard.bool(forKey: key) else { continue }
+            UserDefaults.standard.set(true, forKey: key)
+
+            let minPay = cm.convert(debt.effectiveMinimumPayment, from: debt.currency, to: preferred)
+            let balance = cm.convert(debt.currentBalance, from: debt.currency, to: preferred)
+            let advice: String = {
+                if debt.annualInterestRate > 0 {
+                    // Interest-bearing: the cost of being late is concrete.
+                    let monthlyCost = balance * (debt.annualInterestRate / 100 / 12)
+                    return String(format: loc("notif.debt_advice_interest"),
+                                  cm.formatted(minPay, currency: preferred),
+                                  Int(debt.annualInterestRate),
+                                  cm.formatted(monthlyCost, currency: preferred))
+                }
+                let months = minPay > 0 ? Int(ceil(balance / minPay)) : 0
+                return String(format: loc("notif.debt_advice_zero"),
+                              cm.formatted(minPay, currency: preferred), months)
+            }()
+
+            NotificationManager.shared.postDebtReminder(
+                name: debt.name,
+                amount: cm.formatted(minPay, currency: preferred),
+                dueDay: day,
+                advice: advice)
+        }
+    }
+
+    /// Fire an over-budget alert for any Smart Budget group that has exceeded
+    /// its target this pay cycle. Mirrors the in-app Smart Budget screen: income
+    /// comes from the salary schedule and the window is pay-cycle-aware, so an
+    /// alert lines up with the red "over budget" banner the user already sees.
+    /// Deduped once per cycle per group inside `postBudgetGroupAlert`.
+    private static func checkSmartBudgetAlerts(txs: [TxRecord], context: ModelContext, preferred: String) {
+        let mgr = SmartBudgetManager.shared
+        // `hasActiveBudget`, NOT the raw `isEnabled` toggle. `isEnabled` is a
+        // preference persisted in UserDefaults that deliberately survives
+        // logout and subscription changes — so a user who set it while Royal
+        // kept receiving Royal-only budget alerts after their subscription
+        // lapsed. This is exactly the rule `hasActiveBudget`'s own doc comment
+        // warns about; it was being violated here.
+        guard mgr.hasActiveBudget else { return }
+        let cal = Calendar.current
+        let cm  = CurrencyManager.shared
+
+        // Pay-cycle window + income from active salary schedules.
+        let salaries: [SalarySchedule] = (try? context.fetch(FetchDescriptor<SalarySchedule>())) ?? []
+        let budgetConfigs: [CardBudgetConfig] = (try? context.fetch(FetchDescriptor<CardBudgetConfig>())) ?? []
+        let active = salaries.filter { $0.isActive }
+        let periodStart: Date = {
+            if let day = active.first?.dayOfMonth { return StatPeriod.payCycleRange(payDay: day).start }
+            return cal.date(from: cal.dateComponents([.year, .month], from: Date())) ?? Date()
+        }()
+
+        // Stated salary income first (the budget's signal even before payday);
+        // else income transactions logged within the window.
+        var income = active.reduce(0.0) { $0 + cm.convert($1.amount, from: $1.currency, to: preferred) }
+        if income <= 0 {
+            income = txs.filter { $0.date >= periodStart && $0.amount > 0 && $0.txSubtype != .transfer }
+                .reduce(0.0) { $0 + cm.convert($1.amount, from: ($1.currency.isEmpty ? preferred : $1.currency), to: preferred) }
+        }
+        guard income > 0 else { return }
+
+        let windowTx = txs.filter { $0.date >= periodStart && $0.amount < 0 && $0.txSubtype != .transfer }
+        let cycleKey = ISO8601DateFormatter.dayString(from: periodStart)
+
+        // Only spending groups can be "over budget". Invest & Debt being UNDER
+        // its allocation is a savings shortfall, not an overspend — not alerted.
+        for group in [BudgetGroup.daily, .lifestyle] {
+            // periodStart required — otherwise spent() clips the cycle back to
+            // the calendar month and the alert misses the pre-1st spending.
+            let spent = mgr.spent(in: group, transactions: windowTx, targetCurrency: preferred,
+                                  periodStart: periodStart)
+            // Per-card ratios, not the globals: a user whose budget follows one
+            // card has an override, and alerting against the global target
+            // fired warnings that contradicted the budget screen they'd open.
+            let ratio = mgr.ratio(for: group, cardID: mgr.budgetCardID, configs: budgetConfigs)
+            let limit = income * ratio
+            guard limit > 0, spent > limit else { continue }   // strictly over target
+            let over = spent - limit
+
+            // Where the remedy can come from: the OTHER spending group's unused
+            // headroom. Naming a real number turns "you're over" into a choice
+            // the user can actually make.
+            let otherGroup: BudgetGroup = (group == .daily) ? .lifestyle : .daily
+            let otherRatio = mgr.ratio(for: otherGroup, cardID: mgr.budgetCardID, configs: budgetConfigs)
+            let otherLimit = income * otherRatio
+            let otherSpent = mgr.spent(in: otherGroup, transactions: windowTx,
+                                       targetCurrency: preferred, periodStart: periodStart)
+            let otherHeadroom = max(otherLimit - otherSpent, 0)
+
+            let daysLeft = max((cal.dateComponents([.day], from: Date(),
+                                                   to: cal.date(byAdding: .month, value: 1, to: periodStart) ?? Date()).day ?? 0), 0)
+
+            let advice: String = {
+                if otherHeadroom >= over {
+                    // A shift covers it — no new money needed, just a decision.
+                    return String(format: loc("notif.budget_advice_shift"),
+                                  cm.formatted(over, currency: preferred),
+                                  otherGroup.label.lowercased(),
+                                  cm.formatted(otherHeadroom, currency: preferred),
+                                  daysLeft)
+                }
+                // Nothing spare anywhere: the plan itself is the problem.
+                return String(format: loc("notif.budget_advice_replan"),
+                              cm.formatted(over, currency: preferred), daysLeft)
+            }()
+
+            NotificationManager.postBudgetGroupAlert(
+                group: group.label, overAmount: over, limit: limit,
+                currency: preferred, cycleKey: cycleKey, advice: advice)
+        }
     }
 }
 

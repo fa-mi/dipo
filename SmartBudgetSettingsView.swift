@@ -336,13 +336,17 @@ struct SmartBudgetSettingsSheet: View {
         }
         .sheet(isPresented: $showRecommendation) {
             SmartRecommendationView(onApply: {
-                // Sync the editor to the applied global ratios so the Settings
-                // sliders reflect what DiPo just set.
-                isEnabled     = true
-                editingPerCard = false
-                dailyPct      = Int(SmartBudgetManager.shared.dailyRatio * 100)
-                lifestylePct  = Int(SmartBudgetManager.shared.lifestyleRatio * 100)
-                investPct     = Int(SmartBudgetManager.shared.investDebtRatio * 100)
+                // Sync the editor to what was just applied. Read through
+                // `ratios(forCardID:)` rather than the globals directly: the
+                // apply step also updates the selected card's override, and
+                // this screen may be showing that card — reading globals here
+                // made an applied plan look like it hadn't landed.
+                isEnabled = true
+                let applied = SmartBudgetManager.shared.ratios(forCardID: selectedCardID, configs: cardConfigs)
+                dailyPct     = Int((applied.daily * 100).rounded())
+                lifestylePct = Int((applied.lifestyle * 100).rounded())
+                investPct    = Int((applied.investDebt * 100).rounded())
+                reconcileSelectedPreset()
             })
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
@@ -598,33 +602,10 @@ struct SmartBudgetSettingsSheet: View {
         BudgetRatioCard(group: .lifestyle,  pct: $lifestylePct, otherTotal: dailyPct + investPct).padding(.horizontal, 22)
         BudgetRatioCard(group: .investDebt, pct: $investPct,     otherTotal: dailyPct + lifestylePct).padding(.horizontal, 22)
 
-        VStack(alignment: .leading, spacing: 10) {
-            Text(loc("budget.presets")).font(.system(size: 13, weight: .semibold)).foregroundStyle(AppTheme.textSecondary).padding(.horizontal, 22)
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 10) {
-                    let presets: [(String, Int, Int, Int, String)] = [
-                        ("50/30/20", 50, 30, 20, loc("budget.preset.classic")),
-                        ("60/20/20", 60, 20, 20, loc("budget.preset.conservative")),
-                        ("40/30/30", 40, 30, 30, loc("budget.preset.aggressive")),
-                        ("50/20/30", 50, 20, 30, loc("budget.preset.debt_focus"))
-                    ]
-                    ForEach(presets, id: \.0) { p in
-                        Button {
-                            HapticManager.shared.tap()
-                            withAnimation(.spring(response: 0.3)) { dailyPct=p.1; lifestylePct=p.2; investPct=p.3 }
-                        } label: {
-                            VStack(spacing: 3) {
-                                Text(p.0).font(.system(size: 14, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
-                                Text(p.4).font(.system(size: 10)).foregroundStyle(AppTheme.textSecondary)
-                            }
-                            .padding(.horizontal, 16).padding(.vertical, 10)
-                            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 12))
-                            .overlay(RoundedRectangle(cornerRadius: 12).stroke(AppTheme.accent.opacity(0.2), lineWidth: 1))
-                        }.buttonStyle(ScaleButtonStyle())
-                    }
-                }.padding(.horizontal, 22)
-            }
-        }
+        // NOTE: the numeric "quick presets" row that used to sit here was
+        // removed — the Profile Presets gallery above this section already
+        // offers the same splits with better labels, and two preset pickers on
+        // one screen left the user unsure which one was authoritative.
 
         VStack(alignment: .leading, spacing: 10) {
             Text(loc("budget.whats_in")).font(.system(size: 13, weight: .semibold)).foregroundStyle(AppTheme.textSecondary).padding(.horizontal, 22)

@@ -1310,6 +1310,7 @@ struct ProfileView: View {
         // delete, orphan rows linger in the store referencing deleted card IDs
         // and accumulate forever every time the user resets.
         try? context.delete(model: CardBudgetConfig.self)
+        try? context.delete(model: CycleIntent.self)
         try? context.delete(model: RecurringExpense.self)
         try? context.save()
         UserDefaults.standard.removeObject(forKey: "profile_photo")
@@ -1661,6 +1662,12 @@ extension Notification.Name {
     /// (`dipo://support`) is opened. MainTabView presents the Support screen
     /// so the user lands on their ticket thread from anywhere.
     static let requestOpenSupport        = Notification.Name("requestOpenSupport")
+    /// Posted when a notification's "what to do next" button is tapped, so the
+    /// alert can hand the user straight to the screen that fixes it instead of
+    /// leaving them to find it. MainTabView owns the sheets.
+    static let requestOpenSmartBudget    = Notification.Name("requestOpenSmartBudget")
+    static let requestOpenDebt           = Notification.Name("requestOpenDebt")
+    static let requestOpenSavingsGoals   = Notification.Name("requestOpenSavingsGoals")
 }
 
 // MARK: - Danger Confirm Sheet

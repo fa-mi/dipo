@@ -26,6 +26,16 @@ extension BankCard {
         isHidden ? "•••• •••• •••• ••••" : formattedNumber
     }
 
+    /// Compact one-line name for choosers ("BRI ·· 0969", "GoPay"). Wallets show
+    /// their provider; cards show the holder name plus the last four digits so
+    /// two cards from the same bank stay distinguishable.
+    var pickerLabel: String {
+        let last4 = String(cardNumber.filter(\.isNumber).suffix(4))
+        let name = isDigitalWallet && !walletProvider.isEmpty ? walletProvider : holderName
+        if name.isEmpty { return last4.isEmpty ? loc("card.untitled") : "·· \(last4)" }
+        return last4.isEmpty ? name : "\(name) ·· \(last4)"
+    }
+
     /// Phone number shown in the UI, respecting this card's individual hide/show state.
     /// Hidden  → "•••••••• 7890"  (last 4 always visible for wallet identification)
     /// Visible → full phone number
@@ -61,6 +71,48 @@ extension BankCard {
     /// Total balance (seed + all transactions) in the card's own currency.
     func computedBalance() -> Double {
         balance + liveTransactionBalance()
+    }
+
+    // MARK: - Credit card math
+    //
+    // For a credit card, "balance" isn't cash you have — it's what you OWE.
+    // owed = openingOwed − Σ(transactions since creditSince). A purchase (amount
+    // < 0) raises owed; a payment (amount > 0, from a transfer) lowers it. Only
+    // transactions on/after `creditSince` count, so converting a card with
+    // history doesn't retroactively recompute the debt.
+
+    /// Amount currently owed on this credit card, in its own currency. Clamped
+    /// at 0 — overpaying leaves a zero balance, not a negative "debt".
+    func owedBalance() -> Double {
+        guard isCreditCard else { return 0 }
+        let since = creditSince ?? .distantPast
+        let movement = transactions
+            .filter { $0.date >= since }
+            .reduce(0.0) { sum, tx in
+                sum + CurrencyManager.shared.convert(tx.amount, from: tx.currency, to: resolvedCurrency)
+            }
+        return max(openingOwed - movement, 0)
+    }
+
+    /// Credit still available to spend (limit − owed), never below 0.
+    func availableCredit() -> Double {
+        guard isCreditCard else { return 0 }
+        return max(creditLimit - owedBalance(), 0)
+    }
+
+    /// Fraction of the limit used, 0…1 (for a usage bar).
+    var creditUtilization: Double {
+        guard isCreditCard, creditLimit > 0 else { return 0 }
+        return min(owedBalance() / creditLimit, 1)
+    }
+
+    /// Formatted owed amount.
+    var formattedOwed: String {
+        CurrencyManager.shared.formatted(owedBalance(), currency: resolvedCurrency)
+    }
+    /// Formatted available credit.
+    var formattedAvailable: String {
+        CurrencyManager.shared.formatted(availableCredit(), currency: resolvedCurrency)
     }
 
     /// Formatted total balance including a leading "-" when negative.

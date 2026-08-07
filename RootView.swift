@@ -64,6 +64,14 @@ enum WidgetDataSync {
 
     /// Recompute monthly totals from SwiftData, write pre-formatted strings
     /// to the shared store, and tell WidgetKit to redraw.
+    /// Push just the entitlement flag and reload. Used when the subscription
+    /// changes: the numbers are unchanged, only who may read them.
+    static func setRoyalFlag(_ isRoyal: Bool) {
+        guard let store = UserDefaults(suiteName: appGroupID) else { return }
+        store.set(isRoyal, forKey: Key.isRoyal)
+        WidgetCenter.shared.reloadAllTimelines()
+    }
+
     static func refresh(context: ModelContext) {
         guard let store = shared else { return }
 
@@ -75,6 +83,10 @@ enum WidgetDataSync {
         let preferred = CurrencyManager.shared.preferredCurrency
         var expenses: Double = 0
         var income: Double   = 0
+        // Salary income actually received this month — tracked so we can swap in
+        // the STATED schedule below without double-counting a salary that has
+        // already landed.
+        var salaryIncome: Double = 0
         // Day-to-day (variable) spend only — excludes fixed monthly commitments
         // so the weekly average matches StatisticsView (a one-off rent/debt
         // shouldn't inflate a "per week" figure).
@@ -103,11 +115,24 @@ enum WidgetDataSync {
                     if isVariable { variableExpenses += abs(converted) }
                 } else {
                     income += converted
+                    if tx.category == .salary { salaryIncome += converted }
                 }
             }
         }
         if expenses < 0 { expenses = 0 }
         if variableExpenses < 0 { variableExpenses = 0 }
+
+        // Match the app: income is your STATED monthly income (salary schedule)
+        // when you have one, so the widget shows Rp 10.000.000 all month instead
+        // of Rp 0 until payday. Non-salary income (bonus/freelance) logged this
+        // month is added on top; the salary already received is swapped out for
+        // the schedule so it isn't counted twice.
+        let schedules: [SalarySchedule] = (try? context.fetch(FetchDescriptor<SalarySchedule>())) ?? []
+        let scheduled = schedules.filter { $0.isActive }
+            .reduce(0.0) { $0 + CurrencyManager.shared.convert($1.amount, from: $1.currency, to: preferred) }
+        if scheduled > 0 {
+            income = scheduled + max(income - salaryIncome, 0)
+        }
 
         let expensesFormatted = CurrencyManager.shared.formatted(expenses, currency: preferred)
         let incomeFormatted   = CurrencyManager.shared.formatted(income,   currency: preferred)

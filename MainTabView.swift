@@ -16,6 +16,11 @@ struct MainTabView: View {
     /// `dipo://support`). Presented here so the user reaches their ticket
     /// thread from any tab.
     @State private var showSupport = false
+    // Destinations a notification's "what to do next" button can open. Owned
+    // here so an alert tapped from any tab lands on the right screen.
+    @State private var showBudgetFromNotif = false
+    @State private var showDebtFromNotif = false
+    @State private var showGoalsFromNotif = false
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -93,6 +98,30 @@ struct MainTabView: View {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
                 showSupport = true
             }
+        }
+        .sheet(isPresented: $showBudgetFromNotif) {
+            SmartBudgetSettingsSheet()
+                .presentationDetents([.large]).presentationDragIndicator(.visible)
+                .presentationBackground(AppTheme.bg).preferredColorScheme(appColorScheme())
+        }
+        .sheet(isPresented: $showDebtFromNotif) {
+            DebtView()
+                .presentationDetents([.large]).presentationDragIndicator(.visible)
+                .presentationBackground(AppTheme.bg).preferredColorScheme(appColorScheme())
+        }
+        .sheet(isPresented: $showGoalsFromNotif) {
+            WishlistView()
+                .presentationDetents([.large]).presentationDragIndicator(.visible)
+                .presentationBackground(AppTheme.bg).preferredColorScheme(appColorScheme())
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .requestOpenSmartBudget)) { _ in
+            showBudgetFromNotif = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .requestOpenDebt)) { _ in
+            showDebtFromNotif = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .requestOpenSavingsGoals)) { _ in
+            showGoalsFromNotif = true
         }
         .onReceive(NotificationCenter.default.publisher(for: .requestOpenPaywall)) { _ in
             // If the AddTransaction sheet happens to be open (rare — would

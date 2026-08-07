@@ -17,6 +17,20 @@ struct HomeView: View {
     /// one card; cards without a config row use SmartBudgetManager's global
     /// defaults. Looked up by `cardID == BankCard.id.uuidString`.
     @Query private var cardBudgetConfigs: [CardBudgetConfig]
+    /// For the Net Worth line: liabilities = credit-card owed + active debts.
+    @Query(filter: #Predicate<DebtRecord> { $0.isActive }) private var activeDebts: [DebtRecord]
+    /// Declared Monthly Expenses — surfaced on Home when a charge is imminent,
+    /// so the balance drop never comes as a surprise.
+    @Query private var recurringExpenses: [RecurringExpense]
+
+    /// The next DECLARED recurring charge due within 3 days (soonest first).
+    private var upcomingDeclaredRecurring: RecurringExpense? {
+        recurringExpenses
+            .filter { $0.isActive }
+            .map { ($0, RecurringDateEngine.daysUntil(dayOfMonth: $0.dayOfMonth)) }
+            .filter { $0.1 <= 3 }
+            .min { $0.1 < $1.1 }?.0
+    }
     // Observed so HomeView re-renders whenever budgetCardID changes
     @State private var budgetManager = SmartBudgetManager.shared
 
@@ -50,8 +64,55 @@ struct HomeView: View {
     }
 
     private var totalBalance: Double {
-        vm.cards.reduce(0.0) { $0 + $1.balance + $1.transactions.reduce(0) { $0 + $1.amount } }
+        // Cash only — credit cards are liabilities, not money you hold. They
+        // must never inflate the "total balance" figure.
+        //
+        // Every amount is converted to the preferred currency first. Summing
+        // raw values added a USD card's balance to an IDR one as if they were
+        // the same unit — and since `totalLiabilities` DID convert, net worth
+        // silently mixed converted debts with unconverted cash.
+        let cm = CurrencyManager.shared
+        let pref = cm.preferredCurrency
+        return vm.cards.filter { !$0.isCreditCard }
+            .reduce(0.0) { sum, card in
+                let cur = card.resolvedCurrency
+                let txSum = card.transactions.reduce(0.0) { txAcc, tx in
+                    txAcc + cm.convert(tx.amount, from: tx.currency.isEmpty ? cur : tx.currency, to: pref)
+                }
+                return sum + cm.convert(card.balance, from: cur, to: pref) + txSum
+            }
     }
+
+    /// Total liabilities: credit-card owed + active debt balances, in the
+    /// preferred currency.
+    private var totalLiabilities: Double {
+        let cm = CurrencyManager.shared
+        let pref = cm.preferredCurrency
+        let cc = vm.cards.filter { $0.isCreditCard }
+            .reduce(0.0) { $0 + cm.convert($1.owedBalance(), from: $1.resolvedCurrency, to: pref) }
+        let debt = activeDebts.reduce(0.0) { $0 + cm.convert($1.currentBalance, from: $1.currency, to: pref) }
+        return cc + debt
+    }
+    private var hasLiabilities: Bool { totalLiabilities > 0.5 }
+
+    /// Money already set aside in savings goals. This is the user's money —
+    /// leaving it out made someone with Rp 30M saved and Rp 12M of installments
+    /// look bankrupt. Only counts what is provably NOT still sitting in a
+    /// tracked account: deposits recorded as transactions (cash already went
+    /// down) plus balances the user confirmed are held outside DiPo. Anything
+    /// unconfirmed is left out until they answer the prompt on the goal, so
+    /// the same rupiah is never counted twice.
+    private var goalSavings: Double {
+        let cm = CurrencyManager.shared
+        let pref = cm.preferredCurrency
+        let tx = vm.cards.flatMap(\.transactions)
+        return activeGoals.reduce(0.0) {
+            $0 + cm.convert($1.netWorthContribution(from: tx), from: $1.currency, to: pref)
+        }
+    }
+
+    /// Net worth = cash + savings goals − liabilities.
+    private var netWorth: Double { totalBalance + goalSavings - totalLiabilities }
 
     // Transactions for the currently selected card only
     private var selectedCard: BankCard? {
@@ -67,7 +128,12 @@ struct HomeView: View {
     // Negative balance is per selected card
     private var selectedCardBalance: Double {
         guard let card = selectedCard else { return 0 }
-        return card.balance + card.transactions.reduce(0) { $0 + $1.amount }
+        // `computedBalance()` is the canonical figure the card face shows and it
+        // converts each transaction into the card's currency. Re-summing raw
+        // amounts here made the negative-balance warning disagree with the
+        // balance printed right above it whenever a card held a foreign-currency
+        // transaction.
+        return card.computedBalance()
     }
 
     private var selectedCardCurrency: String {
@@ -100,18 +166,34 @@ struct HomeView: View {
         let cal = Calendar.current
         let monthStart = cal.safeDate(from: cal.dateComponents([.year, .month], from: Date()))
         
-        // Per-card mode: only count income on the selected card
+        // Per-card mode: income on the selected card. Prefer the SALARY SCHEDULE
+        // for that card — month-to-date income alone reads as near-zero for the
+        // whole stretch before payday (a late payday like the 24th), which
+        // collapsed the budget limit and produced absurd insights ("416% over").
         if let card = budgetCard {
+            let cardSalaries = salarySchedules.filter { $0.isActive && $0.cardID == card.id }
+            let active = cardSalaries.isEmpty ? salarySchedules.filter { $0.isActive } : cardSalaries
+            func conv(_ tx: TxRecord) -> Double {
+                CurrencyManager.shared.convert(tx.amount, from: tx.currency.isEmpty ? budgetCurrency : tx.currency,
+                                               to: budgetCurrency)
+            }
+            // Stated monthly income only — same rule as the Smart Budget screen,
+            // so Home's insight and that screen can't disagree about the limit.
+            if !active.isEmpty {
+                return active.reduce(0.0) {
+                    $0 + CurrencyManager.shared.convert($1.amount, from: $1.currency, to: budgetCurrency)
+                }
+            }
             return card.transactions
                 .filter { $0.amount > 0 && $0.txSubtype != .transfer && $0.date >= monthStart }
-                .reduce(0.0) { sum, tx in
-                    let txCur = tx.currency.isEmpty ? budgetCurrency : tx.currency
-                    return sum + CurrencyManager.shared.convert(tx.amount, from: txCur, to: budgetCurrency)
-                }
+                .reduce(0.0) { $0 + conv($1) }
         }
         
         // Aggregate mode: prefer scheduled salary, otherwise sum all positive tx
-        let scheduled = salarySchedules.filter { $0.isActive }.reduce(0.0) { $0 + $1.amount }
+        // Convert — a USD freelance schedule beside an IDR salary was being
+        // added as a bare number, so budgets were sized off a nonsense income.
+        let scheduled = salarySchedules.filter { $0.isActive }
+            .reduce(0.0) { $0 + CurrencyManager.shared.toPreferred($1.amount, from: $1.currency) }
         if scheduled > 0 { return scheduled }
         return vm.cards.flatMap { $0.transactions }
             .filter { $0.amount > 0 && $0.txSubtype != .transfer && $0.date >= monthStart }
@@ -141,10 +223,15 @@ struct HomeView: View {
             return
         }
         let tx = budgetTransactions
+        // Scope insights to the PAY CYCLE (same window the Smart Budget screen
+        // uses) so Home and Smart Budget can't disagree about being over budget.
+        let cycleStart: Date? = salarySchedules.first(where: { $0.isActive })
+            .map { StatPeriod.payCycleRange(payDay: $0.dayOfMonth).start }
         cachedInsights = SmartBudgetManager.shared.evaluateAll(
             allTransactions: tx, income: totalMonthlyIncome,
             cardID: budgetCard?.id.uuidString, configs: cardBudgetConfigs,
-            targetCurrency: budgetCurrency, goals: activeGoals)
+            targetCurrency: budgetCurrency, goals: activeGoals,
+            periodStart: cycleStart)
         cachedAnomalies = SmartBudgetManager.shared.spendingAnomalies(allTransactions: tx)
         cachedRecurring = SmartBudgetManager.shared.detectRecurring(allTransactions: tx)
     }
@@ -222,9 +309,20 @@ struct HomeView: View {
                                 .transition(.move(edge: .top).combined(with: .opacity))
                         }
 
+                        // Declared recurring charge coming up — from the Monthly
+                        // Expenses schedules the user set up themselves. Shown
+                        // BEFORE the detected-pattern banner because a declared
+                        // schedule is a certainty, not a guess.
+                        if let due = upcomingDeclaredRecurring {
+                            DeclaredRecurringBanner(expense: due)
+                                .padding(.horizontal, 22)
+                                .padding(.top, 8)
+                                .transition(.move(edge: .top).combined(with: .opacity))
+                        }
+
                         // Recurring reminder — Royal feature (memoized).
                         if let next = cachedRecurring.first(where: { $0.isDueSoon }) {
-                            RecurringReminderBanner(pattern: next)
+                            RecurringReminderBanner(pattern: next, onDismiss: { recomputeHomeInsights() })
                                 .padding(.horizontal, 22)
                                 .padding(.top, 8)
                                 .transition(.move(edge: .top).combined(with: .opacity))
@@ -253,6 +351,39 @@ struct HomeView: View {
                             .opacity(contentAppeared ? 1 : 0)
                             .scaleEffect(contentAppeared ? 1 : 0.94)
                             .animation(.spring(response: 0.6, dampingFraction: 0.78).delay(0.12), value: contentAppeared)
+
+                        // Net Worth — cash minus liabilities. Only shown when the
+                        // user actually has liabilities (credit cards / debts),
+                        // otherwise it's just the cash total again.
+                        if hasLiabilities {
+                            let fmt = { (v: Double) in CurrencyManager.shared.formatted(v, currency: CurrencyManager.shared.preferredCurrency) }
+                            VStack(alignment: .leading, spacing: 5) {
+                                HStack(spacing: 10) {
+                                    Image(systemName: "chart.pie.fill").font(.system(size: 13)).foregroundStyle(AppTheme.purple)
+                                    Text(loc("home.net_worth")).font(.system(size: 12, weight: .medium)).foregroundStyle(AppTheme.textSecondary)
+                                    Spacer()
+                                    Text((netWorth < 0 ? "-" : "") + fmt(Swift.abs(netWorth)))
+                                        .font(.system(size: 14, weight: .bold))
+                                        .foregroundStyle(netWorth >= 0 ? AppTheme.textPrimary : AppTheme.red)
+                                }
+                                // Spell out the arithmetic — a bare "net worth"
+                                // figure (especially a negative one) is alarming
+                                // and unreadable without its parts.
+                                Text(goalSavings > 0.5
+                                     ? String(format: loc("home.net_worth_breakdown_savings"),
+                                              fmt(totalBalance), fmt(goalSavings), fmt(totalLiabilities))
+                                     : String(format: loc("home.net_worth_breakdown"),
+                                              fmt(totalBalance), fmt(totalLiabilities)))
+                                    .font(.system(size: 10))
+                                    .foregroundStyle(AppTheme.textSecondary.opacity(0.75))
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            .padding(.horizontal, 16).padding(.vertical, 11)
+                            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
+                            .overlay(RoundedRectangle(cornerRadius: 14).stroke(AppTheme.purple.opacity(0.15), lineWidth: 1))
+                            .padding(.horizontal, 22).padding(.top, 12)
+                            .opacity(contentAppeared ? 1 : 0)
+                        }
 
                         // Category filter — grid on iPad, scroll on iPhone
                         CategoryFilterBar(selectedFilter: $categoryFilter)
@@ -673,8 +804,62 @@ struct SmartInsightBanner: View {
 
 // MARK: - Recurring Reminder Banner
 
+// Upcoming DECLARED recurring charge (from Monthly Expenses). Unlike the
+// detected-pattern banner below, this is a schedule the user created — a
+// certainty. It answers "why will my balance drop?" before it happens.
+struct DeclaredRecurringBanner: View {
+    let expense: RecurringExpense
+    @State private var appeared = false
+
+    private var days: Int { RecurringDateEngine.daysUntil(dayOfMonth: expense.dayOfMonth) }
+    private var whenText: String {
+        if days <= 0 { return loc("recurring.due_today") }
+        if days == 1 { return loc("recurring.due_tomorrow") }
+        return String(format: loc("recurring.due_in"), days)
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            ZStack {
+                Circle().fill(expense.category.color.opacity(0.15)).frame(width: 40, height: 40)
+                Image(systemName: expense.category.icon)
+                    .font(.system(size: 16)).foregroundStyle(expense.category.color)
+            }
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 6) {
+                    Text(loc("home.declared_recurring_badge"))
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(expense.category.color)
+                        .padding(.horizontal, 6).padding(.vertical, 2)
+                        .background(expense.category.color.opacity(0.15), in: Capsule())
+                    if days <= 0 {
+                        Text(loc("tx.due_today"))
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(AppTheme.red)
+                            .padding(.horizontal, 6).padding(.vertical, 2)
+                            .background(AppTheme.red.opacity(0.15), in: Capsule())
+                    }
+                }
+                Text("\(expense.label) · \(CurrencyManager.shared.formatted(expense.amount, currency: expense.currency))")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(AppTheme.textPrimary).lineLimit(1)
+                Text("\(whenText) · " + loc(expense.autoRecord ? "home.declared_auto_on" : "home.declared_auto_off"))
+                    .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+            }
+            Spacer()
+        }
+        .padding(12)
+        .background(expense.category.color.opacity(0.06), in: RoundedRectangle(cornerRadius: 16))
+        .overlay(RoundedRectangle(cornerRadius: 16).stroke(expense.category.color.opacity(0.2), lineWidth: 1))
+        .opacity(appeared ? 1 : 0)
+        .onAppear { withAnimation(.spring(response: 0.5)) { appeared = true } }
+    }
+}
+
 struct RecurringReminderBanner: View {
     let pattern: SmartBudgetManager.RecurringPattern
+    /// Called after the user hides this detected pattern, so Home can recompute.
+    var onDismiss: (() -> Void)? = nil
     @State private var appeared = false
 
     private var daysUntil: Int {
@@ -704,6 +889,10 @@ struct RecurringReminderBanner: View {
                         .foregroundStyle(tint)
                         .padding(.horizontal, 6).padding(.vertical, 2)
                         .background(tint.opacity(0.15), in: Capsule())
+                    Text(pattern.frequencyLabel)
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .lineLimit(1)
                     // "Due today" only makes sense for a bill — a habit isn't due.
                     if isBill && daysUntil == 0 {
                         Text(loc("tx.due_today"))
@@ -713,12 +902,14 @@ struct RecurringReminderBanner: View {
                             .background(AppTheme.red.opacity(0.15), in: Capsule())
                     }
                 }
-                // Name + cadence so the user knows WHY it's flagged: "warteg ·
-                // every week".
-                Text("\(pattern.name) · \(pattern.frequencyLabel)")
+                // Merchant name gets the whole line. Appending the cadence here
+                // ate the width and truncated BOTH ("makan malam hangry
+                // nashville · ti…"), hiding the very thing that explains the
+                // flag — so the cadence moved up beside the badge instead.
+                Text(pattern.name)
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(AppTheme.textPrimary)
-                    .lineLimit(1)
+                    .lineLimit(1).truncationMode(.tail)
                 // Detail — bills get a "due" prediction; habits are framed as an
                 // average spend, no due-date pressure.
                 let amountStr = CurrencyManager.shared.formatted(pattern.amount, currency: pattern.currency)
@@ -732,6 +923,23 @@ struct RecurringReminderBanner: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer()
+            // Dismiss — hides this auto-detected pattern. It's derived from your
+            // transactions (not a schedule you can delete), so this is the only
+            // way to stop it reappearing.
+            if let onDismiss {
+                Button {
+                    HapticManager.shared.tap()
+                    SmartBudgetManager.shared.dismissRecurring(name: pattern.name)
+                    withAnimation(.spring(response: 0.4)) { onDismiss() }
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .frame(width: 26, height: 26)
+                        .background(AppTheme.cardMid, in: Circle())
+                }
+                .buttonStyle(ScaleButtonStyle())
+            }
         }
         .padding(12)
         .background(tint.opacity(0.06), in: RoundedRectangle(cornerRadius: 16))
@@ -1152,7 +1360,8 @@ struct BankCardView: View {
     /// it matches the Cards tab exactly and can legitimately go negative —
     /// a month-scoped figure hid overspending by resetting to 0 each month.
     /// The Statistics tab remains month-scoped for period analysis.
-    private var totalBalance: Double { lifetimeBalance }
+    // Credit cards show what's OWED, not a cash balance.
+    private var totalBalance: Double { card.isCreditCard ? card.owedBalance() : lifetimeBalance }
     private var network: CardNetwork { CardNetwork.detect(from: card.cardNumber) }
 
     private var formattedBalance: String {
@@ -1243,7 +1452,7 @@ struct BankCardView: View {
                         // Total balance (matches the Cards tab). No month
                         // suffix — this is the card's running balance, not a
                         // periodic figure.
-                        Text(loc("home.balance_total"))
+                        Text(card.isCreditCard ? loc("cc.owed") : loc("home.balance_total"))
                             .font(.system(size: 9, weight: .medium))
                             .foregroundStyle(.white.opacity(0.65))
                         // Hidden → static dots. Visible → CountUpText that
@@ -1606,7 +1815,7 @@ struct TransactionSection: View {
         .confirmationDialog(loc("tx.delete_prompt"), isPresented: deleteDialogBinding, titleVisibility: .visible) {
             Button(loc("common.delete"), role: .destructive) {
                 if let tx = pendingDelete {
-                    context.delete(tx)
+                    deleteTransactionWithGoalRollback(tx, context: context)
                     try? context.save()
                     HapticManager.shared.warning()
                 }
@@ -1651,6 +1860,11 @@ struct AllTransactionsSheet: View {
     private var grouped: [(key: String, date: Date, txs: [TxRecord])] {
         let cal = Calendar.current
         let locale = LanguageManager.shared.currentLocale
+        // One formatter for the whole grouping pass — allocating it per day (the
+        // full history can be dozens of days) hitched every re-render.
+        let df = DateFormatter()
+        df.locale = locale
+        df.dateFormat = DateFormatter.dateFormat(fromTemplate: "EEEEdMMM", options: 0, locale: locale)
         var dict: [Date: [TxRecord]] = [:]
         for tx in transactions {
             let day = cal.startOfDay(for: tx.date)
@@ -1660,12 +1874,7 @@ struct AllTransactionsSheet: View {
             let label: String
             if cal.isDateInToday(day)          { label = loc("common.today") }
             else if cal.isDateInYesterday(day) { label = loc("common.yesterday") }
-            else {
-                let df = DateFormatter()
-                df.locale = locale
-                df.dateFormat = DateFormatter.dateFormat(fromTemplate: "EEEEdMMM", options: 0, locale: locale)
-                label = df.string(from: day)
-            }
+            else                               { label = df.string(from: day) }
             return (key: label, date: day, txs: (dict[day] ?? []).sorted { $0.date > $1.date })
         }
     }
@@ -1699,15 +1908,26 @@ struct AllTransactionsSheet: View {
                                 VStack(alignment: .leading, spacing: 10) {
                                     // This sheet shows ALL rows (no prefix cap), so the
                                     // visible txs already equal the full day.
-                                    let dayTotal = group.txs.reduce(0) { $0 + $1.amount }
+                                    // Convert before summing, and label with the
+                                    // PREFERRED currency. Adding raw amounts and
+                                    // then borrowing the first transaction's
+                                    // currency turned a day holding both IDR and
+                                    // USD rows into a single nonsense figure.
+                                    let dayCurrency = CurrencyManager.shared.preferredCurrency
+                                    let dayTotal = group.txs.reduce(0.0) { sum, tx in
+                                        sum + CurrencyManager.shared.convert(
+                                            tx.amount,
+                                            from: tx.currency.isEmpty ? dayCurrency : tx.currency,
+                                            to: dayCurrency)
+                                    }
                                     HStack {
                                         Text(group.key)
                                             .font(.system(size: 13, weight: .semibold))
                                             .foregroundStyle(AppTheme.textSecondary)
                                         Spacer()
                                         Text(dayTotal >= 0
-                                             ? "+\(CurrencyManager.shared.formatted(dayTotal, currency: group.txs.first?.currency ?? CurrencyManager.shared.preferredCurrency))"
-                                             : CurrencyManager.shared.formatted(dayTotal, currency: group.txs.first?.currency ?? CurrencyManager.shared.preferredCurrency))
+                                             ? "+\(CurrencyManager.shared.formatted(dayTotal, currency: dayCurrency))"
+                                             : CurrencyManager.shared.formatted(dayTotal, currency: dayCurrency))
                                             .font(.system(size: 12, weight: .medium))
                                             .foregroundStyle(dayTotal >= 0 ? AppTheme.accent.opacity(0.7) : AppTheme.red.opacity(0.7))
                                     }
@@ -1717,7 +1937,7 @@ struct AllTransactionsSheet: View {
                                                 onTap: { selectedTx = tx },
                                                 onDelete: { pendingDelete = tx }
                                             ) {
-                                                TxRow(tx: tx, sourceCard: cardIndex[tx.id] ?? cards.first, showCard: cards.count > 1)
+                                                TxRow(tx: tx, sourceCard: cardIndex[tx.id] ?? cards.first, showCard: cards.count > 1, animateEntrance: false)
                                             }
                                         }
                                     }
@@ -1733,7 +1953,7 @@ struct AllTransactionsSheet: View {
             .confirmationDialog(loc("tx.delete_prompt"), isPresented: deleteDialogBinding, titleVisibility: .visible) {
                 Button(loc("common.delete"), role: .destructive) {
                     if let tx = pendingDelete {
-                        context.delete(tx)
+                        deleteTransactionWithGoalRollback(tx, context: context)
                         try? context.save()
                         HapticManager.shared.warning()
                     }
@@ -1892,17 +2112,24 @@ struct TxRow: View {
     let tx: TxRecord
     var sourceCard: BankCard? = nil
     var showCard: Bool = false
+    /// Entrance animation is nice on the short Home list, but in a long
+    /// scrolling history it re-fires on EVERY row as it scrolls into view
+    /// (LazyVStack re-runs `onAppear`), stacking dozens of springs → jank.
+    /// Long lists pass `false`.
+    var animateEntrance: Bool = true
     @State private var appeared = false
 
+    /// Reused across rows — allocating a DateFormatter per row (per render) was
+    /// a measurable scroll cost with a long history.
+    private static let timeFormatter: DateFormatter = {
+        let df = DateFormatter(); df.dateStyle = .none; df.timeStyle = .short
+        return df
+    }()
     private var timeOnly: String {
-        let df = DateFormatter()
-        df.locale = LanguageManager.shared.currentLocale
-        df.dateStyle = .none
-        df.timeStyle = .short
-        return df.string(from: tx.date)
-    }
-    private var network: CardNetwork? {
-        sourceCard.map { CardNetwork.detect(from: $0.cardNumber) }
+        let f = TxRow.timeFormatter
+        let loc = LanguageManager.shared.currentLocale
+        if f.locale != loc { f.locale = loc }
+        return f.string(from: tx.date)
     }
 
     var body: some View {
@@ -1934,6 +2161,21 @@ struct TxRow: View {
                         .foregroundStyle(AppTheme.orange)
                         .padding(.horizontal, 5).padding(.vertical, 2)
                         .background(AppTheme.orange.opacity(0.15), in: Capsule())
+                    }
+                    // Auto-posted marker — a recurring charge or salary credit
+                    // the engine created. Answers "where did my balance go?"
+                    // right in the list instead of looking like a manual entry.
+                    if tx.notes == "tx.note.recurring_auto" || tx.notes == "tx.note.salary_auto" {
+                        let isSalary = tx.notes == "tx.note.salary_auto"
+                        HStack(spacing: 3) {
+                            Image(systemName: isSalary ? "banknote" : "arrow.clockwise")
+                                .font(.system(size: 8, weight: .semibold))
+                            Text(loc(isSalary ? "tx.badge.auto_salary" : "tx.badge.auto_recurring"))
+                                .font(.system(size: 9, weight: .bold))
+                        }
+                        .foregroundStyle(isSalary ? AppTheme.accent : AppTheme.blue)
+                        .padding(.horizontal, 5).padding(.vertical, 2)
+                        .background((isSalary ? AppTheme.accent : AppTheme.blue).opacity(0.13), in: Capsule())
                     }
                 }
                 HStack(spacing: 6) {
@@ -1969,7 +2211,11 @@ struct TxRow: View {
                     .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
             }
         }
-        .opacity(appeared ? 1 : 0).offset(x: appeared ? 0 : 20)
-        .onAppear { withAnimation(.spring(response: 0.45, dampingFraction: 0.8)) { appeared = true } }
+        .opacity(animateEntrance ? (appeared ? 1 : 0) : 1)
+        .offset(x: animateEntrance ? (appeared ? 0 : 20) : 0)
+        .onAppear {
+            guard animateEntrance, !appeared else { return }
+            withAnimation(.spring(response: 0.45, dampingFraction: 0.8)) { appeared = true }
+        }
     }
 }

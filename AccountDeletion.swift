@@ -74,9 +74,17 @@ final class AccountDeletionService {
             return .failed(e.localizedDescription)
         }
 
-        // 5. Everything on device.
+        // 5. Everything on device. `onLogout` BEFORE `signOut` (its own doc
+        // says so): it resets `plan` to .free and neutralises the Smart Budget
+        // flags. Without it the deleted account's Royal plan lingered in memory
+        // — `canAccess` was safe (it checks isLoggedIn) but any code reading
+        // `plan == .royal` directly kept showing Royal content until restart.
+        if let socialID { PremiumManager.shared.onLogout(userID: socialID) }
         UserSwitchDetector.wipeLocalData(context: context)
         UserSession.shared.signOut()
+        // The deleted account's cached entitlement would otherwise sit in
+        // UserDefaults forever.
+        if let socialID { UserDefaults.standard.removeObject(forKey: "premium_plan_\(socialID)") }
 
         print("[DiPo][account-delete] ✓ account fully deleted")
         return .success

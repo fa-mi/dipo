@@ -296,6 +296,10 @@ enum UserSwitchDetector {
         try? context.delete(model: SavingsGoal.self)
         try? context.delete(model: CardBudgetConfig.self)
         try? context.delete(model: RecurringExpense.self)
+        // Declared cycle intents are user-owned judgements. Left behind, the
+        // NEXT person signing in on this device inherits softened verdicts they
+        // never chose — the analysis quietly stops warning them.
+        try? context.delete(model: CycleIntent.self)
         try? context.save()
 
         // UserDefaults — anything that persists user-specific state. We DO NOT

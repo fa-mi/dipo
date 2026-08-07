@@ -20,6 +20,7 @@ final class SavingsGoal {
     var monthlyContribution: Double
     var isPinned: Bool = false  // shows progress on home screen
 
+
     init(name: String, emoji: String = "🎯", targetAmount: Double,
          savedAmount: Double = 0, currency: String = "IDR",
          targetDate: Date? = nil, priority: Int = 2,
@@ -42,6 +43,41 @@ final class SavingsGoal {
     var progress: Double { targetAmount > 0 ? min(savedAmount / targetAmount, 1.0) : 0 }
     var progressPercent: Double { progress * 100 }
     var remaining: Double { max(targetAmount - savedAmount, 0) }
+
+    // MARK: - Reconciliation with real transactions
+    //
+    // Before deposits wrote transactions, `savedAmount` was just a number the
+    // user typed — no proof any money moved. These helpers separate the part
+    // backed by real transactions from the part whose origin DiPo can't see,
+    // so net worth never silently double-counts cash that never left an
+    // account it already tracks.
+
+    /// Deposits recorded through the app for this goal (always in the goal's
+    /// currency). Cash for these has already been deducted from an account.
+    func trackedDeposits(from allTransactions: [TxRecord]) -> Double {
+        let cm = CurrencyManager.shared
+        let idStr = id.uuidString
+        return allTransactions
+            .filter { $0.linkedGoalID == idStr && $0.amount < 0 }
+            .reduce(0.0) { $0 + cm.convert(abs($1.amount), from: $1.currency.isEmpty ? currency : $1.currency, to: currency) }
+    }
+
+    /// The pot this goal started with: money already saved when it was created
+    /// (or set directly afterwards). It never moved through a tracked account,
+    /// so it correctly has no transaction — this is an opening balance, the
+    /// savings equivalent of a credit card's `openingOwed`, not missing data.
+    /// Derived rather than stored: recording a past deposit shifts money from
+    /// this bucket into `trackedDeposits` automatically.
+    func openingBalance(from allTransactions: [TxRecord]) -> Double {
+        max(savedAmount - trackedDeposits(from: allTransactions), 0)
+    }
+
+    /// Savings are a pot of their own, kept separate from account balances, so
+    /// the whole saved amount counts toward net worth. Deposits made through
+    /// DiPo already reduced the funding account, so nothing is counted twice.
+    func netWorthContribution(from allTransactions: [TxRecord]) -> Double {
+        savedAmount
+    }
 
     var monthsToGoal: Int? {
         guard monthlyContribution > 0, remaining > 0 else { return nil }
@@ -200,7 +236,7 @@ struct WishlistView: View {
                                         GoalCard(
                                             goal: goal,
                                             monthlyIncome: monthlyIncome,
-                                            onDeposit: { amount in depositToGoal(goal, amount: amount) },
+                                            onDeposit: { amount, card in depositToGoal(goal, amount: amount, card: card) },
                                             onEdit: { editingGoal = goal },
                                             onDelete: { deleteGoal(goal) },
                                             onComplete: { completeGoal(goal) },
@@ -216,7 +252,7 @@ struct WishlistView: View {
                                         NavigationLink {
                                             AllPersonalGoalsView(
                                                 goals: activeGoals, monthlyIncome: monthlyIncome,
-                                                onDeposit: { g, amt in depositToGoal(g, amount: amt) },
+                                                onDeposit: { g, amt, card in depositToGoal(g, amount: amt, card: card) },
                                                 onEdit: { editingGoal = $0 },
                                                 onDelete: { deleteGoal($0) },
                                                 onComplete: { completeGoal($0) },
@@ -305,9 +341,32 @@ struct WishlistView: View {
         } // end PremiumGate
     }
 
-    private func depositToGoal(_ goal: SavingsGoal, amount: Double) {
+    /// Move money into a goal. When `card` is given the deposit is also written
+    /// as a real transaction: savings are a movement of money, not an invisible
+    /// counter, so the account balance drops, statistics see it, and Smart
+    /// Budget counts it in the Invest & Debt group. Passing nil keeps the old
+    /// counter-only behaviour for money already held outside DiPo.
+    private func depositToGoal(_ goal: SavingsGoal, amount: Double, card: BankCard? = nil) {
         let wasComplete = goal.progress >= 1.0
         goal.savedAmount += amount
+        if let card {
+            let cm = CurrencyManager.shared
+            // Store in the CARD's currency — the money physically leaves that
+            // account, so its balance must move by the amount actually debited.
+            let debited = cm.convert(amount, from: goal.currency, to: card.resolvedCurrency)
+            let tx = TxRecord(
+                name: String(format: loc("savings.tx_name"), goal.name),
+                date: .now,
+                amount: -debited,
+                type: "tx.type.purchase",
+                icon: goal.emoji,
+                iconBgHex: TxCategory.investment.iconBg,
+                category: .investment,
+                currency: card.resolvedCurrency,
+                notes: "tx.note.goal_deposit",
+                linkedGoalID: goal.id.uuidString)
+            card.transactions.append(tx)
+        }
         try? context.save()
         HapticManager.shared.success()
         if !wasComplete && goal.progress >= 1.0 {
@@ -347,6 +406,18 @@ struct WishlistView: View {
     }
 
     private func scheduleGoalNotification(_ goal: SavingsGoal) {
+        // In-app bell entry too. Only the device push existed, so a user who
+        // had notifications switched off — or who simply dismissed the banner —
+        // had no record that they'd hit the goal at all.
+        let cm = CurrencyManager.shared
+        let pledge = goal.monthlyContribution
+        let advice: String? = pledge > 0
+            ? String(format: loc("notif.goal_advice_redirect"),
+                     cm.formatted(pledge, currency: goal.currency))
+            : loc("notif.goal_advice_next")
+        NotificationManager.shared.postSavingsGoalReached(
+            name: goal.name, emoji: goal.emoji, advice: advice)
+
         let content = UNMutableNotificationContent()
         content.title = String(format: loc("savings.notif_title"), goal.emoji)
         content.body  = String(format: loc("savings.notif_body"), goal.name)
@@ -365,7 +436,7 @@ struct WishlistView: View {
 struct AllPersonalGoalsView: View {
     let goals: [SavingsGoal]
     let monthlyIncome: Double
-    let onDeposit: (SavingsGoal, Double) -> Void
+    let onDeposit: (SavingsGoal, Double, BankCard?) -> Void
     let onEdit: (SavingsGoal) -> Void
     let onDelete: (SavingsGoal) -> Void
     let onComplete: (SavingsGoal) -> Void
@@ -380,7 +451,7 @@ struct AllPersonalGoalsView: View {
                         GoalCard(
                             goal: goal,
                             monthlyIncome: monthlyIncome,
-                            onDeposit: { onDeposit(goal, $0) },
+                            onDeposit: { amt, card in onDeposit(goal, amt, card) },
                             onEdit: { onEdit(goal) },
                             onDelete: { onDelete(goal) },
                             onComplete: { onComplete(goal) },
@@ -453,7 +524,7 @@ struct GoalsSummaryCard: View {
 struct GoalCard: View {
     let goal: SavingsGoal
     let monthlyIncome: Double
-    let onDeposit: (Double) -> Void
+    let onDeposit: (Double, BankCard?) -> Void
     let onEdit: () -> Void
     let onDelete: () -> Void
     let onComplete: () -> Void
@@ -635,11 +706,11 @@ struct GoalCard: View {
             Button(loc("common.cancel"), role: .cancel) {}
         }
         .sheet(isPresented: $showDepositSheet) {
-            DepositSheet(goal: goal, onDeposit: { amount in
+            DepositSheet(goal: goal, onDeposit: { amount, card in
                 showDepositSheet = false
-                onDeposit(amount)
+                onDeposit(amount, card)
             })
-            .presentationDetents([.medium])
+            .presentationDetents([.large])
             .presentationDragIndicator(.visible)
             .presentationBackground(AppTheme.bg)
         }
@@ -650,14 +721,42 @@ struct GoalCard: View {
 
 struct DepositSheet: View {
     let goal: SavingsGoal
-    let onDeposit: (Double) -> Void
+    /// `card` is the account the money leaves. Every deposit is recorded as a
+    /// real transaction — DiPo's analysis and recommendations are built on a
+    /// complete record of where money went, so savings can't be an exception.
+    let onDeposit: (Double, BankCard?) -> Void
     @State private var amountText = ""
+    @State private var sourceCardID: UUID? = nil
     @Environment(\.dismiss) private var dismiss
+    @Query(sort: \BankCard.sortOrder) private var cards: [BankCard]
 
     var amount: Double { Double(amountText) ?? 0 }
 
+    /// Cash accounts only — a goal can't be funded from a credit line.
+    private var fundingCards: [BankCard] { cards.filter { !$0.isCreditCard } }
+    private var selectedCard: BankCard? {
+        if let id = sourceCardID, let c = fundingCards.first(where: { $0.id == id }) { return c }
+        return fundingCards.first
+    }
+    /// No cash account means there is nowhere to book the outflow from. Adding
+    /// the account is the fix — that keeps the history complete.
+    private var canDeposit: Bool { amount > 0 && selectedCard != nil }
+
+    /// Currencies without minor units (IDR, JPY) look wrong with a trailing
+    /// ".0", so write them back as whole numbers.
+    private func formatEntry(_ value: Double) -> String {
+        (goal.currency == "IDR" || goal.currency == "JPY")
+            ? String(Int(value.rounded()))
+            : String(value)
+    }
+
     var body: some View {
-        VStack(spacing: 24) {
+        // The sheet grew a source-account picker, so a fixed-height stack in a
+        // .medium detent clipped the confirm button. Content scrolls; the CTA
+        // stays pinned so it is always reachable at any detent or text size.
+        VStack(spacing: 0) {
+            ScrollView(showsIndicators: false) {
+        VStack(spacing: 20) {
             // Handle
             RoundedRectangle(cornerRadius: 3)
                 .fill(AppTheme.cardMid)
@@ -690,57 +789,116 @@ struct DepositSheet: View {
             .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
             .padding(.horizontal, 22)
 
-            // Smart quick amounts based on currency
+            // Quick amounts — a fixed 2×2 grid instead of a horizontal
+            // carousel. The carousel clipped its last chip mid-word at the
+            // screen edge and gave no hint more existed; a grid shows every
+            // option at once, in even columns, at any text size.
             let quickAmounts: [Double] = goal.currency == "IDR"
                 ? [50_000, 100_000, 500_000, 1_000_000]
-                : goal.currency == "JPY" || goal.currency == "IDR"
+                : goal.currency == "JPY"
                 ? [1_000, 5_000, 10_000, 50_000]
                 : [10, 50, 100, 500]
 
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 10) {
-                    ForEach(quickAmounts, id: \.self) { quick in
-                        Button {
-                            HapticManager.shared.tap()
-                            amountText = goal.currency == "IDR" || goal.currency == "JPY"
-                                ? String(Int(quick))
-                                : String(quick)
-                        } label: {
-                            Text("+\(CurrencyManager.shared.formatted(quick, currency: goal.currency))")
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundStyle(AppTheme.textPrimary)
-                                .padding(.horizontal, 14).padding(.vertical, 9)
-                                .background(AppTheme.cardDark, in: Capsule())
-                                .overlay(Capsule().stroke(AppTheme.accent.opacity(0.2), lineWidth: 1))
-                        }
-                        .buttonStyle(ScaleButtonStyle())
-                    }
-
-                    // Also show minimum contribution shortcut
-                    if goal.monthlyContribution > 0 {
-                        Button {
-                            HapticManager.shared.tap()
-                            amountText = String(goal.monthlyContribution)
-                        } label: {
-                            VStack(spacing: 1) {
-                                Text(loc("savings.monthly")).font(.system(size: 9)).foregroundStyle(AppTheme.textSecondary)
-                                Text(CurrencyManager.shared.formatted(goal.monthlyContribution, currency: goal.currency))
-                                    .font(.system(size: 11, weight: .semibold)).foregroundStyle(AppTheme.purple)
+            VStack(spacing: 8) {
+                ForEach(Array(stride(from: 0, to: quickAmounts.count, by: 2)), id: \.self) { row in
+                    HStack(spacing: 8) {
+                        ForEach(Array(quickAmounts[row..<min(row + 2, quickAmounts.count)]), id: \.self) { quick in
+                            Button {
+                                HapticManager.shared.tap()
+                                // Add to what's typed so far, so tapping twice
+                                // means twice the amount — the behaviour the
+                                // "+" label already implied.
+                                amountText = formatEntry(amount + quick)
+                            } label: {
+                                Text("+\(CurrencyManager.shared.formatted(quick, currency: goal.currency))")
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundStyle(AppTheme.textPrimary)
+                                    .lineLimit(1).minimumScaleFactor(0.8)
+                                    .frame(maxWidth: .infinity).padding(.vertical, 11)
+                                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 12))
+                                    .overlay(RoundedRectangle(cornerRadius: 12)
+                                        .stroke(AppTheme.accent.opacity(0.18), lineWidth: 1))
                             }
-                            .padding(.horizontal, 12).padding(.vertical, 7)
-                            .background(AppTheme.purple.opacity(0.1), in: Capsule())
-                            .overlay(Capsule().stroke(AppTheme.purple.opacity(0.3), lineWidth: 1))
+                            .buttonStyle(ScaleButtonStyle())
                         }
-                        .buttonStyle(ScaleButtonStyle())
                     }
                 }
-                .padding(.horizontal, 2)
+
+                // The planned monthly contribution gets its own full-width row:
+                // it's the amount most deposits actually use.
+                if goal.monthlyContribution > 0 {
+                    Button {
+                        HapticManager.shared.tap()
+                        amountText = formatEntry(goal.monthlyContribution)
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "repeat").font(.system(size: 11, weight: .semibold))
+                            Text(loc("savings.monthly")).font(.system(size: 12))
+                            Text(CurrencyManager.shared.formatted(goal.monthlyContribution, currency: goal.currency))
+                                .font(.system(size: 13, weight: .bold))
+                        }
+                        .foregroundStyle(AppTheme.purple)
+                        .frame(maxWidth: .infinity).padding(.vertical, 11)
+                        .background(AppTheme.purple.opacity(0.1), in: RoundedRectangle(cornerRadius: 12))
+                        .overlay(RoundedRectangle(cornerRadius: 12)
+                            .stroke(AppTheme.purple.opacity(0.3), lineWidth: 1))
+                    }
+                    .buttonStyle(ScaleButtonStyle())
+                }
+            }
+            .padding(.horizontal, 22)
+
+            // Source account — the deposit is a real money movement, so the
+            // user picks where it comes from and DiPo logs it. Without this the
+            // savings simply vanished from every balance and every budget.
+            VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(loc("savings.source_account")).font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(AppTheme.textPrimary)
+                    Text(loc("savings.source_account_sub")).font(.system(size: 11))
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                if fundingCards.isEmpty {
+                    Text(loc("savings.reconcile_no_account"))
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(AppTheme.orange)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(fundingCards) { card in
+                                let isOn = (selectedCard?.id == card.id)
+                                Button {
+                                    HapticManager.shared.tap()
+                                    sourceCardID = card.id
+                                } label: {
+                                    Text(card.pickerLabel)
+                                        .font(.system(size: 12, weight: .semibold))
+                                        .foregroundStyle(isOn ? AppTheme.bg : AppTheme.textSecondary)
+                                        .padding(.horizontal, 12).padding(.vertical, 7)
+                                        .background(isOn ? AppTheme.accent : AppTheme.cardDark, in: Capsule())
+                                        .overlay(Capsule().stroke(AppTheme.accent.opacity(isOn ? 0 : 0.25), lineWidth: 1))
+                                }
+                                .buttonStyle(ScaleButtonStyle())
+                            }
+                        }
+                    }
+                }
+            }
+            .padding(14)
+            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
+            .padding(.horizontal, 22)
+            .padding(.bottom, 8)
+        }
             }
 
+            // Pinned CTA — never scrolls out of reach.
             Button {
-                guard amount > 0 else { return }
+                guard canDeposit else { return }
                 HapticManager.shared.success()
-                onDeposit(amount)
+                onDeposit(amount, selectedCard)
             } label: {
                 Text(amount > 0
                      ? String(format: loc("savings.add_amount"), CurrencyManager.shared.formatted(amount, currency: goal.currency))
@@ -749,14 +907,15 @@ struct DepositSheet: View {
                     .foregroundStyle(AppTheme.bg)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
-                    .background(amount > 0 ? AppTheme.accent : AppTheme.cardMid, in: Capsule())
-                    .shadow(color: amount > 0 ? AppTheme.accent.opacity(0.35) : .clear, radius: 12, y: 6)
+                    .background(canDeposit ? AppTheme.accent : AppTheme.cardMid, in: Capsule())
+                    .shadow(color: canDeposit ? AppTheme.accent.opacity(0.35) : .clear, radius: 12, y: 6)
             }
             .buttonStyle(ScaleButtonStyle())
-            .disabled(amount <= 0)
+            .disabled(!canDeposit)
             .padding(.horizontal, 22)
-
-            Spacer()
+            .padding(.top, 10)
+            .padding(.bottom, 10)
+            .background(AppTheme.bg)
         }
     }
 }
@@ -1225,10 +1384,18 @@ struct GoalDetailView: View {
     @State private var appeared         = false
     @State private var animatedProgress: Double = 0
     @State private var displayPct: Int = 0
+    @State private var showPastDepositSheet = false
+    @Query(sort: \BankCard.sortOrder) private var cards: [BankCard]
 
     private var progress: Double  { goal.targetAmount > 0 ? min(goal.savedAmount / goal.targetAmount, 1.0) : 0 }
     private var remaining: Double { max(goal.targetAmount - goal.savedAmount, 0) }
     private var currency: String  { goal.currency }
+
+    private var allTx: [TxRecord] { cards.flatMap(\.transactions) }
+    /// Money the goal started with — correctly has no transaction behind it.
+    private var openingBalance: Double { goal.openingBalance(from: allTx) }
+    /// Deposits that were logged as real transactions.
+    private var recordedDeposits: Double { goal.trackedDeposits(from: allTx) }
     
     private var estimatedDateText: String? {
         guard let date = goal.estimatedDate else { return nil }
@@ -1236,6 +1403,61 @@ struct GoalDetailView: View {
         df.locale = LanguageManager.shared.currentLocale
         df.dateFormat = "MMMM yyyy"
         return df.string(from: date)
+    }
+
+    /// Neutral breakdown of where this goal's money came from. Savings live in
+    /// their own pot, separate from account balances, so the amount the goal
+    /// STARTED with legitimately has no transaction — it is an opening
+    /// balance, not missing data. What matters for analysis is that money
+    /// moved OUT of an account afterwards, so deposits made outside the app
+    /// can be recorded here without changing the saved total.
+    private var savingsBreakdown: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Image(systemName: "tray.full.fill")
+                    .font(.system(size: 13)).foregroundStyle(AppTheme.purple)
+                Text(loc("savings.breakdown_title"))
+                    .font(.system(size: 13, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+            }
+
+            HStack {
+                Text(loc("savings.opening_balance"))
+                    .font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
+                Spacer()
+                Text(CurrencyManager.shared.formatted(openingBalance, currency: currency))
+                    .font(.system(size: 13, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+            }
+            HStack {
+                Text(loc("savings.recorded_deposits"))
+                    .font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
+                Spacer()
+                Text(CurrencyManager.shared.formatted(recordedDeposits, currency: currency))
+                    .font(.system(size: 13, weight: .semibold)).foregroundStyle(AppTheme.accent)
+            }
+
+            Text(loc("savings.breakdown_hint"))
+                .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary.opacity(0.8))
+                .fixedSize(horizontal: false, vertical: true).lineSpacing(2)
+
+            Button {
+                HapticManager.shared.tap()
+                showPastDepositSheet = true
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "clock.arrow.circlepath").font(.system(size: 12))
+                    Text(loc("savings.record_past"))
+                        .font(.system(size: 12, weight: .semibold))
+                }
+                .foregroundStyle(AppTheme.purple)
+                .frame(maxWidth: .infinity).padding(.vertical, 10)
+                .background(AppTheme.purple.opacity(0.12), in: Capsule())
+                .overlay(Capsule().stroke(AppTheme.purple.opacity(0.3), lineWidth: 1))
+            }
+            .buttonStyle(ScaleButtonStyle())
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(AppTheme.cardDark.opacity(0.5), in: RoundedRectangle(cornerRadius: 14))
     }
 
     var body: some View {
@@ -1325,6 +1547,11 @@ struct GoalDetailView: View {
                             .padding(.horizontal, 16).padding(.vertical, 14)
                         }
                         .background(AppTheme.cardDark.opacity(0.5), in: RoundedRectangle(cornerRadius: 14))
+
+                        // Money saved before deposits were recorded has no
+                        // transaction proving it left an account. Ask once,
+                        // then net worth can count it without double-counting.
+                        savingsBreakdown
 
                         // Progress bar
                         GeometryReader { g in
@@ -1495,14 +1722,33 @@ struct GoalDetailView: View {
                 if current >= targetPct { t.invalidate() }
             }
         }
+        .sheet(isPresented: $showPastDepositSheet) {
+            RecordPastDepositSheet(goal: goal)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+                .presentationBackground(AppTheme.bg)
+        }
         .sheet(isPresented: $showDepositSheet) {
-            DepositSheet(goal: goal, onDeposit: { amount in
+            DepositSheet(goal: goal, onDeposit: { amount, card in
                 goal.savedAmount += amount
+                // Same rule as WishlistView.depositToGoal: a funded deposit is
+                // a real money movement and must leave a transaction behind.
+                if let card {
+                    let debited = CurrencyManager.shared.convert(
+                        amount, from: goal.currency, to: card.resolvedCurrency)
+                    card.transactions.append(TxRecord(
+                        name: String(format: loc("savings.tx_name"), goal.name),
+                        date: .now, amount: -debited, type: "tx.type.purchase",
+                        icon: goal.emoji, iconBgHex: TxCategory.investment.iconBg,
+                        category: .investment, currency: card.resolvedCurrency,
+                        notes: "tx.note.goal_deposit",
+                        linkedGoalID: goal.id.uuidString))
+                }
                 try? context.save()
                 showDepositSheet = false
                 HapticManager.shared.success()
             })
-            .presentationDetents([.medium])
+            .presentationDetents([.large])
             .presentationDragIndicator(.visible)
             .presentationBackground(AppTheme.bg)
         }
@@ -1515,5 +1761,152 @@ struct GoalDetailView: View {
             }
             Button(loc("common.cancel"), role: .cancel) {}
         } message: { Text(loc("savings.delete_confirm")) }
+    }
+}
+
+// MARK: - Record a deposit that already happened
+//
+// For money that already moved into the goal without being logged — e.g. a
+// transfer made straight from the banking app. It writes ONLY the transaction:
+// the goal's saved total already includes this money, so adding to it again
+// would inflate the goal. The point is to complete the SPENDING record, which
+// is what the analysis and recommendation features read.
+struct RecordPastDepositSheet: View {
+    let goal: SavingsGoal
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var context
+    @Query(sort: \BankCard.sortOrder) private var cards: [BankCard]
+
+    @State private var amountText = ""
+    @State private var sourceCardID: UUID? = nil
+    @State private var date = Date()
+
+    private var amount: Double { Double(amountText.replacingOccurrences(of: ",", with: ".")) ?? 0 }
+    private var fundingCards: [BankCard] { cards.filter { !$0.isCreditCard } }
+    private var selectedCard: BankCard? {
+        if let id = sourceCardID, let c = fundingCards.first(where: { $0.id == id }) { return c }
+        return fundingCards.first
+    }
+    private var canSave: Bool { amount > 0 && selectedCard != nil }
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                AppTheme.bg.ignoresSafeArea()
+                ScrollView(showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 18) {
+                        Text(loc("savings.past_intro"))
+                            .font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true).lineSpacing(2)
+
+                        // Amount
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(loc("savings.past_amount"))
+                                .font(.system(size: 13, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                            HStack(spacing: 8) {
+                                Text(goal.currency)
+                                    .font(.system(size: 18, weight: .bold)).foregroundStyle(AppTheme.purple)
+                                TextField("0", text: $amountText)
+                                    .font(.system(size: 28, weight: .bold))
+                                    .foregroundStyle(AppTheme.textPrimary)
+                                    .keyboardType(.decimalPad)
+                            }
+                            .padding(16)
+                            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
+                        }
+
+                        // Source account
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(loc("savings.source_account"))
+                                .font(.system(size: 13, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                            if fundingCards.isEmpty {
+                                Text(loc("savings.reconcile_no_account"))
+                                    .font(.system(size: 11, weight: .medium)).foregroundStyle(AppTheme.orange)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            } else {
+                                ScrollView(.horizontal, showsIndicators: false) {
+                                    HStack(spacing: 8) {
+                                        ForEach(fundingCards) { card in
+                                            let isOn = (selectedCard?.id == card.id)
+                                            Button {
+                                                HapticManager.shared.tap(); sourceCardID = card.id
+                                            } label: {
+                                                Text(card.pickerLabel)
+                                                    .font(.system(size: 12, weight: .semibold))
+                                                    .foregroundStyle(isOn ? .white : AppTheme.textSecondary)
+                                                    .padding(.horizontal, 12).padding(.vertical, 7)
+                                                    .background(isOn ? AppTheme.purple : AppTheme.cardDark, in: Capsule())
+                                                    .overlay(Capsule().stroke(AppTheme.purple.opacity(isOn ? 0 : 0.25), lineWidth: 1))
+                                            }
+                                            .buttonStyle(ScaleButtonStyle())
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // When it happened — back-dating puts it in the right
+                        // pay cycle, which is what the analysis groups by.
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(loc("savings.past_date"))
+                                .font(.system(size: 13, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                            DatePicker("", selection: $date, in: ...Date(), displayedComponents: .date)
+                                .datePickerStyle(.compact)
+                                .labelsHidden()
+                                .tint(AppTheme.purple)
+                        }
+
+                        Text(loc("savings.past_note"))
+                            .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary.opacity(0.8))
+                            .fixedSize(horizontal: false, vertical: true).lineSpacing(2)
+
+                        Button {
+                            guard canSave else { return }
+                            HapticManager.shared.success()
+                            save()
+                        } label: {
+                            Text(loc("savings.past_save"))
+                                .font(.system(size: 16, weight: .bold)).foregroundStyle(.white)
+                                .frame(maxWidth: .infinity).padding(.vertical, 15)
+                                .background(canSave ? AppTheme.purple : AppTheme.cardMid,
+                                            in: RoundedRectangle(cornerRadius: 14))
+                        }
+                        .buttonStyle(ScaleButtonStyle())
+                        .disabled(!canSave)
+
+                        Spacer(minLength: 20)
+                    }
+                    .padding(.horizontal, 22).padding(.top, 8)
+                }
+            }
+            .navigationTitle(loc("savings.record_past"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(loc("common.cancel")) { dismiss() }.foregroundStyle(AppTheme.textSecondary)
+                }
+            }
+        }
+    }
+
+    /// Writes the transaction only — `goal.savedAmount` already contains this
+    /// money, so touching it would double the goal's progress.
+    private func save() {
+        guard let card = selectedCard else { return }
+        let cm = CurrencyManager.shared
+        let debited = cm.convert(amount, from: goal.currency, to: card.resolvedCurrency)
+        card.transactions.append(TxRecord(
+            name: String(format: loc("savings.tx_name"), goal.name),
+            date: date,
+            amount: -debited,
+            type: "tx.type.purchase",
+            icon: goal.emoji,
+            iconBgHex: TxCategory.investment.iconBg,
+            category: .investment,
+            currency: card.resolvedCurrency,
+            notes: "tx.note.goal_backfill",
+            linkedGoalID: goal.id.uuidString))
+        try? context.save()
+        dismiss()
     }
 }

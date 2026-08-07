@@ -60,6 +60,8 @@ struct BackupPayload: Codable {
     /// Optional so backups exported before recurring expenses existed still
     /// decode (nil → treated as empty on import).
     var recurrings:   [BackupRecurring]? = nil
+    /// Optional for the same reason — added when cycle intents shipped.
+    var cycleIntents: [BackupCycleIntent]? = nil
 }
 
 // MARK: - DTOs (mirror SwiftData @Model classes 1:1)
@@ -78,6 +80,12 @@ struct BackupCard: Codable {
     let walletProvider: String
     let phoneNumber: String
     let isHidden: Bool
+    // Credit-card fields — optional so backups made before the feature decode.
+    var issuerID: String? = nil
+    var isCreditCard: Bool? = nil
+    var creditLimit: Double? = nil
+    var openingOwed: Double? = nil
+    var creditSince: Date? = nil
 }
 
 struct BackupTransaction: Codable {
@@ -96,11 +104,12 @@ struct BackupTransaction: Codable {
     let currency: String
     let notes: String
     let linkedDebtID: String
+    let linkedGoalID: String
     let subtype: String
 
     private enum CodingKeys: String, CodingKey {
         case id, cardID, name, date, amount, type, icon, iconBgHex,
-             categoryRaw, currency, notes, linkedDebtID, subtype
+             categoryRaw, currency, notes, linkedDebtID, linkedGoalID, subtype
     }
 
     /// Custom decoder so older backups (exported before `subtype` existed)
@@ -121,12 +130,14 @@ struct BackupTransaction: Codable {
         currency     = try c.decode(String.self, forKey: .currency)
         notes        = try c.decode(String.self, forKey: .notes)
         linkedDebtID = try c.decode(String.self, forKey: .linkedDebtID)
+        linkedGoalID = try c.decodeIfPresent(String.self, forKey: .linkedGoalID) ?? ""
         subtype      = try c.decodeIfPresent(String.self, forKey: .subtype) ?? "normal"
     }
 
     init(id: UUID, cardID: UUID, name: String, date: Date, amount: Double,
          type: String, icon: String, iconBgHex: String, categoryRaw: String,
          currency: String, notes: String, linkedDebtID: String,
+         linkedGoalID: String = "",
          subtype: String = "normal") {
         self.id = id
         self.cardID = cardID
@@ -140,6 +151,7 @@ struct BackupTransaction: Codable {
         self.currency = currency
         self.notes = notes
         self.linkedDebtID = linkedDebtID
+        self.linkedGoalID = linkedGoalID
         self.subtype = subtype
     }
 }
@@ -187,6 +199,9 @@ struct BackupDebt: Codable {
     let createdAt: Date
     let notes: String
     let hasBeenTracked: Bool
+    /// Absent in backups made before debts could be closed by hand. Decoding it
+    /// as optional keeps those restorable; nil means "was never closed".
+    var manuallyClosed: Bool? = nil
 }
 
 struct BackupGoal: Codable {
@@ -203,6 +218,17 @@ struct BackupGoal: Codable {
     let notes: String
     let monthlyContribution: Double
     let isPinned: Bool
+}
+
+/// A deliberate choice the user declared for a pay cycle. Optional in the
+/// envelope so older backups (and older app versions reading a new backup)
+/// keep working.
+struct BackupCycleIntent: Codable {
+    let kindRaw: String
+    let cycleKey: String
+    let note: String
+    let isRecurring: Bool
+    let createdAt: Date
 }
 
 struct BackupCardBudget: Codable {
@@ -385,6 +411,7 @@ enum BackupService {
         let debts:    [DebtRecord]       = (try? context.fetch(FetchDescriptor<DebtRecord>())) ?? []
         let goals:    [SavingsGoal]      = (try? context.fetch(FetchDescriptor<SavingsGoal>())) ?? []
         let configs:  [CardBudgetConfig] = (try? context.fetch(FetchDescriptor<CardBudgetConfig>())) ?? []
+        let intents:  [CycleIntent] = (try? context.fetch(FetchDescriptor<CycleIntent>())) ?? []
         let recurrings: [RecurringExpense] = (try? context.fetch(FetchDescriptor<RecurringExpense>())) ?? []
 
         // Build a card-id → list-of-tx index so we know which card each tx
@@ -415,7 +442,10 @@ enum BackupService {
                     sortOrder: c.sortOrder, currency: c.currency,
                     isDigitalWallet: c.isDigitalWallet,
                     walletProvider: c.walletProvider,
-                    phoneNumber: c.phoneNumber, isHidden: c.isHidden
+                    phoneNumber: c.phoneNumber, isHidden: c.isHidden,
+                    issuerID: c.issuerID, isCreditCard: c.isCreditCard,
+                    creditLimit: c.creditLimit, openingOwed: c.openingOwed,
+                    creditSince: c.creditSince
                 )
             },
             transactions: txs.compactMap { t in
@@ -429,6 +459,7 @@ enum BackupService {
                     iconBgHex: t.iconBgHex, categoryRaw: t.categoryRaw,
                     currency: t.currency, notes: t.notes,
                     linkedDebtID: t.linkedDebtID,
+                    linkedGoalID: t.linkedGoalID,
                     subtype: t.subtype
                 )
             },
@@ -453,7 +484,8 @@ enum BackupService {
                     dueDayOfMonth: d.dueDayOfMonth,
                     currency: d.currency, isActive: d.isActive,
                     createdAt: d.createdAt, notes: d.notes,
-                    hasBeenTracked: d.hasBeenTracked
+                    hasBeenTracked: d.hasBeenTracked,
+                    manuallyClosed: d.manuallyClosed
                 )
             },
             goals: goals.map { g in
@@ -492,6 +524,11 @@ enum BackupService {
                     lastChargedYear: r.lastChargedYear,
                     autoRecord: r.autoRecord
                 )
+            },
+            cycleIntents: intents.map { i in
+                BackupCycleIntent(kindRaw: i.kindRaw, cycleKey: i.cycleKey,
+                                  note: i.note, isRecurring: i.isRecurring,
+                                  createdAt: i.createdAt)
             }
         )
 
@@ -573,6 +610,7 @@ enum BackupService {
             try? context.delete(model: DebtRecord.self)
             try? context.delete(model: SavingsGoal.self)
             try? context.delete(model: CardBudgetConfig.self)
+            try? context.delete(model: CycleIntent.self)
             try? context.delete(model: RecurringExpense.self)
             try context.save()
 
@@ -596,6 +634,11 @@ enum BackupService {
             // valid. The auto-generated init() assigns a new UUID; we
             // overwrite it post-init.
             card.id = c.id
+            card.issuerID = c.issuerID ?? ""
+            card.isCreditCard = c.isCreditCard ?? false
+            card.creditLimit = c.creditLimit ?? 0
+            card.openingOwed = c.openingOwed ?? 0
+            card.creditSince = c.creditSince
             context.insert(card)
             cardByID[c.id] = card
         }
@@ -610,6 +653,7 @@ enum BackupService {
                 category: TxCategory(rawValue: t.categoryRaw) ?? .other,
                 currency: t.currency, notes: t.notes,
                 linkedDebtID: t.linkedDebtID,
+                linkedGoalID: t.linkedGoalID,
                 subtype: TxSubtype(rawValue: t.subtype) ?? .normal
             )
             tx.id = t.id
@@ -667,6 +711,7 @@ enum BackupService {
             debt.isActive = d.isActive
             debt.createdAt = d.createdAt
             debt.hasBeenTracked = d.hasBeenTracked
+            debt.manuallyClosed = d.manuallyClosed ?? false
             context.insert(debt)
         }
 
@@ -686,6 +731,14 @@ enum BackupService {
             goal.createdAt = g.createdAt
             goal.isPinned = g.isPinned
             context.insert(goal)
+        }
+
+        for ci in payload.cycleIntents ?? [] {
+            guard let kind = CycleIntentKind(rawValue: ci.kindRaw) else { continue }
+            let intent = CycleIntent(kind: kind, cycleKey: ci.cycleKey,
+                                     note: ci.note, isRecurring: ci.isRecurring)
+            intent.createdAt = ci.createdAt
+            context.insert(intent)
         }
 
         for cb in payload.cardBudgets {
@@ -728,6 +781,7 @@ enum BackupService {
                 try? context.delete(model: DebtRecord.self)
                 try? context.delete(model: SavingsGoal.self)
                 try? context.delete(model: CardBudgetConfig.self)
+            try? context.delete(model: CycleIntent.self)
                 try? context.delete(model: RecurringExpense.self)
                 try? context.save()
                 Self.applyPayload(snap, context: context)
@@ -756,6 +810,11 @@ enum BackupService {
                 phoneNumber: c.phoneNumber, isHidden: c.isHidden
             )
             card.id = c.id
+            card.issuerID = c.issuerID ?? ""
+            card.isCreditCard = c.isCreditCard ?? false
+            card.creditLimit = c.creditLimit ?? 0
+            card.openingOwed = c.openingOwed ?? 0
+            card.creditSince = c.creditSince
             context.insert(card)
             cardByID[c.id] = card
         }
@@ -767,6 +826,7 @@ enum BackupService {
                 category: TxCategory(rawValue: t.categoryRaw) ?? .other,
                 currency: t.currency, notes: t.notes,
                 linkedDebtID: t.linkedDebtID,
+                linkedGoalID: t.linkedGoalID,
                 subtype: TxSubtype(rawValue: t.subtype) ?? .normal
             )
             tx.id = t.id
@@ -818,6 +878,7 @@ enum BackupService {
             debt.isActive = d.isActive
             debt.createdAt = d.createdAt
             debt.hasBeenTracked = d.hasBeenTracked
+            debt.manuallyClosed = d.manuallyClosed ?? false
             context.insert(debt)
         }
         for g in payload.goals {
@@ -837,6 +898,14 @@ enum BackupService {
             goal.isPinned = g.isPinned
             context.insert(goal)
         }
+        for ci in payload.cycleIntents ?? [] {
+            guard let kind = CycleIntentKind(rawValue: ci.kindRaw) else { continue }
+            let intent = CycleIntent(kind: kind, cycleKey: ci.cycleKey,
+                                     note: ci.note, isRecurring: ci.isRecurring)
+            intent.createdAt = ci.createdAt
+            context.insert(intent)
+        }
+
         for cb in payload.cardBudgets {
             let cfg = CardBudgetConfig(
                 cardID: cb.cardID,

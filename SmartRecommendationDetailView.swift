@@ -85,26 +85,117 @@ struct SmartRecommendationDetailView: View {
 
     // MARK: Summary
 
-    private var summaryTab: some View {
-        VStack(spacing: 16) {
-            // Overall Impact — dark hero card
-            VStack(alignment: .leading, spacing: 14) {
-                Text(loc("reco.impact_title")).font(.system(size: 15, weight: .bold)).foregroundStyle(.white)
-                Text(loc("reco.impact_intro")).font(.system(size: 11)).foregroundStyle(.white.opacity(0.7))
-                HStack(spacing: 14) {
-                    impactStat(money(reco.recommendedMonthlySaving), loc("reco.impact.planned_saving"), AppTheme.accent)
-                    impactStat(reco.potentialCut > 0 ? "-\(money(reco.potentialCut))" : "—", loc("reco.impact.smarter"), AppTheme.accent)
-                }
-                HStack(spacing: 14) {
-                    impactStat(reco.goalMonthsFaster.map { String(format: loc("debt.month"), $0) } ?? "—",
-                               loc("reco.impact.goal_faster"), AppTheme.blue)
-                    impactStat(reco.investReturn10y > 0 ? money(reco.investReturn10y) : "—",
-                               loc("reco.impact.invest_return"), AppTheme.blue)
+    /// 1. Where you stand — one sentence and the single number that matters.
+    private var situationCard: some View {
+        let positive = !reco.isDeficit
+        let headline = positive
+            ? money(reco.recommendedMonthlySaving)
+            : "-" + money(reco.deficitAmount)
+        return VStack(alignment: .leading, spacing: 8) {
+            Text(loc("reco.sum.where_title"))
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.7))
+            Text(headline)
+                .font(.system(size: 30, weight: .bold))
+                .foregroundStyle(positive ? AppTheme.accent : AppTheme.red)
+                .minimumScaleFactor(0.7).lineLimit(1)
+            Text(positive
+                 ? String(format: loc("reco.sum.where_surplus"), money(reco.avgMonthlyExpense))
+                 : String(format: loc("reco.sum.where_deficit"),
+                          money(reco.avgMonthlyExpense), money(reco.monthlyIncome)))
+                .font(.system(size: 12)).foregroundStyle(.white.opacity(0.85))
+                .fixedSize(horizontal: false, vertical: true).lineSpacing(2)
+            if !reco.periodLabel.isEmpty {
+                Text(reco.periodLabel)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(AppTheme.purple)
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(hex: "#1B2A24"), in: RoundedRectangle(cornerRadius: 18))
+    }
+
+    /// 2. What to do, in order. Same items as the main screen but numbered, so
+    /// the plan reads as a sequence rather than a pile of suggestions.
+    private var stepsCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(loc("reco.sum.steps_title"))
+                .font(.system(size: 14, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+            ForEach(Array(reco.topItems.prefix(4).enumerated()), id: \.element.id) { idx, item in
+                HStack(alignment: .top, spacing: 10) {
+                    Text("\(idx + 1)")
+                        .font(.system(size: 12, weight: .bold)).foregroundStyle(item.tint)
+                        .frame(width: 22, height: 22)
+                        .background(item.tint.opacity(0.15), in: Circle())
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(item.title)
+                            .font(.system(size: 13, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Text(item.subtitle)
+                            .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true).lineSpacing(2)
+                    }
+                    Spacer(minLength: 0)
                 }
             }
-            .padding(16)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color(hex: "#1B2A24"), in: RoundedRectangle(cornerRadius: 18))
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
+    }
+
+    /// 3. Only the outcomes that actually have a value. A grid half-full of
+    /// em-dashes reads as missing data, not as "not applicable yet".
+    private var impactStats: [(value: String, label: String, tint: Color)] {
+        var out: [(String, String, Color)] = []
+        if reco.recommendedMonthlySaving > 0 {
+            out.append((money(reco.recommendedMonthlySaving), loc("reco.impact.planned_saving"), AppTheme.accent))
+        }
+        if reco.potentialCut > 0 {
+            out.append((money(reco.potentialCut), loc("reco.impact.smarter"), AppTheme.orange))
+        }
+        if let m = reco.goalMonthsFaster, m > 0 {
+            out.append((String(format: loc("debt.month"), m), loc("reco.impact.goal_faster"), AppTheme.blue))
+        }
+        if reco.investReturn10y > 0 {
+            out.append((money(reco.investReturn10y), loc("reco.impact.invest_return"), AppTheme.purple))
+        }
+        return out
+    }
+
+    private var impactCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(loc("reco.impact_title"))
+                .font(.system(size: 14, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+            Text(loc("reco.impact_intro"))
+                .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+            ForEach(Array(impactStats.enumerated()), id: \.offset) { _, stat in
+                HStack {
+                    Text(stat.label)
+                        .font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 10)
+                    Text(stat.value)
+                        .font(.system(size: 15, weight: .bold)).foregroundStyle(stat.tint)
+                        .lineLimit(1).minimumScaleFactor(0.8)
+                }
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
+    }
+
+    private var summaryTab: some View {
+        VStack(spacing: 16) {
+            // Read top-to-bottom as a story: where you are → what to do →
+            // what changes. The old version opened with a 2×2 grid of stats
+            // that were mostly "—" or "Rp 0" in deficit, which told the user
+            // nothing and looked broken.
+            situationCard
+            stepsCard
+            if !impactStats.isEmpty { impactCard }
 
             if !reco.reasons.isEmpty {
                 VStack(alignment: .leading, spacing: 10) {
@@ -145,13 +236,14 @@ struct SmartRecommendationDetailView: View {
                     Text(money(reco.recommendedMonthlySaving) + loc("reco.per_month"))
                         .font(.system(size: 24, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
                     Spacer()
-                    if reco.savingVsCurrentPct != 0 {
+                    if reco.savingVsCurrentPct != 0 && !reco.isDeficit {
                         Text(String(format: loc("reco.vs_current"), reco.savingVsCurrentPct))
                             .font(.system(size: 11, weight: .bold)).foregroundStyle(AppTheme.accent)
                             .padding(.horizontal, 8).padding(.vertical, 4)
                             .background(AppTheme.accent.opacity(0.12), in: Capsule())
                     }
                 }
+                if reco.isDeficit { deficitExplainer }
             }
 
             if !reco.savingAllocation.isEmpty {
@@ -217,6 +309,31 @@ struct SmartRecommendationDetailView: View {
         }
     }
 
+    /// Why the plan allocates a share to Invest & debt while the suggested
+    /// saving/investing figure is zero: that share is currently paying debt
+    /// minimums, and setting money aside only becomes real once spending fits
+    /// inside income. Without this the two numbers look like a bug.
+    private var deficitExplainer: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                Image(systemName: "info.circle.fill")
+                    .font(.system(size: 11)).foregroundStyle(AppTheme.orange)
+                Text(loc("reco.deficit_zero_title"))
+                    .font(.system(size: 12, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+            }
+            Text(String(format: loc("reco.deficit_zero_body"),
+                        Int((reco.recommendedRatios.investDebt * 100).rounded()),
+                        money(reco.monthlyIncome * reco.recommendedRatios.investDebt),
+                        money(reco.debtMinimumMonthly),
+                        money(reco.deficitAmount)))
+                .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                .fixedSize(horizontal: false, vertical: true).lineSpacing(2)
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(AppTheme.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
+    }
+
     // MARK: Investment
 
     private var investmentTab: some View {
@@ -226,6 +343,7 @@ struct SmartRecommendationDetailView: View {
                 Text(loc("reco.invest.suggested")).font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
                 Text(money(reco.suggestedInvestment) + loc("reco.per_month"))
                     .font(.system(size: 24, weight: .bold)).foregroundStyle(AppTheme.purple)
+                if reco.isDeficit { deficitExplainer }
             }
             card {
                 HStack {

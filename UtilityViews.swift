@@ -546,7 +546,7 @@ struct TransactionDetailSheet: View {
         }
         .confirmationDialog(loc("tx.delete_prompt"), isPresented: $showDeleteConfirm, titleVisibility: .visible) {
             Button(loc("common.delete"), role: .destructive) {
-                context.delete(tx)
+                deleteTransactionWithGoalRollback(tx, context: context)
                 try? context.save()
                 HapticManager.shared.warning()
                 dismiss()
@@ -818,10 +818,14 @@ struct DetailRow: View {
 struct AddTransactionSheet: View {
     let vm: AppViewModel
     var preselectedCategory: TxCategory? = nil
+    /// Pre-select a specific card (e.g. "Log a purchase" from a credit card).
+    var preselectedCardID: UUID? = nil
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
     @Query private var activeDebts: [DebtRecord]
     @Query(sort: \SalarySchedule.createdAt) private var salarySchedules: [SalarySchedule]
+    /// Whole history, used to learn how THIS user categorises merchants.
+    @Query private var allTransactions: [TxRecord]
 
     @State private var txType: AddTxType = .expense
     @State private var name: String = ""
@@ -837,6 +841,8 @@ struct AddTransactionSheet: View {
     @State private var saveInPreferred = false
     @State private var showBudgetAlert = false
     @State private var pendingBudgetAlert: BudgetAlert? = nil
+    @State private var showCreditLimitAlert = false
+    @State private var creditOverConfirmed = false
     @State private var showConversionPaywall = false
     /// Receipt scanner moved here from the Home FAB. Royal-only feature; tapping
     /// shows the paywall first when the user lacks access.
@@ -856,15 +862,19 @@ struct AddTransactionSheet: View {
     @State private var pm = PremiumManager.shared
 
     private var monthlyIncome: Double {
+        // Budget limits are based on STATED monthly income, exactly like the
+        // Smart Budget screen ("From salary schedule"). This used to add any
+        // extra income logged this calendar month, which silently raised the
+        // limit here (Rp 5.057.500) while Smart Budget still showed Rp 5.000.000
+        // — two different "budget exceeded" thresholds for the same budget.
         let scheduled = salarySchedules.filter { $0.isActive }.reduce(0) { $0 + $1.amount }
+        if scheduled > 0 { return scheduled }
+        // No schedule → fall back to income actually received this month.
         let cal = Calendar.current
         let monthStart = cal.safeDate(from: cal.dateComponents([.year, .month], from: Date()))
-        // Add any extra income recorded this month (bonus, freelance, etc.) — exclude salary
-        // to avoid double-counting since salary schedules already cover that
-        let extraIncome = allCardTransactions
-            .filter { $0.amount > 0 && $0.date >= monthStart && $0.category != .salary }
+        return allCardTransactions
+            .filter { $0.amount > 0 && $0.txSubtype != .transfer && $0.date >= monthStart }
             .reduce(0) { $0 + $1.amount }
-        return scheduled + extraIncome
     }
 
     private var allCardTransactions: [TxRecord] {
@@ -1250,9 +1260,11 @@ struct AddTransactionSheet: View {
                             .opacity(appeared ? 1 : 0).offset(y: appeared ? 0 : 20)
                             .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.1), value: appeared)
                             .onChange(of: name) { _, newName in
-                                // Auto-categorize by merchant name
+                                // History first, keyword map second — what this
+                                // user actually does beats a shipped guess.
                                 if txType == .expense,
-                                   let suggested = SmartBudgetManager.suggestCategory(for: newName, txType: "Expense"),
+                                   let suggested = SmartBudgetManager.suggestCategory(
+                                        for: newName, txType: "Expense", transactions: allTransactions),
                                    availableCategories.contains(suggested) {
                                     withAnimation(.spring(response: 0.3)) { selectedCategory = suggested }
                                 }
@@ -1260,11 +1272,20 @@ struct AddTransactionSheet: View {
 
                         // Auto-categorize hint
                         if txType == .expense,
-                           let suggested = SmartBudgetManager.suggestCategory(for: name, txType: "Expense"),
+                           let suggested = SmartBudgetManager.suggestCategory(
+                                for: name, txType: "Expense", transactions: allTransactions),
                            suggested != selectedCategory {
+                            let learned = SmartBudgetManager.learnedCategory(
+                                for: name, transactions: allTransactions)
                             HStack(spacing: 8) {
                                 Image(systemName: suggested.icon).font(.system(size: 12)).foregroundStyle(suggested.color)
-                                Text(String(format: loc("tx.auto_detected"), suggested.displayLabel))
+                                // Cite the evidence when it comes from the
+                                // user's own history — "because you did this 5
+                                // times" is trustworthy in a way that a bare
+                                // "detected" never is.
+                                Text(learned.map {
+                                        String(format: loc("tx.learned_from"), $0.count, $0.matchedTerm)
+                                     } ?? String(format: loc("tx.auto_detected"), suggested.displayLabel))
                                     .font(.system(size: 12, weight: .medium)).foregroundStyle(AppTheme.textSecondary)
                                 Spacer()
                                 Button {
@@ -1321,8 +1342,22 @@ struct AddTransactionSheet: View {
                                                 HapticManager.shared.tap(); selectedCardIndex = i
                                             } label: {
                                                 VStack(alignment: .leading, spacing: 4) {
-                                                    Text(card.holderName).font(.system(size: 12, weight: .semibold))
-                                                    if card.isDigitalWallet {
+                                                    HStack(spacing: 5) {
+                                                        Text(card.holderName).font(.system(size: 12, weight: .semibold))
+                                                        // Credit cards are spendable but flagged so the
+                                                        // user knows this purchase adds to what they owe.
+                                                        if card.isCreditCard {
+                                                            Text(loc("cc.badge")).font(.system(size: 8, weight: .bold))
+                                                                .foregroundStyle(selectedCardIndex == i ? AppTheme.bg.opacity(0.75) : AppTheme.purple)
+                                                                .padding(.horizontal, 5).padding(.vertical, 1)
+                                                                .background((selectedCardIndex == i ? AppTheme.bg.opacity(0.2) : AppTheme.purple.opacity(0.15)), in: Capsule())
+                                                        }
+                                                    }
+                                                    if card.isCreditCard {
+                                                        Text(String(format: loc("cc.avail_short"), card.formattedAvailable))
+                                                            .font(.system(size: 11))
+                                                            .foregroundStyle(selectedCardIndex == i ? AppTheme.bg.opacity(0.7) : AppTheme.textSecondary)
+                                                    } else if card.isDigitalWallet {
                                                         Text(card.walletProvider.isEmpty ? loc("common.wallet") : card.walletProvider)
                                                             .font(.system(size: 11))
                                                             .foregroundStyle(selectedCardIndex == i ? AppTheme.bg.opacity(0.7) : AppTheme.textSecondary)
@@ -1445,8 +1480,13 @@ struct AddTransactionSheet: View {
         }
         .onAppear {
             CurrencyManager.shared.fetchRate()
-            // Start on the card the user was viewing on home
-            selectedCardIndex = min(vm.selectedCardIndex, max(vm.cards.count - 1, 0))
+            // Start on the card the user was viewing on home, or a specific
+            // card if the caller asked for one (e.g. "Log a purchase" on a CC).
+            if let id = preselectedCardID, let idx = vm.cards.firstIndex(where: { $0.id == id }) {
+                selectedCardIndex = idx
+            } else {
+                selectedCardIndex = min(vm.selectedCardIndex, max(vm.cards.count - 1, 0))
+            }
             // Init currency from that card
             if !vm.cards.isEmpty {
                 let card = vm.cards[min(selectedCardIndex, vm.cards.count - 1)]
@@ -1512,6 +1552,15 @@ struct AddTransactionSheet: View {
                 }
             }
         }
+        .alert(loc("cc.over_limit_title"), isPresented: $showCreditLimitAlert) {
+            Button(loc("tx.add_anyway"), role: .destructive) { creditOverConfirmed = true; saveTransaction() }
+            Button(loc("common.cancel"), role: .cancel) { }
+        } message: {
+            if vm.cards.indices.contains(selectedCardIndex) {
+                let card = vm.cards[selectedCardIndex]
+                Text(String(format: loc("cc.over_limit_msg"), card.formattedAvailable))
+            }
+        }
     }
 
     private func saveTransaction() {
@@ -1520,13 +1569,34 @@ struct AddTransactionSheet: View {
             HapticManager.shared.error(); withAnimation { showError = true }; return
         }
 
+        // Credit-limit check — spending on a credit card that would blow past
+        // its limit. Warns once; "Add anyway" proceeds (issuers do allow small
+        // over-limit spend). Only for expenses on a credit card.
+        if txType == .expense, vm.cards.indices.contains(selectedCardIndex) {
+            let card = vm.cards[selectedCardIndex]
+            if card.isCreditCard, card.creditLimit > 0, !creditOverConfirmed {
+                let addInCardCur = CurrencyManager.shared.convert(abs(effectiveAmount), from: effectiveCurrency, to: card.resolvedCurrency)
+                if card.owedBalance() + addInCardCur > card.creditLimit {
+                    showCreditLimitAlert = true
+                    HapticManager.shared.warning()
+                    return
+                }
+            }
+        }
+
         // Smart budget check — only for expenses
         if txType == .expense {
+            // Pay-cycle scoped, matching the Smart Budget screen — a calendar
+            // month window understates spend before payday, so the "this will
+            // exceed your budget" warning wouldn't fire even when already over.
+            let cycleStart: Date? = salarySchedules.first(where: { $0.isActive })
+                .map { StatPeriod.payCycleRange(payDay: $0.dayOfMonth).start }
             if let alert = SmartBudgetManager.shared.wouldExceed(
                 category: selectedCategory,
                 amount: effectiveAmount,
                 transactions: allCardTransactions,
-                income: monthlyIncome
+                income: monthlyIncome,
+                periodStart: cycleStart
             ) {
                 pendingBudgetAlert = alert
                 showBudgetAlert = true

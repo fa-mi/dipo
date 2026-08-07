@@ -205,7 +205,10 @@ struct DiPoApp: App {
             // Per-card Smart Budget allocations (50/30/20 daily/lifestyle/invest).
             // One row per card the user has configured; cards without a row fall
             // back to global defaults from SmartBudgetManager.
-            CardBudgetConfig.self
+            CardBudgetConfig.self,
+            // Deliberate choices the user declared per pay cycle, so the engine
+            // reports them instead of scoring them as mistakes.
+            CycleIntent.self
         ])
         let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
         do {

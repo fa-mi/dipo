@@ -21,6 +21,15 @@ struct DebtView: View {
     @State private var simulatorDebt: DebtRecord? = nil
     @State private var showSalarySetup = false
     @State private var showAllDebts = false
+    @State private var showAddCreditCard = false
+    @State private var editingCreditCard: BankCard? = nil
+    @State private var logSpendCard: BankCard? = nil
+
+    /// Credit cards are liability accounts — they live here in the Debt Tracker
+    /// (the single door for creating one), sorted by amount owed.
+    private var creditCards: [BankCard] {
+        cards.filter { $0.isCreditCard }.sorted { $0.owedBalance() > $1.owedBalance() }
+    }
 
     /// Max debts shown inline before collapsing behind "See all".
     private let debtPreviewLimit = 5
@@ -136,6 +145,19 @@ struct DebtView: View {
     }
 
     var body: some View {
+        // Self-gate, like Wishlist and Smart Budget settings. Today every entry
+        // point happens to be blocked (the Profile row is a
+        // PremiumLockedFeatureLink, and the Home insight that routes here only
+        // exists when `hasActiveBudget` is true), but a screen that relies
+        // entirely on its callers to protect it is one new navigation path away
+        // from leaking. It also covers a subscription lapsing while the sheet
+        // is already open.
+        PremiumGate(feature: .smartDebt) {
+            debtContent
+        }
+    }
+
+    private var debtContent: some View {
         ZStack { AppTheme.bg.ignoresSafeArea()
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 0) {
@@ -260,6 +282,16 @@ struct DebtView: View {
                             }
                         }
                     }
+
+                    // ── Credit Cards (liability accounts) ──────────────────
+                    // Shown regardless of whether there are debts — a user may
+                    // track only a credit card. This is the single door to
+                    // create one.
+                    creditCardSection
+                        .padding(.top, 24)
+                        .opacity(appeared ? 1 : 0)
+                        .animation(.spring(response: 0.55, dampingFraction: 0.8).delay(0.34), value: appeared)
+
                     Spacer(minLength: 120)
                 }
             }
@@ -307,6 +339,63 @@ struct DebtView: View {
                 .presentationDragIndicator(.visible)
                 .presentationBackground(AppTheme.bg)
                 .preferredColorScheme(appColorScheme())
+        }
+        .sheet(isPresented: $showAddCreditCard) {
+            CreditCardFormSheet(editCard: nil)
+                .presentationDetents([.large]).presentationDragIndicator(.visible)
+                .presentationBackground(AppTheme.bg).preferredColorScheme(appColorScheme())
+        }
+        .sheet(item: $editingCreditCard) { card in
+            CreditCardFormSheet(editCard: card)
+                .presentationDetents([.large]).presentationDragIndicator(.visible)
+                .presentationBackground(AppTheme.bg).preferredColorScheme(appColorScheme())
+        }
+        .sheet(item: $logSpendCard) { card in
+            // Cross-link: log a purchase with this credit card pre-selected.
+            AddTransactionSheet(vm: txViewModel(), preselectedCardID: card.id)
+                .presentationDetents([.large]).presentationDragIndicator(.visible)
+                .presentationBackground(AppTheme.bg).preferredColorScheme(appColorScheme())
+        }
+    }
+
+    /// Lightweight AppViewModel carrying the live card list into the add-tx form.
+    private func txViewModel() -> AppViewModel {
+        let vm = AppViewModel()
+        vm.cards = cards
+        return vm
+    }
+
+    // MARK: - Credit Cards Section
+
+    @ViewBuilder private var creditCardSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text(loc("cc.section_title")).font(.system(size: 17, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                Spacer()
+                Button { HapticManager.shared.tap(); showAddCreditCard = true } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: "plus").font(.system(size: 12, weight: .bold))
+                        Text(loc("cc.add")).font(.system(size: 13, weight: .semibold))
+                    }
+                    .foregroundStyle(AppTheme.purple)
+                    .padding(.horizontal, 12).padding(.vertical, 7)
+                    .background(AppTheme.purple.opacity(0.12), in: Capsule())
+                }.buttonStyle(ScaleButtonStyle())
+            }
+            .padding(.horizontal, 22)
+
+            if creditCards.isEmpty {
+                Text(loc("cc.section_empty"))
+                    .font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
+                    .padding(.horizontal, 22)
+            } else {
+                ForEach(creditCards) { card in
+                    CreditCardLiabilityRow(card: card,
+                                           onEdit: { editingCreditCard = card },
+                                           onLogSpend: { logSpendCard = card })
+                        .padding(.horizontal, 22)
+                }
+            }
         }
     }
 }
@@ -758,6 +847,9 @@ struct DebtCard: View {
             Button(loc("debt.make_payment")) { showPaymentSheet = true }
             Button(loc("common.edit")) { vm.loadForEdit(debt) }
             Button(loc("debt.mark_paid"), role: .none) { markPaid() }
+            // Migration path: a debt that's really a credit card can become a
+            // proper CC account (spendable + owed tracking) in one tap.
+            Button(loc("cc.convert_action")) { convertToCreditCard() }
             Button(loc("common.delete"), role: .destructive) { showDelete = true }
             Button(loc("common.cancel"), role: .cancel) {}
         }
@@ -783,6 +875,27 @@ struct DebtCard: View {
     private func markPaid() {
         debt.currentBalance = 0; debt.isActive = false
         debt.manuallyClosed = true   // keep it closed; don't let sync revive it
+        try? modelContext.save()
+        HapticManager.shared.success()
+    }
+
+    /// Convert this debt into a real credit-card account, then close the debt so
+    /// the same money isn't tracked twice. Limit defaults to the original total
+    /// (an editable best-guess); owed carries over from the current balance.
+    private func convertToCreditCard() {
+        let existing = (try? modelContext.fetch(FetchDescriptor<BankCard>())) ?? []
+        let g = BankIssuer.fallbackGradient(for: "5")
+        let card = BankCard(
+            holderName: debt.name, cardNumber: "", balance: 0, expireDate: "",
+            gradientStart: g.start, gradientEnd: g.end,
+            sortOrder: existing.count, currency: debt.currency.isEmpty ? CurrencyManager.shared.preferredCurrency : debt.currency)
+        card.isCreditCard = true
+        card.creditLimit = max(debt.totalAmount, debt.currentBalance)
+        card.openingOwed = debt.currentBalance
+        card.creditSince = Date()
+        modelContext.insert(card)
+        // Close the debt (don't delete — keeps history), so it's not double-counted.
+        debt.currentBalance = 0; debt.isActive = false; debt.manuallyClosed = true
         try? modelContext.save()
         HapticManager.shared.success()
     }

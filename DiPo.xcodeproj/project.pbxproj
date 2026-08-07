@@ -69,6 +69,12 @@
 		9BEA10042F000004000000B4 /* UnitySavings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BEA10042F000004000000E4 /* UnitySavings.swift */; };
 		9BEA10052F000005000000B4 /* RecurringExpense.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BEA10052F000005000000E4 /* RecurringExpense.swift */; };
 		9BEA10062F000006000000B4 /* AccountDeletion.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BEA10062F000006000000E4 /* AccountDeletion.swift */; };
+		9BEA10072F000007000000B4 /* BankIssuer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BEA10072F000007000000E4 /* BankIssuer.swift */; };
+		9BEA10082F000008000000B4 /* TidyCategoriesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BEA10082F000008000000E4 /* TidyCategoriesView.swift */; };
+		9BEA10092F000009000000B4 /* CreditCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BEA10092F000009000000E4 /* CreditCard.swift */; };
+		9BEA100A2F00000A000000B4 /* FinancialBriefing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BEA100A2F00000A000000E4 /* FinancialBriefing.swift */; };
+		9BEA100A2F00000A0000B5B4 /* CycleIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BEA100A2F00000A0000E5E4 /* CycleIntent.swift */; };
+		9BEA100A2F00000A0000B6B4 /* CycleIntentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BEA100A2F00000A0000E6E4 /* CycleIntentView.swift */; };
 		9BFC17B52F91206C00D80402 /* RevenueCat in Frameworks */ = {isa = PBXBuildFile; productRef = 9BFC17B42F91206C00D80402 /* RevenueCat */; };
 /* End PBXBuildFile section */
 
@@ -154,6 +160,12 @@
 		9BEA10042F000004000000E4 /* UnitySavings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnitySavings.swift; sourceTree = "<group>"; };
 		9BEA10052F000005000000E4 /* RecurringExpense.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecurringExpense.swift; sourceTree = "<group>"; };
 		9BEA10062F000006000000E4 /* AccountDeletion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountDeletion.swift; sourceTree = "<group>"; };
+		9BEA10072F000007000000E4 /* BankIssuer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BankIssuer.swift; sourceTree = "<group>"; };
+		9BEA10082F000008000000E4 /* TidyCategoriesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TidyCategoriesView.swift; sourceTree = "<group>"; };
+		9BEA10092F000009000000E4 /* CreditCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreditCard.swift; sourceTree = "<group>"; };
+		9BEA100A2F00000A000000E4 /* FinancialBriefing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FinancialBriefing.swift; sourceTree = "<group>"; };
+		9BEA100A2F00000A0000E5E4 /* CycleIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CycleIntent.swift; sourceTree = "<group>"; };
+		9BEA100A2F00000A0000E6E4 /* CycleIntentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CycleIntentView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -259,6 +271,12 @@
 				9BEA10042F000004000000E4 /* UnitySavings.swift */,
 				9BEA10052F000005000000E4 /* RecurringExpense.swift */,
 				9BEA10062F000006000000E4 /* AccountDeletion.swift */,
+				9BEA10072F000007000000E4 /* BankIssuer.swift */,
+				9BEA10082F000008000000E4 /* TidyCategoriesView.swift */,
+				9BEA10092F000009000000E4 /* CreditCard.swift */,
+				9BEA100A2F00000A000000E4 /* FinancialBriefing.swift */,
+				9BEA100A2F00000A0000E6E4 /* CycleIntentView.swift */,
+				9BEA100A2F00000A0000E5E4 /* CycleIntent.swift */,
 				9B1C11CB2FA029540032CD2C /* CryptoManager.swift */,
 				9B1C11CD2FA029540032CD2C /* NetworkLayer.swift */,
 				9B1C11CE2FA029540032CD2C /* SecureDataLayerMigration.swift */,
@@ -482,6 +500,12 @@
 				9BEA10042F000004000000B4 /* UnitySavings.swift in Sources */,
 				9BEA10052F000005000000B4 /* RecurringExpense.swift in Sources */,
 				9BEA10062F000006000000B4 /* AccountDeletion.swift in Sources */,
+				9BEA10072F000007000000B4 /* BankIssuer.swift in Sources */,
+				9BEA10082F000008000000B4 /* TidyCategoriesView.swift in Sources */,
+				9BEA10092F000009000000B4 /* CreditCard.swift in Sources */,
+				9BEA100A2F00000A000000B4 /* FinancialBriefing.swift in Sources */,
+				9BEA100A2F00000A0000B6B4 /* CycleIntentView.swift in Sources */,
+				9BEA100A2F00000A0000B5B4 /* CycleIntent.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -503,7 +527,7 @@
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
 				CODE_SIGN_ENTITLEMENTS = DiPoWidgetExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 57;
+				CURRENT_PROJECT_VERSION = 61;
 				DEVELOPMENT_TEAM = 3C6KN7P2NC;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = DiPoWidget/Info.plist;
@@ -515,7 +539,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 2.1;
+				MARKETING_VERSION = 2.3;
 				PRODUCT_BUNDLE_IDENTIFIER = com.fahmiaquinas.DiPo.DiPoWidget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -535,7 +559,7 @@
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
 				CODE_SIGN_ENTITLEMENTS = DiPoWidgetExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 57;
+				CURRENT_PROJECT_VERSION = 61;
 				DEVELOPMENT_TEAM = 3C6KN7P2NC;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = DiPoWidget/Info.plist;
@@ -547,7 +571,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 2.1;
+				MARKETING_VERSION = 2.3;
 				PRODUCT_BUNDLE_IDENTIFIER = com.fahmiaquinas.DiPo.DiPoWidget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -691,7 +715,7 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = DiPo/DiPo.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 57;
+				CURRENT_PROJECT_VERSION = 61;
 				DEVELOPMENT_TEAM = 3C6KN7P2NC;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -708,7 +732,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.1;
+				MARKETING_VERSION = 2.3;
 				PRODUCT_BUNDLE_IDENTIFIER = com.fahmiaquinas.DiPo;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -733,7 +757,7 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = DiPo/DiPo.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 57;
+				CURRENT_PROJECT_VERSION = 61;
 				DEVELOPMENT_TEAM = 3C6KN7P2NC;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -750,7 +774,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.1;
+				MARKETING_VERSION = 2.3;
 				PRODUCT_BUNDLE_IDENTIFIER = com.fahmiaquinas.DiPo;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
