@@ -72,6 +72,37 @@ enum WidgetDataSync {
         WidgetCenter.shared.reloadAllTimelines()
     }
 
+    /// Erase everything the Home Screen widget shows.
+    ///
+    /// This bridge only ever WROTE. It lives in the App Group container, which
+    /// is a different store from `UserDefaults.standard`, so none of the three
+    /// wipe paths touched it — they cleared SwiftData and the standard defaults
+    /// and left the widget holding the previous state. Consequences, in order
+    /// of severity:
+    ///   • A different account signing in on this device saw the PREVIOUS
+    ///     user's monthly spending, top category and weekly average on the
+    ///     Home Screen until the app next refreshed.
+    ///   • After sign-out the cached `isRoyal` flag stayed true, so Royal-only
+    ///     insights kept rendering on a surface with no paywall in front of it.
+    ///   • "Reset All Data" and account deletion both left the old figures up.
+    ///
+    /// Removing the keys (rather than zeroing them) makes the widget fall back
+    /// to its neutral placeholder, which is the honest state for "no data".
+    static func clear() {
+        guard let store = UserDefaults(suiteName: appGroupID) else { return }
+        let keys = [
+            Key.monthlyExpenses, Key.monthlyExpensesFormatted,
+            Key.monthlyIncome, Key.monthlyIncomeFormatted,
+            Key.currency, Key.monthLabel, Key.lastUpdated,
+            Key.isRoyal, Key.topCategoryLabel, Key.topCategoryFormatted,
+            Key.topCategoryPercent, Key.weeklyAvgFormatted,
+            Key.labelExpenses, Key.labelIncome, Key.labelQuickAdd,
+            Key.labelTopCategory, Key.labelWeeklyAvg,
+        ]
+        for key in keys { store.removeObject(forKey: key) }
+        WidgetCenter.shared.reloadAllTimelines()
+    }
+
     static func refresh(context: ModelContext) {
         guard let store = shared else { return }
 
@@ -154,7 +185,10 @@ enum WidgetDataSync {
         // widget UI by `isRoyal`, but we always compute + write them so
         // the moment a user upgrades, the widget unlocks on the next
         // refresh without needing schema changes here.
-        let isRoyal = (PremiumManager.shared.plan == .royal)
+        // `canAccess` rather than a bare plan check — it also requires a signed-in
+        // session, so a signed-out device can't keep serving Royal insights on
+        // the Home Screen where there's no paywall to stop it.
+        let isRoyal = PremiumManager.shared.canAccess(.smartBudget)
         let topEntry = perCategory.filter { $0.value > 0 }.max { $0.value < $1.value }
         let topCategoryLabel     = topEntry?.key.displayLabel ?? ""
         let topCategoryFormatted = topEntry.map {
@@ -223,7 +257,12 @@ struct RootView: View {
 
     // This @Query is the live observer — SwiftData notifies it
     // the moment any card is inserted, updated, or deleted
-    @Query(sort: \BankCard.sortOrder) private var liveCards: [BankCard]
+    /// Cash accounts only. Credit cards are liabilities — they belong in Debts
+    /// & Credits where the limit, instalments and bill live together, not in a
+    /// carousel next to money you actually have. Showing them side by side made
+    /// "balance" mean two opposite things one swipe apart.
+    @Query(filter: #Predicate<BankCard> { !$0.isCreditCard },
+           sort: \BankCard.sortOrder) private var liveCards: [BankCard]
 
     // Watching transactions directly (not just cards) is what lets the
     // widget bridge refresh when a tx is added/edited/deleted — `liveCards`
@@ -389,6 +428,13 @@ struct RootView: View {
             // Schedule the smart reminders (weekly recap, monthly summary,
             // inactivity nudge, overspend alert) on launch too.
             NotificationScheduler.refresh(context: context)
+            // First-launch stamp anchors the "you have never backed up" nudge
+            // so it lands a week after install rather than sliding forward on
+            // every app open.
+            if UserDefaults.standard.object(forKey: "dipo_first_launch_date") == nil {
+                UserDefaults.standard.set(Date(), forKey: "dipo_first_launch_date")
+            }
+            NotificationManager.scheduleBackupReminder()
             // Check card expiry on every launch
             NotificationManager.scheduleCardExpiryReminders(for: liveCards)
             // Single, authoritative RevenueCat configure — must stay here (post-SwiftUI init).

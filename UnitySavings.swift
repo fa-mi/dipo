@@ -190,8 +190,13 @@ final class UnitySavingsService {
             print("[Unity][accept] ✗ blocked: no auth uid")
             return false
         }
-        guard PremiumManager.shared.plan == .royal else {
-            print("[Unity][accept] ✗ blocked: not Royal (plan=\(PremiumManager.shared.plan))")
+        // `canAccess`, not `plan == .royal`: the uid guard above is satisfied by
+        // the ANONYMOUS Firebase session every launch establishes, so it proves
+        // nothing about whether anyone is signed into DiPo. `canAccess` checks
+        // the plan AND the login, which is what "hard-gated on Royal" means
+        // here. Matches the `PremiumGate(.savingsGoals)` wrapping this screen.
+        guard PremiumManager.shared.canAccess(.savingsGoals) else {
+            print("[Unity][accept] ✗ blocked: no Royal access (plan=\(PremiumManager.shared.plan))")
             return false
         }
         var step = "join-transaction (read+update goal)"
@@ -1094,7 +1099,7 @@ struct SharedGoalDetailView: View {
                 }
             }
             .navigationTitle(loc("unity.title")).navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button(loc("common.done")) { dismiss() }.foregroundStyle(AppTheme.purple) } }
+            .doneToolbar { dismiss() }
             .task { await load() }
             .sheet(isPresented: $showAdd) {
                 AddContributionSheet(goal: goal) { await load() }

@@ -349,6 +349,8 @@ struct WishlistView: View {
     private func depositToGoal(_ goal: SavingsGoal, amount: Double, card: BankCard? = nil) {
         let wasComplete = goal.progress >= 1.0
         goal.savedAmount += amount
+        ActionFeedbackCenter.shared.savingsAdded(
+            amount: amount, currency: goal.currency, goalName: goal.name, emoji: goal.emoji)
         if let card {
             let cm = CurrencyManager.shared
             // Store in the CARD's currency — the money physically leaves that
@@ -390,9 +392,11 @@ struct WishlistView: View {
     }
 
     private func deleteGoal(_ goal: SavingsGoal) {
+        let name = goal.name
         context.delete(goal)
         try? context.save()
         HapticManager.shared.warning()
+        ActionFeedbackCenter.shared.removed(loc("feedback.goal_deleted"), detail: name)
     }
 
     private func togglePin(_ goal: SavingsGoal) {
@@ -1367,6 +1371,8 @@ struct GoalFormSheet: View {
         }
         try? context.save()
         HapticManager.shared.success()
+        ActionFeedbackCenter.shared.goalSaved(
+            name: name.trimmingCharacters(in: .whitespaces), emoji: emoji, isUpdate: editGoal != nil)
         dismiss()
     }
 }

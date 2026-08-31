@@ -69,6 +69,11 @@ final class AIChatViewModel {
         /// give data-driven insights — not just log transactions. Built fresh
         /// per message by the view from SwiftData.
         let context: String
+        /// The app's language, so the assistant's reply follows what the user
+        /// is reading — not the language they happened to type in. Without it
+        /// the model inferred, and two English messages in a row could get one
+        /// English reply and one Indonesian.
+        let language: String
     }
     private struct ChatResponse: Decodable {
         let reply: String
@@ -115,6 +120,25 @@ final class AIChatViewModel {
 
         messages.append(AIChatMessage(role: .user, text: text))
         input = ""
+
+        // Try locally first. Plain entries like "beli kopi 25rb dan parkir 5rb"
+        // are a tokenising problem, and sending them to a language model costs a
+        // credit, a round trip, and a working connection for no added judgement.
+        // The parser returns nil unless it is confident, so anything ambiguous
+        // still reaches the model.
+        if let local = LocalTxParser.parse(text) {
+            let parsed = local.items.map { item in
+                AIParsedTx(name: item.name, amount: item.amount,
+                           isExpense: item.isExpense, category: item.category,
+                           currency: CurrencyManager.shared.preferredCurrency,
+                           date: .now, notes: "tx.note.quick_entry")
+            }
+            messages.append(AIChatMessage(role: .assistant,
+                text: loc(parsed.count == 1 ? "ai.local_one" : "ai.local_many"),
+                transactions: parsed))
+            return
+        }
+
         isLoading = true
         defer { isLoading = false }
 
@@ -123,7 +147,8 @@ final class AIChatViewModel {
             userPlan: PremiumManager.shared.plan.rawValue,
             message: text,
             currencyHint: CurrencyManager.shared.preferredCurrency,
-            context: context
+            context: context,
+            language: LanguageManager.shared.current.rawValue
         )
         guard let body = try? JSONEncoder().encode(payload) else {
             messages.append(AIChatMessage(role: .assistant,
@@ -135,7 +160,7 @@ final class AIChatViewModel {
         do {
             let resp: ChatResponse = try await NetworkService.shared.fetch(endpoint)
             if let left = resp.creditsLeft { creditsLeft = left }
-            let parsed = resp.transactions.map { wire -> AIParsedTx in
+            let parsed = resp.transactions.filter { abs($0.amount) > 0 }.map { wire -> AIParsedTx in
                 AIParsedTx(
                     name: wire.name,
                     amount: abs(wire.amount),
@@ -199,6 +224,9 @@ struct AIChatView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
     @Query(sort: \BankCard.sortOrder) private var cards: [BankCard]
+    /// Needed so a credit card's available credit accounts for principal that
+    /// running instalments still hold.
+    @Query private var installments: [CardInstallment]
     @Query private var debts: [DebtRecord]
     @Query private var goals: [SavingsGoal]
     @Query private var recurrings: [RecurringExpense]
@@ -207,6 +235,13 @@ struct AIChatView: View {
     @State private var vm = AIChatViewModel()
     @State private var selectedCardID: UUID? = nil
     @FocusState private var inputFocused: Bool
+
+    /// Set by the Back Tap / Siri shortcut so the sheet opens already listening.
+    var autoStartVoice: Bool = false
+
+    @State private var voice = VoiceDictation()
+    @State private var voiceNotice: String? = nil
+    @State private var showCardPicker = false
 
     /// Card new transactions are written to. Defaults to the first card.
     private var targetCard: BankCard? {
@@ -236,6 +271,43 @@ struct AIChatView: View {
                 vm.messages.append(AIChatMessage(role: .assistant,
                     text: loc("ai.greeting")))
             }
+            // Arriving from Back Tap / Siri: start listening immediately. The
+            // whole point of the gesture is that nothing else needs pressing.
+            // Speaking IS the submit. Waiting for a second tap defeats the
+            // point of the gesture — and nothing is written to the ledger yet:
+            // the reply comes back as a card the user still has to add, so a
+            // misheard sentence costs a glance, not a wrong transaction.
+            voice.onFinish = { text in
+                guard !text.isEmpty else { return }
+                vm.input = text
+                inputFocused = false
+                let snapshot = buildFinancialContext()
+                Task { await vm.send(context: snapshot) }
+            }
+            if autoStartVoice {
+                await voice.start()
+            }
+        }
+        // Live transcript flows straight into the field so the user watches
+        // their words land and can fix them by hand before sending.
+        .onChange(of: voice.transcript) { _, text in
+            guard !text.isEmpty else { return }
+            vm.input = text
+        }
+        .onChange(of: voice.state) { _, newState in
+            switch newState {
+            case .denied(let why):      voiceNotice = why
+            case .unavailable(let why): voiceNotice = why
+            case .idle, .listening:     break
+            }
+        }
+        .onDisappear { voice.cancel() }
+        .sheet(isPresented: $showCardPicker) {
+            cardPickerSheet
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+                .presentationBackground(AppTheme.bg)
+                .preferredColorScheme(appColorScheme())
         }
     }
 
@@ -243,11 +315,6 @@ struct AIChatView: View {
 
     private var header: some View {
         HStack(spacing: 12) {
-            Button { dismiss() } label: {
-                Image(systemName: "chevron.left")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(AppTheme.textPrimary)
-            }
             HStack(spacing: 7) {
                 Image(systemName: "sparkles")
                     .font(.system(size: 15, weight: .semibold))
@@ -281,6 +348,22 @@ struct AIChatView: View {
     // MARK: Card picker
 
     /// Short, human-readable label for a card — "Holder ·· 1234".
+    /// A credit card has no "balance" in the cash sense. Running
+    /// `computedBalance()` on one applies the cash formula (seed + transactions)
+    /// to a liability account and prints a meaningless figure — which is how a
+    /// credit card came to advertise "Rp 1jt" that was neither a balance nor a
+    /// limit. What matters when choosing a credit card as the destination is
+    /// how much room is left on it.
+    private func subtitle(for card: BankCard) -> String {
+        let cm = CurrencyManager.shared
+        if card.isCreditCard {
+            return String(format: loc("cc.available_short"),
+                          cm.formatted(card.availableCredit(installments),
+                                       currency: card.resolvedCurrency))
+        }
+        return cm.formatted(card.computedBalance(), currency: card.resolvedCurrency)
+    }
+
     private func cardLabel(_ card: BankCard) -> String {
         let last4 = String(card.cardNumber.filter(\.isNumber).suffix(4))
         let name  = card.isDigitalWallet && !card.walletProvider.isEmpty
@@ -294,39 +377,106 @@ struct AIChatView: View {
     /// Defaults to the first card; shown as a tappable menu so it stays
     /// compact even with many cards.
     private var cardPickerBar: some View {
-        Menu {
-            ForEach(cards) { card in
-                Button {
-                    selectedCardID = card.id
-                    HapticManager.shared.tap()
-                } label: {
-                    if selectedCardID == card.id {
-                        Label(cardLabel(card), systemImage: "checkmark")
-                    } else {
-                        Text(cardLabel(card))
-                    }
-                }
-            }
+        Button {
+            guard cards.count > 1 else { return }
+            HapticManager.shared.tap()
+            showCardPicker = true
         } label: {
-            HStack(spacing: 7) {
-                Image(systemName: "creditcard.fill")
-                    .font(.system(size: 11))
-                    .foregroundStyle(AppTheme.accent)
+            HStack(spacing: 9) {
+                // The card's own colour, so the destination is recognisable at a
+                // glance rather than by reading four digits.
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(targetCard.map { LinearGradient(colors: [Color(hex: $0.gradientStart),
+                                                                   Color(hex: $0.gradientEnd)],
+                                                          startPoint: .topLeading,
+                                                          endPoint: .bottomTrailing) }
+                          ?? LinearGradient(colors: [AppTheme.cardMid, AppTheme.cardMid],
+                                            startPoint: .top, endPoint: .bottom))
+                    .frame(width: 26, height: 17)
                 Text(loc("ai.add_to"))
                     .font(.system(size: 12))
                     .foregroundStyle(AppTheme.textSecondary)
                 Text(targetCard.map(cardLabel) ?? "—")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(AppTheme.textPrimary)
-                Image(systemName: "chevron.up.chevron.down")
-                    .font(.system(size: 9, weight: .bold))
-                    .foregroundStyle(AppTheme.textSecondary)
-                Spacer()
+                    .lineLimit(1)
+                if cards.count > 1 {
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(AppTheme.textSecondary)
+                }
+                Spacer(minLength: 0)
             }
             .padding(.horizontal, 18)
             .padding(.vertical, 10)
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
         .disabled(cards.count <= 1)
+    }
+
+    /// Card chooser. The system Menu showed a bare list of names with no way to
+    /// tell an e-wallet from a bank account or to see what is in either.
+    private var cardPickerSheet: some View {
+        NavigationStack {
+            ZStack {
+                AppTheme.bg.ignoresSafeArea()
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 10) {
+                        ForEach(cards) { card in
+                            Button {
+                                HapticManager.shared.tap()
+                                selectedCardID = card.id
+                                showCardPicker = false
+                            } label: {
+                                HStack(spacing: 12) {
+                                    RoundedRectangle(cornerRadius: 6)
+                                        .fill(LinearGradient(colors: [Color(hex: card.gradientStart),
+                                                                      Color(hex: card.gradientEnd)],
+                                                             startPoint: .topLeading,
+                                                             endPoint: .bottomTrailing))
+                                        .frame(width: 42, height: 28)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        HStack(spacing: 5) {
+                                            Text(cardLabel(card))
+                                                .font(.system(size: 14, weight: .semibold))
+                                                .foregroundStyle(AppTheme.textPrimary)
+                                                .lineLimit(1)
+                                            if card.isCreditCard {
+                                                Text(loc("cc.badge"))
+                                                    .font(.system(size: 8, weight: .bold))
+                                                    .foregroundStyle(AppTheme.purple)
+                                                    .padding(.horizontal, 4).padding(.vertical, 1)
+                                                    .background(AppTheme.purple.opacity(0.15), in: Capsule())
+                                            }
+                                        }
+                                        Text(subtitle(for: card))
+                                            .font(.system(size: 11))
+                                            .foregroundStyle(AppTheme.textSecondary)
+                                    }
+                                    Spacer(minLength: 8)
+                                    if selectedCardID == card.id {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .font(.system(size: 18))
+                                            .foregroundStyle(AppTheme.accent)
+                                    }
+                                }
+                                .padding(12)
+                                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
+                                .overlay(RoundedRectangle(cornerRadius: 14)
+                                    .stroke(selectedCardID == card.id
+                                            ? AppTheme.accent.opacity(0.5) : Color.clear, lineWidth: 1.5))
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.horizontal, 22).padding(.top, 12)
+                }
+            }
+            .navigationTitle(loc("ai.add_to"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(AppTheme.bg, for: .navigationBar)
+        }
     }
 
     // MARK: Chat scroll
@@ -442,11 +592,65 @@ struct AIChatView: View {
 
     // MARK: Input bar
 
+    /// Mic toggle. While listening it turns into a stop button with a live
+    /// level ring, so the user can see the mic is hearing them — a static icon
+    /// gives no way to tell "still listening" from "already died".
+    private var micButton: some View {
+        Button {
+            HapticManager.shared.tap()
+            voiceNotice = nil
+            if voice.isListening {
+                voice.stop()
+            } else {
+                voice.reset()
+                inputFocused = false
+                Task { await voice.start() }
+            }
+        } label: {
+            ZStack {
+                Circle()
+                    .fill(voice.isListening ? AppTheme.red.opacity(0.15) : AppTheme.cardDark)
+                    .frame(width: 38, height: 38)
+                if voice.isListening {
+                    Circle()
+                        .stroke(AppTheme.red.opacity(0.55), lineWidth: 2)
+                        .frame(width: 38, height: 38)
+                        .scaleEffect(1 + voice.level * 0.35)
+                        .animation(.easeOut(duration: 0.12), value: voice.level)
+                }
+                Image(systemName: voice.isListening ? "stop.fill" : "mic.fill")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(voice.isListening ? AppTheme.red : AppTheme.textSecondary)
+            }
+        }
+        .buttonStyle(.plain)
+        .disabled(vm.isLoading)
+        .opacity(vm.isLoading ? 0.5 : 1)
+        .accessibilityLabel(loc(voice.isListening ? "voice.stop" : "voice.start"))
+    }
+
     private var inputBar: some View {
         VStack(spacing: 0) {
             Divider().overlay(AppTheme.cardMid)
+            // Permission refusals and "no recogniser for this language" have to
+            // be said out loud. A mic button that silently does nothing is the
+            // most common way voice input reads as broken.
+            if let voiceNotice {
+                HStack(spacing: 6) {
+                    Image(systemName: "exclamationmark.circle.fill")
+                        .font(.system(size: 11)).foregroundStyle(AppTheme.orange)
+                    Text(voiceNotice)
+                        .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                    Spacer()
+                }
+                .padding(.horizontal, 16).padding(.top, 8)
+            }
+
             HStack(spacing: 10) {
-                TextField(loc("ai.input_placeholder"), text: $vm.input, axis: .vertical)
+                micButton
+
+                TextField(voice.isListening ? loc("voice.listening") : loc("ai.input_placeholder"),
+                          text: $vm.input, axis: .vertical)
                     .font(.system(size: 14))
                     .lineLimit(1...4)
                     .focused($inputFocused)

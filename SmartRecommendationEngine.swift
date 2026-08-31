@@ -90,7 +90,9 @@ struct RecoCycleSnapshot {
     /// — a user who transfers to a goal every payday was being rated "Weak"
     /// purely because their living costs used the rest of the income.
     let savingsDeposits: Double
-    let income: Double       // cycle income (salary schedule)
+    /// Income actually received in the cycle, floored at the scheduled
+    /// salary so a mid-cycle view before payday does not divide by ~0.
+    let income: Double
     /// Biggest single consumption category this cycle — turns "you're over by
     /// Rp X" into advice the user can actually act on ("Food & Drinks, 88 txs").
     var topCategory: String? = nil
@@ -544,7 +546,18 @@ enum SmartRecommendationEngine {
             let base = savingScore + balanceScore + investScore
             guard intents.excusesInvesting else { return base }
             let judged = savingScore + balanceScore          // out of 75
-            return judged * (100.0 / 75.0)
+            // `max` matters, and its absence was a real defect: declaring an
+            // intent could LOWER the score.
+            //
+            // `excusesInvesting` is true for "all-in on debt" and "building a
+            // buffer" as well as an outright pause. But debt payoff counts
+            // inside `investScore` (debtPayment is an investDebt category), so
+            // a user doing exactly what they declared earned points there —
+            // and the re-weight then threw that component away. With saving and
+            // balance both at 0, rescaling 0 out of 75 gave 0, where scoring
+            // normally gave 15. The excuse is meant to protect the score, so it
+            // may only ever raise it.
+            return max(base, judged * (100.0 / 75.0))
         }()
         // Temper the score for realism. Two dampers, both in [~0.7…1.0]:
         //   • dataFactor — when spending looks under-logged (`loggedRatio` low),

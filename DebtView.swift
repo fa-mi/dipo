@@ -24,6 +24,18 @@ struct DebtView: View {
     @State private var showAddCreditCard = false
     @State private var editingCreditCard: BankCard? = nil
     @State private var logSpendCard: BankCard? = nil
+    @State private var payingCard: BankCard? = nil
+    @State private var deletingCard: BankCard? = nil
+    @Query private var installments: [CardInstallment]
+    @Query private var recurrings: [RecurringExpense]
+    @Query private var budgetConfigs: [CardBudgetConfig]
+    /// Inside ObligationsView the hub owns the header and the Simulate tab, so
+    /// this view drops its own duplicate simulator button.
+    var embedded: Bool = false
+    /// Fixed obligations, shown next to the health score rather than as a
+    /// separate verdict above it. Two health readings on one screen, computed
+    /// differently, is worse than one — especially when they disagree.
+    var obligationLoad: ObligationLoad? = nil
 
     /// Credit cards are liability accounts — they live here in the Debt Tracker
     /// (the single door for creating one), sorted by amount owed.
@@ -65,10 +77,18 @@ struct DebtView: View {
         let scheduled = activeSalaries.reduce(0.0) {
             $0 + CurrencyManager.shared.convert($1.amount, from: $1.currency, to: pref)
         }
-        let extra = thisMonthIncome
-            .filter { $0.category != .salary }   // avoid double-counting the auto-credited salary
-            .reduce(0.0) { $0 + conv($1) }
-        return scheduled + extra
+        // Deliberately NOT adding this month's other income.
+        //
+        // This used to be `scheduled + everything else positive logged this
+        // month`, which meant a bonus, a THR, a reimbursement or a refund all
+        // inflated "monthly income" — and every ratio built on it. A user
+        // earning Rp 10jt saw Rp 25,75jt here and was told the whole lot was
+        // safe to spend. A one-off payment is not a monthly income, and an
+        // allocation plan is a statement about a repeatable month.
+        //
+        // `thisMonthIncome` still drives the no-schedule fallback above, where
+        // logged income is the only signal available.
+        return scheduled
     }
 
     private var monthlyExpenses: Double {
@@ -78,12 +98,26 @@ struct DebtView: View {
         let pref = CurrencyManager.shared.preferredCurrency
         // Exclude debt payments — they are already factored into safeSpendingBudget
         // via recommendedMonthlyDebtPayment, so including them would double-count
+        // The PAY CYCLE, not the calendar month.
+        //
+        // Everything else on this screen — the budget, the ratios, the health
+        // score — is measured per pay cycle. This one filtered by calendar
+        // month, so for a payday on the 25th it summed parts of TWO cycles and
+        // compared that against one cycle's budget. On this user's data that
+        // read Rp 25,4jt of "monthly" spending against a Rp 6,3jt allowance and
+        // announced Rp 19,1jt of overspending, for a cycle that actually
+        // finished Rp 748k ahead.
+        let cycleStart: Date = {
+            guard let day = salaries.first(where: { $0.isActive })?.dayOfMonth else {
+                return cal.safeDate(from: cal.dateComponents([.year, .month], from: now))
+            }
+            return StatPeriod.payCycleRange(payDay: day).start
+        }()
         return allTx.filter {
             $0.amount < 0 &&
             $0.txSubtype != .transfer &&   // transfers aren't spending
             $0.category != .debtPayment &&
-            cal.component(.month, from: $0.date) == cal.component(.month, from: now) &&
-            cal.component(.year,  from: $0.date) == cal.component(.year,  from: now)
+            $0.date >= cycleStart
         }.reduce(0) { sum, tx in
             let txCur = tx.currency.isEmpty ? pref : tx.currency
             return sum + CurrencyManager.shared.convert(abs(tx.amount), from: txCur, to: pref)
@@ -101,10 +135,44 @@ struct DebtView: View {
         }
     }
 
+    /// Declared recurring outgoings — the same set the obligation card counts.
+    private var monthlyCommitments: Double {
+        let cm = CurrencyManager.shared
+        let pref = cm.preferredCurrency
+        return recurrings.filter(\.isActive).reduce(0.0) {
+            $0 + cm.convert($1.amount, from: $1.currency, to: pref)
+        }
+    }
+
+    /// The Invest & Debt ratio actually in force — the card's override when it
+    /// has one, the global setting otherwise.
+    private var liveInvestDebtRatio: Double {
+        SmartBudgetManager.shared.ratio(for: .investDebt,
+                                        cardID: SmartBudgetManager.shared.budgetCardID,
+                                        configs: budgetConfigs)
+    }
+
+    /// Non-salary income received in the current cycle.
+    private var extraIncomeThisCycle: Double {
+        let cal = Calendar.current
+        let cm = CurrencyManager.shared
+        let pref = cm.preferredCurrency
+        guard let day = salaries.first(where: { $0.isActive })?.dayOfMonth else { return 0 }
+        let start = StatPeriod.payCycleRange(payDay: day).start
+        return cards.flatMap(\.transactions)
+            .filter { $0.date >= start && $0.amount > 0 && $0.txSubtype != .transfer
+                      && $0.category != .salary
+                      && $0.category != .investment && $0.category != .debtPayment }
+            .reduce(0.0) { $0 + cm.convert($1.amount, from: $1.currency.isEmpty ? pref : $1.currency, to: pref) }
+    }
+
     private var engine: FinancialHealthEngine {
         FinancialHealthEngine(monthlyIncome: monthlyIncome,
                               debts: debts,
-                              monthlyExpenses: monthlyExpenses)
+                              monthlyExpenses: monthlyExpenses,
+                              fixedCommitments: monthlyCommitments,
+                              investDebtRatio: liveInvestDebtRatio,
+                              extraIncomeThisCycle: extraIncomeThisCycle)
     }
     
     /// Recomputes each debt's `currentBalance` from its linked payment transactions.
@@ -168,8 +236,11 @@ struct DebtView: View {
                             Text(loc("debt.smart_sub")).font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
                         }
                         Spacer()
-                        // Simulator button
-                        if !debts.isEmpty {
+                        // Simulator button — hidden when embedded, where the
+                        // hub already offers a Simulate tab. Two controls a
+                        // thumb apart both labelled "simulate", doing different
+                        // things, is worse than either alone.
+                        if !debts.isEmpty && !embedded {
                             Button {
                                 HapticManager.shared.tap()
                                 simulatorDebt = debts.filter { $0.isActive }.first
@@ -207,6 +278,20 @@ struct DebtView: View {
                                 .opacity(appeared ? 1 : 0)
                                 .offset(y: appeared ? 0 : 20)
                                 .animation(.spring(response: 0.55, dampingFraction: 0.8).delay(0.08), value: appeared)
+
+                            // Fixed obligations, directly beneath the score they
+                            // belong to. The health score reads debts alone —
+                            // which is why it can say "Excellent, DTI 0.0%"
+                            // while rent and subscriptions quietly take a third
+                            // of income. Shown together, the two halves make one
+                            // picture instead of contradicting each other.
+                            if let obligationLoad {
+                                ObligationLoadCard(load: obligationLoad)
+                                    .padding(.horizontal, 22)
+                                    .opacity(appeared ? 1 : 0)
+                                    .offset(y: appeared ? 0 : 20)
+                                    .animation(.spring(response: 0.55, dampingFraction: 0.8).delay(0.12), value: appeared)
+                            }
 
                             // Smart allocation — needs income. When no salary/
                             // income exists this month, the debt allocation &
@@ -350,6 +435,29 @@ struct DebtView: View {
                 .presentationDetents([.large]).presentationDragIndicator(.visible)
                 .presentationBackground(AppTheme.bg).preferredColorScheme(appColorScheme())
         }
+        .sheet(item: $payingCard) { card in
+            CreditCardPaymentSheet(creditCard: card, cards: cards, context: context)
+                .presentationDetents([.large]).presentationDragIndicator(.visible)
+                .presentationBackground(AppTheme.bg).preferredColorScheme(appColorScheme())
+        }
+        .alert(loc("cc.delete_title"), isPresented: Binding(
+            get: { deletingCard != nil },
+            set: { if !$0 { deletingCard = nil } })) {
+            Button(loc("common.cancel"), role: .cancel) { deletingCard = nil }
+            Button(loc("action.delete"), role: .destructive) {
+                if let c = deletingCard {
+                    // Installments belong to the card; orphaning them would
+                    // leave phantom principal locking a limit that no longer
+                    // exists.
+                    for inst in installments where inst.cardID == c.id { context.delete(inst) }
+                    context.delete(c)
+                    try? context.save()
+                }
+                deletingCard = nil
+            }
+        } message: {
+            Text(loc("cc.delete_msg"))
+        }
         .sheet(item: $logSpendCard) { card in
             // Cross-link: log a purchase with this credit card pre-selected.
             AddTransactionSheet(vm: txViewModel(), preselectedCardID: card.id)
@@ -390,10 +498,15 @@ struct DebtView: View {
                     .padding(.horizontal, 22)
             } else {
                 ForEach(creditCards) { card in
-                    CreditCardLiabilityRow(card: card,
-                                           onEdit: { editingCreditCard = card },
-                                           onLogSpend: { logSpendCard = card })
-                        .padding(.horizontal, 22)
+                    VStack(spacing: 10) {
+                        CreditCardLiabilityRow(card: card,
+                                               onEdit: { editingCreditCard = card },
+                                               onLogSpend: { logSpendCard = card },
+                                               onPay: { payingCard = card },
+                                               onDelete: { deletingCard = card })
+                        InstallmentSection(card: card, installments: installments, context: context)
+                    }
+                    .padding(.horizontal, 22)
                 }
             }
         }
@@ -427,11 +540,7 @@ struct AllDebtsView: View {
             .navigationTitle(loc("debt.your_debts"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(AppTheme.bg, for: .navigationBar)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(loc("common.done")) { dismiss() }.foregroundStyle(AppTheme.accent)
-                }
-            }
+            .doneToolbar { dismiss() }
         }
     }
 }
@@ -589,14 +698,32 @@ struct AllocationCard: View {
                 .foregroundStyle(AppTheme.textSecondary)
                 .lineSpacing(2)
 
-            // Visual split bar
+            // Three parts, not two. Committed money was previously folded into
+            // "safe to spend", which is how a user with Rp 3,7jt of rent and
+            // subscriptions was told 100% of income was free.
             GeometryReader { g in
                 let debtPct = CGFloat(engine.recommendedDebtAllocationPercent / 100)
-                let spendPct = max(0, 1 - debtPct)
+                let savePct = CGFloat(engine.setAsidePercent / 100)
+                let commitPct = CGFloat(engine.commitmentPercent / 100)
+                let spendPct = max(0, 1 - debtPct - savePct - commitPct)
                 HStack(spacing: 2) {
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(AppTheme.red.opacity(0.8))
-                        .frame(width: g.size.width * debtPct, height: 12)
+                    if debtPct > 0 {
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(AppTheme.red.opacity(0.8))
+                            .frame(width: g.size.width * debtPct, height: 12)
+                    }
+                    // The share the plan reserves for the future. Without this
+                    // segment the 20% was invisible AND unspent-for.
+                    if savePct > 0 {
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(AppTheme.blue.opacity(0.8))
+                            .frame(width: g.size.width * savePct, height: 12)
+                    }
+                    if commitPct > 0 {
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(AppTheme.orange.opacity(0.8))
+                            .frame(width: g.size.width * commitPct, height: 12)
+                    }
                     RoundedRectangle(cornerRadius: 4)
                         .fill(AppTheme.accent.opacity(0.6))
                         .frame(width: g.size.width * spendPct, height: 12)
@@ -605,15 +732,27 @@ struct AllocationCard: View {
             }
             .frame(height: 12)
 
-            HStack(spacing: 20) {
-                AllocationRow(color: AppTheme.red.opacity(0.8),
-                              label: loc("debt.allocation.debt"),
-                              percent: engine.recommendedDebtAllocationPercent,
-                              amount: engine.recommendedMonthlyDebtPayment,
+            HStack(spacing: 12) {
+                if engine.recommendedMonthlyDebtPayment > 0 {
+                    AllocationRow(color: AppTheme.red.opacity(0.8),
+                                  label: loc("debt.allocation.debt"),
+                                  percent: engine.recommendedDebtAllocationPercent,
+                                  amount: engine.recommendedMonthlyDebtPayment,
+                                  currency: CurrencyManager.shared.preferredCurrency)
+                }
+                AllocationRow(color: AppTheme.blue.opacity(0.8),
+                              label: loc("debt.allocation.save"),
+                              percent: engine.setAsidePercent,
+                              amount: engine.toSaveOrInvest,
+                              currency: CurrencyManager.shared.preferredCurrency)
+                AllocationRow(color: AppTheme.orange.opacity(0.8),
+                              label: loc("debt.allocation.committed"),
+                              percent: engine.commitmentPercent,
+                              amount: engine.fixedCommitments,
                               currency: CurrencyManager.shared.preferredCurrency)
                 AllocationRow(color: AppTheme.accent.opacity(0.6),
                               label: loc("debt.allocation.safe"),
-                              percent: max(0, 100 - engine.recommendedDebtAllocationPercent),
+                              percent: engine.safeSpendingPercent,
                               amount: engine.safeSpendingBudget,
                               currency: CurrencyManager.shared.preferredCurrency)
             }
@@ -877,6 +1016,11 @@ struct DebtCard: View {
         debt.manuallyClosed = true   // keep it closed; don't let sync revive it
         try? modelContext.save()
         HapticManager.shared.success()
+        // Marking it paid by hand is still paying it off — same moment, same
+        // celebration. Only the credit-card conversion is excluded.
+        ActionFeedbackCenter.shared.celebrateDebtPayoff(
+            name: debt.name, total: debt.totalAmount, currency: debt.currency,
+            since: debt.createdAt, monthlyFreed: debt.minimumPayment)
     }
 
     /// Convert this debt into a real credit-card account, then close the debt so
@@ -895,9 +1039,122 @@ struct DebtCard: View {
         card.creditSince = Date()
         modelContext.insert(card)
         // Close the debt (don't delete — keeps history), so it's not double-counted.
+        // Deliberately NO payoff celebration here: the money hasn't been repaid,
+        // it has moved to a credit card. Confetti would be a lie.
         debt.currentBalance = 0; debt.isActive = false; debt.manuallyClosed = true
         try? modelContext.save()
         HapticManager.shared.success()
+    }
+}
+
+// MARK: - Debt Payoff Celebration
+//
+// Reaching a savings goal already gets confetti. Clearing a debt used to get a
+// haptic buzz and silence — even though it is the harder of the two, and the
+// one people spend years on. This gives it the same vocabulary as
+// `GoalCelebration` (scrim, confetti, staggered springs, cascade haptic) so the
+// app has one way of saying "well done" rather than two.
+//
+// The copy stays concrete: how long it took, and how much monthly cash just
+// came back. A bare "Congratulations!" is a greeting card; the numbers are the
+// reason to feel good.
+struct DebtPayoffCelebration: View {
+    let summary: ActionFeedbackCenter.DebtPayoffSummary
+    let onDismiss: () -> Void
+
+    @State private var scale: CGFloat = 0.5
+    @State private var opacity: Double = 0
+    @State private var ring: CGFloat = 0.6
+    @State private var ringFade: Double = 0.55
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.78).ignoresSafeArea()
+
+            ConfettiView()
+                .ignoresSafeArea()
+                .allowsHitTesting(false)
+
+            VStack(spacing: 22) {
+                ZStack {
+                    // A ring that expands outward and fades — the visual echo
+                    // of a weight being lifted.
+                    Circle()
+                        .stroke(AppTheme.accent.opacity(ringFade), lineWidth: 2)
+                        .frame(width: 118, height: 118)
+                        .scaleEffect(ring)
+                    Circle()
+                        .fill(AppTheme.accent.opacity(0.15))
+                        .frame(width: 104, height: 104)
+                    Image(systemName: "checkmark.seal.fill")
+                        .font(.system(size: 56, weight: .semibold))
+                        .foregroundStyle(AppTheme.accent)
+                }
+                .scaleEffect(scale)
+
+                VStack(spacing: 9) {
+                    Text(loc("debt.celebrate.title"))
+                        .font(.system(size: 27, weight: .bold))
+                        .foregroundStyle(AppTheme.textPrimary)
+                    Text(summary.name)
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(AppTheme.accent)
+                        .multilineTextAlignment(.center)
+                    Text(String(format: loc("debt.celebrate.paid"),
+                                CurrencyManager.shared.formatted(summary.total, currency: summary.currency)))
+                        .font(.system(size: 15))
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .multilineTextAlignment(.center)
+
+                    // Two facts worth carrying away: the effort behind it, and
+                    // the money it hands back every month from here on.
+                    VStack(spacing: 5) {
+                        Text(summary.monthsTaken >= 1
+                             ? String(format: loc("debt.celebrate.took"), summary.monthsTaken)
+                             : loc("debt.celebrate.took_one"))
+                        if summary.monthlyFreed > 0.5 {
+                            Text(String(format: loc("debt.celebrate.freed"),
+                                        CurrencyManager.shared.formatted(summary.monthlyFreed, currency: summary.currency)))
+                                .foregroundStyle(AppTheme.accent.opacity(0.9))
+                        }
+                    }
+                    .font(.system(size: 12.5, weight: .medium))
+                    .foregroundStyle(AppTheme.textSecondary.opacity(0.85))
+                    .multilineTextAlignment(.center)
+                    .padding(.top, 6)
+                }
+                .padding(.horizontal, 28)
+                .scaleEffect(scale)
+                .opacity(opacity)
+
+                Button {
+                    HapticManager.shared.success()
+                    onDismiss()
+                } label: {
+                    Text(loc("debt.celebrate.cta"))
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundStyle(AppTheme.bg)
+                        .padding(.horizontal, 44).padding(.vertical, 15)
+                        .background(AppTheme.accent, in: Capsule())
+                        .shadow(color: AppTheme.accent.opacity(0.5), radius: 16, y: 8)
+                }
+                .buttonStyle(ScaleButtonStyle())
+                .scaleEffect(scale)
+                .opacity(opacity)
+            }
+        }
+        .onAppear {
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.6)) { scale = 1.1 }
+            withAnimation(.easeOut(duration: 1.1)) { ring = 1.55; ringFade = 0 }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { scale = 1.0; opacity = 1 }
+            }
+            for i in 0..<5 {
+                DispatchQueue.main.asyncAfter(deadline: .now() + Double(i) * 0.08) {
+                    HapticManager.shared.rigidImpact()
+                }
+            }
+        }
     }
 }
 
@@ -1581,8 +1838,14 @@ struct DebtPaymentSheet: View {
         if debt.currentBalance == 0 {
             debt.isActive = false
             HapticManager.shared.rigidImpact()
+            ActionFeedbackCenter.shared.celebrateDebtPayoff(
+                name: debt.name, total: debt.totalAmount, currency: debt.currency,
+                since: debt.createdAt, monthlyFreed: debt.minimumPayment)
         } else {
             HapticManager.shared.success()
+            ActionFeedbackCenter.shared.debtPaid(
+                amount: amount, currency: activeCurrency, debtName: debt.name,
+                remaining: debt.currentBalance, remainingCurrency: debt.currency)
         }
 
         try? context.save()
@@ -1946,11 +2209,7 @@ struct PayoffSimulatorSheet: View {
             .navigationTitle(loc("debt.payoff_sim"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(AppTheme.bg, for: .navigationBar)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(loc("common.done")) { dismiss() }.foregroundStyle(AppTheme.textSecondary)
-                }
-            }
+            .doneToolbar { dismiss() }
         }
     }
 }

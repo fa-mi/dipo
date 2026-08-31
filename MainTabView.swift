@@ -21,6 +21,8 @@ struct MainTabView: View {
     @State private var showBudgetFromNotif = false
     @State private var showDebtFromNotif = false
     @State private var showGoalsFromNotif = false
+    /// Ask DiPo opened by the Back Tap / Siri shortcut, already listening.
+    @State private var showVoiceEntry = false
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -62,8 +64,22 @@ struct MainTabView: View {
 
             CustomTabBar(vm: vm, namespace: tabNS, showAddSheet: $showAddSheet,
                          showNoCardBanner: $showNoCardBanner)
+
+            // Confirmation toasts. Mounted here — above every tab, below every
+            // sheet — so one overlay serves the whole app and no screen has to
+            // own its own success UI.
+            ActionFeedbackOverlay()
         }
         .ignoresSafeArea(edges: .bottom)
+        // Clearing a debt is celebrated from here for the same reason: the debt
+        // card that triggered it is filtered out of its own list the instant it
+        // stops being active, so it cannot host its own moment.
+        .fullScreenCover(item: Bindable(ActionFeedbackCenter.shared).debtPayoff) { summary in
+            DebtPayoffCelebration(summary: summary) {
+                ActionFeedbackCenter.shared.debtPayoff = nil
+            }
+            .presentationBackground(.clear)
+        }
         .animation(.spring(response: 0.4, dampingFraction: 0.8), value: showNoCardBanner)
         .sheet(isPresented: $showAddSheet) {
             AddTransactionSheet(vm: vm)
@@ -113,6 +129,29 @@ struct MainTabView: View {
             WishlistView()
                 .presentationDetents([.large]).presentationDragIndicator(.visible)
                 .presentationBackground(AppTheme.bg).preferredColorScheme(appColorScheme())
+        }
+        .sheet(isPresented: $showVoiceEntry) {
+            AIChatView(autoStartVoice: true)
+                .presentationDetents([.large]).presentationDragIndicator(.visible)
+                .presentationBackground(AppTheme.bg).preferredColorScheme(appColorScheme())
+        }
+        // Cold launch from the voice shortcut: the intent fires before any
+        // view exists, so the notification lands with nobody listening. The
+        // flag it also set is picked up here instead.
+        .task {
+            if QuickVoiceRoute.shared.consume() {
+                try? await Task.sleep(for: .milliseconds(400))
+                showVoiceEntry = true
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .requestOpenVoiceEntry)) { _ in
+            _ = QuickVoiceRoute.shared.consume()
+            // Same guard the paywall uses: iOS silently drops a sheet presented
+            // on top of another one, so close first and let the animation finish.
+            if showAddSheet { showAddSheet = false }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                showVoiceEntry = true
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: .requestOpenSmartBudget)) { _ in
             showBudgetFromNotif = true

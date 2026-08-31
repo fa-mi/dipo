@@ -474,6 +474,12 @@ final class PremiumManager {
         // user's Smart Budget toggle (and, if they happen to be Royal, see
         // someone else's 50/30/20 ratios applied to their data).
         SmartBudgetManager.shared.onLogoutCleanup()
+        // This path sets `plan` directly instead of going through
+        // `syncPlanFromCustomerInfo`, so the widget's cached Royal flag was
+        // never lowered on sign-out — and the figures beside it stayed up too.
+        // The Home Screen has no paywall in front of it; clearing is the only
+        // way to stop showing a signed-out device someone's finances.
+        WidgetDataSync.clear()
     }
 
     // MARK: - App Launch — restore active subscription

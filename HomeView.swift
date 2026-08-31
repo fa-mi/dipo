@@ -13,6 +13,7 @@ struct HomeView: View {
     /// All active goals — used by the SmartBudget engine for goal-linked
     /// insight ("cut X% lifestyle → goal lands N weeks earlier").
     @Query(filter: #Predicate<SavingsGoal> { !$0.isCompleted }) private var activeGoals: [SavingsGoal]
+    @Query(filter: #Predicate<Receivable> { !$0.isSettled }) private var receivables: [Receivable]
     /// Per-card budget configurations. Each row stores Smart Budget ratios for
     /// one card; cards without a config row use SmartBudgetManager's global
     /// defaults. Looked up by `cardID == BankCard.id.uuidString`.
@@ -33,6 +34,10 @@ struct HomeView: View {
     }
     // Observed so HomeView re-renders whenever budgetCardID changes
     @State private var budgetManager = SmartBudgetManager.shared
+    /// Held in @State so SwiftUI observes plan changes — reading the singleton
+    /// inline inside a computed property registers no dependency, so the net
+    /// worth chip would linger after a subscription lapsed until a redraw.
+    @State private var premiumMgr = PremiumManager.shared
 
     @State private var showSearch           = false
     @State private var showNotifications    = false
@@ -95,6 +100,14 @@ struct HomeView: View {
     }
     private var hasLiabilities: Bool { totalLiabilities > 0.5 }
 
+    /// Net worth aggregates data from two Royal-only features — savings goals
+    /// and debt tracking. The chip had no entitlement check at all, so a user
+    /// who lapsed from Royal (or restored a backup made on Royal) kept seeing
+    /// both figures spelled out. Require access to BOTH sources it reads.
+    private var canSeeNetWorth: Bool {
+        premiumMgr.canAccess(.savingsGoals) && premiumMgr.canAccess(.smartDebt)
+    }
+
     /// Money already set aside in savings goals. This is the user's money —
     /// leaving it out made someone with Rp 30M saved and Rp 12M of installments
     /// look bankrupt. Only counts what is provably NOT still sitting in a
@@ -111,8 +124,20 @@ struct HomeView: View {
         }
     }
 
-    /// Net worth = cash + savings goals − liabilities.
-    private var netWorth: Double { totalBalance + goalSavings - totalLiabilities }
+    /// Money other people owe the user. An outstanding claim is an asset in
+    /// exactly the way a debt is a liability; leaving it out understated the
+    /// net worth of anyone who had lent money out.
+    private var receivableAssets: Double {
+        let cm = CurrencyManager.shared
+        let pref = cm.preferredCurrency
+        let tx = vm.cards.flatMap(\.transactions)
+        return receivables.reduce(0.0) {
+            $0 + cm.convert($1.netWorthContribution(from: tx), from: $1.currency, to: pref)
+        }
+    }
+
+    /// Net worth = cash + savings goals + receivables − liabilities.
+    private var netWorth: Double { totalBalance + goalSavings + receivableAssets - totalLiabilities }
 
     // Transactions for the currently selected card only
     private var selectedCard: BankCard? {
@@ -232,7 +257,10 @@ struct HomeView: View {
             cardID: budgetCard?.id.uuidString, configs: cardBudgetConfigs,
             targetCurrency: budgetCurrency, goals: activeGoals,
             periodStart: cycleStart)
-        cachedAnomalies = SmartBudgetManager.shared.spendingAnomalies(allTransactions: tx)
+        // Same `cycleStart` the insights above use — without it this ran on
+        // calendar months and contradicted the card directly beside it.
+        cachedAnomalies = SmartBudgetManager.shared.spendingAnomalies(
+            allTransactions: tx, periodStart: cycleStart)
         cachedRecurring = SmartBudgetManager.shared.detectRecurring(allTransactions: tx)
     }
 
@@ -355,7 +383,7 @@ struct HomeView: View {
                         // Net Worth — cash minus liabilities. Only shown when the
                         // user actually has liabilities (credit cards / debts),
                         // otherwise it's just the cash total again.
-                        if hasLiabilities {
+                        if hasLiabilities && canSeeNetWorth {
                             let fmt = { (v: Double) in CurrencyManager.shared.formatted(v, currency: CurrencyManager.shared.preferredCurrency) }
                             VStack(alignment: .leading, spacing: 5) {
                                 HStack(spacing: 10) {
@@ -365,6 +393,12 @@ struct HomeView: View {
                                     Text((netWorth < 0 ? "-" : "") + fmt(Swift.abs(netWorth)))
                                         .font(.system(size: 14, weight: .bold))
                                         .foregroundStyle(netWorth >= 0 ? AppTheme.textPrimary : AppTheme.red)
+                                        // Roll the digits when a transaction
+                                        // moves this. Seeing the figure change
+                                        // is what links the action just taken
+                                        // to its effect on net worth.
+                                        .contentTransition(.numericText())
+                                        .animation(.easeOut(duration: 0.45), value: netWorth)
                                 }
                                 // Spell out the arithmetic — a bare "net worth"
                                 // figure (especially a negative one) is alarming
@@ -917,6 +951,14 @@ struct RecurringReminderBanner: View {
                     .font(.system(size: 11))
                     .foregroundStyle(AppTheme.textSecondary)
                 // One-line explainer so first-time users aren't confused.
+                // The evidence behind the claim, stated plainly: how many
+                // times, and over what span. Without it a detected pattern is
+                // an assertion the user has no way to check.
+                Text(String(format: loc("recurring.evidence"),
+                            pattern.occurrences, evidenceRange))
+                    .font(.system(size: 10))
+                    .foregroundStyle(AppTheme.textSecondary.opacity(0.8))
+
                 Text(isBill ? loc("recurring.help.bill") : loc("recurring.help.habit"))
                     .font(.system(size: 10))
                     .foregroundStyle(AppTheme.textSecondary.opacity(0.7))
@@ -946,6 +988,17 @@ struct RecurringReminderBanner: View {
         .overlay(RoundedRectangle(cornerRadius: 16).stroke(tint.opacity(0.2), lineWidth: 1))
         .opacity(appeared ? 1 : 0)
         .onAppear { withAnimation(.spring(response: 0.5)) { appeared = true } }
+    }
+
+    /// "14 Aug – 21 Aug" for the sightings this pattern was built from.
+    private var evidenceRange: String {
+        let df = DateFormatter()
+        df.locale = LanguageManager.shared.currentLocale
+        df.dateFormat = DateFormatter.dateFormat(fromTemplate: "d MMM", options: 0,
+                                                 locale: LanguageManager.shared.currentLocale)
+        let first = df.string(from: pattern.firstDate)
+        let last  = df.string(from: pattern.lastDate)
+        return first == last ? last : "\(first) – \(last)"
     }
 
     private func detailText(_ amountStr: String) -> String {
@@ -1805,6 +1858,13 @@ struct TransactionSection: View {
                                     ) {
                                         TxRow(tx: tx, sourceCard: cardIndex[tx.id] ?? cards.first, showCard: cards.count > 1)
                                     }
+                                    // Rows used to vanish instantly, which reads
+                                    // as a glitch — the eye can't tell a deleted
+                                    // row from a mis-rendered list. Collapsing
+                                    // out shows WHICH row left.
+                                    .transition(.asymmetric(
+                                        insertion: .opacity.combined(with: .move(edge: .top)),
+                                        removal: .scale(scale: 0.92).combined(with: .opacity)))
                                 }
                             }
                         }
@@ -1815,7 +1875,9 @@ struct TransactionSection: View {
         .confirmationDialog(loc("tx.delete_prompt"), isPresented: deleteDialogBinding, titleVisibility: .visible) {
             Button(loc("common.delete"), role: .destructive) {
                 if let tx = pendingDelete {
-                    deleteTransactionWithGoalRollback(tx, context: context)
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                        deleteTransactionWithGoalRollback(tx, context: context)
+                    }
                     try? context.save()
                     HapticManager.shared.warning()
                 }
@@ -1939,6 +2001,7 @@ struct AllTransactionsSheet: View {
                                             ) {
                                                 TxRow(tx: tx, sourceCard: cardIndex[tx.id] ?? cards.first, showCard: cards.count > 1, animateEntrance: false)
                                             }
+                                            .transition(.scale(scale: 0.92).combined(with: .opacity))
                                         }
                                     }
                                 }
@@ -1953,7 +2016,9 @@ struct AllTransactionsSheet: View {
             .confirmationDialog(loc("tx.delete_prompt"), isPresented: deleteDialogBinding, titleVisibility: .visible) {
                 Button(loc("common.delete"), role: .destructive) {
                     if let tx = pendingDelete {
-                        deleteTransactionWithGoalRollback(tx, context: context)
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                            deleteTransactionWithGoalRollback(tx, context: context)
+                        }
                         try? context.save()
                         HapticManager.shared.warning()
                     }
@@ -1966,11 +2031,7 @@ struct AllTransactionsSheet: View {
             .navigationTitle(loc("tx.all"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(AppTheme.bg, for: .navigationBar)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(loc("common.done")) { dismiss() }.foregroundStyle(AppTheme.accent)
-                }
-            }
+            .doneToolbar { dismiss() }
         }
         .sheet(item: $selectedTx) { tx in
             TransactionDetailSheet(tx: tx)

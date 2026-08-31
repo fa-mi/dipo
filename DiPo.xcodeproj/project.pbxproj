@@ -75,6 +75,23 @@
 		9BEA100A2F00000A000000B4 /* FinancialBriefing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BEA100A2F00000A000000E4 /* FinancialBriefing.swift */; };
 		9BEA100A2F00000A0000B5B4 /* CycleIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BEA100A2F00000A0000E5E4 /* CycleIntent.swift */; };
 		9BEA100A2F00000A0000B6B4 /* CycleIntentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BEA100A2F00000A0000E6E4 /* CycleIntentView.swift */; };
+		9BEA100A2F00000A0000C1B4 /* ActionFeedback.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BEA100A2F00000A0000F1E4 /* ActionFeedback.swift */; };
+		9BEA100A2F00000A0000C2B4 /* BackgroundRefresh.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BEA100A2F00000A0000F2E4 /* BackgroundRefresh.swift */; };
+		9BEA100A2F00000A0000C3B4 /* WebSyncService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BEA100A2F00000A0000F3E4 /* WebSyncService.swift */; };
+		9BEA10172F0000170000C3B4 /* CommitmentImpact.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BEA10172F0000170000F3E4 /* CommitmentImpact.swift */; };
+		9BEA10162F0000160000C3B4 /* CommitmentPriority.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BEA10162F0000160000F3E4 /* CommitmentPriority.swift */; };
+		9BEA10152F0000150000C3B4 /* WalletCarousel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BEA10152F0000150000F3E4 /* WalletCarousel.swift */; };
+		9BEA10142F0000140000C3B4 /* DataIntegrityCheck.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BEA10142F0000140000F3E4 /* DataIntegrityCheck.swift */; };
+		9BEA10132F0000130000C3B4 /* CardInstallment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BEA10132F0000130000F3E4 /* CardInstallment.swift */; };
+		9BEA10122F0000120000C3B4 /* ObligationsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BEA10122F0000120000F3E4 /* ObligationsView.swift */; };
+		9BEA10112F0000110000C3B4 /* PlannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BEA10112F0000110000F3E4 /* PlannerView.swift */; };
+		9BEA10102F0000100000C3B4 /* Receivables.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BEA10102F0000100000F3E4 /* Receivables.swift */; };
+		9BEA100F2F00000F0000C3B4 /* LocalTxParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BEA100F2F00000F0000F3E4 /* LocalTxParser.swift */; };
+		9BEA100A2F00000A0000C4B4 /* WebSyncView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BEA100A2F00000A0000F4E4 /* WebSyncView.swift */; };
+		9BEA100A2F00000A0000C5B4 /* NotificationPreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BEA100A2F00000A0000F5E4 /* NotificationPreferences.swift */; };
+		9BEA100A2F00000A0000C6B4 /* NotificationSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BEA100A2F00000A0000F6E4 /* NotificationSettingsView.swift */; };
+		9BEA100B2F00000B0000C3B4 /* VoiceDictation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BEA100B2F00000B0000F3E4 /* VoiceDictation.swift */; };
+		9BEA100C2F00000C0000C3B4 /* AskDiPoIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BEA100C2F00000C0000F3E4 /* AskDiPoIntent.swift */; };
 		9BFC17B52F91206C00D80402 /* RevenueCat in Frameworks */ = {isa = PBXBuildFile; productRef = 9BFC17B42F91206C00D80402 /* RevenueCat */; };
 /* End PBXBuildFile section */
 
@@ -166,6 +183,23 @@
 		9BEA100A2F00000A000000E4 /* FinancialBriefing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FinancialBriefing.swift; sourceTree = "<group>"; };
 		9BEA100A2F00000A0000E5E4 /* CycleIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CycleIntent.swift; sourceTree = "<group>"; };
 		9BEA100A2F00000A0000E6E4 /* CycleIntentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CycleIntentView.swift; sourceTree = "<group>"; };
+		9BEA100A2F00000A0000F1E4 /* ActionFeedback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionFeedback.swift; sourceTree = "<group>"; };
+		9BEA100A2F00000A0000F2E4 /* BackgroundRefresh.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundRefresh.swift; sourceTree = "<group>"; };
+		9BEA100A2F00000A0000F3E4 /* WebSyncService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebSyncService.swift; sourceTree = "<group>"; };
+		9BEA10172F0000170000F3E4 /* CommitmentImpact.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommitmentImpact.swift; sourceTree = "<group>"; };
+		9BEA10162F0000160000F3E4 /* CommitmentPriority.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommitmentPriority.swift; sourceTree = "<group>"; };
+		9BEA10152F0000150000F3E4 /* WalletCarousel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletCarousel.swift; sourceTree = "<group>"; };
+		9BEA10142F0000140000F3E4 /* DataIntegrityCheck.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataIntegrityCheck.swift; sourceTree = "<group>"; };
+		9BEA10132F0000130000F3E4 /* CardInstallment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CardInstallment.swift; sourceTree = "<group>"; };
+		9BEA10122F0000120000F3E4 /* ObligationsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ObligationsView.swift; sourceTree = "<group>"; };
+		9BEA10112F0000110000F3E4 /* PlannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlannerView.swift; sourceTree = "<group>"; };
+		9BEA10102F0000100000F3E4 /* Receivables.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Receivables.swift; sourceTree = "<group>"; };
+		9BEA100F2F00000F0000F3E4 /* LocalTxParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalTxParser.swift; sourceTree = "<group>"; };
+		9BEA100A2F00000A0000F4E4 /* WebSyncView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebSyncView.swift; sourceTree = "<group>"; };
+		9BEA100A2F00000A0000F5E4 /* NotificationPreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationPreferences.swift; sourceTree = "<group>"; };
+		9BEA100A2F00000A0000F6E4 /* NotificationSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationSettingsView.swift; sourceTree = "<group>"; };
+		9BEA100B2F00000B0000F3E4 /* VoiceDictation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceDictation.swift; sourceTree = "<group>"; };
+		9BEA100C2F00000C0000F3E4 /* AskDiPoIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AskDiPoIntent.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -275,6 +309,23 @@
 				9BEA10082F000008000000E4 /* TidyCategoriesView.swift */,
 				9BEA10092F000009000000E4 /* CreditCard.swift */,
 				9BEA100A2F00000A000000E4 /* FinancialBriefing.swift */,
+				9BEA100A2F00000A0000F1E4 /* ActionFeedback.swift */,
+				9BEA100A2F00000A0000F6E4 /* NotificationSettingsView.swift */,
+				9BEA100A2F00000A0000F5E4 /* NotificationPreferences.swift */,
+				9BEA100A2F00000A0000F4E4 /* WebSyncView.swift */,
+				9BEA100A2F00000A0000F3E4 /* WebSyncService.swift */,
+				9BEA10172F0000170000F3E4 /* CommitmentImpact.swift */,
+				9BEA10162F0000160000F3E4 /* CommitmentPriority.swift */,
+				9BEA10152F0000150000F3E4 /* WalletCarousel.swift */,
+				9BEA10142F0000140000F3E4 /* DataIntegrityCheck.swift */,
+				9BEA10132F0000130000F3E4 /* CardInstallment.swift */,
+				9BEA10122F0000120000F3E4 /* ObligationsView.swift */,
+				9BEA10112F0000110000F3E4 /* PlannerView.swift */,
+				9BEA10102F0000100000F3E4 /* Receivables.swift */,
+				9BEA100F2F00000F0000F3E4 /* LocalTxParser.swift */,
+				9BEA100C2F00000C0000F3E4 /* AskDiPoIntent.swift */,
+				9BEA100B2F00000B0000F3E4 /* VoiceDictation.swift */,
+				9BEA100A2F00000A0000F2E4 /* BackgroundRefresh.swift */,
 				9BEA100A2F00000A0000E6E4 /* CycleIntentView.swift */,
 				9BEA100A2F00000A0000E5E4 /* CycleIntent.swift */,
 				9B1C11CB2FA029540032CD2C /* CryptoManager.swift */,
@@ -504,6 +555,23 @@
 				9BEA10082F000008000000B4 /* TidyCategoriesView.swift in Sources */,
 				9BEA10092F000009000000B4 /* CreditCard.swift in Sources */,
 				9BEA100A2F00000A000000B4 /* FinancialBriefing.swift in Sources */,
+				9BEA100A2F00000A0000C1B4 /* ActionFeedback.swift in Sources */,
+				9BEA100A2F00000A0000C6B4 /* NotificationSettingsView.swift in Sources */,
+				9BEA100A2F00000A0000C5B4 /* NotificationPreferences.swift in Sources */,
+				9BEA100A2F00000A0000C4B4 /* WebSyncView.swift in Sources */,
+				9BEA100A2F00000A0000C3B4 /* WebSyncService.swift in Sources */,
+				9BEA10172F0000170000C3B4 /* CommitmentImpact.swift in Sources */,
+				9BEA10162F0000160000C3B4 /* CommitmentPriority.swift in Sources */,
+				9BEA10152F0000150000C3B4 /* WalletCarousel.swift in Sources */,
+				9BEA10142F0000140000C3B4 /* DataIntegrityCheck.swift in Sources */,
+				9BEA10132F0000130000C3B4 /* CardInstallment.swift in Sources */,
+				9BEA10122F0000120000C3B4 /* ObligationsView.swift in Sources */,
+				9BEA10112F0000110000C3B4 /* PlannerView.swift in Sources */,
+				9BEA10102F0000100000C3B4 /* Receivables.swift in Sources */,
+				9BEA100F2F00000F0000C3B4 /* LocalTxParser.swift in Sources */,
+				9BEA100C2F00000C0000C3B4 /* AskDiPoIntent.swift in Sources */,
+				9BEA100B2F00000B0000C3B4 /* VoiceDictation.swift in Sources */,
+				9BEA100A2F00000A0000C2B4 /* BackgroundRefresh.swift in Sources */,
 				9BEA100A2F00000A0000B6B4 /* CycleIntentView.swift in Sources */,
 				9BEA100A2F00000A0000B5B4 /* CycleIntent.swift in Sources */,
 			);
@@ -527,7 +595,7 @@
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
 				CODE_SIGN_ENTITLEMENTS = DiPoWidgetExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 61;
+				CURRENT_PROJECT_VERSION = 63;
 				DEVELOPMENT_TEAM = 3C6KN7P2NC;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = DiPoWidget/Info.plist;
@@ -539,7 +607,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 2.3;
+				MARKETING_VERSION = 2.4;
 				PRODUCT_BUNDLE_IDENTIFIER = com.fahmiaquinas.DiPo.DiPoWidget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -559,7 +627,7 @@
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
 				CODE_SIGN_ENTITLEMENTS = DiPoWidgetExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 61;
+				CURRENT_PROJECT_VERSION = 63;
 				DEVELOPMENT_TEAM = 3C6KN7P2NC;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = DiPoWidget/Info.plist;
@@ -571,7 +639,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 2.3;
+				MARKETING_VERSION = 2.4;
 				PRODUCT_BUNDLE_IDENTIFIER = com.fahmiaquinas.DiPo.DiPoWidget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -715,13 +783,17 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = DiPo/DiPo.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 61;
+				CURRENT_PROJECT_VERSION = 63;
 				DEVELOPMENT_TEAM = 3C6KN7P2NC;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = DiPo/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = DiPo;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
+				INFOPLIST_KEY_NFCReaderUsageDescription = "DiPo reads your e-money card to show its balance and recent transactions. It never changes the card or its balance.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "DiPo needs camera access to scan your receipts and automatically save transactions.";
 				INFOPLIST_KEY_NSFaceIDUsageDescription = "Unlock DiPo";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "DiPo needs photo library access to read receipts you've already saved as images.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -732,7 +804,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.3;
+				MARKETING_VERSION = 2.4;
 				PRODUCT_BUNDLE_IDENTIFIER = com.fahmiaquinas.DiPo;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -757,13 +829,17 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = DiPo/DiPo.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 61;
+				CURRENT_PROJECT_VERSION = 63;
 				DEVELOPMENT_TEAM = 3C6KN7P2NC;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = DiPo/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = DiPo;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
+				INFOPLIST_KEY_NFCReaderUsageDescription = "DiPo reads your e-money card to show its balance and recent transactions. It never changes the card or its balance.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "DiPo needs camera access to scan your receipts and automatically save transactions.";
 				INFOPLIST_KEY_NSFaceIDUsageDescription = "Unlock DiPo";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "DiPo needs photo library access to read receipts you've already saved as images.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -774,7 +850,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.3;
+				MARKETING_VERSION = 2.4;
 				PRODUCT_BUNDLE_IDENTIFIER = com.fahmiaquinas.DiPo;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;

@@ -63,6 +63,34 @@ enum StatPeriod: String, CaseIterable {
     /// today. Months without the exact day are handled by clamping the anchor
     /// to the 28th so short months never skip it (fine for the common 1–28
     /// paydays).
+    /// Snaps a computed cycle start onto the salary transaction that actually
+    /// opened it, when one sits within a day or two.
+    ///
+    /// A SAFETY NET, not a fix for a known defect — worth saying plainly,
+    /// because it was added on a wrong premise. It looked like the engine's
+    /// computed payday and the recorded salary disagreed, but that came from
+    /// reading exported UTC timestamps as local dates: a salary at 00:00 WIB
+    /// exports as 17:00 UTC the previous day. Read in the device's own zone,
+    /// `SalaryDateEngine.actualPayDate` matches every recorded salary exactly.
+    ///
+    /// What it still guards is real: a hand-entered salary landing a day off the
+    /// scheduled one, which would otherwise fall outside its own cycle. The
+    /// tolerance is deliberately tight — wide enough for that, too narrow to
+    /// grab an unrelated salary-category row and move the boundary onto it.
+    static func anchoredStart(_ computed: Date, salaryDates: [Date],
+                              toleranceDays: Int = 2) -> Date {
+        let cal = Calendar.current
+        let base = cal.startOfDay(for: computed)
+        var best: Date? = nil
+        var bestGap = Int.max
+        for raw in salaryDates {
+            let d = cal.startOfDay(for: raw)
+            let gap = abs(cal.dateComponents([.day], from: d, to: base).day ?? .max)
+            if gap <= toleranceDays, gap < bestGap { bestGap = gap; best = d }
+        }
+        return best ?? base
+    }
+
     static func payCycleRange(payDay: Int, now: Date = Date()) -> (start: Date, end: Date) {
         let cal = Calendar.current
         let today = cal.startOfDay(for: now)
@@ -95,6 +123,8 @@ struct StatisticsView: View {
     let appVM: AppViewModel
     @Query private var cardBudgetConfigs: [CardBudgetConfig]
     @Query(sort: \SalarySchedule.createdAt) private var salarySchedules: [SalarySchedule]
+    @Query private var recurringPlans: [RecurringExpense]
+    @Query private var savingsGoals: [SavingsGoal]
     @State private var selectedPeriod: StatPeriod = .thisMonth
     /// Held in @State so SwiftUI observes plan changes; reading
     /// `PremiumManager.shared` inline inside `body` registers no dependency,
@@ -109,7 +139,7 @@ struct StatisticsView: View {
     // filter ran ~6× per render. `netWorthTrend` scans all tx across 6 buckets.
     // We now compute both once, only when inputs change (see recomputeStats).
     @State private var cachedFilteredTx: [TxRecord] = []
-    @State private var cachedNetWorthTrend: [(label: String, value: Double)] = []
+    @State private var cachedNetWorthTrend: [CycleTrendPoint] = []
     @State private var customStart: Date = Calendar.current.safeDate(byAdding: .month, value: -1, to: Date())
     @State private var customEnd: Date = Date()
     @State private var showCustomPicker = false
@@ -149,10 +179,34 @@ struct StatisticsView: View {
         StatPeriod.allCases.filter { $0 != .payCycle || payCycleDay != nil }
     }
 
+    /// Dates the salary actually landed. Used to anchor cycle boundaries so
+    /// Statistics and Smart Budget agree on where a cycle begins.
+    private var salaryTxDates: [Date] {
+        (selectedCard?.transactions ?? []).filter { $0.category == .salary && $0.amount > 0 }.map(\.date)
+    }
+
+    /// The anchored payday for a month offset from today. Every cycle boundary
+    /// in this screen goes through here, so a cycle is always [payday, next
+    /// payday) — never "start plus one calendar month", which drifts whenever a
+    /// payday is pulled off a weekend or holiday. For this user's data the real
+    /// gaps are 28 and 32 days, not two equal months.
+    private func cycleBoundary(monthsFromNow offset: Int) -> Date? {
+        guard let day = payCycleDay else { return nil }
+        let cal = Calendar.current
+        let base = StatPeriod.anchoredStart(StatPeriod.payCycleRange(payDay: day).start,
+                                            salaryDates: salaryTxDates)
+        let shifted = cal.safeDate(byAdding: .month, value: offset, to: base)
+        let m = cal.component(.month, from: shifted), y = cal.component(.year, from: shifted)
+        return StatPeriod.anchoredStart(
+            cal.startOfDay(for: SalaryDateEngine.actualPayDate(dayOfMonth: day, month: m, year: y)),
+            salaryDates: salaryTxDates)
+    }
+
     private var effectiveRange: (start: Date, end: Date) {
         if selectedPeriod == .custom { return (customStart, customEnd) }
         if selectedPeriod == .payCycle, let day = payCycleDay {
-            return StatPeriod.payCycleRange(payDay: day)
+            let r = StatPeriod.payCycleRange(payDay: day)
+            return (StatPeriod.anchoredStart(r.start, salaryDates: salaryTxDates), r.end)
         }
         return selectedPeriod.dateRange()
     }
@@ -165,7 +219,9 @@ struct StatisticsView: View {
         let (start, end) = effectiveRange
         // A period that already ended needs no caveat.
         guard end > Date() || cal.isDateInToday(end) else { return nil }
-        let total = max(cal.dateComponents([.day], from: start, to: cal.date(byAdding: .month, value: 1, to: start) ?? end).day ?? 30, 1)
+        // Cycle length = this payday to the next one, not a calendar month.
+        let cycleEnd = cycleBoundary(monthsFromNow: 1) ?? (cal.date(byAdding: .month, value: 1, to: start) ?? end)
+        let total = max(cal.dateComponents([.day], from: start, to: cycleEnd).day ?? 30, 1)
         let elapsed = min(max((cal.dateComponents([.day], from: start, to: Date()).day ?? 0) + 1, 1), total)
         return elapsed >= total ? nil : (elapsed, total)
     }
@@ -181,7 +237,27 @@ struct StatisticsView: View {
     private func previousPeriodTotal(positive: Bool) -> Double? {
         let cal = Calendar.current
         let (start, _) = effectiveRange
-        guard let prevStart = cal.date(byAdding: .month, value: -1, to: start) else { return nil }
+
+        // The previous window has to begin where the previous CYCLE actually
+        // began, not one calendar month back. `payCycleRange` anchors the
+        // current cycle on the business-day-adjusted pay date, so subtracting a
+        // month here reintroduces exactly the drift that function exists to
+        // avoid: for a payday on the 25th, July 25 2026 is a Saturday and the
+        // salary lands Friday July 24 — one day BEFORE a naive window opens.
+        // The comparison then misses an entire month's salary and reports a
+        // flat, unchanged income as +400%.
+        let prevStart: Date
+        if selectedPeriod == .payCycle, let day = payCycleDay {
+            let m = cal.component(.month, from: start)
+            let y = cal.component(.year,  from: start)
+            let pm = m == 1 ? 12 : m - 1
+            let py = m == 1 ? y - 1 : y
+            prevStart = cal.startOfDay(
+                for: SalaryDateEngine.actualPayDate(dayOfMonth: day, month: pm, year: py))
+        } else {
+            guard let naive = cal.date(byAdding: .month, value: -1, to: start) else { return nil }
+            prevStart = naive
+        }
         let cutoff: Date = {
             guard let p = periodProgress else { return start }
             return cal.date(byAdding: .day, value: p.elapsed, to: prevStart) ?? start
@@ -242,6 +318,23 @@ struct StatisticsView: View {
             mfmt.locale = locale
             mfmt.dateFormat = DateFormatter.dateFormat(fromTemplate: "MMMMyyyy", options: 0, locale: locale)
             return mfmt.string(from: start)
+        }
+        // A pay cycle runs from payday to the day BEFORE the next payday, and
+        // the header should say so. `effectiveRange.end` is TODAY for a running
+        // cycle, so it used to read "25 Aug – 30 Aug" for a cycle that actually
+        // covers 25 Aug – 24 Sep. The "Day 6 of 31" chip already reports how far
+        // in you are; the title's job is to name the period, not the slice of it
+        // that has happened.
+        if selectedPeriod == .payCycle, let day = payCycleDay {
+            let cal = Calendar.current
+            let m = cal.component(.month, from: start), y = cal.component(.year, from: start)
+            let nm = m == 12 ? 1 : m + 1
+            let ny = m == 12 ? y + 1 : y
+            _ = (m, y, nm, ny)
+            let nextPay = cycleBoundary(monthsFromNow: 1)
+                ?? cal.safeDate(byAdding: .month, value: 1, to: start)
+            let lastDay = cal.safeDate(byAdding: .day, value: -1, to: nextPay)
+            return "\(fmt.string(from: start)) – \(fmt.string(from: lastDay))"
         }
         return "\(fmt.string(from: start)) – \(fmt.string(from: end))"
     }
@@ -427,26 +520,39 @@ struct StatisticsView: View {
     /// current calendar month reads falsely negative (salary landed on the 25th
     /// of the *previous* month, so a fresh calendar month has expenses but no
     /// income yet).
-    private var netWorthTrend: [(label: String, value: Double)] { cachedNetWorthTrend }
+    private var netWorthTrend: [CycleTrendPoint] { cachedNetWorthTrend }
 
-    private func computeNetWorthTrend() -> [(label: String, value: Double)] {
+    /// Fixed commitments measured against income and the active savings goal.
+    private var commitmentReview: CommitmentReview {
+        CommitmentReview.build(recurrings: recurringPlans, salaries: salarySchedules,
+                               goals: savingsGoals, configs: cardBudgetConfigs,
+                               currency: displayCurrency)
+    }
+
+    private func computeNetWorthTrend() -> [CycleTrendPoint] {
         let cal = Calendar.current
         let now = Date()
         let locale = LanguageManager.shared.currentLocale
         let fmt = DateFormatter()
         fmt.locale = locale
         fmt.dateFormat = DateFormatter.dateFormat(fromTemplate: "MMM", options: 0, locale: locale)
-        var points: [(label: String, value: Double)] = []
+        var points: [CycleTrendPoint] = []
 
         // Bucket boundaries: pay-cycle anchored (start of current cycle, then
         // step back a month at a time) or calendar-month.
         let bucketStarts: [(start: Date, end: Date)] = {
             var out: [(Date, Date)] = []
             if let day = payCycleDay {
-                let currentStart = StatPeriod.payCycleRange(payDay: day).start
+                let currentStart = StatPeriod.anchoredStart(
+                    StatPeriod.payCycleRange(payDay: day).start, salaryDates: salaryTxDates)
+                _ = currentStart
                 for offset in stride(from: -5, through: 0, by: 1) {
-                    let s = cal.safeDate(byAdding: .month, value: offset, to: currentStart)
-                    let e = cal.safeDate(byAdding: .month, value: 1, to: s)
+                    // Each bucket spans its own payday to the next, so uneven
+                    // cycles stay uneven instead of being forced to a month.
+                    let s = cycleBoundary(monthsFromNow: offset)
+                        ?? cal.safeDate(byAdding: .month, value: offset, to: currentStart)
+                    let e = cycleBoundary(monthsFromNow: offset + 1)
+                        ?? cal.safeDate(byAdding: .month, value: 1, to: s)
                     out.append((s, e))
                 }
             } else {
@@ -463,19 +569,29 @@ struct StatisticsView: View {
         guard let card = selectedCard else {
             // Label a pay-cycle bucket by the month it ends in (the "salary
             // month"); a calendar bucket by its own month.
-            return bucketStarts.map { (fmt.string(from: payCycleDay != nil ? $0.end : $0.start), 0) }
+            return bucketStarts.map {
+                CycleTrendPoint(label: fmt.string(from: payCycleDay != nil ? $0.end : $0.start),
+                                start: $0.start, end: $0.end,
+                                income: 0, expense: 0, txCount: 0)
+            }
         }
         for (s, e) in bucketStarts {
-            let net = card.transactions
+            let rows = card.transactions
                 .filter { $0.date >= s && $0.date < e && $0.txSubtype != .transfer }
-                .reduce(0.0) { $0 + convertedAmount($1) }
-            points.append((fmt.string(from: payCycleDay != nil ? e : s), net))
+            var inc = 0.0, exp = 0.0
+            for t in rows {
+                let v = convertedAmount(t)
+                if v >= 0 { inc += v } else { exp += -v }
+            }
+            points.append(CycleTrendPoint(label: fmt.string(from: payCycleDay != nil ? e : s),
+                                          start: s, end: e,
+                                          income: inc, expense: exp, txCount: rows.count))
         }
         // Drop months that pre-date the account's first transaction. Rendering
         // them as placeholder tracks filled a third of the chart with bars for
         // periods that never existed — a two-month history should look like two
         // months, not like four empty ones and a spike.
-        if let firstReal = points.firstIndex(where: { $0.value != 0 }) {
+        if let firstReal = points.firstIndex(where: { $0.net != 0 }) {
             points = Array(points[firstReal...])
         }
         return points
@@ -783,7 +899,8 @@ struct StatisticsView: View {
 
                     // Net worth trend — 6 month sparkline
                     NetWorthTrendCard(trend: netWorthTrend,
-                                      subtitle: payCycleDay != nil ? loc("stats.net_worth_sub_cycle") : loc("stats.net_worth_sub"))
+                                      subtitle: payCycleDay != nil ? loc("stats.net_worth_sub_cycle") : loc("stats.net_worth_sub"),
+                                      currency: displayCurrency)
                         .padding(.horizontal, 22)
                         .padding(.top, 12)
                     
@@ -791,6 +908,15 @@ struct StatisticsView: View {
                     // Royal-only feature. Free users get a blurred teaser
                     // that opens the paywall on tap (same pattern as the
                     // Home Screen widget's locked-insights treatment).
+                    // Commitments priced in goal-time, next to the descriptive
+                    // insights. The weekly average says what happened; this says
+                    // what it costs.
+                    if premiumMgr.canAccess(.smartBudget), !commitmentReview.lines.isEmpty {
+                        CommitmentPriorityCard(review: commitmentReview, currency: displayCurrency)
+                            .padding(.horizontal, 22)
+                            .padding(.top, 12)
+                    }
+
                     if filteredExpenses > 0 {
                         let insightsCard = SmartInsightsCard(
                             weeklyAverage: weeklyAverage,
@@ -1301,13 +1427,33 @@ struct StatSegmentPicker: View {
 
 // MARK: - Net Worth Trend Card
 
-struct NetWorthTrendCard: View {
-    let trend: [(label: String, value: Double)]
-    var subtitle: String = loc("stats.net_worth_sub")
-    @State private var appeared = false
+/// One bar of the trend, carrying the numbers behind it.
+///
+/// The chart used to hold only a label and a net figure, which meant the only
+/// way to check it was to trust it. Keeping income, expense, the window and the
+/// transaction count alongside lets the card open and show its own working.
+struct CycleTrendPoint: Identifiable {
+    let id = UUID()
+    let label: String
+    let start: Date
+    let end: Date
+    let income: Double
+    let expense: Double
+    let txCount: Int
+    var net: Double { income - expense }
+    /// A period that has not finished yet holds an incomplete total.
+    var isRunning: Bool { end > Date() }
+}
 
-    private var maxAbs: Double { trend.map { abs($0.value) }.max() ?? 1 }
-    private var hasData: Bool { trend.contains { $0.value != 0 } }
+struct NetWorthTrendCard: View {
+    let trend: [CycleTrendPoint]
+    var subtitle: String = loc("stats.net_worth_sub")
+    var currency: String = CurrencyManager.shared.preferredCurrency
+    @State private var appeared = false
+    @State private var showBreakdown = false
+
+    private var maxAbs: Double { trend.map { abs($0.net) }.max() ?? 1 }
+    private var hasData: Bool { trend.contains { $0.net != 0 } }
 
     /// A single gradient bar, with an optional soft glow for the current period.
     private func bar(_ fill: LinearGradient, w: CGFloat, h: CGFloat, glow: Color?) -> some View {
@@ -1319,6 +1465,21 @@ struct NetWorthTrendCard: View {
     }
 
     var body: some View {
+        content
+            .contentShape(Rectangle())
+            .onTapGesture {
+                guard hasData else { return }
+                HapticManager.shared.tap()
+                showBreakdown = true
+            }
+            .sheet(isPresented: $showBreakdown) {
+                CycleTrendBreakdown(trend: trend, currency: currency)
+                    .presentationDetents([.large]).presentationDragIndicator(.visible)
+                    .presentationBackground(AppTheme.bg).preferredColorScheme(appColorScheme())
+            }
+    }
+
+    private var content: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
@@ -1331,8 +1492,8 @@ struct NetWorthTrendCard: View {
                 }
                 Spacer()
                 // Overall direction
-                if let last = trend.last, let first = trend.first(where: { $0.value != 0 }) {
-                    let up = last.value >= first.value
+                if let last = trend.last, let first = trend.first(where: { $0.net != 0 }) {
+                    let up = last.net >= first.net
                     HStack(spacing: 4) {
                         Image(systemName: up ? "arrow.up.right" : "arrow.down.right")
                             .font(.system(size: 11, weight: .bold))
@@ -1346,7 +1507,7 @@ struct NetWorthTrendCard: View {
             }
 
             if hasData {
-                let hasNegative = trend.contains { $0.value < 0 }
+                let hasNegative = trend.contains { $0.net < 0 }
                 let chartH: CGFloat = 70
                 
                 VStack(spacing: 6) {
@@ -1366,14 +1527,14 @@ struct NetWorthTrendCard: View {
                             
                             HStack(alignment: hasNegative ? .center : .bottom, spacing: 6) {
                                 ForEach(Array(trend.enumerated()), id: \.offset) { i, point in
-                                    let hasValue = point.value != 0
-                                    let rawH = maxAbs > 0 ? CGFloat(abs(point.value) / maxAbs) * availableH : 0
+                                    let hasValue = point.net != 0
+                                    let rawH = maxAbs > 0 ? CGFloat(abs(point.net) / maxAbs) * availableH : 0
                                     // Empty periods get a faint full-height
                                     // track, not a stub that reads as "almost
                                     // nothing" — before this, months with no
                                     // data at all looked like months of zero.
                                     let barH = hasValue ? max(rawH, 3) : availableH
-                                    let isPositive = point.value >= 0
+                                    let isPositive = point.net >= 0
                                     let isLast = i == trend.count - 1
                                     let base: Color = isPositive ? AppTheme.accent : AppTheme.red
                                     // Current period pops at full saturation; past
@@ -1630,7 +1791,7 @@ struct StatsExportSheet: View {
                         .font(.system(size: 13))
                         .foregroundStyle(AppTheme.textSecondary)
                 }
-                .padding(.top, 12)
+                .padding(.top, 28)
                 
                 // Visual preview — actual report card scaled down
                 StatsReportCard(
@@ -1787,48 +1948,37 @@ struct StatsReportCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             // Brand header — DiPo Mascot logo + label
-            HStack {
-                HStack(spacing: 10) {
-                    Image("DiPoMascot")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 38, height: 38)
-                        .blendMode(colorScheme == .dark ? .screen : .multiply)
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text("Digital Pocket ID")
-                            .font(.system(size: 16, weight: .heavy, design: .rounded))
-                            .foregroundStyle(AppTheme.textPrimary)
-                        Text(loc("stats.title"))
-                            .font(.system(size: 10))
-                            .foregroundStyle(AppTheme.textSecondary)
-                    }
-                }
-                Spacer()
-                VStack(alignment: .trailing, spacing: 2) {
-                    Text(periodSubtitle)
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(AppTheme.textPrimary)
-                    HStack(spacing: 4) {
-                        Circle().fill(cardColor).frame(width: 6, height: 6)
-                        Text(cardLabel)
-                            .font(.system(size: 9))
-                            .foregroundStyle(AppTheme.textSecondary)
-                            .lineLimit(1)
-                    }
-                }
+            HStack(spacing: 8) {
+                Image("DiPoMascot")
+                    .resizable().scaledToFit()
+                    .frame(width: 26, height: 26)
+                    .blendMode(colorScheme == .dark ? .screen : .multiply)
+                Text("DiPo")
+                    .font(.system(size: 14, weight: .heavy, design: .rounded))
+                    .foregroundStyle(AppTheme.textPrimary)
+                Circle().fill(cardColor).frame(width: 5, height: 5)
+                Text(cardLabel)
+                    .font(.system(size: 10))
+                    .foregroundStyle(AppTheme.textSecondary)
+                    .lineLimit(1)
+                Spacer(minLength: 6)
+                Text(periodSubtitle)
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(AppTheme.textSecondary)
+                    .lineLimit(1).minimumScaleFactor(0.8)
             }
             
             // Hero — Net Balance
             VStack(alignment: .leading, spacing: 4) {
                 Text(loc("stats.net_balance"))
-                    .font(.system(size: 10, weight: .medium))
+                    .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(AppTheme.textSecondary)
                 Text(netBalance >= 0
                      ? "\(CurrencyManager.shared.formatted(netBalance, currency: currency))"
                      : CurrencyManager.shared.formatted(netBalance, currency: currency))
-                    .font(.system(size: 28, weight: .heavy))
+                    .font(.system(size: 32, weight: .heavy))
                     .foregroundStyle(netBalance >= 0 ? AppTheme.accent : AppTheme.red)
-                    .lineLimit(1).minimumScaleFactor(0.6)
+                    .lineLimit(1).minimumScaleFactor(0.55)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(16)
@@ -1859,25 +2009,19 @@ struct StatsReportCard: View {
                 )
             }
             
-            // Weekly Avg (Royal) + Tx Count. A withheld weekly average arrives
-            // as 0 — printing "Rp 0" would read as a real figure, so the box is
-            // dropped and the transaction count takes the full width.
-            HStack(spacing: 8) {
+            // Weekly average + transaction count demoted to one quiet line.
+            // As boxes they carried the same visual weight as income and
+            // expenses while answering a question nobody asks of a report.
+            HStack(spacing: 6) {
                 if weeklyAverage > 0 {
-                    ReportMetricBox(
-                        label: loc("stats.weekly_short"),
-                        value: CurrencyManager.shared.formatted(weeklyAverage, currency: currency),
-                        color: AppTheme.purple,
-                        icon: "calendar.badge.clock"
-                    )
+                    Text(String(format: loc("stats.report_weekly_inline"),
+                                CurrencyManager.shared.formatted(weeklyAverage, currency: currency)))
+                    Text("·")
                 }
-                ReportMetricBox(
-                    label: loc("stats.transactions"),
-                    value: "\(transactionCount)",
-                    color: AppTheme.orange,
-                    icon: "list.bullet.rectangle.fill"
-                )
+                Text(String(format: loc("stats.report_tx_inline"), transactionCount))
             }
+            .font(.system(size: 10))
+            .foregroundStyle(AppTheme.textSecondary.opacity(0.8))
             
             // Top Categories
             if !topCategories.isEmpty {
@@ -1891,7 +2035,7 @@ struct StatsReportCard: View {
                             .foregroundStyle(AppTheme.textSecondary)
                     }
                     VStack(spacing: 7) {
-                        ForEach(Array(topCategories.prefix(5).enumerated()), id: \.offset) { idx, item in
+                        ForEach(Array(topCategories.prefix(3).enumerated()), id: \.offset) { idx, item in
                             ReportCategoryRow(
                                 rank: idx + 1,
                                 category: item.category,
@@ -2314,6 +2458,108 @@ struct FlowLegend: View {
                     Spacer(minLength: 0)
                 }
             }
+        }
+    }
+}
+
+// MARK: - Trend breakdown
+//
+// The chart's own working, shown on tap.
+//
+// A bar is a conclusion; this is the arithmetic behind it — the exact window,
+// how much came in, how much went out, how many rows were counted, and the
+// subtraction. Nothing here is recomputed: it is the same numbers the bar was
+// drawn from, which is the point. A figure you cannot check is one you can only
+// take on trust, and trust is the wrong thing to ask for about someone's money.
+struct CycleTrendBreakdown: View {
+    let trend: [CycleTrendPoint]
+    let currency: String
+    @Environment(\.dismiss) private var dismiss
+
+    private func money(_ v: Double) -> String {
+        CurrencyManager.shared.formatted(v, currency: currency)
+    }
+    private func range(_ p: CycleTrendPoint) -> String {
+        let df = DateFormatter()
+        df.locale = LanguageManager.shared.currentLocale
+        df.dateFormat = DateFormatter.dateFormat(fromTemplate: "dMMM", options: 0,
+                                                 locale: LanguageManager.shared.currentLocale)
+        // The window is half-open, so the last day it covers is the day before
+        // it ends — the same convention the period header uses.
+        let last = Calendar.current.safeDate(byAdding: .day, value: -1, to: p.end)
+        return "\(df.string(from: p.start)) – \(df.string(from: last))"
+    }
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                AppTheme.bg.ignoresSafeArea()
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 12) {
+                        Text(loc("stats.trend_detail_intro"))
+                            .font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 22)
+
+                        ForEach(trend.reversed()) { p in
+                            VStack(spacing: 9) {
+                                HStack {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        HStack(spacing: 6) {
+                                            Text(p.label)
+                                                .font(.system(size: 15, weight: .bold))
+                                                .foregroundStyle(AppTheme.textPrimary)
+                                            if p.isRunning {
+                                                Text(loc("stats.trend_running"))
+                                                    .font(.system(size: 9, weight: .bold))
+                                                    .foregroundStyle(AppTheme.orange)
+                                                    .padding(.horizontal, 5).padding(.vertical, 2)
+                                                    .background(AppTheme.orange.opacity(0.15), in: Capsule())
+                                            }
+                                        }
+                                        Text(range(p))
+                                            .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                                    }
+                                    Spacer()
+                                    Text((p.net >= 0 ? "+" : "−") + money(abs(p.net)))
+                                        .font(.system(size: 16, weight: .bold))
+                                        .foregroundStyle(p.net >= 0 ? AppTheme.accent : AppTheme.red)
+                                }
+                                Divider().overlay(AppTheme.cardMid)
+                                row(loc("stats.income"), money(p.income), AppTheme.accent)
+                                row(loc("stats.expenses"), "− " + money(p.expense), AppTheme.red)
+                                row(loc("stats.trend_counted"),
+                                    String(format: loc("search.results_count"), p.txCount),
+                                    AppTheme.textSecondary)
+                            }
+                            .padding(14)
+                            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
+                            .padding(.horizontal, 22)
+                        }
+
+                        Text(loc("stats.trend_detail_note"))
+                            .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 22).padding(.top, 4)
+                        Spacer(minLength: 30)
+                    }
+                    .padding(.top, 12)
+                }
+            }
+            .navigationTitle(loc("stats.trend_detail_title"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(AppTheme.bg, for: .navigationBar)
+            .doneToolbar { dismiss() }
+        }
+    }
+
+    private func row(_ l: String, _ v: String, _ tint: Color) -> some View {
+        HStack {
+            Text(l).font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
+            Spacer()
+            Text(v).font(.system(size: 12, weight: .semibold)).foregroundStyle(tint)
         }
     }
 }

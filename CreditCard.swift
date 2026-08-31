@@ -15,6 +15,13 @@ struct CreditCardLiabilityRow: View {
     var onEdit: () -> Void
     /// Cross-link to log a purchase on this card (wired in F3).
     var onLogSpend: (() -> Void)? = nil
+    /// Record a bill payment against this card.
+    var onPay: (() -> Void)? = nil
+    /// Delete the card. This row was the ONLY place a credit card was listed,
+    /// and it offered no way to remove one — the Cards manager's trash button
+    /// lives on a different row type. So a credit card, once created, could not
+    /// be deleted from anywhere in the app.
+    var onDelete: (() -> Void)? = nil
 
     private var issuer: BankIssuer? { BankIssuer.find(card.issuerID.isEmpty ? nil : card.issuerID) }
     private var title: String {
@@ -51,8 +58,19 @@ struct CreditCardLiabilityRow: View {
                             Label(loc("cc.log_spend"), systemImage: "cart.badge.plus")
                         }
                     }
+                    if let onPay {
+                        Button { HapticManager.shared.tap(); onPay() } label: {
+                            Label(loc("cc.pay_bill"), systemImage: "arrow.left.arrow.right")
+                        }
+                    }
                     Button { HapticManager.shared.tap(); onEdit() } label: {
                         Label(loc("common.edit"), systemImage: "pencil")
+                    }
+                    if let onDelete {
+                        Divider()
+                        Button(role: .destructive) { HapticManager.shared.warning(); onDelete() } label: {
+                            Label(loc("action.delete"), systemImage: "trash")
+                        }
                     }
                 } label: {
                     Image(systemName: "ellipsis").font(.system(size: 15, weight: .semibold))
@@ -251,6 +269,127 @@ struct CreditCardFormSheet: View {
             card.issuerID = BankIssuer.detect(from: cardNumber)?.id ?? ""
             context.insert(card)
         }
+        try? context.save()
+        HapticManager.shared.success()
+        ActionFeedbackCenter.shared.cardSaved(
+            name: name.trimmingCharacters(in: .whitespaces), isUpdate: editCard != nil)
+        dismiss()
+    }
+}
+
+// MARK: - Credit Card Bill Payment
+//
+// Paying a credit card bill is a TRANSFER, not an expense. The spending already
+// happened when each purchase was logged on the card; treating the payment as a
+// second expense would count the same rupiah twice and make any month where you
+// clear a balance look catastrophic.
+//
+// So two transactions are written, both `.transfer`:
+//   • negative on the cash account the money leaves
+//   • positive on the credit card, which reduces `owedBalance()` — that figure
+//     is openingOwed minus the sum of movements, so a credit lowers it
+struct CreditCardPaymentSheet: View {
+    let creditCard: BankCard
+    let cards: [BankCard]
+    let context: ModelContext
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var amountText = ""
+    @State private var fromCardID: UUID? = nil
+
+    private var owed: Double { creditCard.owedBalance() }
+    private var cashCards: [BankCard] { cards.filter { !$0.isCreditCard } }
+
+    private var canSave: Bool {
+        guard let a = Double(amountText), a > 0, fromCardID != nil else { return false }
+        return true
+    }
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                AppTheme.bg.ignoresSafeArea()
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 18) {
+                        VStack(spacing: 4) {
+                            Text(loc("cc.owed")).font(.system(size: 12))
+                                .foregroundStyle(AppTheme.textSecondary)
+                            Text(creditCard.formattedOwed)
+                                .font(.system(size: 26, weight: .bold)).foregroundStyle(AppTheme.red)
+                        }
+                        .padding(.top, 8)
+
+                        TextField("0", text: $amountText)
+                            .font(.system(size: 22, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
+                            .keyboardType(.decimalPad).multilineTextAlignment(.center)
+                            .padding(.vertical, 14)
+                            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
+                            .padding(.horizontal, 22)
+
+                        Button { amountText = String(format: "%.0f", owed) } label: {
+                            Text(loc("cc.pay_full")).font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(AppTheme.accent)
+                        }
+                        .buttonStyle(.plain)
+
+                        CardPickerSection(selectedCardID: $fromCardID, titleKey: "cc.pay_from")
+                            .padding(.horizontal, 22)
+
+                        HStack(alignment: .top, spacing: 8) {
+                            Image(systemName: "info.circle.fill").font(.system(size: 12))
+                                .foregroundStyle(AppTheme.textSecondary)
+                            Text(loc("cc.pay_hint"))
+                                .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                            Spacer(minLength: 0)
+                        }
+                        .padding(.horizontal, 22)
+
+                        Button { record() } label: {
+                            Text(loc("cc.pay_bill")).font(.system(size: 16, weight: .bold))
+                                .foregroundStyle(.white)
+                                .frame(maxWidth: .infinity).padding(.vertical, 15)
+                                .background(canSave ? AppTheme.accent : AppTheme.cardMid,
+                                            in: RoundedRectangle(cornerRadius: 16))
+                        }
+                        .buttonStyle(ScaleButtonStyle())
+                        .disabled(!canSave)
+                        .padding(.horizontal, 22)
+                        Spacer(minLength: 20)
+                    }
+                }
+            }
+            .navigationTitle(loc("cc.pay_bill"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(AppTheme.bg, for: .navigationBar)
+            .doneToolbar { dismiss() }
+            .onAppear { if fromCardID == nil { fromCardID = cashCards.first?.id } }
+        }
+    }
+
+    private func record() {
+        guard let amount = Double(amountText), amount > 0,
+              let id = fromCardID, let source = cards.first(where: { $0.id == id }) else { return }
+        let ccName = creditCard.holderName.isEmpty ? loc("cc.title") : creditCard.holderName
+
+        let out = TxRecord(
+            name: String(format: loc("cc.tx_payment_out"), ccName),
+            date: .now, amount: -abs(amount), type: "tx.type.purchase",
+            icon: "CC", iconBgHex: TxCategory.other.iconBg,
+            category: .other, currency: source.resolvedCurrency,
+            notes: "tx.note.cc_payment", subtype: .transfer)
+        context.insert(out)
+        source.transactions.append(out)
+
+        let credit = TxRecord(
+            name: String(format: loc("cc.tx_payment_in"), ccName),
+            date: .now, amount: abs(amount), type: "tx.type.income",
+            icon: "CC", iconBgHex: TxCategory.other.iconBg,
+            category: .other, currency: creditCard.resolvedCurrency,
+            notes: "tx.note.cc_payment", subtype: .transfer)
+        context.insert(credit)
+        creditCard.transactions.append(credit)
+
         try? context.save()
         HapticManager.shared.success()
         dismiss()

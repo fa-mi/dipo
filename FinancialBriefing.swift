@@ -445,7 +445,7 @@ enum FinancialBriefingEngine {
             // Essential variable capped at 25% so current overspending doesn't
             // get baked in as a "need".
             let essentialShare = min(essentialVar / income, 0.25)
-            var daily = snap5(min(max(fixedShare + essentialShare, 0.40), 0.65))
+            let daily = snap5(min(max(fixedShare + essentialShare, 0.40), 0.65))
             var invest = snap5(min(max(isDeficit ? 0.10 : 0.20, debtMin / income + 0.05), 0.35))
             // Same "heavy debt" test the recommendation engine uses: either
             // interest-bearing, or minimums already eating >10% of income.
@@ -664,11 +664,7 @@ struct FinancialBriefingView: View {
             .navigationTitle(loc("brief.title"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(AppTheme.bg, for: .navigationBar)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(loc("common.done")) { dismiss() }.foregroundStyle(AppTheme.textSecondary)
-                }
-            }
+            .doneToolbar { dismiss() }
             .onAppear {
                 briefing = FinancialBriefingEngine.build(
                     cards: cards, debts: debts, goals: goals,

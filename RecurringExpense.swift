@@ -125,19 +125,63 @@ struct RecurringExpenseEngine {
                                         currentYear: year, cal: cal) {
                 let due = RecurringDateEngine.dueDate(dayOfMonth: e.dayOfMonth, month: m, year: y)
                 guard today >= cal.startOfDay(for: due) else { continue }
+                // Never post a charge dated before the schedule existed.
+                // pendingMonths bounds to the creation MONTH, not the creation
+                // DAY — so a bill added on the 14th with a day-8 due date used
+                // to charge immediately, back-dated to the 8th. Two harms: the
+                // balance drops for a payment the user never authorised here,
+                // and the row lands days up the ledger where nobody thinks to
+                // look for it. A bill starts counting from its first due date
+                // AFTER it was set up; anything earlier is history the user
+                // enters by hand if they want it.
+                guard due >= cal.startOfDay(for: e.createdAt) else { continue }
+
+                // A bill declared in a currency other than its source card's is
+                // converted ONCE, here, at the rate in force on the charge day,
+                // and stored in the card's own currency. See the FX notes on
+                // TxRecord for why the rate must be frozen rather than applied
+                // when a screen happens to draw the row.
+                //
+                // The fallback matters as much as the conversion: `lastUpdated`
+                // is nil only when no real rate has ever been fetched or cached,
+                // meaning CurrencyManager is still on its hardcoded seed table.
+                // Freezing an invented rate into the ledger forever is worse
+                // than storing the original currency and letting display-time
+                // conversion self-correct once real rates arrive.
+                let cardCurrency = card.resolvedCurrency
+                var txAmount   = -abs(e.amount)
+                var txCurrency = e.currency
+                var fxOriginal: Double = 0
+                var fxOriginalCur = ""
+                var fxRate: Double = 0
+
+                if !e.currency.isEmpty, e.currency != cardCurrency,
+                   CurrencyManager.shared.lastUpdated != nil {
+                    let rate = CurrencyManager.shared.convert(1, from: e.currency, to: cardCurrency)
+                    if rate > 0 {
+                        fxOriginal    = -abs(e.amount)
+                        fxOriginalCur = e.currency
+                        fxRate        = rate
+                        txAmount      = -abs(e.amount * rate)
+                        txCurrency    = cardCurrency
+                    }
+                }
 
                 // Stable keys only (type/notes) — translated at display time,
                 // never frozen into the DB. Same rule the salary engine follows.
                 let tx = TxRecord(
                     name: e.label,
                     date: due,
-                    amount: -abs(e.amount),
+                    amount: txAmount,
                     type: "tx.type.purchase",
                     icon: String(e.label.prefix(2).uppercased()),
                     iconBgHex: e.category.iconBg,
                     category: e.category,
-                    currency: e.currency,
-                    notes: "tx.note.recurring_auto"
+                    currency: txCurrency,
+                    notes: "tx.note.recurring_auto",
+                    fxOriginalAmount: fxOriginal,
+                    fxOriginalCurrency: fxOriginalCur,
+                    fxRate: fxRate
                 )
                 // Insert BEFORE appending: TxRecord has no `inverse:` on the
                 // relationship, so SwiftData won't always auto-persist a child
@@ -208,7 +252,11 @@ final class RecurringExpenseViewModel {
     static let categories: [TxCategory] = [
         .commitment, .bills, .food, .transport, .shopping, .health, .travel, .other
     ]
-    let currencies = ["USD", "IDR"]
+    /// Every currency the app can actually price and convert. Was hardcoded to
+    /// ["USD", "IDR"] while CurrencyManager already fetched live rates for a
+    /// dozen — so a euro or Singapore-dollar subscription had no way in even
+    /// though the conversion behind it worked fine.
+    var currencies: [String] { CurrencyManager.supportedCurrencies.map(\.code) }
 
     func resetForm() {
         formLabel = ""; formAmount = ""; formDay = 1
@@ -225,11 +273,12 @@ final class RecurringExpenseViewModel {
         formCategory = e.category
         formCardID = e.cardID
         formAutoRecord = e.autoRecord
-        if let id = e.cardID, let card = cards.first(where: { $0.id == id }) {
-            formCurrency = card.currency
-        } else {
-            formCurrency = e.currency
-        }
+        // Always the expense's OWN currency. This used to overwrite it with the
+        // linked card's, so opening a $10 bill for edit showed "IDR 10" and
+        // saving wrote that back — silently turning a ten-dollar subscription
+        // into a ten-rupiah one. The card's currency is only a default for NEW
+        // expenses, applied by the form's .onChange when a card is picked.
+        formCurrency = e.currency
         editing = e
         showAddSheet = true
     }
@@ -255,9 +304,13 @@ struct RecurringExpensesView: View {
     @Environment(\.modelContext) private var context
     @Query(sort: \RecurringExpense.createdAt) private var expenses: [RecurringExpense]
     @Query(sort: \BankCard.sortOrder) private var cards: [BankCard]
+    /// Needed only so the back-dated cleanup can also see phantom salary
+    /// credits — the credit engine carried the identical month-granular bug.
+    @Query private var salarySchedules: [SalarySchedule]
     @State private var vm = RecurringExpenseViewModel()
     @State private var appeared = false
     @State private var showOrphanCleanup = false
+    @State private var showPhantomCleanup = false
 
     /// Max rows shown inline before collapsing behind "See all".
     static let previewLimit = 5
@@ -273,6 +326,12 @@ struct RecurringExpensesView: View {
             && !liveLabels.contains(tx.name.trimmingCharacters(in: .whitespaces).lowercased())
         }
         .sorted { $0.date > $1.date }
+    }
+
+    /// Auto-created rows dated before their own schedule existed — leftovers
+    /// from the month-granular catch-up bound both engines used to use.
+    private var phantomAutoCharges: [PhantomAutoCharge] {
+        PhantomAutoChargeFinder.find(cards: cards, expenses: expenses, salaries: salarySchedules)
     }
 
     private var activeExpenses: [RecurringExpense] { expenses.filter { $0.isActive } }
@@ -327,6 +386,34 @@ struct RecurringExpensesView: View {
                             .padding(.horizontal, 22).padding(.top, 14)
                         }
 
+                        // Back-dated auto-charges — rows the engines wrote for
+                        // dates before their schedule existed. Separate banner
+                        // from the orphan one above: different cause, different
+                        // fix, and a user can have both at once.
+                        if !phantomAutoCharges.isEmpty {
+                            Button {
+                                HapticManager.shared.tap(); showPhantomCleanup = true
+                            } label: {
+                                HStack(spacing: 10) {
+                                    Image(systemName: "calendar.badge.exclamationmark")
+                                        .font(.system(size: 16)).foregroundStyle(AppTheme.red)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(String(format: loc("recurring.phantom_title"), phantomAutoCharges.count))
+                                            .font(.system(size: 13, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                                        Text(loc("recurring.phantom_sub"))
+                                            .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                                    }
+                                    Spacer()
+                                    Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold)).foregroundStyle(AppTheme.textSecondary)
+                                }
+                                .padding(14)
+                                .background(AppTheme.red.opacity(0.10), in: RoundedRectangle(cornerRadius: 14))
+                                .overlay(RoundedRectangle(cornerRadius: 14).stroke(AppTheme.red.opacity(0.25), lineWidth: 1))
+                            }
+                            .buttonStyle(ScaleButtonStyle())
+                            .padding(.horizontal, 22).padding(.top, 14)
+                        }
+
                         if !activeExpenses.isEmpty {
                             summaryCard
                                 .padding(.horizontal, 22).padding(.top, 20)
@@ -369,6 +456,13 @@ struct RecurringExpensesView: View {
             }
             .sheet(isPresented: $showOrphanCleanup) {
                 OrphanedAutoChargesView(orphans: orphanedAutoCharges)
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
+                    .presentationBackground(AppTheme.bg)
+                    .preferredColorScheme(appColorScheme())
+            }
+            .sheet(isPresented: $showPhantomCleanup) {
+                PhantomAutoChargesView(phantoms: phantomAutoCharges)
                     .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
                     .presentationBackground(AppTheme.bg)
@@ -565,9 +659,49 @@ struct RecurringFormSheet: View {
     let context: ModelContext
     @Environment(\.dismiss) private var dismiss
     @Query(sort: \BankCard.sortOrder) private var cards: [BankCard]
+    // Needed to answer "what does this do to my plan" while the form is open.
+    @Query private var allRecurrings: [RecurringExpense]
+    @Query private var salarySchedules: [SalarySchedule]
+    @Query private var savingsGoals: [SavingsGoal]
+    @Query private var budgetConfigs: [CardBudgetConfig]
     @State private var appeared = false
 
     private var isEditing: Bool { vm.editing != nil }
+
+    /// The consequence of saving this, computed live as the form is filled.
+    private var impact: CommitmentImpact? {
+        guard let amount = Double(vm.formAmount), amount > 0 else { return nil }
+        let pref = CurrencyManager.shared.preferredCurrency
+        let converted = CurrencyManager.shared.convert(amount, from: vm.formCurrency, to: pref)
+        return CommitmentImpact.build(proposedAmount: converted,
+                                      category: vm.formCategory,
+                                      currency: pref,
+                                      excludingPlanID: vm.editing?.id,
+                                      recurrings: allRecurrings,
+                                      salaries: salarySchedules,
+                                      goals: savingsGoals,
+                                      configs: budgetConfigs)
+    }
+
+    /// "≈ Rp 158.000 · $1 = Rp 15.800" when the bill's currency differs from
+    /// the card it is charged to. nil when they match, when no card is chosen
+    /// yet, or when the amount isn't a usable number — nothing meaningful to
+    /// preview in those cases.
+    private var fxPreview: String? {
+        guard let cardID = vm.formCardID,
+              let card = cards.first(where: { $0.id == cardID }) else { return nil }
+        let target = card.resolvedCurrency
+        guard !vm.formCurrency.isEmpty, vm.formCurrency != target else { return nil }
+        guard let amount = Double(vm.formAmount), amount > 0 else { return nil }
+
+        let cm = CurrencyManager.shared
+        let converted = cm.convert(amount, from: vm.formCurrency, to: target)
+        let unitRate  = cm.convert(1, from: vm.formCurrency, to: target)
+        return String(format: loc("recurring.fx_preview"),
+                      cm.formatted(converted, currency: target),
+                      CurrencyManager.symbol(for: vm.formCurrency),
+                      cm.formatted(unitRate, currency: target))
+    }
 
     var body: some View {
         NavigationStack {
@@ -579,31 +713,28 @@ struct RecurringFormSheet: View {
                                    placeholder: loc("recurring.label_ph"),
                                    text: $vm.formLabel)
 
-                        // Amount + currency (currency locks to the card's currency)
+                        // Amount + currency. The currency is free to differ from
+                        // the card's — a USD subscription paid from an IDR card
+                        // is the common case, and it used to be inexpressible
+                        // because this control locked itself the moment a card
+                        // was picked. Choosing a card still DEFAULTS the currency
+                        // to that card's (see .onChange below); it just no longer
+                        // forbids changing it afterwards.
                         VStack(spacing: 8) {
                             Text(loc("recurring.amount")).font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
                                 .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 22)
                             HStack(spacing: 10) {
-                                if let cardID = vm.formCardID, let card = cards.first(where: { $0.id == cardID }) {
+                                Menu {
+                                    ForEach(vm.currencies, id: \.self) { c in
+                                        Button(c) { HapticManager.shared.tap(); vm.formCurrency = c }
+                                    }
+                                } label: {
                                     HStack(spacing: 6) {
-                                        Text(card.currency).font(.system(size: 15, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
-                                        Image(systemName: "lock.fill").font(.system(size: 10)).foregroundStyle(AppTheme.textSecondary)
+                                        Text(vm.formCurrency).font(.system(size: 15, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                                        Image(systemName: "chevron.up.chevron.down").font(.system(size: 10)).foregroundStyle(AppTheme.textSecondary)
                                     }
                                     .padding(.horizontal, 14).padding(.vertical, 14)
                                     .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
-                                } else {
-                                    Menu {
-                                        ForEach(vm.currencies, id: \.self) { c in
-                                            Button(c) { HapticManager.shared.tap(); vm.formCurrency = c }
-                                        }
-                                    } label: {
-                                        HStack(spacing: 6) {
-                                            Text(vm.formCurrency).font(.system(size: 15, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
-                                            Image(systemName: "chevron.up.chevron.down").font(.system(size: 10)).foregroundStyle(AppTheme.textSecondary)
-                                        }
-                                        .padding(.horizontal, 14).padding(.vertical, 14)
-                                        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
-                                    }
                                 }
                                 TextField("0", text: $vm.formAmount)
                                     .font(.system(size: 22, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
@@ -613,6 +744,31 @@ struct RecurringFormSheet: View {
                                     .frame(maxWidth: .infinity)
                             }
                             .padding(.horizontal, 22)
+
+                            // Estimate at today's rate, so signing up for "$10"
+                            // isn't a blind commitment. Deliberately worded as an
+                            // estimate: the figure that lands in the ledger is the
+                            // one computed on the charge day, not this one.
+                            // Shown before Save, not after — the decision is
+                            // still open here, and this is the only moment the
+                            // number can change anything.
+                            if let impact {
+                                CommitmentImpactPreview(impact: impact,
+                                                        currency: CurrencyManager.shared.preferredCurrency)
+                                    .padding(.horizontal, 22)
+                                    .transition(.opacity)
+                            }
+
+                            if let preview = fxPreview {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "arrow.left.arrow.right")
+                                        .font(.system(size: 10)).foregroundStyle(AppTheme.textSecondary)
+                                    Text(preview)
+                                        .font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, 22)
+                            }
                         }
 
                         // Category picker
@@ -756,6 +912,9 @@ struct RecurringFormSheet: View {
         }
         try? context.save()
         HapticManager.shared.success()
+        ActionFeedbackCenter.shared.recurringSaved(
+            name: vm.formLabel.trimmingCharacters(in: .whitespaces),
+            amount: amount, currency: vm.formCurrency, day: vm.formDay)
         dismiss()
     }
 }
@@ -839,11 +998,7 @@ struct OrphanedAutoChargesView: View {
             .navigationTitle(loc("recurring.orphan_nav"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(AppTheme.bg, for: .navigationBar)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(loc("common.done")) { dismiss() }.foregroundStyle(AppTheme.textSecondary)
-                }
-            }
+            .doneToolbar { dismiss() }
             .onAppear {
                 if !appeared { selected = Set(orphans.map(\.id)); appeared = true }  // pre-select all
             }
@@ -889,6 +1044,219 @@ struct OrphanedAutoChargesView: View {
         }
         .buttonStyle(ScaleButtonStyle())
         .disabled(chosen.isEmpty)
+        .padding(.horizontal, 22).padding(.bottom, 20)
+    }
+}
+
+// MARK: - Back-Dated Auto-Charge Cleanup
+//
+// One-shot repair for rows the auto-engines wrote for dates BEFORE their own
+// schedule existed. Both `pendingMonths` implementations bounded catch-up to
+// the creation MONTH rather than the creation DAY, so a bill added on the 14th
+// with a day-8 due date posted a charge back-dated to the 8th — money that
+// never moved through DiPo, filed on a date nobody thinks to check. Both
+// engines now carry a day-level guard, but rows already written stay in the
+// ledger and keep skewing the balance until they are removed here.
+//
+// Deliberately NOT the same set as OrphanedAutoChargesView above. That one
+// handles charges whose schedule was DELETED; this one handles charges whose
+// schedule is alive but younger than the charge. The two can never overlap —
+// detecting a back-dated charge requires a live schedule to compare against.
+struct PhantomAutoCharge: Identifiable {
+    let tx: TxRecord
+    let scheduleCreatedAt: Date
+    /// Salary credits inflate the balance, recurring charges deflate it, so
+    /// removal moves the number in opposite directions. The UI has to say which.
+    let isIncome: Bool
+    var id: UUID { tx.id }
+}
+
+enum PhantomAutoChargeFinder {
+    /// Suffix SalaryCreditEngine appends when naming its transactions.
+    private static let salarySuffix = " - Salary"
+
+    static func find(cards: [BankCard],
+                     expenses: [RecurringExpense],
+                     salaries: [SalarySchedule]) -> [PhantomAutoCharge] {
+        let cal = Calendar.current
+
+        // Earliest creation date per label. When two schedules share a name we
+        // keep the OLDEST: flagging a charge that some older schedule could
+        // legitimately have produced is worse than missing one, because the
+        // user acts on this list by deleting.
+        var expenseCreated: [String: Date] = [:]
+        for e in expenses {
+            let key = e.label.trimmingCharacters(in: .whitespaces).lowercased()
+            guard !key.isEmpty else { continue }
+            let day = cal.startOfDay(for: e.createdAt)
+            expenseCreated[key] = min(expenseCreated[key] ?? day, day)
+        }
+        var salaryCreated: [String: Date] = [:]
+        for s in salaries {
+            let key = s.label.trimmingCharacters(in: .whitespaces).lowercased()
+            guard !key.isEmpty else { continue }
+            let day = cal.startOfDay(for: s.createdAt)
+            salaryCreated[key] = min(salaryCreated[key] ?? day, day)
+        }
+
+        var out: [PhantomAutoCharge] = []
+        for card in cards {
+            for tx in card.transactions {
+                let isIncome: Bool
+                let key: String
+                switch tx.notes {
+                case "tx.note.recurring_auto":
+                    isIncome = false
+                    key = tx.name.trimmingCharacters(in: .whitespaces).lowercased()
+                case "tx.note.salary_auto":
+                    isIncome = true
+                    var name = tx.name
+                    if name.hasSuffix(salarySuffix) { name.removeLast(salarySuffix.count) }
+                    key = name.trimmingCharacters(in: .whitespaces).lowercased()
+                default:
+                    continue   // hand-entered rows are never touched
+                }
+                let table = isIncome ? salaryCreated : expenseCreated
+                // No live schedule → orphan, which the other cleaner owns.
+                guard let created = table[key] else { continue }
+                guard tx.date < created else { continue }
+                out.append(PhantomAutoCharge(tx: tx, scheduleCreatedAt: created, isIncome: isIncome))
+            }
+        }
+        return out.sorted { $0.tx.date > $1.tx.date }
+    }
+}
+
+struct PhantomAutoChargesView: View {
+    let phantoms: [PhantomAutoCharge]
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var context
+    @State private var selected: Set<UUID> = []
+    @State private var appeared = false
+
+    private var chosen: [PhantomAutoCharge] { phantoms.filter { selected.contains($0.id) } }
+
+    /// Signed effect on the balance once the chosen rows are gone. Removing a
+    /// phantom expense gives money back; removing a phantom salary takes it
+    /// away. A single unsigned total would misstate half the cases.
+    private var netEffect: Double {
+        let pref = CurrencyManager.shared.preferredCurrency
+        var total: Double = 0
+        for p in chosen {
+            let cur = p.tx.currency.isEmpty ? pref : p.tx.currency
+            total -= CurrencyManager.shared.convert(p.tx.amount, from: cur, to: pref)
+        }
+        return total
+    }
+
+    private func dayText(_ date: Date) -> String {
+        let df = DateFormatter()
+        df.locale = LanguageManager.shared.currentLocale
+        df.dateFormat = DateFormatter.dateFormat(fromTemplate: "d MMM yyyy", options: 0,
+                                                 locale: LanguageManager.shared.currentLocale)
+        return df.string(from: date)
+    }
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                AppTheme.bg.ignoresSafeArea()
+                if phantoms.isEmpty {
+                    VStack(spacing: 14) {
+                        Image(systemName: "checkmark.seal.fill").font(.system(size: 40)).foregroundStyle(AppTheme.accent)
+                        Text(loc("recurring.phantom_none")).font(.system(size: 16)).foregroundStyle(AppTheme.textSecondary)
+                    }
+                } else {
+                    ScrollView(showsIndicators: false) {
+                        LazyVStack(spacing: 10) {
+                            Text(loc("recurring.phantom_explain"))
+                                .font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, 22).padding(.bottom, 4)
+                            ForEach(phantoms) { p in
+                                row(p)
+                            }
+                            .padding(.horizontal, 22)
+                            Spacer(minLength: 130)
+                        }
+                        .padding(.top, 8)
+                    }
+                    VStack { Spacer(); footer }
+                }
+            }
+            .navigationTitle(loc("recurring.phantom_nav"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(AppTheme.bg, for: .navigationBar)
+            .doneToolbar { dismiss() }
+            .onAppear {
+                if !appeared { selected = Set(phantoms.map(\.id)); appeared = true }  // pre-select all
+            }
+        }
+    }
+
+    private func row(_ p: PhantomAutoCharge) -> some View {
+        let isOn = selected.contains(p.id)
+        let cur = p.tx.currency.isEmpty ? CurrencyManager.shared.preferredCurrency : p.tx.currency
+        return Button {
+            HapticManager.shared.tap()
+            if isOn { selected.remove(p.id) } else { selected.insert(p.id) }
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: isOn ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 20)).foregroundStyle(isOn ? AppTheme.red : AppTheme.textSecondary)
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(spacing: 6) {
+                        Text(p.tx.name)
+                            .font(.system(size: 14, weight: .medium)).foregroundStyle(AppTheme.textPrimary).lineLimit(1)
+                        if p.isIncome {
+                            Text(loc("recurring.phantom_income_badge"))
+                                .font(.system(size: 9, weight: .semibold))
+                                .foregroundStyle(AppTheme.accent)
+                                .padding(.horizontal, 5).padding(.vertical, 2)
+                                .background(AppTheme.accent.opacity(0.15), in: Capsule())
+                        }
+                    }
+                    // The whole point of the row: the charge date sits before
+                    // the schedule's own creation date. Show both, side by side.
+                    Text(String(format: loc("recurring.phantom_row"),
+                                dayText(p.tx.date), dayText(p.scheduleCreatedAt)))
+                        .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                }
+                Spacer()
+                Text(CurrencyManager.shared.formatted(abs(p.tx.amount), currency: cur))
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(p.isIncome ? AppTheme.accent : AppTheme.textPrimary)
+            }
+            .padding(12)
+            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var footer: some View {
+        VStack(spacing: 8) {
+            if !chosen.isEmpty {
+                let up = netEffect >= 0
+                Text(String(format: loc(up ? "recurring.phantom_effect_up" : "recurring.phantom_effect_down"),
+                            CurrencyManager.shared.formatted(abs(netEffect),
+                                                             currency: CurrencyManager.shared.preferredCurrency)))
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(up ? AppTheme.accent : AppTheme.orange)
+            }
+            Button {
+                HapticManager.shared.warning()
+                for p in chosen { context.delete(p.tx) }
+                try? context.save()
+                dismiss()
+            } label: {
+                Text(String(format: loc("recurring.phantom_delete"), chosen.count))
+                    .font(.system(size: 16, weight: .bold)).foregroundStyle(.white)
+                    .frame(maxWidth: .infinity).padding(.vertical, 16)
+                    .background(chosen.isEmpty ? AppTheme.cardMid : AppTheme.red, in: RoundedRectangle(cornerRadius: 16))
+            }
+            .buttonStyle(ScaleButtonStyle())
+            .disabled(chosen.isEmpty)
+        }
         .padding(.horizontal, 22).padding(.bottom, 20)
     }
 }

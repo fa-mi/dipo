@@ -2,6 +2,10 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>com.fahmiaquinas.DiPo.refresh</string>
+	</array>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
@@ -11,8 +15,6 @@
 			</array>
 		</dict>
 		<dict>
-			<!-- DiPo's own URL scheme for widget deep-links (e.g. dipo://add-transaction). -->
-			<!-- Separate dict so it doesn't get confused with the Google Sign-In scheme above. -->
 			<key>CFBundleURLName</key>
 			<string>com.fahmiaquinas.DiPo</string>
 			<key>CFBundleURLSchemes</key>
@@ -23,33 +25,34 @@
 	</array>
 	<key>GIDClientID</key>
 	<string>810914794268-nhaq685ftps5up6633ifj2r0b06oqo7c.apps.googleusercontent.com</string>
-	<key>ITSAppUsesNonExemptEncryption</key>
-	<false/>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<false/>
+		<key>NSExceptionDomains</key>
+		<dict>
+			<key>open.er-api.com</key>
+			<dict>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<false/>
+				<key>NSIncludesSubdomains</key>
+				<true/>
+			</dict>
+		</dict>
+	</dict>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>DiPo reads only your subscribed national-holiday calendar, to know when a payday falls on a holiday and lands earlier. Your personal events are never read.</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>DiPo reads only your subscribed national-holiday calendar, to know when a payday falls on a holiday and lands earlier. Your personal events are never read.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>DiPo listens only while you hold the mic button in Ask DiPo, so you can log a transaction by speaking instead of typing.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Speech recognition turns what you say into transaction text. DiPo transcribes on-device whenever your language supports it.</string>
 	<key>REVENUECAT_API_KEY</key>
 	<string>appl_prrkODEIIQhpqZyWLMzSogOABDN</string>
-    
-    <key>NSCameraUsageDescription</key>
-    <string>DiPo needs camera access to scan your receipts and automatically save transactions.</string>
-
-    <key>NSPhotoLibraryUsageDescription</key>
-    <string>DiPo needs photo library access to read receipts you've already saved as images.</string>
-    
-    <!-- Add to Info.plist -->
-    <key>NSAppTransportSecurity</key>
-    <dict>
-        <key>NSAllowsArbitraryLoads</key>
-        <false/>
-        <key>NSExceptionDomains</key>
-        <dict>
-            <!-- Only for development/testing - REMOVE in production -->
-            <key>open.er-api.com</key>
-            <dict>
-                <key>NSExceptionAllowsInsecureHTTPLoads</key>
-                <false/>
-                <key>NSIncludesSubdomains</key>
-                <true/>
-            </dict>
-        </dict>
-    </dict>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
+	</array>
 </dict>
 </plist>
