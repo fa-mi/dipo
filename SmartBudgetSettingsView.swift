@@ -29,7 +29,18 @@ struct SmartBudgetSettingsSheet: View {
     /// means "no preset is the active choice" (custom/manual ratios).
     @State private var selectedPreset: BudgetProfile? = nil
 
-    enum BudgetTab: String, CaseIterable { case overview = "Overview"; case settings = "Settings" }
+    enum BudgetTab: String, CaseIterable {
+        case overview, settings, simulate
+        /// Was rendered straight from `rawValue`, so these two tab labels stayed
+        /// English no matter which language the app was in.
+        var titleKey: String {
+            switch self {
+            case .overview: return "budget.tab_overview"
+            case .settings: return "budget.tab_settings"
+            case .simulate: return "budget.tab_simulate"
+            }
+        }
+    }
 
     private var totalPct: Int { dailyPct + lifestylePct + investPct }
     private var isBalanced: Bool { totalPct == 100 }
@@ -242,7 +253,7 @@ struct SmartBudgetSettingsSheet: View {
 
                     if isEnabled {
                         Picker("", selection: $selectedTab) {
-                            ForEach(BudgetTab.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                            ForEach(BudgetTab.allCases, id: \.self) { Text(loc($0.titleKey)).tag($0) }
                         }
                         .pickerStyle(.segmented).padding(.horizontal, 22).padding(.top, 12).padding(.bottom, 4)
                     }
@@ -250,8 +261,18 @@ struct SmartBudgetSettingsSheet: View {
                     ScrollView(showsIndicators: false) {
                         VStack(spacing: 20) {
                             if isEnabled {
-                                if selectedTab == .overview { overviewTab }
-                                else { settingsTab }
+                                switch selectedTab {
+                                case .overview: overviewTab
+                                case .settings: settingsTab
+                                // Take-home pay and pension growth live here,
+                                // not in Debts & Credits. They answer income and
+                                // cash-flow questions, which is what this screen
+                                // is already about — a salary calculator filed
+                                // under "what you owe" is somewhere nobody
+                                // would think to look.
+                                case .simulate:
+                                    PlannerView(embedded: true, tools: [.takeHome, .jht])
+                                }
                             }
                             Spacer(minLength: 40)
                         }.padding(.top, 12)
@@ -1108,13 +1129,24 @@ struct BudgetGroupDetailView: View {
                                      : String(format: loc("budget.under_detail"), actualPct, targetPct))
                                     .font(.system(size: 11, weight: .medium))
                                     .foregroundStyle(isOver ? AppTheme.red : AppTheme.textSecondary)
+                                    .fixedSize(horizontal: false, vertical: true)
                             }
                             Spacer(minLength: 10)
                             Text(groupTx.count == 1
                                  ? loc("budget.tx_count_one")
                                  : String(format: loc("budget.tx_count"), groupTx.count))
                                 .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
-                                .fixedSize()
+                                // Was a bare .fixedSize(), which locks BOTH axes:
+                                // the text refused to wrap AND refused to shrink.
+                                // Next to the long left-hand sentence that pushed
+                                // the HStack's minimum width past the screen, so
+                                // the whole card — and with it the page — became
+                                // wider than the display and drifted sideways.
+                                // Locking only the vertical axis keeps it on one
+                                // line's worth of height while still yielding
+                                // horizontally.
+                                .fixedSize(horizontal: false, vertical: true)
+                                .layoutPriority(1)
                         }
                         .padding(.horizontal, 18).padding(.top, 10)
 

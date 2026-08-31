@@ -89,32 +89,67 @@ struct SmartRecommendationView: View {
 
     /// Best-known monthly income: active salary schedules, else derived from
     /// this history's positive (non-transfer) transactions.
+    /// Average monthly income across the analysed history — everything that
+    /// actually arrived, not just the salary line.
+    ///
+    /// This drove "Where you stand", and taking the schedule alone is what
+    /// produced "you spent Rp 18,8jt against Rp 10jt of income, −Rp 8,8jt". Over
+    /// the same two cycles Rp 39,15jt actually came in, so the real figure was
+    /// +Rp 760k. A verdict on a period that has already happened has to count
+    /// the money that was there; a bonus you received and spent is not a deficit.
+    ///
+    /// The salary schedule stays as a FLOOR, so a stretch with no logged income
+    /// yet doesn't collapse the denominator.
     private var monthlyIncome: Double {
         let cm = CurrencyManager.shared
-        let active = salaries.filter { $0.isActive }
-        if !active.isEmpty {
-            return active.reduce(0.0) { $0 + cm.convert($1.amount, from: $1.currency, to: currency) }
-        }
         let months = max(SmartBudgetManager.shared.dataMonthsAvailable(allTransactions: allTx), 1)
-        let inc = allTx.filter { $0.amount > 0 && $0.txSubtype != .transfer }
+        let logged = allTx.filter { $0.amount > 0 && $0.txSubtype != .transfer }
             .reduce(0.0) { $0 + cm.convert($1.amount, from: $1.currency.isEmpty ? currency : $1.currency, to: currency) }
-        return inc / Double(months)
+        let averaged = logged / Double(months)
+        let scheduled = salaries.filter(\.isActive)
+            .reduce(0.0) { $0 + cm.convert($1.amount, from: $1.currency, to: currency) }
+        return max(averaged, scheduled)
     }
 
     private var allTx: [TxRecord] { cards.flatMap { $0.transactions } }
 
+    /// Records whose shape suggests they don't describe what actually happened.
+    /// Every ratio on this screen is built from them, so the caveat belongs
+    /// here rather than buried in a settings screen.
+    /// What happened to income beyond the salary in the judged cycle — the
+    /// question a cash-flow line cannot answer.
+    private var windfallReview: WindfallReview? {
+        let cal = Calendar.current
+        let start = judgedCycleStart
+        let end = cal.safeDate(byAdding: .month, value: 1, to: start)
+        let cycleTx = allTx.filter { $0.date >= start && $0.date < end }
+        guard !cycleTx.isEmpty else { return nil }
+        return WindfallReview.build(cycleTransactions: cycleTx, currency: currency)
+    }
+
+    private var integrityFindings: [IntegrityFinding] {
+        DataIntegrityCheck.run(transactions: allTx, debts: debts, recurrings: recurringExpenses)
+    }
+
     /// Start of the cycle the score describes (the last complete one when the
     /// current cycle is only days old — matching `currentCycleSnapshot`).
+    /// Dates the salary actually landed, newest-relevant first.
+    private var salaryTxDates: [Date] {
+        allTx.filter { $0.category == .salary && $0.amount > 0 }.map(\.date)
+    }
+
     private var judgedCycleStart: Date {
         let cal = Calendar.current
         let now = Date()
         guard let day = salaries.first(where: { $0.isActive })?.dayOfMonth else {
             return cal.date(from: cal.dateComponents([.year, .month], from: now)) ?? now
         }
-        let current = StatPeriod.payCycleRange(payDay: day).start
+        let current = StatPeriod.anchoredStart(StatPeriod.payCycleRange(payDay: day).start,
+                                               salaryDates: salaryTxDates)
         let elapsed = cal.dateComponents([.day], from: current, to: now).day ?? 0
         if elapsed < 7, let dayBefore = cal.date(byAdding: .day, value: -1, to: current) {
-            return StatPeriod.payCycleRange(payDay: day, now: dayBefore).start
+            return StatPeriod.anchoredStart(StatPeriod.payCycleRange(payDay: day, now: dayBefore).start,
+                                            salaryDates: salaryTxDates)
         }
         return current
     }
@@ -140,12 +175,14 @@ struct SmartRecommendationView: View {
         var start: Date
         var end: Date = now
         if let day = payDay {
-            let current = StatPeriod.payCycleRange(payDay: day).start
+            let current = StatPeriod.anchoredStart(StatPeriod.payCycleRange(payDay: day).start,
+                                                   salaryDates: salaryTxDates)
             let elapsed = cal.dateComponents([.day], from: current, to: now).day ?? 0
             if elapsed < 7,
                let dayBefore = cal.date(byAdding: .day, value: -1, to: current) {
                 // Previous complete cycle: [prevStart, currentStart).
-                start = StatPeriod.payCycleRange(payDay: day, now: dayBefore).start
+                start = StatPeriod.anchoredStart(StatPeriod.payCycleRange(payDay: day, now: dayBefore).start,
+                                                 salaryDates: salaryTxDates)
                 end = current
             } else {
                 start = current
@@ -194,12 +231,34 @@ struct SmartRecommendationView: View {
             .reduce(0.0) { $0 + CurrencyManager.shared.convert(
                 abs($1.amount), from: $1.currency.isEmpty ? currency : $1.currency, to: currency) }
 
+        // Income ACTUALLY received in this cycle — not the salary schedule.
+        //
+        // The schedule was the wrong denominator for a backward-looking
+        // analysis. A cycle where a bonus arrived and was partly spent got
+        // measured against salary alone: living costs came out at 256% of
+        // "income" and the cycle read as Rp 16,8jt overspent when the real gap
+        // was Rp 9,08jt. The spending side was exact; only the denominator
+        // pretended half the money never existed.
+        //
+        // This is deliberately the OPPOSITE call from the allocation plan in
+        // Debt Tracker. That one looks FORWARD and must not raise next month's
+        // budget because a bonus landed once. This looks BACKWARD at what
+        // actually happened, where ignoring money that genuinely arrived is
+        // simply wrong.
+        //
+        // `max` with the schedule keeps a mid-cycle view sane: before payday
+        // lands, actual income is near zero and every ratio would explode.
+        let receivedIncome = scopedTx
+            .filter { $0.date >= start && $0.date < end && $0.amount > 0 && $0.txSubtype != .transfer }
+            .reduce(0.0) { $0 + CurrencyManager.shared.convert(
+                $1.amount, from: $1.currency.isEmpty ? currency : $1.currency, to: currency) }
+
         return RecoCycleSnapshot(
             daily:      mgr.spent(in: .daily,      transactions: windowTx, targetCurrency: currency, periodStart: start),
             lifestyle:  mgr.spent(in: .lifestyle,  transactions: windowTx, targetCurrency: currency, periodStart: start),
             investDebt: mgr.spent(in: .investDebt, transactions: windowTx, targetCurrency: currency, periodStart: start),
             savingsDeposits: savingsDeposits,
-            income:     monthlyIncome,
+            income:     max(receivedIncome, monthlyIncome),
             topCategory:       top?.key.displayLabel,
             topCategoryAmount: top?.value.total ?? 0,
             topCategoryCount:  top?.value.count ?? 0)
@@ -244,6 +303,19 @@ struct SmartRecommendationView: View {
                     titleBlock(r)
                     scoreCard(r)
                     analyzedBanner(r)
+
+                    // Directly under the "analyzed N transactions" claim, which
+                    // is exactly where a caveat about that data belongs.
+                    if !integrityFindings.isEmpty {
+                        DataIntegrityCard(findings: integrityFindings)
+                            .padding(.horizontal, 22)
+                    }
+
+                    // Only when there WAS extra income. Otherwise there is no
+                    // windfall to review and the card would be noise.
+                    if let w = windfallReview, w.isRelevant {
+                        WindfallCard(review: w).padding(.horizontal, 22)
+                    }
                     deepAnalysisButton
                     intentButton(r)
                     recommendationsSection(r)
@@ -667,6 +739,10 @@ struct SmartRecommendationView: View {
         }
         try? context.save()
 
+        ActionFeedbackCenter.shared.budgetApplied(
+            daily: Int((r.recommendedRatios.daily * 100).rounded()),
+            lifestyle: Int((r.recommendedRatios.lifestyle * 100).rounded()),
+            investDebt: Int((r.recommendedRatios.investDebt * 100).rounded()))
         onApply()
         dismiss()
     }

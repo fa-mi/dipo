@@ -27,6 +27,10 @@ struct CycleIntentView: View {
     }
     private func isOn(_ kind: CycleIntentKind) -> Bool { row(for: kind) != nil }
 
+    private var activeIntentCount: Int {
+        CycleIntentKind.allCases.filter { isOn($0) }.count
+    }
+
     var body: some View {
         NavigationStack {
             ZStack {
@@ -51,10 +55,14 @@ struct CycleIntentView: View {
             .navigationTitle(loc("intent.title"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(AppTheme.bg, for: .navigationBar)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(loc("common.done")) { dismiss() }.foregroundStyle(AppTheme.purple)
-                }
+            // Confirm on the way out, not per toggle. Toggling already shows
+            // its own result right there on the card; a toast per tap would
+            // just cover the card the user is looking at. What is NOT visible
+            // here is the consequence — Deep Analysis softening next cycle —
+            // so the exit is where a summary earns its place.
+            .doneToolbar {
+                ActionFeedbackCenter.shared.intentsSaved(count: activeIntentCount)
+                dismiss()
             }
         }
     }
@@ -186,7 +194,9 @@ struct CycleIntentView: View {
     private func toggle(_ kind: CycleIntentKind, recurring: Bool) {
         if let existing = row(for: kind) {
             context.delete(existing)
+            HapticManager.shared.tap()
         } else {
+            HapticManager.shared.success()
             context.insert(CycleIntent(kind: kind, cycleKey: cycleKey,
                                        note: (noteDrafts[kind.rawValue] ?? "").trimmingCharacters(in: .whitespaces),
                                        isRecurring: recurring))

@@ -410,12 +410,20 @@ struct SearchTxRow: View {
                     Text(formattedDate)
                         .font(.system(size: 11))
                         .foregroundStyle(AppTheme.textSecondary)
+                        // The date yields first. A truncated date is still
+                        // readable; a wrapped category chip ("Commitm/ent")
+                        // reads as a rendering fault.
+                        .lineLimit(1)
+                        .layoutPriority(0)
                     Text(tx.category.shortLabel)
                         .font(.system(size: 10, weight: .medium))
                         .foregroundStyle(tx.category.color)
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
                         .background(tx.category.color.opacity(0.12), in: Capsule())
+                        .layoutPriority(1)
                 }
             }
             Spacer()
@@ -593,21 +601,41 @@ struct TransactionDetailSheet: View {
                     .font(.system(size: 34, weight: .bold))
                     .foregroundStyle(tx.amount >= 0 ? AppTheme.green : AppTheme.red)
 
-                Text(convertedLabel)
-                    .font(.system(size: 14))
-                    .foregroundStyle(AppTheme.textSecondary)
-
-                if CurrencyManager.shared.isLoading {
-                    HStack(spacing: 6) {
-                        ProgressView().scaleEffect(0.7).tint(AppTheme.textSecondary)
-                        Text(loc("common.updating_rate")).font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                if tx.isFXConverted {
+                    // Settled row: show what was declared and the rate applied
+                    // on the charge day. This deliberately REPLACES the live
+                    // conversion below — re-converting an amount that was
+                    // already converted once would print a figure that
+                    // contradicts the one actually posted to the balance.
+                    VStack(spacing: 4) {
+                        Text(String(format: loc("tx.fx_original"),
+                                    CurrencyManager.shared.formatted(abs(tx.fxOriginalAmount),
+                                                                     currency: tx.fxOriginalCurrency)))
+                            .font(.system(size: 14))
+                            .foregroundStyle(AppTheme.textSecondary)
+                        Text(String(format: loc("tx.fx_rate_used"),
+                                    CurrencyManager.symbol(for: tx.fxOriginalCurrency),
+                                    CurrencyManager.shared.formatted(tx.fxRate, currency: tx.currency)))
+                            .font(.system(size: 11))
+                            .foregroundStyle(AppTheme.textSecondary)
                     }
-                } else if let updated = CurrencyManager.shared.lastUpdated {
-                    Text(String(format: loc("common.rate_as_of"),
-                                CurrencyManager.shared.rateLabel,
-                                Self.shortTimeString(from: updated)))
-                        .font(.system(size: 11))
+                } else {
+                    Text(convertedLabel)
+                        .font(.system(size: 14))
                         .foregroundStyle(AppTheme.textSecondary)
+
+                    if CurrencyManager.shared.isLoading {
+                        HStack(spacing: 6) {
+                            ProgressView().scaleEffect(0.7).tint(AppTheme.textSecondary)
+                            Text(loc("common.updating_rate")).font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                        }
+                    } else if let updated = CurrencyManager.shared.lastUpdated {
+                        Text(String(format: loc("common.rate_as_of"),
+                                    CurrencyManager.shared.rateLabel,
+                                    Self.shortTimeString(from: updated)))
+                            .font(.system(size: 11))
+                            .foregroundStyle(AppTheme.textSecondary)
+                    }
                 }
             }
             .padding(.top, 16)
@@ -1628,6 +1656,11 @@ struct AddTransactionSheet: View {
             // transfer) makes sense in context.
         )
         vm.cards[selectedCardIndex].transactions.append(record)
+        // Confirm the RESULT, not just "saved" — the amount and where it went.
+        ActionFeedbackCenter.shared.transactionSaved(
+            amount: record.amount, currency: record.currency,
+            category: record.category,
+            cardLabel: vm.cards[selectedCardIndex].pickerLabel)
 
         // Auto-reduce linked debt balance.
         // Convert the payment amount into the debt's currency before

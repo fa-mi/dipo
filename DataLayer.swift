@@ -92,12 +92,40 @@ final class TxRecord {
     /// Default keeps SwiftData migration lightweight for existing rows.
     var linkedGoalID: String = ""
 
+    /// UUID string of the linked Receivable when this tx is either the money
+    /// going out to lend or a repayment coming back. Lets the outstanding
+    /// balance be derived from the ledger instead of a stored counter, so
+    /// deleting the transaction correctly undoes the repayment.
+    var linkedReceivableID: String = ""
+
     /// Transaction subtype — distinguishes normal expense/income from
     /// refunds (reversing a prior expense, NOT new income) and inter-account
     /// transfers (shouldn't count as income OR expense for budgeting math).
     /// Stored as rawValue string so SwiftData migration is non-destructive
     /// for old rows that don't have this field — defaults to "normal".
     var subtype: String = "normal"
+
+    // MARK: - Foreign-exchange provenance
+    //
+    // When a scheduled charge is declared in a currency other than its source
+    // card's, the engine converts ONCE at charge time and stores the result in
+    // the CARD's currency, so `amount`/`currency` are always same-currency with
+    // the card and `liveTransactionBalance()` re-converts nothing.
+    //
+    // The alternative — keep the amount in USD and convert whenever a screen
+    // draws it — re-values history every time the rate moves: last January's
+    // $10 bill would show one rupiah figure then and a different one today. A
+    // posted ledger entry must not drift after the fact.
+    //
+    // These three keep the original visible and auditable. `fxRate` is units of
+    // `currency` per 1 unit of `fxOriginalCurrency`. All zero/empty = no
+    // conversion happened, which is the case for every pre-existing row.
+    var fxOriginalAmount: Double = 0
+    var fxOriginalCurrency: String = ""
+    var fxRate: Double = 0
+
+    /// True when this row was converted from another currency as it was written.
+    var isFXConverted: Bool { !fxOriginalCurrency.isEmpty && fxRate > 0 }
 
     var category: TxCategory {
         get { TxCategory(rawValue: categoryRaw) ?? .other }
@@ -117,7 +145,10 @@ final class TxRecord {
          currency: String = "USD", notes: String = "",
          linkedDebtID: String = "",
          linkedGoalID: String = "",
-         subtype: TxSubtype = .normal) {
+         subtype: TxSubtype = .normal,
+         fxOriginalAmount: Double = 0,
+         fxOriginalCurrency: String = "",
+         fxRate: Double = 0) {
         self.id = UUID()
         self.name = name
         self.date = date
@@ -131,6 +162,9 @@ final class TxRecord {
         self.linkedDebtID = linkedDebtID
         self.linkedGoalID = linkedGoalID
         self.subtype = subtype.rawValue
+        self.fxOriginalAmount = fxOriginalAmount
+        self.fxOriginalCurrency = fxOriginalCurrency
+        self.fxRate = fxRate
     }
 }
 
@@ -347,13 +381,19 @@ extension TxCategory {
 
     /// Short localized label for compact UI (filter bar, pills with limited width).
     /// Shorter than displayLabel for categories with long names.
+    /// Compact name for chips and filter pills. "Short" is judged in the
+    /// LONGEST language, not English — Indonesian "Transportasi" and
+    /// "Perjalanan" overflow a chip that "Transport" and "Travel" fit fine.
     var shortLabel: String {
         switch self {
         case .food:        return loc("category.short.food")
         case .investment:  return loc("category.short.investment")
         case .debtPayment: return loc("category.short.debt")
         case .incomeOther: return loc("category.short.income_other")
-        // All others are short enough — reuse displayLabel
+        case .commitment:  return loc("category.short.commitment")
+        case .transport:   return loc("category.short.transport")
+        case .travel:      return loc("category.short.travel")
+        // All others are short enough in both languages — reuse displayLabel
         default:           return displayLabel
         }
     }
@@ -685,5 +725,12 @@ func deleteTransactionWithGoalRollback(_ tx: TxRecord, context: ModelContext) {
             goal.savedAmount = max(goal.savedAmount - refund, 0)
         }
     }
+    // Confirm here rather than at each call site: deletion is silent and
+    // irreversible, so it is the action that most needs a receipt — and the
+    // three call sites must never disagree about whether one appears.
+    ActionFeedbackCenter.shared.removed(
+        String(format: loc("feedback.tx_deleted"),
+               CurrencyManager.shared.formatted(abs(tx.amount), currency: tx.currency)),
+        detail: tx.name)
     context.delete(tx)
 }

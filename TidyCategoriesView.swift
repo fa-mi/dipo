@@ -74,11 +74,7 @@ struct TidyCategoriesView: View {
             .navigationTitle(loc("tidy.title"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(AppTheme.bg, for: .navigationBar)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(loc("common.done")) { dismiss() }.foregroundStyle(AppTheme.textSecondary)
-                }
-            }
+            .doneToolbar { dismiss() }
             .onAppear {
                 if !appeared { suggestions = build(); appeared = true }
             }

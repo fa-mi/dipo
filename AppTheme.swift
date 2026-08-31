@@ -14,6 +14,10 @@ struct AppTheme {
     static let orange  = Color(hex: "#FB923C")
     static let blue    = Color(hex: "#38BDF8")
     static let purple  = Color(hex: "#A78BFA")
+    /// The one slot the Profile feature list had left. Purple, green, orange,
+    /// red and sky are all already spoken for there, so a row that needs to be
+    /// told apart from its neighbours has nowhere else to go.
+    static let teal    = Color(hex: "#06B6D4")
 }
 
 // MARK: - UIColor Adaptive Helper

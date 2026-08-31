@@ -24,6 +24,62 @@ enum SocialProvider: String {
 // work correctly. Without this, request.auth is always nil and all
 // authenticated Firestore writes fail with "Missing or insufficient permissions".
 
+
+// MARK: - Firebase sign-in that preserves the existing account
+//
+// DiPo establishes an ANONYMOUS Firebase session on every launch (AppDelegate)
+// so Firestore rules, which all require `request.auth != null`, are satisfied
+// before anyone logs in. Everything the app then writes — `users/{uid}`,
+// `dipoIndex.uid`, `webSync/{uid}` — is keyed to that uid.
+//
+// `Auth.signIn(with:)` REPLACES that session with a brand-new user and a brand-
+// new uid. Every one of those documents is instantly orphaned, and
+// `dipoIndex`'s update rule (`resource.data.uid == request.auth.uid`) then
+// refuses to let the new uid reclaim the entry — by design, since that guard is
+// what stops one account seizing another's DiPo ID. The result is a user who
+// signs in properly and silently loses their DiPo ID, their web sync and their
+// Unity invites, with no way back.
+//
+// `link(with:)` upgrades the anonymous account IN PLACE: same uid, now backed
+// by a real provider. Nothing is orphaned and nothing needs migrating, and the
+// uid finally becomes stable across reinstalls because Firebase maps a given
+// Apple/Google identity to the same user every time.
+//
+// The fallback matters too: if that Apple/Google identity is already attached
+// to another Firebase user (a returning user on a fresh device), linking fails
+// with `credentialAlreadyInUse` and the right move is to sign into THAT
+// account — it is the one holding their history.
+@MainActor
+enum FirebaseAccountLinker {
+    static func signInPreservingAccount(
+        _ credential: AuthCredential,
+        label: String,
+        completion: @escaping (AuthDataResult?, Error?) -> Void
+    ) {
+        guard let current = Auth.auth().currentUser, current.isAnonymous else {
+            Auth.auth().signIn(with: credential, completion: completion)
+            return
+        }
+        current.link(with: credential) { result, error in
+            if let error = error as NSError? {
+                let code = AuthErrorCode(rawValue: error.code)
+                if code == .credentialAlreadyInUse || code == .emailAlreadyInUse {
+                    // Their real account already exists — join it rather than
+                    // stranding them on an anonymous one.
+                    print("[DiPo] Firebase (\(label)) already linked elsewhere; signing into it")
+                    Auth.auth().signIn(with: credential, completion: completion)
+                    return
+                }
+                print("[DiPo] Firebase (\(label)) link failed: \(error.localizedDescription)")
+                Auth.auth().signIn(with: credential, completion: completion)
+                return
+            }
+            print("[DiPo] Firebase (\(label)) linked in place, uid preserved: \(result?.user.uid ?? "")")
+            completion(result, nil)
+        }
+    }
+}
+
 @Observable
 final class UserSession {
     static let shared = UserSession()
@@ -96,7 +152,7 @@ final class UserSession {
                 rawNonce: nil,
                 fullName: credential.fullName
             )
-            Auth.auth().signIn(with: firebaseCredential) { [weak self] result, error in
+            FirebaseAccountLinker.signInPreservingAccount(firebaseCredential, label: "Apple") { [weak self] result, error in
                 if let error = error {
                     print("[DiPo] Firebase Auth (Apple) error: \(error.localizedDescription)")
                 } else {
@@ -142,7 +198,7 @@ final class UserSession {
                 withIDToken: idToken,
                 accessToken: user.accessToken.tokenString
             )
-            Auth.auth().signIn(with: firebaseCredential) { [weak self] authResult, authError in
+            FirebaseAccountLinker.signInPreservingAccount(firebaseCredential, label: "Google") { [weak self] authResult, authError in
                 if let authError = authError {
                     print("[DiPo] Firebase Auth (Google) error: \(authError.localizedDescription)")
                 } else {

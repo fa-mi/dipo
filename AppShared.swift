@@ -74,6 +74,8 @@ struct SheetField: View {
     let label: String
     let placeholder: String
     @Binding var text: String
+    /// Defaults to the normal keyboard so every existing caller is untouched.
+    var keyboard: UIKeyboardType = .default
     @FocusState private var focused: Bool
 
     var body: some View {
@@ -82,6 +84,7 @@ struct SheetField: View {
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(AppTheme.textSecondary)
             TextField(placeholder, text: $text)
+                .keyboardType(keyboard)
                 .font(.system(size: 15))
                 .foregroundStyle(AppTheme.textPrimary)
                 .padding(14)
@@ -325,6 +328,15 @@ enum UserSwitchDetector {
         for key in keysToWipe {
             UserDefaults.standard.removeObject(forKey: key)
         }
+        // Same reasoning as `sb_dismissed_insights` above, for the flags that
+        // record which pushes already went out. Keyed by cycle/debt/day rather
+        // than by user, so without this, user B inherits user A's "already
+        // warned" state and hears nothing for the rest of the cycle.
+        NotificationManager.clearDeliveryDedupState()
+        // The widget bridge lives in the App Group container, not in
+        // `UserDefaults.standard` — so none of the keys above reach it. Without
+        // this, user B's Home Screen shows user A's spending.
+        WidgetDataSync.clear()
 
         // In-memory singletons that cache state.
         SmartBudgetManager.shared.resetAllSettings()
@@ -392,4 +404,42 @@ extension View {
     /// Slow looping vertical drift — see `GentleFloat`. Apply to empty-state
     /// icons / illustrations.
     func gentleFloat() -> some View { modifier(GentleFloat()) }
+}
+
+// MARK: - Sheet Done Button
+//
+// Every dismissable sheet had its own idea of what "Done" looks like: 12 sat
+// on the LEFT (`.cancellationAction`) and one on the right, across five colour
+// treatments — textSecondary, purple, accent, and two with no colour at all.
+// The grey ones in particular read as disabled.
+//
+// One modifier, one answer: top-RIGHT (where iOS users reach for a confirming
+// action), accent green, semibold so it is unmistakably tappable.
+//
+// Usage:  .doneToolbar { dismiss() }
+
+struct DoneToolbar: ViewModifier {
+    let action: () -> Void
+
+    func body(content: Content) -> some View {
+        content.toolbar {
+            ToolbarItem(placement: .confirmationAction) {
+                Button {
+                    HapticManager.shared.tap()
+                    action()
+                } label: {
+                    Text(loc("common.done"))
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(AppTheme.accent)
+                }
+            }
+        }
+    }
+}
+
+extension View {
+    /// Standard top-right "Done" for a sheet. See `DoneToolbar`.
+    func doneToolbar(_ action: @escaping () -> Void) -> some View {
+        modifier(DoneToolbar(action: action))
+    }
 }

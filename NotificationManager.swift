@@ -59,6 +59,26 @@ struct AppNotificationItem: Identifiable, Codable {
     /// promo page, changelog, etc. without cramming everything into `body`.
     var linkUrl: String?
 
+    /// Age of this item, derived from `createdAt` every time it is read.
+    ///
+    /// `time` above is a STRING frozen at creation — almost always
+    /// `loc("notif.time.now")`. Rows rendered it directly, so every item in the
+    /// bell said "Now" forever. Seven once-a-day overspend alerts across a week
+    /// therefore looked like seven alerts fired this second, which is what made
+    /// the list feel like it was attacking the user rather than recording a
+    /// week of history.
+    ///
+    /// `time` is kept because it is persisted via Codable and older payloads
+    /// still carry it, but nothing should display it any more.
+    var relativeTime: String {
+        let seconds = Date().timeIntervalSince(createdAt)
+        if seconds < 60 { return loc("notif.time.now") }
+        let f = RelativeDateTimeFormatter()
+        f.locale = LanguageManager.shared.currentLocale
+        f.unitsStyle = .short
+        return f.localizedString(for: createdAt, relativeTo: Date())
+    }
+
     /// Notification category. `nil`/"general" for normal broadcasts; the app
     /// renders some kinds distinctly. Currently `"ticket_reply"` (an admin
     /// support reply) is shown concisely — single-line body + a "Support"
@@ -242,6 +262,29 @@ final class NotificationManager {
     ///   - overAmount: how much past the target, in money. A percentage alone
     ///     ("1% above") tells the user nothing they can act on — Rp 82.000 does.
     ///   - advice: reasoning plus the concrete next step, already formatted.
+    /// Prefixes of the "already sent, don't send again" flags. They can't be
+    /// listed literally because each carries a cycle date, debt id or month.
+    ///
+    /// These MUST be cleared whenever the underlying data is wiped. They are
+    /// keyed by cycle/debt/day — never by user — so after a reset, a restore,
+    /// or a different account signing in, a flag set for the OLD data still
+    /// reads as "already warned" and silences the alert for the rest of that
+    /// cycle. Same failure the `sb_dismissed_insights` entry in
+    /// `UserSwitchDetector.wipeLocalData` already guards against: the engine
+    /// looks broken because it has gone quiet for reasons the user can't see.
+    static let dedupKeyPrefixes = ["budget_alert_", "debt_due_", "overspend_push_day",
+                                   "overspend_last_amount", "overspend_last_period"]
+
+    /// Forget every one-shot delivery flag, so alerts can fire again for
+    /// whatever data now occupies this device.
+    static func clearDeliveryDedupState() {
+        let defaults = UserDefaults.standard
+        for key in defaults.dictionaryRepresentation().keys
+        where dedupKeyPrefixes.contains(where: key.hasPrefix) {
+            defaults.removeObject(forKey: key)
+        }
+    }
+
     static func postBudgetGroupAlert(group: String, overAmount: Double, limit: Double,
                                      currency: String, cycleKey: String,
                                      advice: String) {
@@ -559,6 +602,7 @@ final class NotificationManager {
     /// Call this whenever a salary schedule is added or updated.
     @MainActor
     static func scheduleSalaryReminders(dayOfMonth: Int, label: String, amount: String) {
+        guard NotificationPreferences.shared.isEnabled(.payday) else { return }
         let center = UNUserNotificationCenter.current()
 
         // Remove any old salary reminders before re-scheduling
@@ -625,6 +669,7 @@ final class NotificationManager {
     /// Weekly spending recap — fires the upcoming Sunday at 20:00.
     /// `deltaText` is an optional "+12% vs last week" style comparison.
     nonisolated static func scheduleWeeklyRecap(expensesFormatted: String, deltaText: String?) {
+        guard MainActor.assumeIsolated({ NotificationPreferences.shared.isEnabled(.summary) }) else { return }
         let center = UNUserNotificationCenter.current()
         center.removePendingNotificationRequests(withIdentifiers: ["smart_weekly_recap"])
 
@@ -650,6 +695,7 @@ final class NotificationManager {
     nonisolated static func scheduleMonthlySummary(incomeFormatted: String,
                                                    expenseFormatted: String,
                                                    topCategory: String?) {
+        guard MainActor.assumeIsolated({ NotificationPreferences.shared.isEnabled(.summary) }) else { return }
         let center = UNUserNotificationCenter.current()
         center.removePendingNotificationRequests(withIdentifiers: ["smart_monthly_summary"])
 
@@ -677,6 +723,7 @@ final class NotificationManager {
     /// 3-day mark is already in the past (user is already overdue — a late
     /// nudge would feel broken; the next tx they add reschedules it).
     nonisolated static func scheduleInactivityNudge(lastTxDate: Date?) {
+        guard MainActor.assumeIsolated({ NotificationPreferences.shared.isEnabled(.inactivity) }) else { return }
         let center = UNUserNotificationCenter.current()
         center.removePendingNotificationRequests(withIdentifiers: ["smart_inactivity"])
 
@@ -710,11 +757,38 @@ final class NotificationManager {
                                    topCategoryAmount: Double = 0) {
         guard income > 0, expense > income else { return }
 
-        // Once-per-day dedup. Key holds the yyyy-MM-dd of the last push.
+        guard NotificationPreferences.shared.isEnabled(.budget) else { return }
+
+        // Tell the user ONCE, then only when it has meaningfully worsened.
+        //
+        // This used to be once per DAY. Being over budget is a condition, not
+        // an event: after the first alert the user knows, and repeating it
+        // every morning with a slightly different number is nagging, not
+        // information. Worse, each repeat carried a new amount in its body, so
+        // `post()`'s duplicate guard — which compares title AND body — never
+        // matched, and the bell accumulated one near-identical red card per day.
+        //
+        // A genuinely new fact still gets through: crossing 1.5× the shortfall
+        // that was last reported means the situation changed materially, and
+        // that IS worth a second interruption.
+        // The escalation threshold is scoped to the period it was measured in.
+        // Without this reset, being Rp 8jt over in March would demand Rp 12jt
+        // before April could say anything — so the first alert of a fresh month
+        // would be swallowed by last month's high-water mark.
+        let periodKey = String(ISO8601DateFormatter.dayString(from: .now).prefix(7))  // yyyy-MM
+        if UserDefaults.standard.string(forKey: "overspend_last_period") != periodKey {
+            UserDefaults.standard.set(periodKey, forKey: "overspend_last_period")
+            UserDefaults.standard.removeObject(forKey: "overspend_last_amount")
+        }
+
+        let shortfall = expense - income
+        let lastAlerted = UserDefaults.standard.double(forKey: "overspend_last_amount")
+        let firstTime = lastAlerted <= 0
+        let worsenedMaterially = shortfall >= lastAlerted * 1.5
+        guard firstTime || worsenedMaterially else { return }
+        UserDefaults.standard.set(shortfall, forKey: "overspend_last_amount")
+
         let todayKey = ISO8601DateFormatter.dayString(from: .now)
-        let lastKey  = UserDefaults.standard.string(forKey: "overspend_push_day")
-        guard lastKey != todayKey else { return }
-        UserDefaults.standard.set(todayKey, forKey: "overspend_push_day")
 
         let overBy = CurrencyManager.shared.formatted(expense - income, currency: currencyCode)
 
@@ -806,14 +880,11 @@ struct NotificationCenterView: View {
             .navigationTitle(loc("notif.title"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(AppTheme.bg, for: .navigationBar)
+            .doneToolbar {
+                mgr.markAllRead()
+                dismiss()
+            }
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(loc("common.done")) {
-                        mgr.markAllRead()
-                        dismiss()
-                    }
-                    .foregroundStyle(AppTheme.textSecondary)
-                }
                 ToolbarItem(placement: .primaryAction) {
                     if !mgr.items.isEmpty {
                         Button(loc("common.clear")) { mgr.clearAll() }
@@ -860,7 +931,7 @@ struct NotificationCenterView: View {
                         if !item.isRead {
                             Circle().fill(item.iconColor).frame(width: 8, height: 8)
                         }
-                        Text(item.time).font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                        Text(item.relativeTime).font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
                     }
                     // Ticket replies stay concise in the list (one truncated
                     // line) — the full reply is shown when the row is tapped
@@ -964,7 +1035,7 @@ struct NotificationDetailView: View {
                                     .font(.system(size: 20, weight: .bold))
                                     .foregroundStyle(AppTheme.textPrimary)
                                     .fixedSize(horizontal: false, vertical: true)
-                                Text(item.time)
+                                Text(item.relativeTime)
                                     .font(.system(size: 12))
                                     .foregroundStyle(AppTheme.textSecondary)
                             }
@@ -1106,12 +1177,7 @@ struct NotificationDetailView: View {
             .navigationTitle(loc("notif.detail_title"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(AppTheme.bg, for: .navigationBar)
-            .toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    Button(loc("common.done")) { dismiss() }
-                        .foregroundStyle(AppTheme.textSecondary)
-                }
-            }
+            .doneToolbar { dismiss() }
         }
     }
 }
@@ -1227,6 +1293,7 @@ enum NotificationScheduler {
     /// Debt tracking is Royal-only, so this follows the same entitlement.
     private static func scheduleDebtReminders(context: ModelContext, preferred: String,
                                               cal: Calendar, now: Date) {
+        guard NotificationPreferences.shared.isEnabled(.debt) else { return }
         guard PremiumManager.shared.canAccess(.smartDebt) else { return }
         let debts: [DebtRecord] = (try? context.fetch(FetchDescriptor<DebtRecord>())) ?? []
         let cm = CurrencyManager.shared
@@ -1281,6 +1348,7 @@ enum NotificationScheduler {
     /// alert lines up with the red "over budget" banner the user already sees.
     /// Deduped once per cycle per group inside `postBudgetGroupAlert`.
     private static func checkSmartBudgetAlerts(txs: [TxRecord], context: ModelContext, preferred: String) {
+        guard NotificationPreferences.shared.isEnabled(.budget) else { return }
         let mgr = SmartBudgetManager.shared
         // `hasActiveBudget`, NOT the raw `isEnabled` toggle. `isEnabled` is a
         // preference persisted in UserDefaults that deliberately survives
@@ -1363,3 +1431,89 @@ enum NotificationScheduler {
 }
 
 // MARK: - Contact Admin Sheet
+
+// MARK: - Backup reminder
+//
+// The one notification worth sending about something that has NOT happened.
+//
+// A backup only matters at the moment the phone is lost, wiped or replaced —
+// which is precisely when it is too late to make one. Everything else DiPo
+// notifies about can be caught up on later; this cannot. That asymmetry is why
+// it earns a push rather than only the in-app banner it had, which by
+// definition is seen only by someone who already opened the app.
+extension NotificationManager {
+
+    static let backupDateKey = "last_backup_export_date"
+    /// Long enough that a diligent user is never nagged, short enough that a
+    /// month of new transactions is never the thing at risk.
+    private static let backupStaleDays = 30
+    private static let backupNotificationID = "backup_reminder"
+
+    /// Records that a backup just happened, and clears any pending reminder —
+    /// a nudge that arrives right after the user complied is the fastest way to
+    /// teach them these notifications aren't worth reading.
+    static func markBackupTaken() {
+        UserDefaults.standard.set(Date(), forKey: backupDateKey)
+        UNUserNotificationCenter.current()
+            .removePendingNotificationRequests(withIdentifiers: [backupNotificationID])
+    }
+
+    /// Schedules (or reschedules) the reminder. Same identifier every time, so
+    /// re-running on foreground replaces rather than stacks — and picks up a
+    /// language change with it.
+    static func scheduleBackupReminder() {
+        guard NotificationPreferences.shared.isEnabled(.backup) else {
+            UNUserNotificationCenter.current()
+                .removePendingNotificationRequests(withIdentifiers: [backupNotificationID])
+            return
+        }
+        let cal = Calendar.current
+        let last = UserDefaults.standard.object(forKey: backupDateKey) as? Date
+
+        // Never backed up: give a new user a week to settle in first, counted
+        // from install rather than from now, or the reminder would keep sliding
+        // forward every time they open the app and never arrive.
+        let due: Date
+        let title: String
+        let body: String
+        if let last {
+            due = cal.safeDate(byAdding: .day, value: backupStaleDays, to: last)
+            let f = DateFormatter()
+            f.locale = LanguageManager.shared.currentLocale
+            f.dateStyle = .medium; f.timeStyle = .none
+            title = loc("backup.reminder.stale_title")
+            body  = String(format: loc("backup.reminder.stale_subtitle"), f.string(from: last))
+        } else {
+            let anchor = (UserDefaults.standard.object(forKey: "dipo_first_launch_date") as? Date) ?? Date()
+            due = cal.safeDate(byAdding: .day, value: 7, to: anchor)
+            title = loc("backup.reminder.never_title")
+            body  = loc("backup.reminder.never_subtitle")
+        }
+
+        // Already overdue → land it this evening rather than in the past, which
+        // UNCalendarNotificationTrigger would silently drop.
+        var fireDate = due
+        if fireDate <= Date() {
+            let today = cal.startOfDay(for: Date())
+            fireDate = cal.safeDate(byAdding: .hour, value: 19, to: today)
+            if fireDate <= Date() {
+                fireDate = cal.safeDate(byAdding: .day, value: 1, to: fireDate)
+            }
+        } else {
+            // Evening, when someone is more likely to act on it than mid-morning.
+            let day = cal.startOfDay(for: fireDate)
+            fireDate = cal.safeDate(byAdding: .hour, value: 19, to: day)
+        }
+
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body  = body
+        content.sound = .dipo
+        let comps = cal.dateComponents([.year, .month, .day, .hour, .minute], from: fireDate)
+        UNUserNotificationCenter.current().add(
+            UNNotificationRequest(identifier: backupNotificationID,
+                                  content: content,
+                                  trigger: UNCalendarNotificationTrigger(dateMatching: comps, repeats: false))
+        )
+    }
+}

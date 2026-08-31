@@ -649,12 +649,7 @@ struct TicketThreadView: View {
             .navigationTitle(ticket.subject)
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(AppTheme.bg, for: .navigationBar)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(loc("common.done")) { HapticManager.shared.tap(); dismiss() }
-                        .foregroundStyle(AppTheme.textSecondary)
-                }
-            }
+            .doneToolbar { dismiss() }
         }
         .task {
             liveStatus = ticket.status

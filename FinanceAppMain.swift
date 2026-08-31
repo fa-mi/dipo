@@ -49,6 +49,10 @@ class AppDelegate: NSObject, UIApplicationDelegate,
         UNUserNotificationCenter.current().delegate = self
         Messaging.messaging().delegate = self
 
+        // Must happen here, before launch completes — iOS throws if a task is
+        // submitted for an identifier with no registered handler.
+        BackgroundRefresh.register()
+
         // Ensure a Firebase Auth session exists. The Firestore security
         // rules require `request.auth != null` — without an auth session
         // EVERY read/write (device_tokens, user_notifications, even
@@ -81,6 +85,13 @@ class AppDelegate: NSObject, UIApplicationDelegate,
             }
         }
         return true
+    }
+
+    /// Queue the next background evaluation as the app leaves the foreground.
+    /// This is the only moment we can be sure a request is pending — iOS
+    /// discards them on force-quit and after each run.
+    func applicationDidEnterBackground(_ application: UIApplication) {
+        BackgroundRefresh.schedule()
     }
 
     // APNs → Firebase: pass the raw token so FCM can map it
@@ -198,10 +209,17 @@ struct DiPoApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @AppStorage("appearance_mode") private var appearanceMode: String = "system"
 
-    private static let sharedModelContainer: ModelContainer = {
+    /// Not private: the background-refresh task needs the same store the UI
+    /// uses, and a second container over the same file would fight it.
+    static let sharedModelContainer: ModelContainer = {
         let schema = Schema([
             BankCard.self, TxRecord.self, SalarySchedule.self,
             DebtRecord.self, SavingsGoal.self, RecurringExpense.self,
+            // Money lent out. Registered here or @Query would fault at runtime.
+            Receivable.self,
+            // Credit-card instalments: they hold limit that no transaction
+            // represents, so they need their own store.
+            CardInstallment.self,
             // Per-card Smart Budget allocations (50/30/20 daily/lifestyle/invest).
             // One row per card the user has configured; cards without a row fall
             // back to global defaults from SmartBudgetManager.

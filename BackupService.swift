@@ -106,10 +106,17 @@ struct BackupTransaction: Codable {
     let linkedDebtID: String
     let linkedGoalID: String
     let subtype: String
+    /// FX provenance for rows the recurring engine converted at charge time.
+    /// Zero/empty for every row written before multi-currency recurring, and
+    /// for same-currency rows — which is why they decode with defaults below.
+    let fxOriginalAmount: Double
+    let fxOriginalCurrency: String
+    let fxRate: Double
 
     private enum CodingKeys: String, CodingKey {
         case id, cardID, name, date, amount, type, icon, iconBgHex,
-             categoryRaw, currency, notes, linkedDebtID, linkedGoalID, subtype
+             categoryRaw, currency, notes, linkedDebtID, linkedGoalID, subtype,
+             fxOriginalAmount, fxOriginalCurrency, fxRate
     }
 
     /// Custom decoder so older backups (exported before `subtype` existed)
@@ -132,13 +139,19 @@ struct BackupTransaction: Codable {
         linkedDebtID = try c.decode(String.self, forKey: .linkedDebtID)
         linkedGoalID = try c.decodeIfPresent(String.self, forKey: .linkedGoalID) ?? ""
         subtype      = try c.decodeIfPresent(String.self, forKey: .subtype) ?? "normal"
+        fxOriginalAmount   = try c.decodeIfPresent(Double.self, forKey: .fxOriginalAmount) ?? 0
+        fxOriginalCurrency = try c.decodeIfPresent(String.self, forKey: .fxOriginalCurrency) ?? ""
+        fxRate             = try c.decodeIfPresent(Double.self, forKey: .fxRate) ?? 0
     }
 
     init(id: UUID, cardID: UUID, name: String, date: Date, amount: Double,
          type: String, icon: String, iconBgHex: String, categoryRaw: String,
          currency: String, notes: String, linkedDebtID: String,
          linkedGoalID: String = "",
-         subtype: String = "normal") {
+         subtype: String = "normal",
+         fxOriginalAmount: Double = 0,
+         fxOriginalCurrency: String = "",
+         fxRate: Double = 0) {
         self.id = id
         self.cardID = cardID
         self.name = name
@@ -153,6 +166,9 @@ struct BackupTransaction: Codable {
         self.linkedDebtID = linkedDebtID
         self.linkedGoalID = linkedGoalID
         self.subtype = subtype
+        self.fxOriginalAmount = fxOriginalAmount
+        self.fxOriginalCurrency = fxOriginalCurrency
+        self.fxRate = fxRate
     }
 }
 
@@ -460,7 +476,10 @@ enum BackupService {
                     currency: t.currency, notes: t.notes,
                     linkedDebtID: t.linkedDebtID,
                     linkedGoalID: t.linkedGoalID,
-                    subtype: t.subtype
+                    subtype: t.subtype,
+                    fxOriginalAmount: t.fxOriginalAmount,
+                    fxOriginalCurrency: t.fxOriginalCurrency,
+                    fxRate: t.fxRate
                 )
             },
             salaries: salaries.map { s in
@@ -614,6 +633,11 @@ enum BackupService {
             try? context.delete(model: RecurringExpense.self)
             try context.save()
 
+        // The restored data is a different set of cycles and debts than
+        // whatever was here before, so the "already warned" flags describe
+        // nothing that still exists. Left in place they suppress real alerts.
+        NotificationManager.clearDeliveryDedupState()
+
         // ---- INSERT FROM PAYLOAD ----
         // Insert cards first so the transaction loop can attach to them by
         // primary key. We rebuild the relationship via `card.transactions
@@ -654,7 +678,10 @@ enum BackupService {
                 currency: t.currency, notes: t.notes,
                 linkedDebtID: t.linkedDebtID,
                 linkedGoalID: t.linkedGoalID,
-                subtype: TxSubtype(rawValue: t.subtype) ?? .normal
+                subtype: TxSubtype(rawValue: t.subtype) ?? .normal,
+                fxOriginalAmount: t.fxOriginalAmount,
+                fxOriginalCurrency: t.fxOriginalCurrency,
+                fxRate: t.fxRate
             )
             tx.id = t.id
             // CRITICAL: explicit insert. BankCard.transactions has a cascade
@@ -784,6 +811,7 @@ enum BackupService {
             try? context.delete(model: CycleIntent.self)
                 try? context.delete(model: RecurringExpense.self)
                 try? context.save()
+                NotificationManager.clearDeliveryDedupState()
                 Self.applyPayload(snap, context: context)
                 try? context.save()
             }
@@ -827,7 +855,10 @@ enum BackupService {
                 currency: t.currency, notes: t.notes,
                 linkedDebtID: t.linkedDebtID,
                 linkedGoalID: t.linkedGoalID,
-                subtype: TxSubtype(rawValue: t.subtype) ?? .normal
+                subtype: TxSubtype(rawValue: t.subtype) ?? .normal,
+                fxOriginalAmount: t.fxOriginalAmount,
+                fxOriginalCurrency: t.fxOriginalCurrency,
+                fxRate: t.fxRate
             )
             tx.id = t.id
             // Same critical pattern as the inline import path: explicit

@@ -442,7 +442,6 @@ final class SmartBudgetManager {
         let cal = Calendar.current
         let now = Date()
         let monthStart = cal.safeDate(from: cal.dateComponents([.year, .month], from: now))
-        let lastMonthStart = cal.safeDate(byAdding: .month, value: -1, to: monthStart)
 
         // Spike comparison ("Food up X% vs last month") must use the SAME window
         // as the budget — the pay cycle when we have one — otherwise, right after
@@ -559,7 +558,6 @@ final class SmartBudgetManager {
                             )
                         )
                     }
-                    let pct = Int((spent / limit - 1) * 100)
                     // Quantified target: "to get back on track, limit X/day".
                     // dayOfMonth + daysInMonth give us the "days remaining"
                     // window. We also surface this in the action label so
@@ -586,17 +584,16 @@ final class SmartBudgetManager {
                     // target. Reporting "28% over the limit" here while that
                     // screen said "14% above your 50% target" described one fact
                     // with two different numbers.
-                    let groupRatio: Double = {
-                        switch grp {
-                        case .daily:      return r.daily
-                        case .lifestyle:  return r.lifestyle
-                        case .investDebt: return r.investDebt
-                        }
-                    }()
-                    let actualPct = income > 0 ? Int(((spent / income) * 100).rounded()) : 0
-                    let targetPct = Int((groupRatio * 100).rounded())
-                    var bodyWithTarget = String(format: loc("insight.group_over_body"),
-                                                actualPct, max(actualPct - targetPct, 0), targetPct)
+                    // Money, not ratios. "Using 68% of income — 18% above your
+                    // 50% target" makes the reader do two subtractions before
+                    // they learn anything they can act on; the amount spent
+                    // against the amount allowed says it in one glance. The
+                    // percentages still exist on the Smart Budget screen, where
+                    // setting a ratio is the actual task.
+                    var bodyWithTarget = String(
+                        format: loc("insight.group_over_body"),
+                        CurrencyManager.shared.formatted(spent, currency: target),
+                        CurrencyManager.shared.formatted(limit, currency: target))
                     if grp == .daily {
                         // Same window as `spent` above — otherwise the breakdown
                         // in this sentence wouldn't add up to the figure it explains.
@@ -639,7 +636,11 @@ final class SmartBudgetManager {
         // warung meals. Wait until the window is wide enough to describe a
         // habit rather than a single evening.
         let cats = daysThis >= 5 ? TxCategory.allCases : []
-        var biggestSpike: (cat: TxCategory, pct: Int)? = nil
+        // Amounts are carried alongside the percentage because the percentage
+        // alone is what the user reads, and "244%" tells nobody whether that is
+        // Rp 50k or Rp 5jt. The ratio still decides WHICH category is worth
+        // reporting; the money is what gets shown.
+        var biggestSpike: (cat: TxCategory, pct: Int, this: Double, last: Double)? = nil
         for cat in cats {
             let thisAmt = thisTx.filter { $0.category == cat }.reduce(0.0) { sum, tx in
                 let txCur = tx.currency.isEmpty ? target : tx.currency
@@ -654,15 +655,20 @@ final class SmartBudgetManager {
                 continue
             }
             if biggestSpike == nil || pct > (biggestSpike?.pct ?? 0) {
-                biggestSpike = (cat, pct)
+                biggestSpike = (cat, pct, thisAmt, lastAmt)
             }
         }
         if let spike = biggestSpike {
+            let cm = CurrencyManager.shared
             return SmartInsight(
                 icon: spike.cat.icon,
                 color: spike.cat.color,
-                title: String(format: loc("insight.cat_up_title"), spike.cat.displayLabel, spike.pct),
-                body: String(format: loc("insight.cat_up_body"), spike.pct, spike.cat.displayLabel.lowercased())
+                title: String(format: loc("insight.cat_up_title"),
+                              spike.cat.displayLabel,
+                              cm.formatted(spike.this - spike.last, currency: target)),
+                body: String(format: loc("insight.cat_up_body"),
+                             cm.formatted(spike.this, currency: target),
+                             cm.formatted(spike.last, currency: target))
             )
         }
 
@@ -1146,10 +1152,23 @@ final class SmartBudgetManager {
         let cal = Calendar.current
         let now = Date()
         let monthStart  = cal.safeDate(from: cal.dateComponents([.year, .month], from: now))
-        let nextMonth   = cal.safeDate(byAdding: .month, value: 1, to: monthStart)
-        // Same calendar month, one year ago.
+        // Same calendar month one year ago — but only as far into it as we are
+        // into this one.
+        //
+        // This used to take the WHOLE month last year against however much of
+        // this month has happened so far. On the 8th that is 8 days measured
+        // against 31, so the figure came out ~74% "lower" and the app
+        // congratulated the user for saving money they simply hadn't had time
+        // to spend yet. A finance app being wrong in the reassuring direction
+        // is the worst way to be wrong, and the ≥10% noise floor was nowhere
+        // near enough to catch it.
+        //
+        // Year-over-year stays CALENDAR-aligned (unlike the cycle-based
+        // insights) because the thing it looks for — Lebaran, December, school
+        // fees — is genuinely seasonal.
+        let elapsed = now.timeIntervalSince(monthStart)
         let lastYearStart = cal.safeDate(byAdding: .year, value: -1, to: monthStart)
-        let lastYearEnd   = cal.safeDate(byAdding: .month, value: 1, to: lastYearStart)
+        let lastYearEnd   = lastYearStart.addingTimeInterval(elapsed)
 
         let sumExpense: ([TxRecord]) -> Double = { txs in
             txs.filter { $0.txSubtype != .transfer }
@@ -1160,8 +1179,11 @@ final class SmartBudgetManager {
                 }
         }
 
+        // Bounded by `now`, not by the end of the month: a future-dated entry
+        // would otherwise be counted here with nothing matching it in the
+        // (elapsed-clipped) last-year window.
         let thisMonthSpend = sumExpense(
-            allTransactions.filter { $0.date >= monthStart && $0.date < nextMonth }
+            allTransactions.filter { $0.date >= monthStart && $0.date < now }
         )
         let lastYearSpend = sumExpense(
             allTransactions.filter { $0.date >= lastYearStart && $0.date < lastYearEnd }
@@ -1200,12 +1222,9 @@ final class SmartBudgetManager {
                 icon: "chart.line.downtrend.xyaxis",
                 color: AppTheme.accent,
                 title: String(format: loc("insight.yoy_saving_title"), monthName),
-                // Body format is "%d%% lower than %@ last year — saved ~%@":
-                // (pct, monthName, amount). monthName was previously omitted,
-                // leaving the 2nd %@ to read garbage off the va_list → a
-                // EXC_BAD_ACCESS crash inside String(format:) when this insight
-                // rendered. All three args must be supplied, in order.
-                body: String(format: loc("insight.yoy_saving_body"), absPct, monthName, savedFmt)
+                // Money first, month second — the percentage has been dropped
+                // from the copy entirely. Both args are %@; keep them in order.
+                body: String(format: loc("insight.yoy_saving_body"), savedFmt, monthName)
             )
         } else {
             // Spent more — but we don't immediately alarm; just inform.
@@ -1215,10 +1234,7 @@ final class SmartBudgetManager {
                 icon: "chart.line.uptrend.xyaxis",
                 color: AppTheme.orange,
                 title: String(format: loc("insight.yoy_higher_title"), monthName),
-                // Body format is "%d%% higher than %@ last year — about %@ more":
-                // (pct, monthName, amount). Same missing-arg crash as the
-                // saving branch — supply monthName for the middle %@.
-                body: String(format: loc("insight.yoy_higher_body"), absPct, monthName, savedFmt)
+                body: String(format: loc("insight.yoy_higher_body"), savedFmt, monthName)
             )
         }
     }
@@ -1530,58 +1546,102 @@ final class SmartBudgetManager {
 
     // MARK: - Spending Anomaly Detection
 
-    /// Detects if any category is spending unusually high vs personal 3-month average
-    func spendingAnomalies(allTransactions: [TxRecord]) -> [SmartInsight] {
+    /// Detects if any category is spending unusually high versus the same
+    /// stretch of the user's own recent cycles.
+    ///
+    /// `periodStart` is the pay-cycle start. Pass it whenever a salary schedule
+    /// exists: this used to run on CALENDAR months while `monthlyInsights`
+    /// right beside it ran on pay cycles, so the two spike insights described
+    /// the same behaviour from two different windows. For a salary paid on the
+    /// 25th they never even overlapped.
+    ///
+    /// It also compared an INCOMPLETE current month against three COMPLETE
+    /// past ones. Eight days of shopping measured against three full months of
+    /// shopping is not a like-for-like ratio, and the resulting "244% above
+    /// your usual" was arithmetic on two different units. Each baseline window
+    /// is now cut to the same elapsed time as the current one.
+    func spendingAnomalies(allTransactions: [TxRecord],
+                           periodStart: Date? = nil) -> [SmartInsight] {
         // Royal-only — match the gating pattern of every other public
         // engine method so callers can't leak premium output by forgetting
         // a wrapping `if hasActiveBudget`.
         guard hasActiveBudget else { return [] }
         let cal = Calendar.current
         let now = Date()
-        let monthStart = cal.safeDate(from: cal.dateComponents([.year, .month], from: now))
+        let cycleStart = periodStart ?? cal.safeDate(from: cal.dateComponents([.year, .month], from: now))
 
-        // Build 3-month baseline per category
+        // Too early in the cycle to describe a habit — one big evening would
+        // read as a trend. Same floor `monthlyInsights` uses for its own spike.
+        let daysIn = max(cal.dateComponents([.day], from: cycleStart, to: now).day ?? 0, 0)
+        guard daysIn >= 5 else { return [] }
+
+        // Elapsed time, not whole days: truncating gives the current window up
+        // to ~24h more than each baseline window, which inflates the ratio
+        // before any behaviour has changed.
+        let elapsed = now.timeIntervalSince(cycleStart)
+
+        /// Spend in one category between two dates. Transfers aren't real
+        /// spend; refunds reversed one. Same model as `spent(in:)` so anomaly
+        /// math agrees with budget math.
+        func spend(_ cat: TxCategory, from: Date, to: Date) -> Double {
+            allTransactions
+                .filter { $0.date >= from && $0.date < to && $0.category == cat && $0.txSubtype != .transfer }
+                .reduce(0.0) { sum, tx in
+                    let v = CurrencyManager.shared.toPreferred(abs(tx.amount), from: tx.currency)
+                    if tx.txSubtype == .refund { return sum - v }
+                    return tx.amount < 0 ? sum + v : sum
+                }
+        }
+
         var insights: [SmartInsight] = []
 
         for cat in TxCategory.allCases {
-            // This month's spend — skip transfers (not real spend) and
-            // subtract refunds (they reversed an expense). Same model as
-            // `spent(in:)` so anomaly math agrees with budget math.
-            let thisMonth = allTransactions
-                .filter { $0.date >= monthStart && $0.category == cat && $0.txSubtype != .transfer }
-                .reduce(0.0) { sum, tx in
-                    let amt = CurrencyManager.shared.toPreferred(abs(tx.amount), from: tx.currency)
-                    if tx.txSubtype == .refund { return sum - amt }
-                    return tx.amount < 0 ? sum + amt : sum
-                }
+            let thisMonth = spend(cat, from: cycleStart, to: now)
             guard thisMonth > 0 else { continue }
 
-            // Average of previous 3 months — same skip/refund treatment.
+            // The same stretch of each of the previous 6 cycles. Six rather
+            // than three because the spread below is only meaningful with
+            // enough points to estimate it from.
             var monthlyAmounts: [Double] = []
-            for offset in 1...3 {
-                let mStart = cal.safeDate(byAdding: .month, value: -offset, to: monthStart)
-                let mEnd   = cal.safeDate(byAdding: .month, value: 1, to: mStart)
-                let amt = allTransactions
-                    .filter { $0.date >= mStart && $0.date < mEnd && $0.category == cat && $0.txSubtype != .transfer }
-                    .reduce(0.0) { sum, tx in
-                        let v = CurrencyManager.shared.toPreferred(abs(tx.amount), from: tx.currency)
-                        if tx.txSubtype == .refund { return sum - v }
-                        return tx.amount < 0 ? sum + v : sum
-                    }
+            for offset in 1...6 {
+                let mStart = cal.safeDate(byAdding: .month, value: -offset, to: cycleStart)
+                let amt = spend(cat, from: mStart, to: mStart.addingTimeInterval(elapsed))
                 if amt > 0 { monthlyAmounts.append(amt) }
             }
-            guard monthlyAmounts.count >= 2 else { continue }
-            let avg = monthlyAmounts.reduce(0, +) / Double(monthlyAmounts.count)
+            // Three points give two degrees of freedom — the minimum from which
+            // a spread can be estimated at all.
+            guard monthlyAmounts.count >= 3 else { continue }
+            let n = Double(monthlyAmounts.count)
+            let avg = monthlyAmounts.reduce(0, +) / n
             guard avg > 0 else { continue }
 
-            // Reliability filter via reliableSpikePct: rejects tiny baselines
-            // (avg <Rp 100k-equiv) AND extreme ratios (>500%). Also bumps the
-            // floor to 50% as before — anomaly should be more dramatic than
-            // the cat_up insight.
+            // Z-score instead of a flat percentage. A fixed "50% over" bar
+            // treats every category as equally predictable, which they are not:
+            // food swings 40% month to month for most people, so 50% is noise
+            // there — while rent barely moves, so 50% over is a catastrophe
+            // nobody was warned about until far too late. Measuring the jump in
+            // units of the category's OWN variation asks the right question:
+            // unusual *for this person, in this category*.
+            let variance = monthlyAmounts.reduce(0.0) { $0 + pow($1 - avg, 2) } / (n - 1)
+            let sd = variance.squareRoot()
+            // Floor the spread at 10% of the mean. Without it a category that
+            // happened to be identical three cycles running has sd ≈ 0, and any
+            // increase divides out to a colossal z — flagging a rounding error
+            // as an emergency. The floor encodes an honest limit: we never
+            // claim to know someone's baseline to better than a tenth.
+            let effectiveSD = max(sd, avg * 0.10)
+            let z = (thisMonth - avg) / effectiveSD
+            guard z >= 2.0 else { continue }
+
+            // Reliability filter still rejects tiny baselines (avg < Rp 100k-
+            // equiv) and absurd ratios (>500%). The percentage floor drops to a
+            // token value because the z-score is now what decides magnitude —
+            // leaving it at 50% would just reinstate the flat threshold this
+            // change exists to remove.
             let target = CurrencyManager.shared.preferredCurrency
-            guard let pct = reliableSpikePct(this: thisMonth, last: avg,
-                                              target: target,
-                                              minimumPctIncrease: 50) else {
+            guard reliableSpikePct(this: thisMonth, last: avg,
+                                   target: target,
+                                   minimumPctIncrease: 10) != nil else {
                 continue
             }
             // Suppress alarm if this is a known seasonal pattern for the
@@ -1591,11 +1651,15 @@ final class SmartBudgetManager {
             if isLikelySeasonal(category: cat, allTransactions: allTransactions) {
                 continue
             }
+            let cm = CurrencyManager.shared
             insights.append(SmartInsight(
                 icon: cat.icon,
                 color: AppTheme.red,
                 title: String(format: loc("insight.spike_title"), cat.displayLabel),
-                body: String(format: loc("insight.spike_body"), pct, cat.displayLabel.lowercased())
+                body: String(format: loc("insight.spike_body"),
+                             cm.formatted(thisMonth, currency: target),
+                             cm.formatted(thisMonth - avg, currency: target),
+                             cm.formatted(avg, currency: target))
             ))
         }
         return insights
@@ -1611,6 +1675,11 @@ final class SmartBudgetManager {
         let category: TxCategory
         let intervalDays: Int // ~1 = daily, ~7 = weekly, ~14 = bi-weekly, ~30 = monthly
         let lastDate: Date
+        /// Oldest sighting in the group. Shown alongside `occurrences` so the
+        /// user can see WHICH transactions produced the claim — a detection
+        /// that can't be traced back to its evidence is impossible to argue
+        /// with when it's wrong.
+        var firstDate: Date = .distantPast
         /// How many times this pattern was seen — higher = more reliable.
         var occurrences: Int = 2
         var nextExpected: Date {
@@ -1651,13 +1720,27 @@ final class SmartBudgetManager {
     /// like "grab"/"gojek") — keys on that first word alone. Short/generic
     /// first words fall back to the full cleaned name so "Grab Food" and
     /// "Grab Car" stay separate.
+    /// First words that describe WHAT was bought rather than WHO sold it.
+    /// Length was standing in for distinctiveness, but plenty of generic
+    /// Indonesian nouns clear five letters — so "tiket masuk Ragunan", "tiket
+    /// kereta", and "tiket bioskop" all keyed on "tiket" and merged into one
+    /// bogus subscription. These fall back to the full cleaned name, the same
+    /// way "grab"/"gojek" already do by being short.
+    private static let genericFirstWords: Set<String> = [
+        "tiket", "parkir", "pulsa", "token", "bayar", "beli", "biaya", "iuran",
+        "isi", "sewa", "top", "topup", "transfer", "kirim", "belanja", "jajan",
+        "makan", "minum", "ongkos", "admin", "denda", "cicilan", "angsuran",
+        "ticket", "fee", "buy", "pay", "bill", "topup",
+    ]
+
     private func recurringKey(for name: String) -> String {
         let cleaned = name.lowercased()
             .unicodeScalars.map { CharacterSet.letters.contains($0) || $0 == " " ? Character($0) : " " }
             .reduce(into: "") { $0.append($1) }
             .split(separator: " ").joined(separator: " ")
         let firstWord = cleaned.split(separator: " ").first.map(String.init) ?? cleaned
-        return firstWord.count >= 5 ? firstWord : cleaned
+        guard firstWord.count >= 5, !Self.genericFirstWords.contains(firstWord) else { return cleaned }
+        return firstWord
     }
 
     /// Finds transactions that recur on a regular interval (daily / weekly /
@@ -1722,10 +1805,17 @@ final class SmartBudgetManager {
             let intervalDays: Int
             let tolerance: Int
             switch avgGap {
-            case 1...2 where sorted.count >= 4: intervalDays = max(avgGap, 1); tolerance = 1
-            case 6...8:                          intervalDays = 7;  tolerance = 2
-            case 12...16:                        intervalDays = 14; tolerance = 3
-            case 25...35:                        intervalDays = 30; tolerance = 6
+            // Every cadence needs at least THREE sightings. With two, there is
+            // exactly one gap, so `avgGap` equals that gap and the regularity
+            // check below can never fail — it silently degrades to "two
+            // same-named expenses happened to fall 6–8 days apart", which is
+            // how a second zoo trip becomes a weekly subscription. Three
+            // sightings give two gaps, which is the minimum that can actually
+            // disagree with each other. Daily keeps its higher bar.
+            case 1...2 where sorted.count >= 4:  intervalDays = max(avgGap, 1); tolerance = 1
+            case 6...8   where sorted.count >= 3: intervalDays = 7;  tolerance = 2
+            case 12...16 where sorted.count >= 3: intervalDays = 14; tolerance = 3
+            case 25...35 where sorted.count >= 3: intervalDays = 30; tolerance = 6
             default: continue
             }
             guard gaps.allSatisfy({ abs($0 - avgGap) <= tolerance }) else { continue }
@@ -1742,6 +1832,7 @@ final class SmartBudgetManager {
                 category: latest.category,
                 intervalDays: intervalDays,
                 lastDate: latest.date,
+                firstDate: sorted.first?.date ?? latest.date,
                 occurrences: txs.count
             ))
         }

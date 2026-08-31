@@ -132,12 +132,21 @@ enum CardNetwork {
 
 struct CardListView: View {
     @Bindable var vm: AppViewModel
+    @Environment(\.modelContext) private var modelContext
+    // Needed for the cascade below — deleting a card must take its dependents
+    // with it, or they linger pointing at something that no longer exists.
+    @Query private var allSchedules: [SalarySchedule]
+    @Query private var allRecurrings: [RecurringExpense]
+    @Query private var allBudgetConfigs: [CardBudgetConfig]
     @State private var showAddCard    = false
     @State private var editingCard: BankCard? = nil
     @State private var appeared       = false
     @State private var showTransfer        = false
     @State private var showTransferPaywall = false
     @State private var pm = PremiumManager.shared
+    /// Which card the carousel is centred on. Drives the actions beneath it.
+    @State private var carouselID: UUID? = nil
+    @State private var deletingCard: BankCard? = nil
 
 
     /// Kelompokkan saldo per mata uang kartu. Tiap kartu dijumlah dalam currency-nya sendiri
@@ -164,6 +173,24 @@ struct CardListView: View {
         }.map { (currency: $0.key, total: $0.value) }
     }
 
+    /// Same cascade CardDetailRow used to perform. A card's salary schedules,
+    /// recurring plans and per-card budget config are meaningless once it is
+    /// gone, and a budget scoped to it would silently widen to "all cards"
+    /// while the settings still claimed a card scope.
+    private func deleteCard(_ card: BankCard) {
+        for s in allSchedules where s.cardID == card.id { modelContext.delete(s) }
+        for r in allRecurrings where r.cardID == card.id { modelContext.delete(r) }
+        for cfg in allBudgetConfigs where cfg.cardID == card.id.uuidString { modelContext.delete(cfg) }
+        if SmartBudgetManager.shared.budgetCardID == card.id.uuidString {
+            SmartBudgetManager.shared.budgetCardID = nil
+        }
+        let nextID = vm.cards.first(where: { $0.id != card.id })?.id
+        modelContext.delete(card)          // cascade removes its transactions
+        try? modelContext.save()
+        HapticManager.shared.warning()
+        carouselID = nextID
+    }
+
     var body: some View {
         ZStack {
             AppTheme.bg.ignoresSafeArea()
@@ -173,7 +200,7 @@ struct CardListView: View {
                     // Header
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(loc("cards.title"))
+                            Text(loc("wallet.title"))
                                 .font(.system(size: 24, weight: .bold))
                                 .foregroundStyle(AppTheme.textPrimary)
                             Text(String(format: loc(vm.cards.count == 1 ? "cards.card_count" : "cards.card_counts"), vm.cards.count))
@@ -235,19 +262,31 @@ struct CardListView: View {
                     .padding(.top, 20)
                     .opacity(appeared ? 1 : 0)
 
-                    // Cards
-                    VStack(spacing: 20) {
-                        ForEach(Array(vm.cards.enumerated()), id: \.element.id) { i, card in
-                            CardDetailRow(
-                                card: card,
-                                vm: vm,
-                                onEdit: { editingCard = card }
-                            )
-                            .opacity(appeared ? 1 : 0)
-                            .offset(y: appeared ? 0 : 24)
-                            .animation(.spring(response: 0.55, dampingFraction: 0.8).delay(Double(i) * 0.08), value: appeared)
+                    // Cards, standing up and swipeable. The actions used to sit
+                    // under every card in a long stack; now they follow the one
+                    // you are looking at, which is the only one they can apply to.
+                    VStack(spacing: 14) {
+                        WalletCarousel(cards: vm.cards, selectedID: $carouselID)
+                            .padding(.top, 18)
+                        if vm.cards.count > 1 {
+                            WalletPageDots(cards: vm.cards, selectedID: carouselID)
+                        }
+                        if let card = vm.cards.first(where: { $0.id == carouselID }) ?? vm.cards.first {
+                            // Actions only. CardDetailRow used to sit here and it
+                            // redrew the whole card plus its balance — the same
+                            // figure the carousel shows directly above it.
+                            WalletCardActions(card: card,
+                                              txCount: card.transactions.count,
+                                              onEdit: { editingCard = card },
+                                              onDelete: { deletingCard = card })
+                                .padding(.horizontal, 22)
+                                .id(card.id)
+                                .transition(.opacity)
                         }
                     }
+                    .opacity(appeared ? 1 : 0)
+                    .animation(.spring(response: 0.55, dampingFraction: 0.8), value: appeared)
+                    .animation(.easeOut(duration: 0.2), value: carouselID)
                     .padding(.horizontal, 22)
                     .padding(.top, 24)
 
@@ -334,6 +373,17 @@ struct CardListView: View {
                 .presentationBackground(AppTheme.bg)
                 .preferredColorScheme(appColorScheme())
         }
+        // Deletion moved up here with the actions bar. The confirmation used to
+        // live inside CardDetailRow, which no longer exists.
+        .alert(String(format: loc("cards.delete_confirm"), deletingCard?.last4 ?? ""),
+               isPresented: Binding(get: { deletingCard != nil },
+                                    set: { if !$0 { deletingCard = nil } })) {
+            Button(loc("common.cancel"), role: .cancel) { deletingCard = nil }
+            Button(loc("cards.delete_all"), role: .destructive) {
+                if let c = deletingCard { deleteCard(c) }
+                deletingCard = nil
+            }
+        }
         .sheet(item: $editingCard) { card in
             CardFormSheet(vm: vm, editCard: card)
                 .presentationDetents([.large])
@@ -355,243 +405,6 @@ struct CardListView: View {
                 .presentationBackground(AppTheme.bg)
                 .preferredColorScheme(appColorScheme())
         }
-    }
-}
-
-// MARK: - Card Detail Row
-
-struct CardDetailRow: View {
-    @Bindable var card: BankCard
-    @Bindable var vm: AppViewModel
-    let onEdit: () -> Void
-    @Environment(\.modelContext) private var modelContext
-    @Query private var allSchedules: [SalarySchedule]
-    @Query private var allRecurrings: [RecurringExpense]
-    @Query private var allBudgetConfigs: [CardBudgetConfig]
-
-    @State private var showActions       = false
-    @State private var showDeleteConfirm = false
-
-    private var linkedSchedules: [SalarySchedule] {
-        allSchedules.filter { $0.cardID == card.id }
-    }
-
-    /// Recurring plans that charge this card. Left behind, they stay "active"
-    /// in the UI while the engine silently skips them forever (it can't find
-    /// the card), so the user's kos or subscription just stops being recorded
-    /// with no visible reason.
-    private var linkedRecurrings: [RecurringExpense] {
-        allRecurrings.filter { $0.cardID == card.id }
-    }
-
-    private var deleteSummary: String {
-        var parts: [String] = []
-        let txCount = card.transactions.count
-        if txCount > 0 {
-            parts.append(String(format: loc(txCount == 1 ? "cards.tx_count" : "cards.tx_counts"), txCount))
-        }
-        if !linkedRecurrings.isEmpty {
-            let names = linkedRecurrings.map { $0.label }.joined(separator: ", ")
-            parts.append(String(format: loc("cards.recurring_counts"), linkedRecurrings.count, names))
-        }
-        if !linkedSchedules.isEmpty {
-            let names = linkedSchedules.map { $0.label }.joined(separator: ", ")
-            let schedKey = linkedSchedules.count == 1 ? "cards.salary_count" : "cards.salary_counts"
-            parts.append(String(format: loc(schedKey), linkedSchedules.count, names))
-        }
-        if parts.isEmpty { return loc("cards.delete_info_empty") }
-        return String(format: loc("cards.delete_info_exists"), parts.joined(separator: " + "))
-    }
-
-    private var network: CardNetwork { CardNetwork.detect(from: card.cardNumber) }
-    private var cardCurrency: String {
-        card.currency.isEmpty ? CurrencyManager.shared.preferredCurrency : card.currency
-    }
-    private var liveBalance: Double {
-        card.transactions.reduce(0.0) { sum, tx in
-            sum + CurrencyManager.shared.convert(tx.amount, from: tx.currency, to: cardCurrency)
-        }
-    }
-    private var totalBalance: Double { card.balance + liveBalance }
-    private var formattedTotalBalance: String {
-        (totalBalance < 0 ? "-" : "") + CurrencyManager.shared.formatted(Swift.abs(totalBalance), currency: cardCurrency)
-    }
-
-    var body: some View {
-        VStack(spacing: 0) {
-            // Mini card preview
-            ZStack(alignment: .topLeading) {
-                RoundedRectangle(cornerRadius: 20)
-                    .fill(LinearGradient(
-                        colors: [Color(hex: card.gradientStart), Color(hex: card.gradientEnd)],
-                        startPoint: .topLeading, endPoint: .bottomTrailing
-                    ))
-
-                // Wave
-                GeometryReader { g in
-                    Path { p in
-                        p.move(to: .init(x: g.size.width * 0.32, y: 0))
-                        p.addCurve(
-                            to: .init(x: g.size.width, y: g.size.height * 0.7),
-                            control1: .init(x: g.size.width * 0.74, y: -12),
-                            control2: .init(x: g.size.width + 8, y: g.size.height * 0.32)
-                        )
-                        p.addLine(to: .init(x: g.size.width, y: 0))
-                        p.closeSubpath()
-                    }
-                    .fill(LinearGradient(
-                        colors: [Color.white.opacity(0.12), Color.white.opacity(0.02)],
-                        startPoint: .top, endPoint: .bottom
-                    ))
-                }
-                .clipShape(RoundedRectangle(cornerRadius: 20))
-
-                VStack(alignment: .leading, spacing: 0) {
-                    HStack {
-                        Image(systemName: "wave.3.right")
-                            .font(.system(size: 16))
-                            .foregroundStyle(Color.white.opacity(0.6))
-                        Spacer()
-                        // Network/wallet logo
-                        if card.isDigitalWallet, let wp = WalletProvider(rawValue: card.walletProvider) {
-                            HStack(spacing: 4) {
-                                Image(systemName: wp.icon)
-                                    .font(.system(size: 13))
-                                    .foregroundStyle(Color.white.opacity(0.9))
-                                Text(loc("cards.wallet"))
-                                    .font(.system(size: 10, weight: .medium))
-                                    .foregroundStyle(Color.white.opacity(0.7))
-                            }
-                        } else {
-                            CardNetworkLogo(network: network)
-                        }
-                    }
-                    Spacer()
-                    Text(card.holderName)
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(Color.white)
-                    // Phone or card number — inline eye toggle on the right
-                    HStack(spacing: 6) {
-                        if card.isDigitalWallet {
-                            Text(card.displayPhone)
-                                .font(.system(size: 11))
-                                .foregroundStyle(Color.white.opacity(0.6))
-                        } else {
-                            Text(card.displayNumber)
-                                .font(.system(size: 11))
-                                .foregroundStyle(Color.white.opacity(0.6))
-                        }
-                        Spacer()
-                        Button {
-                            HapticManager.shared.tap()
-                            card.isHidden.toggle()
-                        } label: {
-                            Image(systemName: card.isHidden ? "eye.slash" : "eye")
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundStyle(.white.opacity(0.6))
-                        }
-                        .buttonStyle(ScaleButtonStyle())
-                    }
-                    .padding(.top, 2)
-                    HStack(alignment: .bottom) {
-                        Text(card.isHidden ? "••••••" : formattedTotalBalance)
-                            .font(.system(size: 22, weight: .bold))
-                            .foregroundStyle(Color.white)
-                            .contentTransition(.numericText())
-                        Spacer()
-                        if !card.isDigitalWallet {
-                            VStack(alignment: .trailing, spacing: 2) {
-                                Text(loc("cards.expires")).font(.system(size: 9)).foregroundStyle(Color.white.opacity(0.6))
-                                Text(card.expireDate).font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.white)
-                            }
-                        }
-                    }
-                    .padding(.top, 8)
-                }
-                .padding(18)
-            }
-            .frame(height: 160)
-
-            // Card info + actions
-            HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(spacing: 6) {
-                        if card.isDigitalWallet, let wp = WalletProvider(rawValue: card.walletProvider) {
-                            Circle().fill(wp.color).frame(width: 7, height: 7)
-                            Text(wp.rawValue)
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundStyle(AppTheme.textPrimary)
-                        } else {
-                            Circle().fill(network.accentColor).frame(width: 7, height: 7)
-                            Text(network.name)
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundStyle(AppTheme.textPrimary)
-                        }
-                    }
-                    Text(String(format: loc(card.transactions.count == 1 ? "cards.tx_count" : "cards.tx_counts"), card.transactions.count))
-                        .font(.system(size: 12))
-                        .foregroundStyle(AppTheme.textSecondary)
-                }
-                Spacer()
-                // Edit button
-                Button {
-                    HapticManager.shared.tap()
-                    onEdit()
-                } label: {
-                    Image(systemName: "pencil")
-                        .font(.system(size: 14))
-                        .foregroundStyle(AppTheme.textSecondary)
-                        .frame(width: 36, height: 36)
-                        .background(AppTheme.cardMid, in: Circle())
-                }
-                .buttonStyle(ScaleButtonStyle())
-
-                // Delete button
-                Button {
-                    HapticManager.shared.warning()
-                    showDeleteConfirm = true
-                } label: {
-                    Image(systemName: "trash")
-                        .font(.system(size: 14))
-                        .foregroundStyle(AppTheme.red.opacity(0.8))
-                        .frame(width: 36, height: 36)
-                        .background(AppTheme.red.opacity(0.1), in: Circle())
-                }
-                .buttonStyle(ScaleButtonStyle())
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 14)
-        }
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 20))
-        .confirmationDialog(String(format: loc("cards.delete_confirm"), card.last4),
-                            isPresented: $showDeleteConfirm,
-                            titleVisibility: .visible) {
-            Button(loc("cards.delete_all"), role: .destructive) { deleteCard() }
-            Button(loc("common.cancel"), role: .cancel) {}
-        } message: {
-            Text(deleteSummary)
-        }
-    }
-
-    private func deleteCard() {
-        for schedule in linkedSchedules { modelContext.delete(schedule) }
-        // Recurring plans pointing at this card would keep looking active while
-        // never charging again — delete them with the card they belonged to.
-        for plan in linkedRecurrings { modelContext.delete(plan) }
-        // Per-card budget override is meaningless once the card is gone, and
-        // its cardID is @Attribute(.unique) — leaving orphans around invites a
-        // collision if the same UUID is ever restored from a backup.
-        for cfg in allBudgetConfigs where cfg.cardID == card.id.uuidString {
-            modelContext.delete(cfg)
-        }
-        // Smart Budget was scoped to this card: without clearing it, budgets
-        // silently widen to "all cards" while settings still claim a card scope.
-        if SmartBudgetManager.shared.budgetCardID == card.id.uuidString {
-            SmartBudgetManager.shared.budgetCardID = nil
-        }
-        modelContext.delete(card)  // cascade deletes all TxRecords
-        try? modelContext.save()
-        HapticManager.shared.warning()
     }
 }
 
@@ -1458,6 +1271,8 @@ struct CardTransferSheet: View {
     @State private var sourceIndex = 0
     @State private var destIndex   = 1
     @State private var amountText  = ""
+    enum TransferEnd { case source, destination }
+    @State private var picking: TransferEnd? = nil
 
     private var cards: [BankCard] { vm.cards }
     private var sourceCard: BankCard? { cards.indices.contains(sourceIndex) ? cards[sourceIndex] : nil }
@@ -1491,16 +1306,31 @@ struct CardTransferSheet: View {
             ZStack {
                 AppTheme.bg.ignoresSafeArea()
                 ScrollView(showsIndicators: false) {
-                    VStack(spacing: 16) {
-                        header
-
-                        sectionLabel(loc("transfer.from"))
-                        cardCarousel(index: $sourceIndex, isSource: true)
-
-                        swapButton
-
-                        sectionLabel(loc("transfer.to"))
-                        cardCarousel(index: $destIndex, isSource: false)
+                    VStack(spacing: 18) {
+                        // From → To on ONE row, using the same standing cards
+                        // the wallet now uses. The old layout stacked two full
+                        // carousels with the amount below both, so choosing a
+                        // pair and typing a figure never fit on one screen.
+                        HStack(alignment: .center, spacing: 10) {
+                            transferSlot(title: loc("transfer.from"),
+                                         card: sourceCard) { picking = .source }
+                            Button {
+                                HapticManager.shared.tap()
+                                withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
+                                    let t = sourceIndex; sourceIndex = destIndex; destIndex = t
+                                }
+                            } label: {
+                                Image(systemName: "arrow.left.arrow.right")
+                                    .font(.system(size: 14, weight: .bold))
+                                    .foregroundStyle(AppTheme.accent)
+                                    .frame(width: 38, height: 38)
+                                    .background(AppTheme.accent.opacity(0.12), in: Circle())
+                            }
+                            .buttonStyle(ScaleButtonStyle())
+                            transferSlot(title: loc("transfer.to"),
+                                         card: destCard) { picking = .destination }
+                        }
+                        .padding(.horizontal, 18)
 
                         amountField
 
@@ -1530,6 +1360,116 @@ struct CardTransferSheet: View {
             }
             .animation(.spring(response: 0.3), value: sourceIndex)
             .animation(.spring(response: 0.3), value: destIndex)
+            .sheet(isPresented: Binding(get: { picking != nil },
+                                        set: { if !$0 { picking = nil } })) {
+                pickerSheet
+                    .presentationDetents([.medium, .large])
+                    .presentationDragIndicator(.visible)
+                    .presentationBackground(AppTheme.bg)
+                    .preferredColorScheme(appColorScheme())
+            }
+        }
+    }
+
+    /// One end of the transfer, drawn as a small standing card so the pair
+    /// reads as "this one → that one" at a glance.
+    private func transferSlot(title: String, card: BankCard?, tap: @escaping () -> Void) -> some View {
+        Button {
+            HapticManager.shared.tap(); tap()
+        } label: {
+            VStack(spacing: 8) {
+                Text(title.uppercased())
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(AppTheme.textSecondary)
+                    .tracking(0.7)
+                if let card {
+                    WalletCard(card: card, width: 96, compact: true)
+                        .frame(width: 96)
+                    Text(CurrencyManager.shared.formatted(card.computedBalance(),
+                                                          currency: card.resolvedCurrency))
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(AppTheme.textPrimary)
+                        .lineLimit(1).minimumScaleFactor(0.7)
+                } else {
+                    RoundedRectangle(cornerRadius: 14)
+                        .fill(AppTheme.cardDark)
+                        .frame(width: 96, height: 96 / WalletCard.aspect)
+                }
+            }
+            .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// Card chooser for whichever end was tapped.
+    private var pickerSheet: some View {
+        NavigationStack {
+            ZStack {
+                AppTheme.bg.ignoresSafeArea()
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 10) {
+                        ForEach(Array(cards.enumerated()), id: \.element.id) { i, card in
+                            Button {
+                                HapticManager.shared.tap()
+                                if picking == .source { sourceIndex = i } else { destIndex = i }
+                                picking = nil
+                            } label: {
+                                // A slim spine in the card's own colour, not a
+                                // shrunken card face. At row height a card face
+                                // is a coloured blob that crowds the name and
+                                // says nothing the colour alone doesn't; the
+                                // spine identifies it and leaves the row calm.
+                                let chosen = (picking == .source ? sourceIndex : destIndex) == i
+                                HStack(spacing: 12) {
+                                    RoundedRectangle(cornerRadius: 3, style: .continuous)
+                                        .fill(LinearGradient(colors: [Color(hex: card.gradientStart),
+                                                                      Color(hex: card.gradientEnd)],
+                                                             startPoint: .top, endPoint: .bottom))
+                                        .frame(width: 5, height: 34)
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        HStack(spacing: 6) {
+                                            Text(card.holderName.isEmpty ? loc("wallet.untitled") : card.holderName)
+                                                .font(.system(size: 14, weight: .semibold))
+                                                .foregroundStyle(AppTheme.textPrimary).lineLimit(1)
+                                            if card.isDigitalWallet {
+                                                Text(card.walletProvider.isEmpty
+                                                     ? loc("wallet.ewallet") : card.walletProvider)
+                                                    .font(.system(size: 9, weight: .semibold))
+                                                    .foregroundStyle(AppTheme.textSecondary)
+                                                    .padding(.horizontal, 5).padding(.vertical, 2)
+                                                    .background(AppTheme.cardMid, in: Capsule())
+                                            } else if !card.last4.isEmpty {
+                                                Text("·· \(card.last4)")
+                                                    .font(.system(size: 11, design: .monospaced))
+                                                    .foregroundStyle(AppTheme.textSecondary)
+                                            }
+                                        }
+                                        Text(CurrencyManager.shared.formatted(card.computedBalance(),
+                                                                              currency: card.resolvedCurrency))
+                                            .font(.system(size: 12, weight: .medium))
+                                            .foregroundStyle(AppTheme.textSecondary)
+                                    }
+                                    Spacer(minLength: 6)
+                                    if chosen {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .font(.system(size: 19)).foregroundStyle(AppTheme.accent)
+                                    }
+                                }
+                                .padding(.horizontal, 13).padding(.vertical, 11)
+                                .background(chosen ? AppTheme.accent.opacity(0.08) : AppTheme.cardDark,
+                                            in: RoundedRectangle(cornerRadius: 14))
+                                .overlay(RoundedRectangle(cornerRadius: 14)
+                                    .stroke(chosen ? AppTheme.accent.opacity(0.45) : Color.clear, lineWidth: 1.5))
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.horizontal, 22).padding(.top, 12)
+                }
+            }
+            .navigationTitle(loc(picking == .source ? "transfer.from" : "transfer.to"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(AppTheme.bg, for: .navigationBar)
         }
     }
 
@@ -1551,39 +1491,6 @@ struct CardTransferSheet: View {
         .padding(.bottom, 2)
     }
 
-    private func sectionLabel(_ title: String) -> some View {
-        Text(title)
-            .font(.system(size: 12, weight: .semibold))
-            .foregroundStyle(AppTheme.textSecondary)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 24)
-    }
-
-    // Swipeable card deck — pick source/destination by swiping left/right.
-    // Uses a custom index row instead of the built-in page dots, which sit too
-    // tight against the card and can't be styled.
-    private func cardCarousel(index: Binding<Int>, isSource: Bool) -> some View {
-        VStack(spacing: 0) {
-            TabView(selection: index) {
-                ForEach(Array(cards.enumerated()), id: \.element.id) { i, card in
-                    TransferCardTile(
-                        card: card,
-                        title: label(card),
-                        highlightInsufficient: isSource && i == index.wrappedValue && insufficient,
-                        inUse: i == (isSource ? destIndex : sourceIndex)
-                    )
-                    .padding(.horizontal, 22)
-                    .tag(i)
-                }
-            }
-            .tabViewStyle(.page(indexDisplayMode: .never))
-            .frame(height: 150)
-
-            pageDots(selected: index.wrappedValue)
-                .padding(.top, 16)
-        }
-    }
-
     /// Compact, breathing page indicator: the active card gets an accent pill.
     private func pageDots(selected: Int) -> some View {
         HStack(spacing: 6) {
@@ -1594,21 +1501,6 @@ struct CardTransferSheet: View {
                     .animation(.spring(response: 0.3, dampingFraction: 0.75), value: selected)
             }
         }
-    }
-
-    private var swapButton: some View {
-        Button {
-            HapticManager.shared.tap()
-            withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) { swap(&sourceIndex, &destIndex) }
-        } label: {
-            Image(systemName: "arrow.up.arrow.down")
-                .font(.system(size: 15, weight: .bold)).foregroundStyle(AppTheme.accent)
-                .frame(width: 40, height: 40)
-                .background(AppTheme.cardDark, in: Circle())
-                .overlay(Circle().stroke(AppTheme.accent.opacity(0.35), lineWidth: 1.5))
-                .shadow(color: .black.opacity(0.12), radius: 6, y: 3)
-        }
-        .buttonStyle(ScaleButtonStyle())
     }
 
     private var amountField: some View {

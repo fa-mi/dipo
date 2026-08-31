@@ -63,6 +63,13 @@ struct SalaryCreditEngine {
                 let payDate = SalaryDateEngine.actualPayDate(dayOfMonth: schedule.dayOfMonth,
                                                             month: m, year: y)
                 guard today >= cal.startOfDay(for: payDate) else { continue }
+                // Same day-level bound the recurring engine uses. pendingMonths
+                // stops at the creation MONTH, so a schedule created on the 14th
+                // for a day-1 payday would invent a credit back-dated to the 1st
+                // — income that may never have landed, inflating the balance and
+                // every ratio built on it. Credit only paydays that fall after
+                // the schedule was set up.
+                guard payDate >= cal.startOfDay(for: schedule.createdAt) else { continue }
 
             // Store the transaction in schedule.currency exactly as entered.
             // Display-time conversion is handled by liveTransactionBalance() in
@@ -85,6 +92,11 @@ struct SalaryCreditEngine {
                     currency: schedule.currency,
                     notes: "tx.note.salary_auto"
                 )
+                // Insert BEFORE appending — `transactions` has no `inverse:`,
+                // so SwiftData does not reliably persist a child added only via
+                // the parent's array. The recurring engine already does this;
+                // salary was relying on the array alone.
+                context.insert(salaryTx)
                 targetCard.transactions.append(salaryTx)
 
                 // NOTE: Do NOT touch card.balance — balance is computed from

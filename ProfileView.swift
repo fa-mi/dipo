@@ -9,10 +9,20 @@ struct PremiumLockedFeatureLink: View {
     let feature: PremiumFeature
     let title: String
     let subtitle: String
+    /// Override the badge when a row is GATED by a feature but is not that
+    /// feature. "Sync to Web Version" is unlocked by the same Royal
+    /// entitlement as Smart Budget, so it inherited Smart Budget's purple
+    /// brain — two different destinations wearing one identity, sitting three
+    /// rows apart in the same list. The gate and the badge are separate
+    /// questions; this lets a row answer them differently.
+    var iconOverride: String? = nil
+    var tintOverride: Color? = nil
     @Binding var showPaywall: Bool
     let action: () -> Void
 
     private var isLocked: Bool { !PremiumManager.shared.canAccess(feature) }
+    private var badgeIcon: String { iconOverride ?? feature.icon }
+    private var badgeTint: Color { tintOverride ?? feature.color }
 
     var body: some View {
         Button(action: {
@@ -20,9 +30,9 @@ struct PremiumLockedFeatureLink: View {
             if isLocked { showPaywall = true } else { action() }
         }) {
             HStack(spacing: 14) {
-                Image(systemName: feature.icon)
+                Image(systemName: badgeIcon)
                     .font(.system(size: 18))
-                    .foregroundStyle(isLocked ? AppTheme.textSecondary : feature.color)
+                    .foregroundStyle(isLocked ? AppTheme.textSecondary : badgeTint)
                     .frame(width: 36, height: 36)
                     .background(
                         (isLocked ? AppTheme.textSecondary : feature.color).opacity(0.12),
@@ -144,7 +154,8 @@ struct ProfileView: View {
     @State private var showEmailEdit      = false
     @State private var idCopied           = false
     @State private var emailText          = ""
-    @State private var showDebt           = false
+    @State private var showObligations = false
+    @State private var showWebSync        = false
     @State private var showPaywall        = false
     @State private var appearanceMode: String = UserDefaults.standard.string(forKey: "appearance_mode") ?? "system"
     @State private var premiumMgr  = PremiumManager.shared
@@ -445,8 +456,13 @@ struct ProfileView: View {
             SmartBudgetSettingsSheet().presentationDetents([.large]).presentationDragIndicator(.visible)
                 .presentationBackground(AppTheme.bg).preferredColorScheme(appColorScheme())
         }
-        .sheet(isPresented: $showDebt) {
-            DebtView().presentationDetents([.large]).presentationDragIndicator(.visible)
+        .sheet(isPresented: $showObligations) {
+            ObligationsView()
+                .presentationDetents([.large]).presentationDragIndicator(.visible)
+                .presentationBackground(AppTheme.bg).preferredColorScheme(appColorScheme())
+        }
+        .sheet(isPresented: $showWebSync) {
+            WebSyncView().presentationDetents([.large]).presentationDragIndicator(.visible)
                 .presentationBackground(AppTheme.bg).preferredColorScheme(appColorScheme())
         }
         .sheet(isPresented: $showPaywall) {
@@ -873,10 +889,29 @@ struct ProfileView: View {
                     ? (SmartBudgetManager.shared.isEnabled ? loc("profile.budget_active") : loc("budget.off"))
                     : loc("profile.requires_royal"),
                 showPaywall: $showPaywall) { showBudgetSettings = true }
+            // One door for everything owed, owing, or being considered. These
+            // were three separate rows; they answer the same question from
+            // three sides, and splitting them hid the only number that matters
+            // — what all of it adds up to against income.
             PremiumLockedFeatureLink(
-                feature: .smartDebt, title: loc("profile.debt"),
-                subtitle: premiumMgr.canAccess(.smartDebt) ? loc("profile.debt_sub") : loc("profile.requires_royal"),
-                showPaywall: $showPaywall) { showDebt = true }
+                feature: .smartDebt, title: loc("oblig.nav"),
+                subtitle: premiumMgr.canAccess(.smartDebt) ? loc("oblig.entry_sub") : loc("profile.requires_royal"),
+                iconOverride: "scalemass.fill",
+                showPaywall: $showPaywall) { showObligations = true }
+            // Gated on .smartBudget — the same entitlement the Worker checks
+            // before serving the dashboard, so the button can't offer something
+            // the server will refuse.
+            // Gated by Smart Budget's Royal entitlement, but badged as itself —
+            // a phone-to-laptop glyph in blue, so it stops reading as a second
+            // Smart Budget row three places below the first one.
+            PremiumLockedFeatureLink(
+                feature: .smartBudget, title: loc("profile.websync"),
+                subtitle: premiumMgr.canAccess(.smartBudget)
+                    ? loc("profile.websync_sub")
+                    : loc("profile.requires_royal"),
+                iconOverride: "laptopcomputer.and.iphone",
+                tintOverride: AppTheme.teal,
+                showPaywall: $showPaywall) { showWebSync = true }
         }
         .padding(16)
         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
@@ -1319,6 +1354,14 @@ struct ProfileView: View {
         // to be exhaustive. Without this, ratios + master toggle would survive
         // the wipe and reapply to whichever account signs in next.
         SmartBudgetManager.shared.resetAllSettings()
+        // "Already sent this cycle" flags are keyed by cycle/debt/day, not by
+        // the data they described. Left behind, a user who resets mid-cycle
+        // gets no budget or overspend alert until the next payday — the app
+        // silently stops warning them right when they've started over.
+        NotificationManager.clearDeliveryDedupState()
+        // "Reset All Data" has to mean the Home Screen too, otherwise the
+        // widget keeps displaying the figures the user just erased.
+        WidgetDataSync.clear()
         NotificationCenter.default.post(name: .profilePhotoDidChange, object: nil)
         // NOTE: We deliberately DO NOT call `authVM.resetApp()` here. Reset
         // wipes only the user's financial data — their session, keychain
@@ -1412,6 +1455,9 @@ struct ProfileView: View {
                 // success — failed export shouldn't reset the timer.
                 let now = Date()
                 UserDefaults.standard.set(now, forKey: "last_backup_export_date")
+                // Clears any pending nudge and restarts the 30-day clock.
+                NotificationManager.markBackupTaken()
+                NotificationManager.scheduleBackupReminder()
                 lastExportDate = now
             } catch {
                 backupBusyLabel = nil
@@ -1666,6 +1712,8 @@ extension Notification.Name {
     /// alert can hand the user straight to the screen that fixes it instead of
     /// leaving them to find it. MainTabView owns the sheets.
     static let requestOpenSmartBudget    = Notification.Name("requestOpenSmartBudget")
+    /// Posted by AskDiPoVoiceIntent (Back Tap / Siri / Shortcuts).
+    static let requestOpenVoiceEntry     = Notification.Name("requestOpenVoiceEntry")
     static let requestOpenDebt           = Notification.Name("requestOpenDebt")
     static let requestOpenSavingsGoals   = Notification.Name("requestOpenSavingsGoals")
 }

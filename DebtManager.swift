@@ -215,6 +215,15 @@ struct FinancialHealthEngine {
     let monthlyIncome: Double
     let debts: [DebtRecord]
     let monthlyExpenses: Double
+    /// Rent, subscriptions, standing transfers — money already spoken for
+    /// before any decision is made this month. Defaults to zero so existing
+    /// call sites keep their behaviour.
+    var fixedCommitments: Double = 0
+    /// Smart Budget's Invest & Debt share, PASSED IN rather than read from the
+    /// singleton — the ratio can be overridden per card, and reading the global
+    /// one makes those overrides invisible exactly where they matter most.
+    /// Default matches the app's own starting ratio for callers that predate it.
+    var investDebtRatio: Double = 0.20
 
     // MARK: - Core Calculations
 
@@ -313,15 +322,63 @@ struct FinancialHealthEngine {
     }
 
     /// Recommended safe spending budget (after debt allocation)
+    /// Smart Budget's Invest & Debt share. Debt payments come OUT of this
+    /// bucket — they do not sit beside it.
+    var investDebtAllowance: Double { monthlyIncome * investDebtRatio }
+
+    /// Money that must leave the "spendable" pile before anything is called
+    /// free: the whole Invest & Debt allocation, or the debt minimums if those
+    /// are larger (a minimum has to be paid whatever the plan says).
+    var setAside: Double { max(investDebtAllowance, recommendedMonthlyDebtPayment) }
+
+    /// The part of the set-aside that isn't going to debt — savings and
+    /// investing. With no debt this is the entire 20%, and it is emphatically
+    /// not spending money.
+    var toSaveOrInvest: Double { max(setAside - recommendedMonthlyDebtPayment, 0) }
+
+    /// What is genuinely free to spend.
+    ///
+    /// Two things used to be missing here, and the second was the worse one.
+    /// Fixed commitments were treated as discretionary, so a user with Rp 3,7jt
+    /// of rent and subscriptions was told the whole Rp 10jt was theirs. And the
+    /// Invest & Debt allocation was never set aside at all: with no active debt
+    /// `recommendedMonthlyDebtPayment` is zero, so the 20% meant for saving and
+    /// investing silently became spending money. The plan said 20% to the
+    /// future and the number underneath handed it back.
     var safeSpendingBudget: Double {
-        monthlyIncome - recommendedMonthlyDebtPayment
+        max(monthlyIncome - fixedCommitments - setAside, 0)
+    }
+
+    /// Share of income left free, for the allocation bar.
+    var safeSpendingPercent: Double {
+        guard monthlyIncome > 0 else { return 0 }
+        return safeSpendingBudget / monthlyIncome * 100
+    }
+
+    var setAsidePercent: Double {
+        guard monthlyIncome > 0 else { return 0 }
+        return min(toSaveOrInvest / monthlyIncome * 100, 100)
+    }
+
+    /// Share of income taken by fixed commitments.
+    var commitmentPercent: Double {
+        guard monthlyIncome > 0 else { return 0 }
+        return min(fixedCommitments / monthlyIncome * 100, 100)
     }
 
     /// Safe expense threshold (warning if expenses exceed this)
-    var isOverspending: Bool { monthlyExpenses > safeSpendingBudget }
+    /// Extra income that landed this cycle beyond the salary — a bonus, THR,
+    /// a freelance payment. It funds spending as surely as salary does, so
+    /// judging a cycle without it calls a bonus month a blowout.
+    var extraIncomeThisCycle: Double = 0
+
+    /// What was actually available to spend this cycle.
+    var effectiveAllowance: Double { safeSpendingBudget + extraIncomeThisCycle }
+
+    var isOverspending: Bool { monthlyExpenses > effectiveAllowance }
 
     /// How much over the safe budget
-    var overspendAmount: Double { max(monthlyExpenses - safeSpendingBudget, 0) }
+    var overspendAmount: Double { max(monthlyExpenses - effectiveAllowance, 0) }
 
     // MARK: - Financial Health Score (0-100)
 
