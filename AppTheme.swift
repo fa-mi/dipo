@@ -3,21 +3,83 @@ import SwiftUI
 // MARK: - Theme
 
 struct AppTheme {
+
+    // MARK: Surfaces — unchanged from the original palette.
+
     static let bg            = Color(UIColor.adaptive(dark: "#1A1F1E", light: "#F2F4F3"))
     static let cardDark      = Color(UIColor.adaptive(dark: "#222827", light: "#FFFFFF"))
     static let cardMid       = Color(UIColor.adaptive(dark: "#2A3330", light: "#E4EAE8"))
     static let textPrimary   = Color(UIColor.adaptive(dark: "#FFFFFF",  light: "#0D1514"))
     static let textSecondary = Color(UIColor.adaptive(dark: "#8A9693",  light: "#4D6B62"))
-    static let accent  = Color(hex: "#1DB87A")
-    static let green   = Color(hex: "#1DB87A")
-    static let red     = Color(hex: "#FF5B5B")
-    static let orange  = Color(hex: "#FB923C")
-    static let blue    = Color(hex: "#38BDF8")
-    static let purple  = Color(hex: "#A78BFA")
+
+    // MARK: Semantic colours
+    //
+    // Same hues as before, now ADAPTIVE. They used to be fixed `Color(hex:)`
+    // values tuned against the dark ground and then reused verbatim on the
+    // light one, where every single one failed the 4.5:1 contrast threshold —
+    // blue sat at 1.94:1, orange at 2.05:1, accent at 2.32:1. Light mode was
+    // shipping unreadable status colours.
+    //
+    // The light variants keep each hue and its saturation and only drop
+    // lightness until the ratio clears 4.5:1, so the app reads as the same
+    // product in both themes rather than gaining a second identity.
+
+    static let accent  = Color(UIColor.adaptive(dark: "#1DB87A", light: "#00814B"))  // 6.51 / 4.51
+    static let green   = Color(UIColor.adaptive(dark: "#1DB87A", light: "#00814B"))  // 6.51 / 4.51
+    static let red     = Color(UIColor.adaptive(dark: "#FF5B5B", light: "#DC0000"))  // 5.48 / 4.70
+    static let orange  = Color(UIColor.adaptive(dark: "#FB923C", light: "#B55304"))  // 7.37 / 4.51
+    static let blue    = Color(UIColor.adaptive(dark: "#38BDF8", light: "#0676A8"))  // 7.79 / 4.58
+    static let purple  = Color(UIColor.adaptive(dark: "#A78BFA", light: "#784CF7"))  // 6.13 / 4.54
     /// The one slot the Profile feature list had left. Purple, green, orange,
     /// red and sky are all already spoken for there, so a row that needs to be
     /// told apart from its neighbours has nowhere else to go.
-    static let teal    = Color(hex: "#06B6D4")
+    static let teal    = Color(UIColor.adaptive(dark: "#06B6D4", light: "#047A8F"))  // 6.87 / 4.52
+
+    /// Text and icons sitting ON a solid `accent` / `red` / `green` / `orange`
+    /// fill — which is the opposite problem from text on the page ground.
+    ///
+    /// `.white` was used for this everywhere and never worked: white on the
+    /// green button is 2.56:1, on orange 2.26:1. The fills are bright in dark
+    /// mode and dark in light mode, so the text on them has to invert the
+    /// other way:
+    ///
+    ///     dark theme,  fill #1DB87A : white 2.56:1  ·  near-black 7.72:1
+    ///     light theme, fill #147E53 : white 5.07:1  ·  near-black 3.90:1
+    static let onSolid = Color(UIColor.adaptive(dark: "#0D1514", light: "#FFFFFF"))
+}
+
+// MARK: - Layout
+
+/// Width-driven layout rules.
+///
+/// The app used to branch on `userInterfaceIdiom == .pad`, which is the wrong
+/// question on a foldable: the iPhone Duo reports `.phone` on both panels, so
+/// the iPad path never ran and a single phone column simply stretched.
+///
+///     iPhone 17          393 x 852 pt
+///     iPhone 17 Pro Max  440 x 956 pt
+///     Duo, folded        466 x 678 pt   ← wider than any classic iPhone,
+///                                          and 278 pt shorter
+///     Duo, unfolded      626 x 890 pt   ← 42% wider than the widest iPhone
+///
+/// Asking about width instead of identity also survives the fold happening
+/// while the app is open, which an idiom check cannot observe at all.
+enum AppLayout {
+    /// The widest classic iPhone. Past this, a single column of full-width
+    /// cards stops reading as a phone layout and starts looking like a
+    /// stretched one — line lengths grow past comfortable reading, and card
+    /// content floats in whitespace.
+    static let phoneContentMaxWidth: CGFloat = 440
+}
+
+extension View {
+    /// Caps content at phone width and centres it, leaving the background to
+    /// span the full panel. On every classic iPhone this is a no-op; on the
+    /// Duo it is what stops the layout from stretching.
+    func phoneWidthCapped() -> some View {
+        frame(maxWidth: AppLayout.phoneContentMaxWidth)
+            .frame(maxWidth: .infinity)
+    }
 }
 
 // MARK: - UIColor Adaptive Helper

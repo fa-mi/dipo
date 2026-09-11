@@ -467,7 +467,7 @@ struct ReceivableFormSheet: View {
                             save()
                         } label: {
                             Text(loc("action.save")).font(.system(size: 16, weight: .bold))
-                                .foregroundStyle(.white)
+                                .foregroundStyle(AppTheme.onSolid)
                                 .frame(maxWidth: .infinity).padding(.vertical, 16)
                                 .background(AppTheme.accent, in: RoundedRectangle(cornerRadius: 16))
                         }

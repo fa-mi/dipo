@@ -92,7 +92,7 @@ struct NoInternetOverlay: View {
                     .frame(width: 160, height: 160)
                     .opacity(appeared ? 1 : 0)
                     .scaleEffect(appeared ? 1 : 0.85)
-                    .animation(.spring(response: 0.6).delay(0.1), value: appeared)
+                    .animation(AppMotion.appear, value: appeared)
 
                 Spacer().frame(height: 28)
 
@@ -101,7 +101,7 @@ struct NoInternetOverlay: View {
                     .font(.system(size: 22, weight: .bold))
                     .foregroundStyle(AppTheme.textPrimary)
                     .opacity(appeared ? 1 : 0)
-                    .animation(.spring(response: 0.5).delay(0.18), value: appeared)
+                    .animation(AppMotion.appear, value: appeared)
 
                 Spacer().frame(height: 10)
 
@@ -113,7 +113,7 @@ struct NoInternetOverlay: View {
                     .lineSpacing(3)
                     .padding(.horizontal, 40)
                     .opacity(appeared ? 1 : 0)
-                    .animation(.spring(response: 0.5).delay(0.22), value: appeared)
+                    .animation(AppMotion.appear, value: appeared)
 
                 Spacer().frame(height: 40)
 
@@ -121,7 +121,7 @@ struct NoInternetOverlay: View {
                 retryButton
                     .padding(.horizontal, 32)
                     .opacity(appeared ? 1 : 0)
-                    .animation(.spring(response: 0.5).delay(0.28), value: appeared)
+                    .animation(AppMotion.appear, value: appeared)
 
                 Spacer()
 
@@ -131,7 +131,7 @@ struct NoInternetOverlay: View {
                     .foregroundStyle(AppTheme.textSecondary.opacity(0.5))
                     .padding(.bottom, 40)
                     .opacity(appeared ? 1 : 0)
-                    .animation(.spring(response: 0.5).delay(0.32), value: appeared)
+                    .animation(AppMotion.appear, value: appeared)
             }
         }
         .onAppear  { withAnimation { appeared = true } }
@@ -182,7 +182,7 @@ struct ReconnectedToast: View {
                     Text(loc("network.back_online"))
                         .font(.system(size: 13, weight: .semibold))
                 }
-                .foregroundStyle(.white)
+                .foregroundStyle(AppTheme.onSolid)
                 .padding(.horizontal, 16).padding(.vertical, 9)
                 .background(
                     Capsule().fill(AppTheme.accent)

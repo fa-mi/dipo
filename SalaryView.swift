@@ -177,7 +177,13 @@ final class SalaryViewModel {
         formAmount   = ""
         formDay      = 25
         formCurrency = CurrencyManager.shared.preferredCurrency
-        formCardID   = nil
+        // Default to the account the rest of the app budgets against. Salary
+        // landing on a card other than the main one is why Statistics could
+        // show a pay cycle with no salary in it: the credit engine posted the
+        // income somewhere Smart Budget was not looking. Still editable — some
+        // people genuinely are paid into a second account — but the default
+        // should be the one that keeps every screen agreeing.
+        formCardID   = MainCard.id.flatMap(UUID.init(uuidString:))
         formAutoRecord = true
         formError    = nil
         editingSchedule = nil
@@ -747,7 +753,7 @@ struct SalaryFormSheet: View {
                         }
                         .opacity(appeared ? 1 : 0)
                         .offset(y: appeared ? 0 : 20)
-                        .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.1), value: appeared)
+                        .animation(AppMotion.appear, value: appeared)
 
                         // Day stepper
                         VStack(spacing: 8) {
@@ -800,7 +806,7 @@ struct SalaryFormSheet: View {
                         }
                         .opacity(appeared ? 1 : 0)
                         .offset(y: appeared ? 0 : 20)
-                        .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.15), value: appeared)
+                        .animation(AppMotion.appear, value: appeared)
 
                         // Card picker — REQUIRED: which card receives salary
                         VStack(spacing: 8) {
@@ -814,6 +820,24 @@ struct SalaryFormSheet: View {
                             .padding(.horizontal, 22)
 
                             CardPickerSection(selectedCardID: $vm.formCardID)
+
+                            // Someone with two jobs paid into two accounts is
+                            // exactly who hits this: the form pre-fills the main
+                            // card, and a second job left on that default would
+                            // silently raise the budget on an account that never
+                            // receives it. Said here, while the choice is open,
+                            // rather than discovered as an allowance that grew
+                            // for no visible reason.
+                            if let id = vm.formCardID, MainCard.id != nil,
+                               id.uuidString != MainCard.id {
+                                Label(loc("salary.not_main_card"),
+                                      systemImage: "info.circle")
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(AppTheme.textSecondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(.horizontal, 22)
+                            }
                         }
                         .onChange(of: vm.formCardID) { _, newID in
                             if let id = newID, let card = cards.first(where: { $0.id == id }) {
@@ -821,7 +845,7 @@ struct SalaryFormSheet: View {
                             }
                         }
                         .opacity(appeared ? 1 : 0)
-                        .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.18), value: appeared)
+                        .animation(AppMotion.appear, value: appeared)
 
                         // Auto-record toggle — when off, the schedule still shows
                         // upcoming paydays but creates no income transaction.
@@ -847,7 +871,7 @@ struct SalaryFormSheet: View {
                         .overlay(RoundedRectangle(cornerRadius: 16).stroke(AppTheme.cardMid.opacity(0.6), lineWidth: 1))
                         .padding(.horizontal, 22)
                         .opacity(appeared ? 1 : 0)
-                        .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.2), value: appeared)
+                        .animation(AppMotion.appear, value: appeared)
 
                         // Live preview
                         VStack(spacing: 8) {
@@ -897,7 +921,7 @@ struct SalaryFormSheet: View {
                             .animation(.spring(response: 0.3), value: vm.formDay)
                         }
                         .opacity(appeared ? 1 : 0)
-                        .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.2), value: appeared)
+                        .animation(AppMotion.appear, value: appeared)
 
                         if let err = vm.formError {
                             Text(err)
@@ -928,7 +952,7 @@ struct SalaryFormSheet: View {
                             .overlay(RoundedRectangle(cornerRadius: 14).stroke(AppTheme.blue.opacity(0.2), lineWidth: 1))
                             .padding(.horizontal, 22)
                             .opacity(appeared ? 1 : 0)
-                            .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.22), value: appeared)
+                            .animation(AppMotion.appear, value: appeared)
                         }
 
                         Button { save() } label: {
@@ -945,7 +969,7 @@ struct SalaryFormSheet: View {
                         .padding(.horizontal, 22)
                         .padding(.top, 6)
                         .opacity(appeared ? 1 : 0)
-                        .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.25), value: appeared)
+                        .animation(AppMotion.appear, value: appeared)
 
                         Spacer(minLength: 40)
                     }
@@ -1047,58 +1071,9 @@ struct CardPickerSection: View {
                 .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
                 .padding(.horizontal, 22)
             } else {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 10) {
-                        ForEach(cards) { card in
-                            let isSelected = selectedCardID == card.id
-                            Button { HapticManager.shared.tap(); selectedCardID = card.id } label: {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    ZStack(alignment: .topLeading) {
-                                        RoundedRectangle(cornerRadius: 10)
-                                            .fill(LinearGradient(
-                                                colors: [Color(hex: card.gradientStart), Color(hex: card.gradientEnd)],
-                                                startPoint: .topLeading, endPoint: .bottomTrailing))
-                                            .frame(width: 80, height: 48)
-                                            .overlay(RoundedRectangle(cornerRadius: 10)
-                                                .stroke(isSelected ? AppTheme.accent : Color.clear, lineWidth: 2))
-                                        VStack(alignment: .leading, spacing: 2) {
-                                            Text("•••• \(card.cardNumber.suffix(4))")
-                                                .font(.system(size: 9, weight: .semibold)).foregroundStyle(.white)
-                                            Text(card.holderName).font(.system(size: 8))
-                                                .foregroundStyle(.white.opacity(0.7)).lineLimit(1)
-                                        }
-                                        .padding(6)
-                                        if isSelected {
-                                            Image(systemName: "checkmark.circle.fill")
-                                                .font(.system(size: 13)).foregroundStyle(AppTheme.accent)
-                                                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-                                                .padding(5)
-                                        }
-                                    }
-                                    Text(isSelected ? loc("salary.selected") : CardNetwork.detect(from: card.cardNumber).name)
-                                        .font(.system(size: 9)).foregroundStyle(isSelected ? AppTheme.accent : AppTheme.textSecondary)
-                                }
-                                .frame(width: 80)
-                            }
-                            .buttonStyle(ScaleButtonStyle())
-                        }
-                    }
-                    .padding(.horizontal, 22)
-                }
-
-                if selectedCardID == nil {
-                    HStack(spacing: 6) {
-                        Image(systemName: "exclamationmark.circle.fill")
-                            .font(.system(size: 12)).foregroundStyle(AppTheme.orange)
-                        Text(loc("salary.tap_select"))
-                            .font(.system(size: 12)).foregroundStyle(AppTheme.orange)
-                    }.padding(.horizontal, 22)
-                } else if let id = selectedCardID, let card = cards.first(where: { $0.id == id }) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "checkmark.circle.fill").font(.system(size: 12)).foregroundStyle(AppTheme.accent)
-                        Text(String(format: loc("salary.credited_indicator"), card.last4)).font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
-                    }.padding(.horizontal, 22)
-                }
+                CardChipPicker(cards: cards,
+                               isSelected: { $0.id == selectedCardID },
+                               onSelect: { selectedCardID = $0.id })
             }
         }
     }
@@ -1196,7 +1171,7 @@ struct SalaryDetailView: View {
                     .overlay(RoundedRectangle(cornerRadius: 18).stroke(AppTheme.accent.opacity(0.2), lineWidth: 1))
                     .padding(.horizontal, 22)
                     .opacity(appeared ? 1 : 0).offset(y: appeared ? 0 : 20)
-                    .animation(.spring(response: 0.55, dampingFraction: 0.8).delay(0.05), value: appeared)
+                    .animation(AppMotion.appear, value: appeared)
 
                     // Linked card
                     if let card = linkedCard {
@@ -1221,7 +1196,7 @@ struct SalaryDetailView: View {
                         }
                         .padding(.horizontal, 22)
                         .opacity(appeared ? 1 : 0).offset(y: appeared ? 0 : 20)
-                        .animation(.spring(response: 0.55, dampingFraction: 0.8).delay(0.1), value: appeared)
+                        .animation(AppMotion.appear, value: appeared)
                     }
 
                     // Upcoming 12 months
@@ -1282,7 +1257,7 @@ struct SalaryDetailView: View {
                         .padding(.horizontal, 22)
                     }
                     .opacity(appeared ? 1 : 0).offset(y: appeared ? 0 : 20)
-                    .animation(.spring(response: 0.55, dampingFraction: 0.8).delay(0.15), value: appeared)
+                    .animation(AppMotion.appear, value: appeared)
 
                     Spacer(minLength: 40)
                 }

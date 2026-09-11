@@ -289,7 +289,16 @@ final class WebSyncService {
         // preserved by `amount`, so the web sees the reversal.
         // Split into explicit steps: as one chained expression this was heavy
         // enough that the Swift type-checker gave up on it.
-        let allTx: [TxRecord] = cards.flatMap { $0.transactions }
+        //
+        // Scoped to the main card, because the phone is. Statistics, Smart
+        // Budget and the budget alerts all read that one account now; a
+        // dashboard summing every card would put a different income and a
+        // different expense total on the big screen than the user just read on
+        // their phone, which is the failure this whole change exists to end.
+        // Falling back to every card keeps a user who somehow has no anchor
+        // seeing their data rather than an empty dashboard.
+        let allTx: [TxRecord] = MainCard.resolve(in: cards)?.transactions
+            ?? cards.flatMap { $0.transactions }
         let windowTx: [TxRecord] = allTx
             .filter { $0.date >= cutoff && $0.txSubtype != .transfer }
             .sorted { $0.date > $1.date }
@@ -372,12 +381,27 @@ final class WebSyncService {
         //
         // Sent as boundaries rather than as a precomputed total so the web can
         // still slice by category inside the window.
-        let cycle: (start: Date, end: Date)? = salaries
-            .first(where: { $0.isActive })
-            .map { StatPeriod.payCycleRange(payDay: $0.dayOfMonth) }
+        let cycle: (start: Date, end: Date)? = MainCard.payDay(salaries)
+            .map { StatPeriod.payCycleRange(payDay: $0) }
 
         var out: [String: Any] = [
             "baseCurrency": base,
+            // The phone's timezone, so the dashboard can render the phone's
+            // days rather than the browser's.
+            //
+            // Every date leaves here as UTC (`ISO8601DateFormatter` with no
+            // zone set is GMT), which is the right way to transmit an instant.
+            // But the web then reads day and month off it with `getDate()` /
+            // `getMonth()`, which resolve in whatever zone the BROWSER is in. A
+            // transaction logged at 06:00 in Jakarta is 23:00 the previous day
+            // in UTC, so opening the dashboard on a laptop set to UTC — or from
+            // another country — moves it a day back, and a transaction early on
+            // the 1st moves into the previous MONTH.
+            //
+            // Sending the zone costs one field and makes the dashboard a
+            // faithful mirror of the phone wherever it is opened.
+            "timeZone": TimeZone.current.identifier,
+            "utcOffsetMinutes": TimeZone.current.secondsFromGMT(for: now) / 60,
             "cards":        cardRows,
             "transactions": txRows,
             "debts":        debtRows,
@@ -406,7 +430,7 @@ final class WebSyncService {
         if sb.hasActiveBudget, let cycle {
             let configs: [CardBudgetConfig] = source.configs
             let r = sb.ratios(forCardID: sb.budgetCardID, configs: configs)
-            let income = salaries.filter(\.isActive)
+            let income = MainCard.salaries(salaries)
                 .reduce(0.0) { $0 + cm.convert($1.amount, from: $1.currency, to: base) }
             let windowTx = allTx.filter { $0.date >= cycle.start && $0.txSubtype != .transfer }
 

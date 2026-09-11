@@ -1230,24 +1230,10 @@ struct AddContributionSheet: View {
                                 .font(.system(size: 11, weight: .medium)).foregroundStyle(AppTheme.orange)
                                 .fixedSize(horizontal: false, vertical: true)
                         } else {
-                            ScrollView(.horizontal, showsIndicators: false) {
-                                HStack(spacing: 8) {
-                                    ForEach(fundingCards) { card in
-                                        let isOn = (selectedCard?.id == card.id)
-                                        Button {
-                                            HapticManager.shared.tap(); sourceCardID = card.id
-                                        } label: {
-                                            Text(card.pickerLabel)
-                                                .font(.system(size: 12, weight: .semibold))
-                                                .foregroundStyle(isOn ? .white : AppTheme.textSecondary)
-                                                .padding(.horizontal, 12).padding(.vertical, 7)
-                                                .background(isOn ? AppTheme.purple : AppTheme.cardDark, in: Capsule())
-                                                .overlay(Capsule().stroke(AppTheme.purple.opacity(isOn ? 0 : 0.25), lineWidth: 1))
-                                        }
-                                        .buttonStyle(ScaleButtonStyle())
-                                    }
-                                }
-                            }
+                            CardChipPicker(cards: fundingCards,
+                                           isSelected: { selectedCard?.id == $0.id },
+                                           onSelect: { sourceCardID = $0.id })
+                                .padding(.horizontal, -22)
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)

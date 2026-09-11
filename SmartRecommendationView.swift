@@ -100,18 +100,50 @@ struct SmartRecommendationView: View {
     ///
     /// The salary schedule stays as a FLOOR, so a stretch with no logged income
     /// yet doesn't collapse the denominator.
+    /// The income every ratio on this screen is built from.
+    ///
+    /// This used to be `max(averagedLogged, scheduled)`, and both halves of
+    /// that were wrong.
+    ///
+    /// The `max` meant a single good month decided the plan. On this user's
+    /// data one bonus month of Rp 26.750.000 lifted the mean to Rp 25.157.692
+    /// against a Rp 10.000.000 salary, so the screen recommended a lifestyle
+    /// budget of Rp 8.601.317 a month — money that does not arrive again. A
+    /// plan built on income you received once is not a plan.
+    ///
+    /// So: a salary schedule IS the income when one exists. That is what a
+    /// schedule means — the amount that recurs. Logged income includes
+    /// everything that does not.
+    ///
+    /// Without a schedule there is no declaration to trust, so it falls back to
+    /// what was actually received — but by the MEDIAN month rather than the
+    /// mean, because the whole point is to not let one windfall set the
+    /// baseline. Median of these months is Rp 13.115.000 where the mean is
+    /// Rp 25.157.692.
     private var monthlyIncome: Double {
         let cm = CurrencyManager.shared
-        let months = max(SmartBudgetManager.shared.dataMonthsAvailable(allTransactions: allTx), 1)
-        let logged = allTx.filter { $0.amount > 0 && $0.txSubtype != .transfer }
-            .reduce(0.0) { $0 + cm.convert($1.amount, from: $1.currency.isEmpty ? currency : $1.currency, to: currency) }
-        let averaged = logged / Double(months)
-        let scheduled = salaries.filter(\.isActive)
+        let scheduled = MainCard.salaries(salaries)
             .reduce(0.0) { $0 + cm.convert($1.amount, from: $1.currency, to: currency) }
-        return max(averaged, scheduled)
+        if scheduled > 0 { return scheduled }
+
+        let cal = Calendar.current
+        var byMonth: [DateComponents: Double] = [:]
+        for tx in allTx where tx.amount > 0 && tx.txSubtype != .transfer {
+            let key = cal.dateComponents([.year, .month], from: tx.date)
+            byMonth[key, default: 0] += cm.convert(
+                tx.amount, from: tx.currency.isEmpty ? currency : tx.currency, to: currency)
+        }
+        let months = byMonth.values.sorted()
+        guard !months.isEmpty else { return 0 }
+        let mid = months.count / 2
+        return months.count % 2 == 0 ? (months[mid - 1] + months[mid]) / 2 : months[mid]
     }
 
-    private var allTx: [TxRecord] { cards.flatMap { $0.transactions } }
+    /// Scoped to the main card, like every other figure in the app. This screen
+    /// was still summing all nine accounts.
+    private var allTx: [TxRecord] {
+        MainCard.resolve(in: cards)?.transactions ?? cards.flatMap { $0.transactions }
+    }
 
     /// Records whose shape suggests they don't describe what actually happened.
     /// Every ratio on this screen is built from them, so the caveat belongs

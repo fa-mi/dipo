@@ -12,9 +12,9 @@ struct SmartBudgetSettingsSheet: View {
     @Query private var cardConfigs: [CardBudgetConfig]
 
     @State private var isEnabled    = SmartBudgetManager.shared.isEnabled
-    @State private var dailyPct     = Int(SmartBudgetManager.shared.dailyRatio * 100)
-    @State private var lifestylePct = Int(SmartBudgetManager.shared.lifestyleRatio * 100)
-    @State private var investPct    = Int(SmartBudgetManager.shared.investDebtRatio * 100)
+    @State private var dailyPct     = Self.pct(SmartBudgetManager.shared.dailyRatio)
+    @State private var lifestylePct = Self.pct(SmartBudgetManager.shared.lifestyleRatio)
+    @State private var investPct    = Self.pct(SmartBudgetManager.shared.investDebtRatio)
     @State private var selectedTab  = BudgetTab.overview
     @State private var selectedCardID: String? = nil
     /// When true, edits in Settings tab apply to the selected card only.
@@ -42,6 +42,12 @@ struct SmartBudgetSettingsSheet: View {
         }
     }
 
+    /// Ratio (0…1) to whole percent. Both the editor's initial load and the
+    /// baseline it is later compared against MUST use this — when one rounded
+    /// and the other truncated, a stored 0.29 read back as 29 here and 28
+    /// there, so Save lit up on a screen the user had not touched.
+    private static func pct(_ ratio: Double) -> Int { Int((ratio * 100).rounded()) }
+
     private var totalPct: Int { dailyPct + lifestylePct + investPct }
     private var isBalanced: Bool { totalPct == 100 }
     private var primary: String { CurrencyManager.shared.preferredCurrency }
@@ -55,13 +61,13 @@ struct SmartBudgetSettingsSheet: View {
     /// What the ratios *should* be after saving — either per-card config or global.
     private var currentBaselineRatios: (daily: Int, lifestyle: Int, investDebt: Int) {
         if editingPerCard, let cfg = selectedCardConfig {
-            return (Int(cfg.dailyRatio * 100),
-                    Int(cfg.lifestyleRatio * 100),
-                    Int(cfg.investDebtRatio * 100))
+            return (Self.pct(cfg.dailyRatio),
+                    Self.pct(cfg.lifestyleRatio),
+                    Self.pct(cfg.investDebtRatio))
         }
-        return (Int(SmartBudgetManager.shared.dailyRatio * 100),
-                Int(SmartBudgetManager.shared.lifestyleRatio * 100),
-                Int(SmartBudgetManager.shared.investDebtRatio * 100))
+        return (Self.pct(SmartBudgetManager.shared.dailyRatio),
+                Self.pct(SmartBudgetManager.shared.lifestyleRatio),
+                Self.pct(SmartBudgetManager.shared.investDebtRatio))
     }
 
     private var hasChanges: Bool {
@@ -138,8 +144,9 @@ struct SmartBudgetSettingsSheet: View {
     /// Day-of-month the salary lands on (selected card's schedule, else any
     /// active schedule). Anchors the budget period to the pay cycle.
     private var payCycleDay: Int? {
-        if let s = schedules.first(where: { $0.isActive && $0.cardID == selectedCard?.id }) { return s.dayOfMonth }
-        return schedules.first(where: { $0.isActive })?.dayOfMonth
+        let onCard = schedules.filter { $0.isActive && $0.cardID == selectedCard?.id }
+        if let s = MainCard.anchor(among: onCard) { return s.dayOfMonth }
+        return MainCard.payDay(schedules)
     }
 
     /// Whether spending is measured over the pay cycle (a salary schedule exists).
@@ -335,10 +342,34 @@ struct SmartBudgetSettingsSheet: View {
         }
         .animation(.spring(response: 0.35), value: overGroups.count)
         .onAppear {
-            // Auto-select first card for the Overview preview
-            if selectedCardID == nil {
-                selectedCardID = cards.first?.id.uuidString
-            }
+            // The budget's subject, not a browsing choice. Falls back to the
+            // first card only so the Overview preview still renders for someone
+            // who has not picked an anchor yet.
+            selectedCardID = MainCard.id ?? cards.first?.id.uuidString
+            // Edit the override when the main card has one, the global ratios
+            // otherwise — which is exactly what `ratios(forCardID:)` reads back,
+            // so what is edited here is always what is in force.
+            editingPerCard = selectedCardConfig != nil
+
+            // Load the ratios of whichever target that turned out to be.
+            //
+            // The @State above initialises from the GLOBAL ratios, because a
+            // property initialiser cannot know which card is the anchor yet. So
+            // when the main card had its own override, this screen opened
+            // showing global values while Save wrote to the card — meaning
+            // opening the screen and tapping Save without touching anything
+            // silently replaced the user's custom split with the defaults.
+            //
+            // That is the second, independent cause of "my ratios keep going
+            // back to 50/30/20". The first was `save()` running mid-`load()`;
+            // fixing that did not fix this, because they are different paths to
+            // the same symptom.
+            let live = SmartBudgetManager.shared.ratios(forCardID: selectedCardID,
+                                                        configs: cardConfigs)
+            dailyPct     = Self.pct(live.daily)
+            lifestylePct = Self.pct(live.lifestyle)
+            investPct    = Self.pct(live.investDebt)
+
             // Highlight whichever preset matches the loaded ratios.
             reconcileSelectedPreset()
         }
@@ -364,9 +395,9 @@ struct SmartBudgetSettingsSheet: View {
                 // made an applied plan look like it hadn't landed.
                 isEnabled = true
                 let applied = SmartBudgetManager.shared.ratios(forCardID: selectedCardID, configs: cardConfigs)
-                dailyPct     = Int((applied.daily * 100).rounded())
-                lifestylePct = Int((applied.lifestyle * 100).rounded())
-                investPct    = Int((applied.investDebt * 100).rounded())
+                dailyPct     = Self.pct(applied.daily)
+                lifestylePct = Self.pct(applied.lifestyle)
+                investPct    = Self.pct(applied.investDebt)
                 reconcileSelectedPreset()
             })
                 .presentationDetents([.large])
@@ -402,7 +433,7 @@ struct SmartBudgetSettingsSheet: View {
                         Image(systemName: "slider.horizontal.3").font(.system(size: 14))
                         Text(loc("budget.go_settings")).font(.system(size: 15, weight: .semibold))
                     }
-                    .foregroundStyle(.white)
+                    .foregroundStyle(AppTheme.onSolid)
                     .padding(.horizontal, 28).padding(.vertical, 14)
                     .background(AppTheme.accent, in: RoundedRectangle(cornerRadius: 14))
                     .shadow(color: AppTheme.accent.opacity(0.35), radius: 10, y: 4)
@@ -524,87 +555,47 @@ struct SmartBudgetSettingsSheet: View {
         }
         .padding(.bottom, 16)
 
-        // ── Card Selector — choose which card's budget to edit ───────────
-        // "Default for all cards" applies global ratios; selecting a specific
-        // card creates/updates a per-card override (CardBudgetConfig).
-        VStack(alignment: .leading, spacing: 8) {
-            Text(loc("budget.applies_to"))
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(AppTheme.textSecondary)
-                .padding(.horizontal, 22)
-            
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    // "Default" chip — edits go to global ratios
-                    Button {
-                        HapticManager.shared.tap()
-                        editingPerCard = false
-                        // Load global ratios into editor
-                        dailyPct      = Int(SmartBudgetManager.shared.dailyRatio * 100)
-                        lifestylePct  = Int(SmartBudgetManager.shared.lifestyleRatio * 100)
-                        investPct     = Int(SmartBudgetManager.shared.investDebtRatio * 100)
-                    } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: "globe").font(.system(size: 12))
-                            Text(loc("budget.default_all_cards")).font(.system(size: 13, weight: .semibold))
-                        }
-                        .foregroundStyle(!editingPerCard ? .white : AppTheme.textPrimary)
-                        .padding(.horizontal, 14).padding(.vertical, 8)
-                        .background(!editingPerCard ? AppTheme.accent : AppTheme.cardDark, in: Capsule())
-                        .overlay(Capsule().stroke(AppTheme.accent.opacity(!editingPerCard ? 0 : 0.2), lineWidth: 1))
-                    }
-                    .buttonStyle(ScaleButtonStyle())
-                    
-                    // One chip per card — edits create/update CardBudgetConfig
-                    ForEach(cards) { card in
-                        let cardID = card.id.uuidString
-                        let isSelected = editingPerCard && selectedCardID == cardID
-                        let hasConfig = cardConfigs.contains(where: { $0.cardID == cardID })
-                        Button {
-                            HapticManager.shared.tap()
-                            editingPerCard = true
-                            selectedCardID = cardID
-                            // Load this card's ratios (or global fallback)
-                            let r = SmartBudgetManager.shared.ratios(forCardID: cardID, configs: cardConfigs)
-                            dailyPct      = Int(r.daily * 100)
-                            lifestylePct  = Int(r.lifestyle * 100)
-                            investPct     = Int(r.investDebt * 100)
-                        } label: {
-                            HStack(spacing: 6) {
-                                Image(systemName: card.isDigitalWallet ? "wallet.pass.fill" : "creditcard.fill").font(.system(size: 12))
-                                Text(card.isDigitalWallet ? card.walletProvider : card.holderName)
-                                    .font(.system(size: 13, weight: .semibold))
-                                    .lineLimit(1)
-                                if hasConfig {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .font(.system(size: 11))
-                                        .foregroundStyle(isSelected ? .white.opacity(0.85) : AppTheme.accent)
-                                }
-                            }
-                            .foregroundStyle(isSelected ? .white : AppTheme.textPrimary)
-                            .padding(.horizontal, 14).padding(.vertical, 8)
-                            .background(isSelected ? AppTheme.accent : AppTheme.cardDark, in: Capsule())
-                            .overlay(Capsule().stroke(AppTheme.accent.opacity(isSelected ? 0 : 0.2), lineWidth: 1))
-                        }
-                        .buttonStyle(ScaleButtonStyle())
-                    }
+        // ── Which card this budget governs ────────────────────────────────
+        //
+        // This used to be a row of chips: "Default (all cards)" plus one per
+        // card, each editable. That stopped being true when the anchor arrived.
+        // Every consumer now reads `ratios(forCardID: budgetCardID)`, so ratios
+        // saved against any other card were stored, shown as configured, and
+        // never applied — a setting that looks like it works and does nothing.
+        //
+        // One target, resolved from the main card, and named rather than
+        // chosen. Changing it is a Wallet decision, not a budget-screen one.
+        if let main = MainCard.resolve(in: cards) {
+            HStack(spacing: 10) {
+                LinearGradient(colors: [Color(hex: main.gradientStart), Color(hex: main.gradientEnd)],
+                               startPoint: .top, endPoint: .bottom)
+                    .frame(width: 4, height: 30)
+                    .clipShape(Capsule())
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(loc("budget.applies_to"))
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .tracking(0.5)
+                    Text(main.isDigitalWallet && !main.walletProvider.isEmpty
+                         ? main.walletProvider
+                         : (main.holderName.isEmpty ? loc("wallet.untitled") : main.holderName))
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(AppTheme.textPrimary)
+                        .lineLimit(1)
                 }
-                .padding(.horizontal, 22)
+                Spacer(minLength: 0)
+                Text(loc("main.badge"))
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(AppTheme.accent)
+                    .padding(.horizontal, 6).padding(.vertical, 2)
+                    .background(AppTheme.accent.opacity(0.15), in: Capsule())
             }
-            
-            // Hint text — explains what's happening
-            HStack(spacing: 6) {
-                Image(systemName: "info.circle").font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary.opacity(0.7))
-                Text(editingPerCard
-                     ? loc("budget.editing_per_card")
-                     : loc("budget.editing_default"))
-                    .font(.system(size: 11))
-                    .foregroundStyle(AppTheme.textSecondary.opacity(0.85))
-            }
+            .padding(.horizontal, 14).padding(.vertical, 11)
+            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
             .padding(.horizontal, 22)
+            .padding(.bottom, 4)
         }
-        .padding(.bottom, 4)
-        
+
         // ── Budget Allocation ─────────────────────────────────────────────
         VStack(spacing: 6) {
             HStack {
@@ -652,9 +643,9 @@ struct SmartBudgetSettingsSheet: View {
                 }
                 // Switch back to global view
                 editingPerCard = false
-                dailyPct      = Int(SmartBudgetManager.shared.dailyRatio * 100)
-                lifestylePct  = Int(SmartBudgetManager.shared.lifestyleRatio * 100)
-                investPct     = Int(SmartBudgetManager.shared.investDebtRatio * 100)
+                dailyPct      = Self.pct(SmartBudgetManager.shared.dailyRatio)
+                lifestylePct  = Self.pct(SmartBudgetManager.shared.lifestyleRatio)
+                investPct     = Self.pct(SmartBudgetManager.shared.investDebtRatio)
             } label: {
                 HStack(spacing: 8) {
                     Image(systemName: "arrow.uturn.backward.circle").font(.system(size: 14))
@@ -1039,7 +1030,7 @@ struct BudgetGroupDetailView: View {
                         }
                         .frame(height: 12)
                         .clipShape(Capsule())
-                        .animation(.spring(response: 0.9, dampingFraction: 0.85).delay(0.1), value: appeared)
+                        .animation(AppMotion.appear, value: appeared)
 
                         // Limit tick — only drawn when spending has run past it.
                         if isOver {
@@ -1086,7 +1077,7 @@ struct BudgetGroupDetailView: View {
             }
             .frame(height: 8)
             .opacity(appeared ? 1 : 0)
-            .animation(.easeOut(duration: 0.5).delay(0.25), value: appeared)
+            .animation(AppMotion.appear, value: appeared)
         }
         .frame(height: 8)
     }
@@ -1187,7 +1178,7 @@ struct BudgetGroupDetailView: View {
                     .overlay(RoundedRectangle(cornerRadius: 20).stroke(isOver ? AppTheme.red.opacity(0.3) : group.color.opacity(0.18), lineWidth: isOver ? 1.5 : 1))
                     .padding(.horizontal, 22)
                     .opacity(appeared ? 1 : 0).offset(y: appeared ? 0 : 20)
-                    .animation(.spring(response: 0.55, dampingFraction: 0.8).delay(0.05), value: appeared)
+                    .animation(AppMotion.appear, value: appeared)
 
                     // Category breakdown — every number here is a share of THIS
                     // group's spending, so the bars and the % labels agree.
@@ -1221,7 +1212,7 @@ struct BudgetGroupDetailView: View {
                                                         .fill(LinearGradient(colors: [item.cat.color.opacity(0.75), item.cat.color],
                                                                              startPoint: .leading, endPoint: .trailing))
                                                         .frame(width: max(g.size.width * CGFloat(appeared ? share : 0), share > 0 ? 5 : 0), height: 5)
-                                                        .animation(.spring(response: 0.8, dampingFraction: 0.85).delay(0.2), value: appeared)
+                                                        .animation(AppMotion.appear, value: appeared)
                                                 }
                                             }.frame(height: 5)
                                         }
@@ -1230,7 +1221,7 @@ struct BudgetGroupDetailView: View {
                             }
                         }
                         .opacity(appeared ? 1 : 0).offset(y: appeared ? 0 : 16)
-                        .animation(.spring(response: 0.55, dampingFraction: 0.8).delay(0.1), value: appeared)
+                        .animation(AppMotion.appear, value: appeared)
                     }
 
                     // Transactions
@@ -1287,7 +1278,7 @@ struct BudgetGroupDetailView: View {
                             }
                         }
                         .opacity(appeared ? 1 : 0).offset(y: appeared ? 0 : 16)
-                        .animation(.spring(response: 0.55, dampingFraction: 0.8).delay(0.15), value: appeared)
+                        .animation(AppMotion.appear, value: appeared)
                     } else {
                         VStack(spacing: 12) {
                             Image(systemName: "tray").font(.system(size: 36)).foregroundStyle(AppTheme.textSecondary)

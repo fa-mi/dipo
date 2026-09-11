@@ -241,6 +241,11 @@ struct WalletCarousel: View {
     /// it — the sliver of the next card is what tells you to swipe.
     private let cardWidth: CGFloat = 208
 
+    /// Measured once from the layout this carousel is given, so the side
+    /// padding that centres the first and last card is based on the space that
+    /// actually exists rather than on the device's screen.
+    @State private var containerWidth: CGFloat = 0
+
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             LazyHStack(spacing: 16) {
@@ -258,11 +263,22 @@ struct WalletCarousel: View {
                 }
             }
             .scrollTargetLayout()
-            .padding(.horizontal, (UIScreen.main.bounds.width - cardWidth) / 2)
+            // The container's own width, not the screen's. `UIScreen.main` is
+            // deprecated in iOS 26 and was always the wrong question anyway —
+            // it gives the display, while the padding needs the space this
+            // carousel was actually handed.
+            .padding(.horizontal, max((containerWidth - cardWidth) / 2, 0))
         }
         .scrollTargetBehavior(.viewAligned)
         .scrollPosition(id: $selectedID)
         .frame(height: cardWidth / WalletCard.aspect + 24)
+        .background {
+            GeometryReader { g in
+                Color.clear
+                    .onAppear { containerWidth = g.size.width }
+                    .onChange(of: g.size.width) { _, w in containerWidth = w }
+            }
+        }
     }
 }
 
@@ -294,18 +310,69 @@ struct WalletCardActions: View {
     let txCount: Int
     var onEdit: () -> Void
     var onDelete: () -> Void
+    /// Observed so the badge and the star swap the instant the choice changes.
+    @State private var sb = SmartBudgetManager.shared
+
+    private var isMain: Bool {
+        let _ = sb.budgetCardID
+        return MainCard.isMain(card)
+    }
 
     var body: some View {
         HStack(spacing: 12) {
             Circle().fill(Color(hex: card.gradientStart)).frame(width: 9, height: 9)
             VStack(alignment: .leading, spacing: 1) {
-                Text(subtitle)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(AppTheme.textPrimary).lineLimit(1)
+                HStack(spacing: 6) {
+                    Text(subtitle)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(AppTheme.textPrimary).lineLimit(1)
+                    // Which account the whole app is reasoning about, stated on
+                    // the account itself. Anywhere else and the user has to
+                    // remember a setting to read their own numbers.
+                    if isMain {
+                        Text(loc("main.badge"))
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(AppTheme.accent)
+                            .padding(.horizontal, 6).padding(.vertical, 2)
+                            .background(AppTheme.accent.opacity(0.15), in: Capsule())
+                    }
+                }
                 Text(String(format: loc(txCount == 1 ? "cards.tx_count" : "cards.tx_counts"), txCount))
                     .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
             }
             Spacer(minLength: 8)
+            // One gesture, no sheet.
+            //
+            // Tapping the filled star used to open a picker listing every card —
+            // which is the same choice again, one level deeper, in a screen that
+            // already has all the cards laid out in a carousel. The wallet IS
+            // the picker: swipe to the card you want and star it.
+            //
+            // So on the current anchor the star is a STATUS, not a button.
+            // Nothing to tap, because there is nothing left to decide here.
+            if !card.isCreditCard {
+                if isMain {
+                    Image(systemName: "star.fill")
+                        .font(.system(size: 14))
+                        .foregroundStyle(AppTheme.bg)
+                        .frame(width: 36, height: 36)
+                        .background(AppTheme.accent, in: Circle())
+                        .accessibilityLabel(loc("main.is_main"))
+                } else {
+                    Button {
+                        HapticManager.shared.success()
+                        withAnimation(AppMotion.move) { MainCard.set(card) }
+                    } label: {
+                        Image(systemName: "star")
+                            .font(.system(size: 14))
+                            .foregroundStyle(AppTheme.accent)
+                            .frame(width: 36, height: 36)
+                            .background(AppTheme.accent.opacity(0.12), in: Circle())
+                    }
+                    .buttonStyle(ScaleButtonStyle())
+                    .accessibilityLabel(loc("main.make_main"))
+                }
+            }
             Button { HapticManager.shared.tap(); onEdit() } label: {
                 Image(systemName: "pencil")
                     .font(.system(size: 14)).foregroundStyle(AppTheme.textSecondary)
@@ -323,6 +390,7 @@ struct WalletCardActions: View {
         }
         .padding(.horizontal, 14).padding(.vertical, 12)
         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
+
     }
 
     private var subtitle: String {

@@ -65,9 +65,35 @@ struct SearchView: View {
     @State private var query = ""
     @State private var selectedFilter: TxCategory? = nil
     @State private var selectedPeriod: SearchPeriod = .all_period
-    /// Sort results by time. Newest-first by default; user can flip to
-    /// oldest-first via the sort menu in the results summary bar.
-    @State private var sortNewestFirst = true
+    /// How results are ordered.
+    ///
+    /// Sorting by amount deliberately DROPS the per-day grouping. A list headed
+    /// "Yesterday / Wednesday / Monday" that claims to be largest-first is still
+    /// ordered by date — the biggest transaction of Monday would sit below the
+    /// smallest of yesterday. You cannot have both orders at once, so asking for
+    /// one abandons the other rather than pretending.
+    enum SearchSort: CaseIterable {
+        case newest, oldest, largest, smallest
+
+        var titleKey: String {
+            switch self {
+            case .newest:   return "search.sort.newest"
+            case .oldest:   return "search.sort.oldest"
+            case .largest:  return "search.sort.largest"
+            case .smallest: return "search.sort.smallest"
+            }
+        }
+        var icon: String {
+            switch self {
+            case .newest:   return "arrow.down"
+            case .oldest:   return "arrow.up"
+            case .largest:  return "arrow.down.to.line"
+            case .smallest: return "arrow.up.to.line"
+            }
+        }
+        var isByAmount: Bool { self == .largest || self == .smallest }
+    }
+    @State private var sort: SearchSort = .newest
     @State private var appeared = false
     @FocusState private var focused: Bool
     @State private var selectedTx: TxRecord? = nil
@@ -106,30 +132,44 @@ struct SearchView: View {
     // Group filtered results by date section
     var grouped: [(label: String, date: Date, txs: [TxRecord])] {
         let cal = Calendar.current
-        let locale = LanguageManager.shared.currentLocale
         var dict: [Date: [TxRecord]] = [:]
         for tx in filtered {
             let day = cal.startOfDay(for: tx.date)
             dict[day, default: []].append(tx)
         }
-        return dict.keys.sorted(by: sortNewestFirst ? (>) : (<)).map { day in
+        // By amount: one flat section, no day headers — see `SearchSort`.
+        if sort.isByAmount {
+            let ordered = filtered.sorted {
+                let a = abs(convertedForSort($0)), b = abs(convertedForSort($1))
+                return sort == .largest ? a > b : a < b
+            }
+            return ordered.isEmpty ? [] : [(label: "", date: Date.distantPast, txs: ordered)]
+        }
+        return dict.keys.sorted(by: sort == .newest ? (>) : (<)).map { day in
             let label: String
             if cal.isDateInToday(day)          { label = loc("common.today") }
             else if cal.isDateInYesterday(day) { label = loc("common.yesterday") }
             else {
                 let weekAgo = cal.safeDate(byAdding: .day, value: -7, to: Date())
-                let df = DateFormatter()
-                df.locale = locale
+                let df: DateFormatter
                 if day >= weekAgo {
-                    df.dateFormat = DateFormatter.dateFormat(fromTemplate: "EEEE", options: 0, locale: locale)
+                    df = DateFormatterCache.template("EEEE")
                 } else {
-                    df.dateFormat = DateFormatter.dateFormat(fromTemplate: "d MMMM yyyy", options: 0, locale: locale)
+                    df = DateFormatterCache.template("dMMMMyyyy")
                 }
                 label = df.string(from: day)
             }
-            let dayTxs = (dict[day] ?? []).sorted { sortNewestFirst ? $0.date > $1.date : $0.date < $1.date }
+            let dayTxs = (dict[day] ?? []).sorted { sort == .newest ? $0.date > $1.date : $0.date < $1.date }
             return (label: label, date: day, txs: dayTxs)
         }
+    }
+
+    /// Ranking across mixed currencies has to compare like with like, or a
+    /// $10 purchase sorts below a Rp 20.000 one on the raw number alone.
+    private func convertedForSort(_ tx: TxRecord) -> Double {
+        let pref = CurrencyManager.shared.preferredCurrency
+        return CurrencyManager.shared.convert(
+            tx.amount, from: tx.currency.isEmpty ? pref : tx.currency, to: pref)
     }
 
     var availableCategories: [TxCategory] {
@@ -257,25 +297,22 @@ struct SearchView: View {
                                         : loc("search.results_count")
                                     Text(String(format: fmt, filtered.count))
                                         .font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
-                                    // Sort-by-time toggle (newest / oldest)
+                                    // Order: by time, or by amount.
                                     Menu {
-                                        Button {
-                                            HapticManager.shared.tap()
-                                            withAnimation(.spring(response: 0.3)) { sortNewestFirst = true }
-                                        } label: {
-                                            Label(loc("search.sort.newest"), systemImage: sortNewestFirst ? "checkmark" : "arrow.down")
-                                        }
-                                        Button {
-                                            HapticManager.shared.tap()
-                                            withAnimation(.spring(response: 0.3)) { sortNewestFirst = false }
-                                        } label: {
-                                            Label(loc("search.sort.oldest"), systemImage: !sortNewestFirst ? "checkmark" : "arrow.up")
+                                        ForEach(SearchSort.allCases, id: \.self) { option in
+                                            Button {
+                                                HapticManager.shared.tap()
+                                                withAnimation(AppMotion.move) { sort = option }
+                                            } label: {
+                                                Label(loc(option.titleKey),
+                                                      systemImage: sort == option ? "checkmark" : option.icon)
+                                            }
                                         }
                                     } label: {
                                         HStack(spacing: 4) {
                                             Image(systemName: "arrow.up.arrow.down")
                                                 .font(.system(size: 10, weight: .semibold))
-                                            Text(sortNewestFirst ? loc("search.sort.newest") : loc("search.sort.oldest"))
+                                            Text(loc(sort.titleKey))
                                                 .font(.system(size: 12, weight: .medium))
                                         }
                                         .foregroundStyle(AppTheme.accent)
@@ -298,6 +335,10 @@ struct SearchView: View {
                                         VStack(alignment: .leading, spacing: 8) {
                                             // Group header
                                             let groupTotal = group.txs.reduce(0) { $0 + $1.amount }
+                                            // Empty label = the flat, amount-ordered list. A
+                                            // running total across unrelated days would be a
+                                            // number about nothing.
+                                            if !group.label.isEmpty {
                                             HStack {
                                                 Text(group.label)
                                                     .font(.system(size: 13, weight: .semibold))
@@ -310,6 +351,7 @@ struct SearchView: View {
                                                     .foregroundStyle(groupTotal >= 0 ? AppTheme.accent.opacity(0.8) : AppTheme.red.opacity(0.8))
                                             }
                                             .padding(.horizontal, 22)
+                                            }
 
                                             VStack(spacing: 0) {
                                                 ForEach(group.txs) { tx in
@@ -459,6 +501,43 @@ struct TransactionDetailSheet: View {
     @State private var editNotes = ""
     @State private var showDeleteConfirm = false
     
+    /// History the rhythm is measured over: every transaction on this card, not
+    /// just this one. Cadence is a property of a habit, not of a purchase.
+    @Query private var allCards: [BankCard]
+    private var detailHistory: [TxRecord] {
+        allCards.first { $0.transactions.contains(where: { $0.id == tx.id }) }?.transactions ?? []
+    }
+
+    /// Built once when the sheet opens, not on every body evaluation — the
+    /// model takes medians across the whole card history, which is a full pass
+    /// and has no business running as a side effect of a redraw.
+    @State private var cachedRhythm = SpendingRhythm(history: []) { _ in 0 }
+
+    private func explanationKey(for v: SpendingRhythm.Verdict) -> String {
+        switch v {
+        case .episodicCategory: return "tx.rhythm_why_episodic"
+        case .outlier:          return "tx.rhythm_why_outlier"
+        case .dayToDay:         return "tx.rhythm_why_daily"
+        case .userMarked:       return "tx.rhythm_why_daily"
+        }
+    }
+
+    private func overrideChip(_ title: String, value: Bool?) -> some View {
+        let on = tx.oneOffOverride == value
+        return Button {
+            HapticManager.shared.tap()
+            tx.oneOffOverride = value
+            try? context.save()
+        } label: {
+            Text(title)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(on ? AppTheme.bg : AppTheme.textSecondary)
+                .padding(.horizontal, 12).padding(.vertical, 7)
+                .background(on ? AppTheme.accent : AppTheme.cardMid, in: Capsule())
+        }
+        .buttonStyle(ScaleButtonStyle())
+    }
+
     /// Locale-aware short time formatter (e.g. "12:30 PM" / "12.30")
     static func shortTimeString(from date: Date) -> String {
         let df = DateFormatter()
@@ -501,7 +580,14 @@ struct TransactionDetailSheet: View {
     /// two mixed together.
     private var availableCategories: [TxCategory] {
         switch editType {
-        case .expense: return [.shopping, .food, .travel, .bills, .transport, .health, .commitment, .investment, .other]
+        // `.debtPayment` belongs here. Without it, someone paying off a credit
+        // card by hand had no honest option and reached for "Other" — which is
+        // how a Rp 1.000.000 debt repayment ended up inside this user's daily
+        // spending pattern, month after month. The two menu flows (Debt Tracker
+        // and the CC bill screen) always categorised it correctly; the manual
+        // path was the one with no right answer.
+        case .expense: return [.shopping, .food, .travel, .bills, .transport,
+                               .health, .commitment, .investment, .debtPayment, .other]
         case .income:  return [.salary, .freelance, .business, .investment, .bonus, .gift, .incomeOther]
         }
     }
@@ -550,6 +636,14 @@ struct TransactionDetailSheet: View {
                         }
                     }
                 }
+            }
+        }
+        .onAppear {
+            cachedRhythm = SpendingRhythm(history: detailHistory) { t in
+                CurrencyManager.shared.convert(
+                    t.amount,
+                    from: t.currency.isEmpty ? CurrencyManager.shared.preferredCurrency : t.currency,
+                    to: CurrencyManager.shared.preferredCurrency)
             }
         }
         .confirmationDialog(loc("tx.delete_prompt"), isPresented: $showDeleteConfirm, titleVisibility: .visible) {
@@ -658,6 +752,44 @@ struct TransactionDetailSheet: View {
             }
             .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 18))
             .padding(.horizontal, 22)
+
+            // The engine's call on whether this is day-to-day spending, and a
+            // way to disagree with it.
+            //
+            // Shown rather than hidden, because a number that quietly excludes
+            // some of your spending is a number you cannot check. And the
+            // correction is three-state on purpose: "automatic" has to remain
+            // reachable, or the first tap is irreversible and people stop
+            // tapping.
+            if tx.amount < 0, tx.txSubtype != .transfer,
+               !StatisticsView.fixedMonthlyCats.contains(tx.category) {
+                let amount = abs(CurrencyManager.shared.convert(
+                    tx.amount, from: tx.currency.isEmpty ? CurrencyManager.shared.preferredCurrency : tx.currency,
+                    to: CurrencyManager.shared.preferredCurrency))
+                let auto = cachedRhythm.autoVerdict(for: tx, amount: amount)
+
+                VStack(alignment: .leading, spacing: 10) {
+                    Text(loc("tx.rhythm_title"))
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .tracking(0.6)
+
+                    Text(loc(explanationKey(for: auto)))
+                        .font(.system(size: 12))
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    HStack(spacing: 6) {
+                        overrideChip(loc("tx.rhythm_auto"),   value: nil)
+                        overrideChip(loc("tx.rhythm_daily"),  value: false)
+                        overrideChip(loc("tx.rhythm_irreg"),  value: true)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(14)
+                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
+                .padding(.horizontal, 22)
+            }
 
             // Refund/transfer tagging was removed — if a transaction was a
             // refund, the user simply deletes it (the money came back, so the
@@ -895,7 +1027,7 @@ struct AddTransactionSheet: View {
         // extra income logged this calendar month, which silently raised the
         // limit here (Rp 5.057.500) while Smart Budget still showed Rp 5.000.000
         // — two different "budget exceeded" thresholds for the same budget.
-        let scheduled = salarySchedules.filter { $0.isActive }.reduce(0) { $0 + $1.amount }
+        let scheduled = MainCard.salaries(salarySchedules).reduce(0) { $0 + $1.amount }
         if scheduled > 0 { return scheduled }
         // No schedule → fall back to income actually received this month.
         let cal = Calendar.current
@@ -990,7 +1122,14 @@ struct AddTransactionSheet: View {
     }
     private var availableCategories: [TxCategory] {
         switch txType {
-        case .expense: return [.shopping, .food, .travel, .bills, .transport, .health, .commitment, .investment, .other]
+        // `.debtPayment` belongs here. Without it, someone paying off a credit
+        // card by hand had no honest option and reached for "Other" — which is
+        // how a Rp 1.000.000 debt repayment ended up inside this user's daily
+        // spending pattern, month after month. The two menu flows (Debt Tracker
+        // and the CC bill screen) always categorised it correctly; the manual
+        // path was the one with no right answer.
+        case .expense: return [.shopping, .food, .travel, .bills, .transport,
+                               .health, .commitment, .investment, .debtPayment, .other]
         case .income:  return [.salary, .freelance, .business, .investment, .bonus, .gift, .incomeOther]
         }
     }
@@ -1109,7 +1248,7 @@ struct AddTransactionSheet: View {
                             .padding(.top, 8)
                             .opacity(appeared ? 1 : 0)
                             .offset(y: appeared ? 0 : 20)
-                            .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.04), value: appeared)
+                            .animation(AppMotion.appear, value: appeared)
                         }
 
                         // Type
@@ -1278,7 +1417,7 @@ struct AddTransactionSheet: View {
                             }
                         }
                         .opacity(appeared ? 1 : 0).offset(y: appeared ? 0 : 20)
-                        .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.06), value: appeared)
+                        .animation(AppMotion.appear, value: appeared)
 
                         SheetField(label: loc("tx.name_label"),
                                    placeholder: selectedCategory == .debtPayment
@@ -1286,7 +1425,7 @@ struct AddTransactionSheet: View {
                                        : loc("tx.name_placeholder"),
                                    text: $name)
                             .opacity(appeared ? 1 : 0).offset(y: appeared ? 0 : 20)
-                            .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.1), value: appeared)
+                            .animation(AppMotion.appear, value: appeared)
                             .onChange(of: name) { _, newName in
                                 // History first, keyword map second — what this
                                 // user actually does beats a shipped guess.
@@ -1356,60 +1495,44 @@ struct AddTransactionSheet: View {
                             }
                         }
                         .opacity(appeared ? 1 : 0)
-                        .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.14), value: appeared)
+                        .animation(AppMotion.appear, value: appeared)
 
                         if vm.cards.count > 1 {
                             VStack(spacing: 8) {
                                 Text(loc("debt.card")).font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
                                     .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 22)
-                                ScrollView(.horizontal, showsIndicators: false) {
-                                    HStack(spacing: 10) {
-                                        ForEach(Array(vm.cards.enumerated()), id: \.element.id) { i, card in
-                                            let cardCur = card.currency.isEmpty ? CurrencyManager.shared.preferredCurrency : card.currency
-                                            Button {
-                                                HapticManager.shared.tap(); selectedCardIndex = i
-                                            } label: {
-                                                VStack(alignment: .leading, spacing: 4) {
-                                                    HStack(spacing: 5) {
-                                                        Text(card.holderName).font(.system(size: 12, weight: .semibold))
-                                                        // Credit cards are spendable but flagged so the
-                                                        // user knows this purchase adds to what they owe.
-                                                        if card.isCreditCard {
-                                                            Text(loc("cc.badge")).font(.system(size: 8, weight: .bold))
-                                                                .foregroundStyle(selectedCardIndex == i ? AppTheme.bg.opacity(0.75) : AppTheme.purple)
-                                                                .padding(.horizontal, 5).padding(.vertical, 1)
-                                                                .background((selectedCardIndex == i ? AppTheme.bg.opacity(0.2) : AppTheme.purple.opacity(0.15)), in: Capsule())
-                                                        }
-                                                    }
-                                                    if card.isCreditCard {
-                                                        Text(String(format: loc("cc.avail_short"), card.formattedAvailable))
-                                                            .font(.system(size: 11))
-                                                            .foregroundStyle(selectedCardIndex == i ? AppTheme.bg.opacity(0.7) : AppTheme.textSecondary)
-                                                    } else if card.isDigitalWallet {
-                                                        Text(card.walletProvider.isEmpty ? loc("common.wallet") : card.walletProvider)
-                                                            .font(.system(size: 11))
-                                                            .foregroundStyle(selectedCardIndex == i ? AppTheme.bg.opacity(0.7) : AppTheme.textSecondary)
-                                                    } else {
-                                                        Text(".... \(card.cardNumber.suffix(4))")
-                                                            .font(.system(size: 11))
-                                                            .foregroundStyle(selectedCardIndex == i ? AppTheme.bg.opacity(0.7) : AppTheme.textSecondary)
-                                                    }
-                                                    Text(cardCur)
-                                                        .font(.system(size: 10, weight: .bold))
-                                                        .foregroundStyle(selectedCardIndex == i ? AppTheme.bg.opacity(0.6) : AppTheme.accent)
-                                                }
-                                                .foregroundStyle(selectedCardIndex == i ? AppTheme.bg : AppTheme.textPrimary)
-                                                .padding(.horizontal, 16).padding(.vertical, 10)
-                                                .background(selectedCardIndex == i ? AppTheme.accent : AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 12))
-                                            }
-                                            .buttonStyle(ScaleButtonStyle())
+                                // Chips, not miniature cards.
+                                //
+                                // Each entry carried a holder name, a masked
+                                // number, a currency and sometimes two badges —
+                                // and the holder name is the SAME on every card
+                                // a person owns, so the row repeated "Fahmi
+                                // Aquinas" three times while the thing that
+                                // actually distinguishes them sat underneath in
+                                // small grey text. Currency was printed on all
+                                // of them when all of them were IDR.
+                                //
+                                // What identifies a card here is its colour and
+                                // its four digits, so that is what a chip is: a
+                                // gradient spine borrowed from the Wallet face,
+                                // the bank or provider, and the digits. Anything
+                                // that is true of every card — a currency they
+                                // all share — is not shown, because a label
+                                // repeated on every option distinguishes none.
+                                CardChipPicker(
+                                    cards: vm.cards,
+                                    isSelected: { c in
+                                        vm.cards.firstIndex(where: { $0.id == c.id }) == selectedCardIndex
+                                    },
+                                    onSelect: { c in
+                                        if let i = vm.cards.firstIndex(where: { $0.id == c.id }) {
+                                            selectedCardIndex = i
                                         }
-                                    }
-                                    .padding(.horizontal, 22)
-                                }
+                                    },
+                                    currencyContext: currency)
                             }
                             .opacity(appeared ? 1 : 0)
-                            .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.18), value: appeared)
+                            .animation(AppMotion.appear, value: appeared)
                             .onChange(of: selectedCardIndex) { _, i in
                                 guard i < vm.cards.count else { return }
                                 let card = vm.cards[i]
@@ -1437,12 +1560,12 @@ struct AddTransactionSheet: View {
                                 .padding(.horizontal, 22).frame(maxWidth: .infinity, alignment: .leading)
                         }
                         .opacity(appeared ? 1 : 0)
-                        .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.2), value: appeared)
+                        .animation(AppMotion.appear, value: appeared)
 
                         SheetField(label: loc("tx.notes"), placeholder: loc("tx.notes_placeholder"), text: $notes)
                             .padding(.horizontal, 22)
                             .opacity(appeared ? 1 : 0)
-                            .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.22), value: appeared)
+                            .animation(AppMotion.appear, value: appeared)
 
                         // No card warning — uses warning tone (orange) since
                         // the user can resolve this by adding a card; not
@@ -1490,7 +1613,7 @@ struct AddTransactionSheet: View {
                         }
                         .buttonStyle(ScaleButtonStyle()).disabled(!isValid || vm.cards.isEmpty || (wouldGoNegative && txType == .expense)).padding(.horizontal, 22).padding(.top, 6)
                         .opacity(appeared ? 1 : 0)
-                        .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.26), value: appeared)
+                        .animation(AppMotion.appear, value: appeared)
 
                         Spacer(minLength: 40)
                     }

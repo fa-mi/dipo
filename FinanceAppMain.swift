@@ -80,7 +80,10 @@ class AppDelegate: NSObject, UIApplicationDelegate,
                     // Start the maintenance listener now that auth (required by
                     // Firestore rules) exists — covers cold launch where RootView
                     // .onAppear may run before anonymous auth completes.
-                    Task { @MainActor in FirebaseSupportService.shared.startListeningForMaintenance() }
+                    Task { @MainActor in
+                        FirebaseSupportService.shared.startListeningForMaintenance()
+                        ScreenAnalytics.shared.startListening()
+                    }
                 }
             }
         }

@@ -35,7 +35,6 @@ struct DebtView: View {
     /// Fixed obligations, shown next to the health score rather than as a
     /// separate verdict above it. Two health readings on one screen, computed
     /// differently, is worse than one — especially when they disagree.
-    var obligationLoad: ObligationLoad? = nil
 
     /// Credit cards are liability accounts — they live here in the Debt Tracker
     /// (the single door for creating one), sorted by amount owed.
@@ -58,6 +57,17 @@ struct DebtView: View {
     ///      excluding the salary category to avoid double-counting once the
     ///      scheduled salary is auto-credited.
     ///   3. No schedule → fall back to all income transactions this month.
+    /// Every figure on this screen is read from the main card.
+    ///
+    /// It used to sum every account while taking its RATIOS from the main card
+    /// — an allowance computed on one account's income compared against
+    /// spending from nine. That is how this screen came to announce Rp 19,1jt
+    /// of overspending for a cycle that finished ahead. Same anchor as
+    /// Statistics, Smart Budget and the alerts, so the four cannot disagree.
+    private var scopedTx: [TxRecord] {
+        MainCard.resolve(in: cards)?.transactions ?? cards.flatMap { $0.transactions }
+    }
+
     private var monthlyIncome: Double {
         let cal = Calendar.current
         let monthStart = cal.safeDate(from: cal.dateComponents([.year, .month], from: Date()))
@@ -66,10 +76,10 @@ struct DebtView: View {
             let c = tx.currency.isEmpty ? pref : tx.currency
             return CurrencyManager.shared.convert(tx.amount, from: c, to: pref)
         }
-        let thisMonthIncome = cards.flatMap { $0.transactions }
+        let thisMonthIncome = scopedTx
             .filter { $0.amount > 0 && $0.txSubtype != .transfer && $0.date >= monthStart }
 
-        let activeSalaries = salaries.filter { $0.isActive }
+        let activeSalaries = MainCard.salaries(salaries)
         guard !activeSalaries.isEmpty else {
             // No schedule — use whatever income was actually logged.
             return thisMonthIncome.reduce(0) { $0 + conv($1) }
@@ -92,7 +102,7 @@ struct DebtView: View {
     }
 
     private var monthlyExpenses: Double {
-        let allTx = cards.flatMap { $0.transactions }
+        let allTx = scopedTx
         let cal = Calendar.current
         let now = Date()
         let pref = CurrencyManager.shared.preferredCurrency
@@ -154,12 +164,11 @@ struct DebtView: View {
 
     /// Non-salary income received in the current cycle.
     private var extraIncomeThisCycle: Double {
-        let cal = Calendar.current
         let cm = CurrencyManager.shared
         let pref = cm.preferredCurrency
-        guard let day = salaries.first(where: { $0.isActive })?.dayOfMonth else { return 0 }
+        guard let day = MainCard.payDay(salaries) else { return 0 }
         let start = StatPeriod.payCycleRange(payDay: day).start
-        return cards.flatMap(\.transactions)
+        return scopedTx
             .filter { $0.date >= start && $0.amount > 0 && $0.txSubtype != .transfer
                       && $0.category != .salary
                       && $0.category != .investment && $0.category != .debtPayment }
@@ -277,21 +286,7 @@ struct DebtView: View {
                                 .padding(.horizontal, 22).padding(.top, 20)
                                 .opacity(appeared ? 1 : 0)
                                 .offset(y: appeared ? 0 : 20)
-                                .animation(.spring(response: 0.55, dampingFraction: 0.8).delay(0.08), value: appeared)
-
-                            // Fixed obligations, directly beneath the score they
-                            // belong to. The health score reads debts alone —
-                            // which is why it can say "Excellent, DTI 0.0%"
-                            // while rent and subscriptions quietly take a third
-                            // of income. Shown together, the two halves make one
-                            // picture instead of contradicting each other.
-                            if let obligationLoad {
-                                ObligationLoadCard(load: obligationLoad)
-                                    .padding(.horizontal, 22)
-                                    .opacity(appeared ? 1 : 0)
-                                    .offset(y: appeared ? 0 : 20)
-                                    .animation(.spring(response: 0.55, dampingFraction: 0.8).delay(0.12), value: appeared)
-                            }
+                                .animation(AppMotion.appear, value: appeared)
 
                             // Smart allocation — needs income. When no salary/
                             // income exists this month, the debt allocation &
@@ -302,7 +297,7 @@ struct DebtView: View {
                                     .padding(.horizontal, 22)
                                     .opacity(appeared ? 1 : 0)
                                     .offset(y: appeared ? 0 : 20)
-                                    .animation(.spring(response: 0.55, dampingFraction: 0.8).delay(0.14), value: appeared)
+                                    .animation(AppMotion.appear, value: appeared)
                             } else {
                                 SalarySetupCTA(message: loc("salary.cta.debt")) {
                                     showSalarySetup = true
@@ -310,7 +305,7 @@ struct DebtView: View {
                                 .padding(.horizontal, 22)
                                 .opacity(appeared ? 1 : 0)
                                 .offset(y: appeared ? 0 : 20)
-                                .animation(.spring(response: 0.55, dampingFraction: 0.8).delay(0.14), value: appeared)
+                                .animation(AppMotion.appear, value: appeared)
                             }
 
                             // Overspending warning
@@ -325,7 +320,7 @@ struct DebtView: View {
                                 UrgentPaymentsCard(debts: engine.urgentDebts)
                                     .padding(.horizontal, 22)
                                     .opacity(appeared ? 1 : 0)
-                                    .animation(.spring(response: 0.55, dampingFraction: 0.8).delay(0.18), value: appeared)
+                                    .animation(AppMotion.appear, value: appeared)
                             }
 
                             // Debt list
@@ -363,7 +358,7 @@ struct DebtView: View {
                                 PayoffStrategyCard(engine: engine)
                                     .padding(.horizontal, 22)
                                     .opacity(appeared ? 1 : 0)
-                                    .animation(.spring(response: 0.55, dampingFraction: 0.8).delay(0.3), value: appeared)
+                                    .animation(AppMotion.appear, value: appeared)
                             }
                         }
                     }
@@ -375,7 +370,7 @@ struct DebtView: View {
                     creditCardSection
                         .padding(.top, 24)
                         .opacity(appeared ? 1 : 0)
-                        .animation(.spring(response: 0.55, dampingFraction: 0.8).delay(0.34), value: appeared)
+                        .animation(AppMotion.appear, value: appeared)
 
                     Spacer(minLength: 120)
                 }
@@ -500,6 +495,7 @@ struct DebtView: View {
                 ForEach(creditCards) { card in
                     VStack(spacing: 10) {
                         CreditCardLiabilityRow(card: card,
+                                               installments: installments,
                                                onEdit: { editingCreditCard = card },
                                                onLogSpend: { logSpendCard = card },
                                                onPay: { payingCard = card },
@@ -581,7 +577,7 @@ struct SalarySetupCTA: View {
                     Image(systemName: "plus.circle.fill").font(.system(size: 15))
                     Text(loc("salary.cta.button")).font(.system(size: 15, weight: .bold))
                 }
-                .foregroundStyle(.white)
+                .foregroundStyle(AppTheme.onSolid)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 14)
                 .background(AppTheme.accent, in: RoundedRectangle(cornerRadius: 14))
@@ -1282,7 +1278,7 @@ struct DebtFormSheet: View {
                         .opacity(appeared ? 1 : 0).offset(y: appeared ? 0 : 20)
 
                         SheetField(label: loc("savings.description"), placeholder: loc("debt.description_placeholder"), text: $vm.formName)
-                            .opacity(appeared ? 1 : 0).animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.08), value: appeared)
+                            .opacity(appeared ? 1 : 0).animation(AppMotion.appear, value: appeared)
 
                         // Balance fields
                         HStack(spacing: 12) {
@@ -1326,7 +1322,7 @@ struct DebtFormSheet: View {
                             }
                         }
                         .padding(.horizontal, 22)
-                        .opacity(appeared ? 1 : 0).animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.12), value: appeared)
+                        .opacity(appeared ? 1 : 0).animation(AppMotion.appear, value: appeared)
 
                         // Interest + Due day
                         HStack(spacing: 12) {
@@ -1379,7 +1375,7 @@ struct DebtFormSheet: View {
                             }
                         }
                         .padding(.horizontal, 22)
-                        .opacity(appeared ? 1 : 0).animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.16), value: appeared)
+                        .opacity(appeared ? 1 : 0).animation(AppMotion.appear, value: appeared)
 
                         // Currency
                         VStack(spacing: 8) {
@@ -1398,7 +1394,7 @@ struct DebtFormSheet: View {
                                 }.padding(.horizontal, 22)
                             }
                         }
-                        .opacity(appeared ? 1 : 0).animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.2), value: appeared)
+                        .opacity(appeared ? 1 : 0).animation(AppMotion.appear, value: appeared)
 
                         // Payoff preview
                         if let bal = Double(vm.formBalance.replacingOccurrences(of: ",", with: ".")),
@@ -1460,7 +1456,7 @@ struct DebtFormSheet: View {
                         .buttonStyle(ScaleButtonStyle())
                         .disabled(!canSave)
                         .padding(.horizontal, 22)
-                        .opacity(appeared ? 1 : 0).animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.24), value: appeared)
+                        .opacity(appeared ? 1 : 0).animation(AppMotion.appear, value: appeared)
 
                         Spacer(minLength: 40)
                     }.padding(.top, 8)

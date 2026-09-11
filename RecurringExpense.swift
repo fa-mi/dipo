@@ -23,6 +23,24 @@ final class RecurringExpense {
     /// double-charges within a single month.
     var lastChargedMonth: Int
     var lastChargedYear: Int
+
+    /// Whether the charge for this plan's CURRENT due date has already posted.
+    ///
+    /// Compared against the month of the next due date, not against today. On
+    /// the due day `nextDueDate` still returns today, so a bill charged this
+    /// morning is "due in 0 days" for the rest of the day — which is why the
+    /// Home banner kept promising to record a transaction it had already
+    /// recorded, and why the spend projection risked counting it twice.
+    ///
+    /// Always false when `autoRecord` is off: nothing will post it, so the
+    /// reminder is still owed and the projection still has to expect it.
+    var isChargedForCurrentDue: Bool {
+        guard autoRecord else { return false }
+        let cal = Calendar.current
+        let due = RecurringDateEngine.nextDueDate(dayOfMonth: dayOfMonth)
+        return lastChargedYear  == cal.component(.year,  from: due)
+            && lastChargedMonth == cal.component(.month, from: due)
+    }
     /// When true the engine posts a debit transaction on the charge day. When
     /// false the expense is planning-only: it shows in the list and counts
     /// toward the monthly total, but records nothing (for bills paid from an
@@ -418,7 +436,7 @@ struct RecurringExpensesView: View {
                             summaryCard
                                 .padding(.horizontal, 22).padding(.top, 20)
                                 .opacity(appeared ? 1 : 0).offset(y: appeared ? 0 : 16)
-                                .animation(.spring(response: 0.55, dampingFraction: 0.8).delay(0.05), value: appeared)
+                                .animation(AppMotion.appear, value: appeared)
                         }
 
                         if expenses.isEmpty {

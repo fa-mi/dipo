@@ -95,6 +95,7 @@ enum FinancialBriefingEngine {
                       goals: [SavingsGoal],
                       recurrings: [RecurringExpense],
                       salaries: [SalarySchedule],
+                      installments: [CardInstallment] = [],
                       intents: [CycleIntent] = []) -> FinancialBriefing {
         let cm = CurrencyManager.shared
         let pref = cm.preferredCurrency
@@ -106,12 +107,12 @@ enum FinancialBriefingEngine {
         }
 
         // ── Base figures ────────────────────────────────────────────────
-        let activeSalaries = salaries.filter { $0.isActive }
+        let activeSalaries = MainCard.salaries(salaries)
         let income = activeSalaries.reduce(0.0) { $0 + toPref($1.amount, $1.currency) }
 
         // Cycle window = actual-pay-date anchored, same as everywhere else.
         let cycleStart: Date = {
-            if let day = activeSalaries.first?.dayOfMonth {
+            if let day = MainCard.anchor(among: activeSalaries)?.dayOfMonth {
                 return StatPeriod.payCycleRange(payDay: day).start
             }
             return cal.safeDate(from: cal.dateComponents([.year, .month], from: now))
@@ -122,7 +123,7 @@ enum FinancialBriefingEngine {
         var windowStart = cycleStart
         var windowEnd = now
         var isCompleteCycle = false
-        if elapsed < 7, let day = activeSalaries.first?.dayOfMonth,
+        if elapsed < 7, let day = MainCard.anchor(among: activeSalaries)?.dayOfMonth,
            let dayBefore = cal.date(byAdding: .day, value: -1, to: cycleStart) {
             windowStart = StatPeriod.payCycleRange(payDay: day, now: dayBefore).start
             windowEnd = cycleStart
@@ -135,7 +136,7 @@ enum FinancialBriefingEngine {
             let f = DateFormatter()
             f.locale = LanguageManager.shared.currentLocale
             f.dateFormat = "d MMM"
-            if activeSalaries.first?.dayOfMonth != nil {
+            if MainCard.anchor(among: activeSalaries)?.dayOfMonth != nil {
                 if isCompleteCycle {
                     let lastDay = cal.date(byAdding: .day, value: -1, to: windowEnd) ?? windowEnd
                     return String(format: loc("brief.period_complete"),
@@ -189,11 +190,16 @@ enum FinancialBriefingEngine {
         // installments where the user never typed a minimum.
         let creditCardsOwedForMin = cards.filter { $0.isCreditCard }
             .reduce(0.0) { $0 + toPref($1.owedBalance(), $1.resolvedCurrency) }
+        // Instalments bill a fixed amount each month, so they are added at
+        // face value rather than folded into the 10% revolving estimate above.
+        let installmentMonthly = cards.filter { $0.isCreditCard }
+            .reduce(0.0) { $0 + toPref($1.installmentMonthlyCharge(installments), $1.resolvedCurrency) }
         let debtMin = activeDebts.reduce(0.0) { $0 + toPref($1.effectiveMinimumPayment, $1.currency) }
                     + creditCardsOwedForMin * 0.10
+                    + installmentMonthly
         let totalDebt = activeDebts.reduce(0.0) { $0 + toPref($1.currentBalance, $1.currency) }
         let creditCards = cards.filter { $0.isCreditCard }
-        let ccOwed = creditCards.reduce(0.0) { $0 + toPref($1.owedBalance(), $1.resolvedCurrency) }
+        let ccOwed = creditCards.reduce(0.0) { $0 + toPref($1.totalOwed(installments), $1.resolvedCurrency) }
         let goalPace = goals.filter { !$0.isCompleted }
             .reduce(0.0) { $0 + toPref($1.monthlyContribution, $1.currency) }
 
@@ -385,14 +391,14 @@ enum FinancialBriefingEngine {
 
         // 6. Credit-card hygiene — utilization + affordability of next bill.
         for cc in creditCards where cc.creditLimit > 0 {
-            let owed = toPref(cc.owedBalance(), cc.resolvedCurrency)
-            let util = cc.creditUtilization
+            let owed = toPref(cc.totalOwed(installments), cc.resolvedCurrency)
+            let util = cc.utilisation(installments)
             if util > 0.5 {
                 findings.append(BriefingFinding(
                     severity: .warning,
                     title: String(format: loc("brief.cc_util_title"), cc.holderName),
                     body: String(format: loc("brief.cc_util_body"), Int(util * 100),
-                                 fmt(owed), fmt(toPref(cc.availableCredit(), cc.resolvedCurrency)))))
+                                 fmt(owed), fmt(toPref(cc.availableCredit(installments), cc.resolvedCurrency)))))
             }
         }
 
@@ -539,6 +545,7 @@ struct FinancialBriefingView: View {
     @Query private var recurrings: [RecurringExpense]
     @Query(sort: \SalarySchedule.createdAt) private var salaries: [SalarySchedule]
     @Query private var cycleIntents: [CycleIntent]
+    @Query private var installments: [CardInstallment]
 
     @State private var briefing: FinancialBriefing? = nil
     @State private var appeared = false
@@ -669,6 +676,7 @@ struct FinancialBriefingView: View {
                 briefing = FinancialBriefingEngine.build(
                     cards: cards, debts: debts, goals: goals,
                     recurrings: recurrings, salaries: salaries,
+                    installments: installments,
                     intents: cycleIntents)
                 withAnimation(.spring(response: 0.5, dampingFraction: 0.85)) { appeared = true }
             }

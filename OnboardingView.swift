@@ -133,7 +133,7 @@ struct OnboardingPageView: View {
             }
             .scaleEffect(appeared ? 1 : 0.6)
             .opacity(appeared ? 1 : 0)
-            .animation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.1), value: appeared)
+            .animation(AppMotion.appear, value: appeared)
             .padding(.bottom, 40)
 
             // Title
@@ -143,7 +143,7 @@ struct OnboardingPageView: View {
                 .multilineTextAlignment(.center)
                 .opacity(appeared ? 1 : 0)
                 .offset(y: appeared ? 0 : 20)
-                .animation(.spring(response: 0.5).delay(0.18), value: appeared)
+                .animation(AppMotion.appear, value: appeared)
                 .padding(.horizontal, 32)
 
             // Body
@@ -154,7 +154,7 @@ struct OnboardingPageView: View {
                 .lineSpacing(4)
                 .opacity(appeared ? 1 : 0)
                 .offset(y: appeared ? 0 : 20)
-                .animation(.spring(response: 0.5).delay(0.24), value: appeared)
+                .animation(AppMotion.appear, value: appeared)
                 .padding(.horizontal, 32)
                 .padding(.top, 16)
 
@@ -172,7 +172,7 @@ struct OnboardingPageView: View {
                 .background(color.opacity(0.1), in: Capsule())
                 .overlay(Capsule().stroke(color.opacity(0.2), lineWidth: 1))
                 .opacity(appeared ? 1 : 0)
-                .animation(.spring(response: 0.5).delay(0.3), value: appeared)
+                .animation(AppMotion.appear, value: appeared)
                 .padding(.top, 20)
             }
 

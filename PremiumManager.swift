@@ -687,13 +687,13 @@ struct PaywallView: View {
                         .animation(.spring(response: 0.35), value: selectedPlan)
                         .scaleEffect(appeared ? 1 : 0.6)
                         .opacity(appeared ? 1 : 0)
-                        .animation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.1), value: appeared)
+                        .animation(AppMotion.appear, value: appeared)
 
                         Text(loc("premium.upgrade"))
                             .font(.system(size: 26, weight: .bold))
                             .foregroundStyle(AppTheme.textPrimary)
                             .opacity(appeared ? 1 : 0)
-                            .animation(.spring(response: 0.5).delay(0.18), value: appeared)
+                            .animation(AppMotion.appear, value: appeared)
 
                         Text(loc("premium.sub"))
                             .font(.system(size: 14))
@@ -701,7 +701,7 @@ struct PaywallView: View {
                             .multilineTextAlignment(.center)
                             .padding(.horizontal, 32)
                             .opacity(appeared ? 1 : 0)
-                            .animation(.spring(response: 0.5).delay(0.22), value: appeared)
+                            .animation(AppMotion.appear, value: appeared)
                     }
                     .padding(.top, 32)
 
@@ -715,7 +715,7 @@ struct PaywallView: View {
                     .background(mgr.plan.color.opacity(0.12), in: Capsule())
                     .overlay(Capsule().stroke(mgr.plan.color.opacity(0.3), lineWidth: 1))
                     .opacity(appeared ? 1 : 0)
-                    .animation(.spring(response: 0.5).delay(0.26), value: appeared)
+                    .animation(AppMotion.appear, value: appeared)
 
                     // Single Royal hero card (no tier comparison anymore —
                     // there's only one paid plan). Stretches full-width to
@@ -725,7 +725,7 @@ struct PaywallView: View {
                         .padding(.horizontal, 22)
                         .opacity(appeared ? 1 : 0)
                         .offset(y: appeared ? 0 : 20)
-                        .animation(.spring(response: 0.55, dampingFraction: 0.8).delay(0.3), value: appeared)
+                        .animation(AppMotion.appear, value: appeared)
 
                     VStack(alignment: .leading, spacing: 12) {
                         Text(loc("premium.what_you_get"))
@@ -763,7 +763,7 @@ struct PaywallView: View {
                     .overlay(RoundedRectangle(cornerRadius: 18).stroke(selectedPlan.color.opacity(0.25), lineWidth: 1))
                     .padding(.horizontal, 22)
                     .opacity(appeared ? 1 : 0)
-                    .animation(.spring(response: 0.55, dampingFraction: 0.8).delay(0.36), value: appeared)
+                    .animation(AppMotion.appear, value: appeared)
 
                     VStack(spacing: 12) {
                         if !UserSession.shared.isLoggedIn {
@@ -954,7 +954,7 @@ struct PaywallView: View {
                     }
                     .padding(.horizontal, 22)
                     .opacity(appeared ? 1 : 0)
-                    .animation(.spring(response: 0.5).delay(0.4), value: appeared)
+                    .animation(AppMotion.appear, value: appeared)
 
                     Spacer(minLength: 40)
                 }

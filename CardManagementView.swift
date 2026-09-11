@@ -375,14 +375,22 @@ struct CardListView: View {
         }
         // Deletion moved up here with the actions bar. The confirmation used to
         // live inside CardDetailRow, which no longer exists.
-        .alert(String(format: loc("cards.delete_confirm"), deletingCard?.last4 ?? ""),
-               isPresented: Binding(get: { deletingCard != nil },
-                                    set: { if !$0 { deletingCard = nil } })) {
-            Button(loc("common.cancel"), role: .cancel) { deletingCard = nil }
-            Button(loc("cards.delete_all"), role: .destructive) {
-                if let c = deletingCard { deleteCard(c) }
-                deletingCard = nil
-            }
+        // A sheet, not an alert. An alert has room for one line, and one line
+        // cannot say that 385 transactions, the salary schedule and the
+        // recurring plans leave with the card.
+        .sheet(item: $deletingCard) { card in
+            CardDeleteSheet(
+                card: card,
+                txCount: card.transactions.count,
+                scheduleCount: allSchedules.filter { $0.cardID == card.id }.count,
+                recurringCount: allRecurrings.filter { $0.cardID == card.id }.count,
+                isMain: MainCard.isMain(card),
+                onConfirm: { deleteCard(card) }
+            )
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+            .presentationBackground(AppTheme.bg)
+            .preferredColorScheme(appColorScheme())
         }
         .sheet(item: $editingCard) { card in
             CardFormSheet(vm: vm, editCard: card)
@@ -557,7 +565,7 @@ struct CardFormSheet: View {
                     }
                     if selected {
                         Image(systemName: "checkmark.circle.fill").font(.system(size: 13))
-                            .foregroundStyle(.white).background(AppTheme.accent, in: Circle())
+                            .foregroundStyle(AppTheme.onSolid).background(AppTheme.accent, in: Circle())
                             .offset(x: 20, y: -13)
                     }
                 }
@@ -626,7 +634,7 @@ struct CardFormSheet: View {
                             .padding(.horizontal, 22)
                             .padding(.top, 8)
                             .opacity(appeared ? 1 : 0)
-                            .animation(.spring(response: 0.4, dampingFraction: 0.8).delay(0.02), value: appeared)
+                            .animation(AppMotion.appear, value: appeared)
                         }
 
                         // ── Card preview ───────────────────────────────────────
@@ -642,7 +650,7 @@ struct CardFormSheet: View {
                         )
                         .padding(.horizontal, 22)
                         .opacity(appeared ? 1 : 0)
-                        .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.05), value: appeared)
+                        .animation(AppMotion.appear, value: appeared)
 
                         // ── Network/wallet indicator ───────────────────────────
                         if isWallet {
@@ -719,7 +727,7 @@ struct CardFormSheet: View {
                                 }
                             }
                             .opacity(appeared ? 1 : 0)
-                            .animation(.spring(response: 0.4, dampingFraction: 0.8).delay(0.08), value: appeared)
+                            .animation(AppMotion.appear, value: appeared)
                             .animation(.spring(response: 0.3), value: walletProvider)
                         }
 
@@ -774,7 +782,7 @@ struct CardFormSheet: View {
                             .padding(.horizontal, 22)
                         }
                         .opacity(appeared ? 1 : 0)
-                        .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.1), value: appeared)
+                        .animation(AppMotion.appear, value: appeared)
                         } // end if !isWallet (card number)
 
                         // Holder/account name
@@ -782,7 +790,7 @@ struct CardFormSheet: View {
                                    placeholder: isWallet ? loc("cards.wallet_holder") : loc("cards.card_holder"),
                                    text: $holderName)
                         .opacity(appeared ? 1 : 0)
-                        .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.14), value: appeared)
+                        .animation(AppMotion.appear, value: appeared)
 
                         // Phone number (digital wallet only)
                         if isWallet {
@@ -840,7 +848,7 @@ struct CardFormSheet: View {
                                 .padding(.horizontal, 22)
                             }
                             .opacity(appeared ? 1 : 0)
-                            .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.16), value: appeared)
+                            .animation(AppMotion.appear, value: appeared)
                         }
 
                         // Expiry (physical card only)
@@ -904,7 +912,7 @@ struct CardFormSheet: View {
                             .padding(.horizontal, 22)
                         }
                         .opacity(appeared ? 1 : 0)
-                        .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.18), value: appeared)
+                        .animation(AppMotion.appear, value: appeared)
                         } // end if !isWallet (expiry)
 
                         // Currency — shown for both wallet and physical, editable only when creating
@@ -958,7 +966,7 @@ struct CardFormSheet: View {
                                 .buttonStyle(ScaleButtonStyle())
                             }
                             .opacity(appeared ? 1 : 0)
-                            .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.2), value: appeared)
+                            .animation(AppMotion.appear, value: appeared)
                         } else {
                             // Locked currency display when editing
                             HStack(spacing: 10) {
@@ -1014,7 +1022,7 @@ struct CardFormSheet: View {
                         .buttonStyle(ScaleButtonStyle())
                         .padding(.horizontal, 22)
                         .opacity(appeared ? 1 : 0)
-                        .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.22), value: appeared)
+                        .animation(AppMotion.appear, value: appeared)
 
                         Spacer(minLength: 40)
                     }
@@ -1414,52 +1422,15 @@ struct CardTransferSheet: View {
                                 if picking == .source { sourceIndex = i } else { destIndex = i }
                                 picking = nil
                             } label: {
-                                // A slim spine in the card's own colour, not a
-                                // shrunken card face. At row height a card face
-                                // is a coloured blob that crowds the name and
-                                // says nothing the colour alone doesn't; the
-                                // spine identifies it and leaves the row calm.
-                                let chosen = (picking == .source ? sourceIndex : destIndex) == i
-                                HStack(spacing: 12) {
-                                    RoundedRectangle(cornerRadius: 3, style: .continuous)
-                                        .fill(LinearGradient(colors: [Color(hex: card.gradientStart),
-                                                                      Color(hex: card.gradientEnd)],
-                                                             startPoint: .top, endPoint: .bottom))
-                                        .frame(width: 5, height: 34)
-                                    VStack(alignment: .leading, spacing: 3) {
-                                        HStack(spacing: 6) {
-                                            Text(card.holderName.isEmpty ? loc("wallet.untitled") : card.holderName)
-                                                .font(.system(size: 14, weight: .semibold))
-                                                .foregroundStyle(AppTheme.textPrimary).lineLimit(1)
-                                            if card.isDigitalWallet {
-                                                Text(card.walletProvider.isEmpty
-                                                     ? loc("wallet.ewallet") : card.walletProvider)
-                                                    .font(.system(size: 9, weight: .semibold))
-                                                    .foregroundStyle(AppTheme.textSecondary)
-                                                    .padding(.horizontal, 5).padding(.vertical, 2)
-                                                    .background(AppTheme.cardMid, in: Capsule())
-                                            } else if !card.last4.isEmpty {
-                                                Text("·· \(card.last4)")
-                                                    .font(.system(size: 11, design: .monospaced))
-                                                    .foregroundStyle(AppTheme.textSecondary)
-                                            }
-                                        }
-                                        Text(CurrencyManager.shared.formatted(card.computedBalance(),
-                                                                              currency: card.resolvedCurrency))
-                                            .font(.system(size: 12, weight: .medium))
-                                            .foregroundStyle(AppTheme.textSecondary)
-                                    }
-                                    Spacer(minLength: 6)
-                                    if chosen {
-                                        Image(systemName: "checkmark.circle.fill")
-                                            .font(.system(size: 19)).foregroundStyle(AppTheme.accent)
-                                    }
-                                }
-                                .padding(.horizontal, 13).padding(.vertical, 11)
-                                .background(chosen ? AppTheme.accent.opacity(0.08) : AppTheme.cardDark,
-                                            in: RoundedRectangle(cornerRadius: 14))
-                                .overlay(RoundedRectangle(cornerRadius: 14)
-                                    .stroke(chosen ? AppTheme.accent.opacity(0.45) : Color.clear, lineWidth: 1.5))
+                                // The shared row, like every other card picker
+                                // in the app. This was the last one still
+                                // carrying its own copy of the spine layout —
+                                // identical to look at, and one more place for
+                                // the two to drift apart.
+                                CardListRow(
+                                    card: card,
+                                    selected: (picking == .source ? sourceIndex : destIndex) == i,
+                                    showsRadio: false)
                             }
                             .buttonStyle(.plain)
                         }

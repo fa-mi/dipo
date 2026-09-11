@@ -412,7 +412,7 @@ struct ReceiptPreviewSheet: View {
     // MARK: - Helpers
 
     private var expenseCategories: [TxCategory] {
-        [.shopping, .food, .travel, .bills, .transport, .health, .commitment, .other]
+        [.shopping, .food, .travel, .bills, .transport, .health, .commitment, .debtPayment, .other]
     }
 
     /// Primary name shown on a card chip.

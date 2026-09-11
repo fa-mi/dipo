@@ -121,7 +121,7 @@ struct CommitmentReview {
                                  "wetv", "viu", "apple music", "langganan", "subscription"]
 
         var income = 0.0
-        for s in salaries where s.isActive {
+        for s in MainCard.salaries(salaries) {
             income += cm.convert(s.amount, from: s.currency, to: currency)
         }
 
@@ -157,6 +157,14 @@ struct CommitmentReview {
 struct CommitmentPriorityCard: View {
     let review: CommitmentReview
     let currency: String
+    /// What a day has left after the commitments, and what a day actually
+    /// costs. The pair is the point of this card; see `marginLine`.
+    var dailyAllowance: Double? = nil
+    var typicalDaily: Double = 0
+    /// Irregular spending in the current cycle — the thing that eats the margin.
+    var irregularThisCycle: Double = 0
+    /// Days in the pay cycle — the divisor in the chain shown to the user.
+    var daysInCycle: Int = 30
     @State private var expanded = false
 
     private func money(_ v: Double) -> String {
@@ -164,6 +172,91 @@ struct CommitmentPriorityCard: View {
     }
     private func months(_ v: Double) -> String {
         v >= 12 ? String(format: loc("commit.years"), v / 12) : String(format: loc("commit.months"), v)
+    }
+
+    private func chainRow(_ label: String, _ value: String,
+                          tint: Color = AppTheme.textSecondary) -> some View {
+        HStack(spacing: 8) {
+            Text(label)
+                .font(.system(size: 11))
+                .foregroundStyle(AppTheme.textSecondary)
+            Spacer(minLength: 6)
+            Text(value)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(tint)
+        }
+    }
+
+    /// What the commitments actually leave, said in the unit a person spends in.
+    ///
+    /// The card led with "37% of income" and a bucket percentage, and a user
+    /// read it and felt nothing — correctly, because neither number tells you
+    /// anything you can act on. 37% is not alarming or reassuring until you
+    /// know what the other 63% has to cover, and "74% of Daily needs" is a
+    /// fact about a bucket, not about a day.
+    ///
+    /// The figure that lands is the DAILY MARGIN: what is left per day after
+    /// the commitments, minus what a day actually costs you. On this user's
+    /// numbers that is Rp 165.968 available against Rp 160.000 spent — under
+    /// Rp 6.000 of slack a day. That is the sentence that makes someone sit up,
+    /// and it was nowhere on the screen.
+    ///
+    /// Then the consequence, priced in the same unit: one irregular expense
+    /// costs N days of that margin. Not a warning, an exchange rate — the user
+    /// decides what it is worth.
+    @ViewBuilder
+    private var marginLine: some View {
+        if let allowance = dailyAllowance, allowance > 0, typicalDaily > 0 {
+            let margin = allowance - typicalDaily
+            let tight = margin < allowance * 0.15
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(money(max(margin, 0)))
+                        .font(.system(size: 22, weight: .bold))
+                        .foregroundStyle(margin <= 0 ? AppTheme.red
+                                         : tight ? AppTheme.orange : AppTheme.accent)
+                    Text(loc("commit.margin_unit"))
+                        .font(.system(size: 12))
+                        .foregroundStyle(AppTheme.textSecondary)
+                    Spacer(minLength: 0)
+                }
+                // The chain, not just its answer. "Rp 5.968 of slack" is a
+                // conclusion; the user cannot check it or act on it without
+                // seeing that it came from their income minus their recurring
+                // plans, and that the recurring figure is the only term in it
+                // they can actually change.
+                VStack(alignment: .leading, spacing: 4) {
+                    chainRow(loc("commit.chain_income"), money(review.monthlyIncome))
+                    chainRow(loc("commit.chain_recurring"), "− " + money(review.total),
+                             tint: AppTheme.orange)
+                    chainRow(String(format: loc("commit.chain_perday"), daysInCycle),
+                             money(allowance))
+                    chainRow(loc("commit.chain_typical"), "− " + money(typicalDaily))
+                }
+                .padding(.top, 2)
+
+                Text(String(format: loc(margin <= 0 ? "commit.margin_over" : "commit.margin_sub"),
+                            money(allowance), money(typicalDaily)))
+                    .font(.system(size: 11))
+                    .foregroundStyle(AppTheme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 2)
+
+                // The exchange rate between an unusual expense and everyday slack.
+                if margin > 0, irregularThisCycle > 0 {
+                    let days = irregularThisCycle / margin
+                    Text(String(format: loc("commit.margin_irregular"),
+                                money(irregularThisCycle), Int(days.rounded())))
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(days >= 30 ? AppTheme.orange : AppTheme.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(12)
+            .background((margin <= 0 ? AppTheme.red : tight ? AppTheme.orange : AppTheme.accent)
+                        .opacity(0.10), in: RoundedRectangle(cornerRadius: 14))
+        }
     }
 
     var body: some View {
@@ -185,6 +278,8 @@ struct CommitmentPriorityCard: View {
                 .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
 
+            marginLine
+
             // Where that share actually lands. A percentage of income says
             // nothing about which part of the plan is under pressure.
             if let heavy = review.heaviestBucket, heavy.allowance > 0 {
@@ -197,32 +292,19 @@ struct CommitmentPriorityCard: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            VStack(spacing: 7) {
-                ForEach(review.buckets) { b in
-                    if b.allowance > 0 {
-                        VStack(spacing: 3) {
-                            HStack {
-                                Text(b.group.label)
-                                    .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
-                                Spacer()
-                                Text("\(money(b.committed)) / \(money(b.allowance))")
-                                    .font(.system(size: 11, weight: .medium))
-                                    .foregroundStyle(AppTheme.textPrimary)
-                            }
-                            GeometryReader { g in
-                                ZStack(alignment: .leading) {
-                                    Capsule().fill(AppTheme.cardMid).frame(height: 5)
-                                    Capsule()
-                                        .fill(b.share > 0.80 ? AppTheme.red
-                                              : b.share > 0.60 ? AppTheme.orange : AppTheme.accent)
-                                        .frame(width: g.size.width * min(b.share, 1), height: 5)
-                                }
-                            }
-                            .frame(height: 5)
-                        }
-                    }
-                }
-            }
+            // The three bucket bars used to sit here and they had to go.
+            //
+            // They plotted COMMITMENTS per bucket, while the Smart Budget
+            // screen plots SPENDING per bucket in bars that look identical.
+            // So this card showed "Lifestyle Rp 0" beside a screen showing
+            // Lifestyle Rp 1.500.000 spent, and both were correct — which is
+            // the worst kind of wrong, because the user has no way to tell
+            // that the two charts are measuring different things.
+            //
+            // They also added nothing: which bucket carries the load is
+            // already stated in the headline above, in words, and the number
+            // that actually matters is the daily margin, which is now the
+            // centrepiece rather than a footnote under three charts.
 
             // The trade-off, priced. Only shown when there is both a goal and
             // something changeable — without either there is no choice to offer.

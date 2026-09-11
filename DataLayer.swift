@@ -105,6 +105,26 @@ final class TxRecord {
     /// for old rows that don't have this field — defaults to "normal".
     var subtype: String = "normal"
 
+    /// Marked by the user as a one-off, so it stays out of the day-to-day rate.
+    ///
+    /// STNK, a loan to a friend, a perfume — real money, genuinely
+    /// discretionary, and not a habit. Averaging them into "what a day costs"
+    /// invents a spending pattern nobody has: one Rp 2.000.000 vehicle tax on
+    /// day 9 of a cycle projected as Rp 7.200.000 of annual tax paid monthly.
+    ///
+    /// Travel and Health are handled by category instead — a plane ticket and a
+    /// dental appointment are never a daily habit for anyone, so nobody should
+    /// have to tell the app that. This flag is for the cases where only the
+    /// person can know: whether a Rp 300.000 dinner was an anomaly or their
+    /// normal Saturday is not a question an app gets to answer for them.
+    ///
+    /// nil means "trust the engine" — the common case, and the reason this is
+    /// optional rather than a Bool. A `false` default would be indistinguishable
+    /// from a user saying "no, this IS day-to-day", so the engine could never
+    /// tell an untouched row from a corrected one and would silently overrule
+    /// a correction on the next recompute.
+    var oneOffOverride: Bool? = nil
+
     // MARK: - Foreign-exchange provenance
     //
     // When a scheduled charge is declared in a currency other than its source

@@ -56,6 +56,7 @@
 		9BCF249D2FB63FE40070A483 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9BCF249C2FB63FE40070A483 /* WidgetKit.framework */; };
 		9BCF24AC2FB63FE60070A483 /* DiPoWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 9BCF249B2FB63FE40070A483 /* DiPoWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		9BCFA1751CA0000000000002 /* FirebaseCrashlytics in Frameworks */ = {isa = PBXBuildFile; productRef = 9BCFA1751CA0000000000001 /* FirebaseCrashlytics */; };
+		9BCFA1751CA0000000000004 /* FirebaseAnalytics in Frameworks */ = {isa = PBXBuildFile; productRef = 9BCFA1751CA0000000000003 /* FirebaseAnalytics */; };
 		9BD4AD702FA1B70900B4EA52 /* ReceiptScannerEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BD4AD6F2FA1B70800B4EA52 /* ReceiptScannerEngine.swift */; };
 		9BD4AD712FA1B70900B4EA52 /* ReceiptCameraView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BD4AD692FA1B70800B4EA52 /* ReceiptCameraView.swift */; };
 		9BD4AD722FA1B70900B4EA52 /* ReceiptParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BD4AD6A2FA1B70800B4EA52 /* ReceiptParser.swift */; };
@@ -79,6 +80,15 @@
 		9BEA100A2F00000A0000C2B4 /* BackgroundRefresh.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BEA100A2F00000A0000F2E4 /* BackgroundRefresh.swift */; };
 		9BEA100A2F00000A0000C3B4 /* WebSyncService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BEA100A2F00000A0000F3E4 /* WebSyncService.swift */; };
 		9BEA10172F0000170000C3B4 /* CommitmentImpact.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BEA10172F0000170000F3E4 /* CommitmentImpact.swift */; };
+		9BEA10202F0000200000C3B4 /* DateFormatterCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BEA10202F0000200000F3E4 /* DateFormatterCache.swift */; };
+		9BEA101F2F00001F0000C3B4 /* ScreenAnalytics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BEA101F2F00001F0000F3E4 /* ScreenAnalytics.swift */; };
+		9BEA101E2F00001E0000C3B4 /* AppMotion.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BEA101E2F00001E0000F3E4 /* AppMotion.swift */; };
+		9BEA101D2F00001D0000C3B4 /* CardDeleteSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BEA101D2F00001D0000F3E4 /* CardDeleteSheet.swift */; };
+		9BEA101C2F00001C0000C3B4 /* SpendingAudit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BEA101C2F00001C0000F3E4 /* SpendingAudit.swift */; };
+		9BEA101B2F00001B0000C3B4 /* SpendingRhythm.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BEA101B2F00001B0000F3E4 /* SpendingRhythm.swift */; };
+		9BEA101A2F00001A0000C3B4 /* CardPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BEA101A2F00001A0000F3E4 /* CardPicker.swift */; };
+		9BEA10192F0000190000C3B4 /* MainCardGate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BEA10192F0000190000F3E4 /* MainCardGate.swift */; };
+		9BEA10182F0000180000C3B4 /* MainCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BEA10182F0000180000F3E4 /* MainCard.swift */; };
 		9BEA10162F0000160000C3B4 /* CommitmentPriority.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BEA10162F0000160000F3E4 /* CommitmentPriority.swift */; };
 		9BEA10152F0000150000C3B4 /* WalletCarousel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BEA10152F0000150000F3E4 /* WalletCarousel.swift */; };
 		9BEA10142F0000140000C3B4 /* DataIntegrityCheck.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BEA10142F0000140000F3E4 /* DataIntegrityCheck.swift */; };
@@ -96,6 +106,13 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		9BFA00092F00002000000009 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 9BE64C2E2F7513F000662EC1 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 9BE64C352F7513F000662EC1;
+			remoteInfo = DiPo;
+		};
 		9BCF24AA2FB63FE60070A483 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 9BE64C2E2F7513F000662EC1 /* Project object */;
@@ -120,6 +137,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		9BFA00062F00002000000006 /* DiPoTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = DiPoTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		9B04D3EB2F835EAC0015F772 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		9B1C11CB2FA029540032CD2C /* CryptoManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CryptoManager.swift; sourceTree = "<group>"; };
 		9B1C11CD2FA029540032CD2C /* NetworkLayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkLayer.swift; sourceTree = "<group>"; };
@@ -187,6 +205,15 @@
 		9BEA100A2F00000A0000F2E4 /* BackgroundRefresh.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundRefresh.swift; sourceTree = "<group>"; };
 		9BEA100A2F00000A0000F3E4 /* WebSyncService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebSyncService.swift; sourceTree = "<group>"; };
 		9BEA10172F0000170000F3E4 /* CommitmentImpact.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommitmentImpact.swift; sourceTree = "<group>"; };
+		9BEA10202F0000200000F3E4 /* DateFormatterCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DateFormatterCache.swift; sourceTree = "<group>"; };
+		9BEA101F2F00001F0000F3E4 /* ScreenAnalytics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenAnalytics.swift; sourceTree = "<group>"; };
+		9BEA101E2F00001E0000F3E4 /* AppMotion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppMotion.swift; sourceTree = "<group>"; };
+		9BEA101D2F00001D0000F3E4 /* CardDeleteSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CardDeleteSheet.swift; sourceTree = "<group>"; };
+		9BEA101C2F00001C0000F3E4 /* SpendingAudit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpendingAudit.swift; sourceTree = "<group>"; };
+		9BEA101B2F00001B0000F3E4 /* SpendingRhythm.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpendingRhythm.swift; sourceTree = "<group>"; };
+		9BEA101A2F00001A0000F3E4 /* CardPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CardPicker.swift; sourceTree = "<group>"; };
+		9BEA10192F0000190000F3E4 /* MainCardGate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainCardGate.swift; sourceTree = "<group>"; };
+		9BEA10182F0000180000F3E4 /* MainCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainCard.swift; sourceTree = "<group>"; };
 		9BEA10162F0000160000F3E4 /* CommitmentPriority.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommitmentPriority.swift; sourceTree = "<group>"; };
 		9BEA10152F0000150000F3E4 /* WalletCarousel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletCarousel.swift; sourceTree = "<group>"; };
 		9BEA10142F0000140000F3E4 /* DataIntegrityCheck.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataIntegrityCheck.swift; sourceTree = "<group>"; };
@@ -220,6 +247,7 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		9BFA00072F00002000000007 /* DiPoTests */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = DiPoTests; sourceTree = "<group>"; };
 		9BCF24A02FB63FE40070A483 /* DiPoWidget */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
@@ -259,6 +287,7 @@
 				9B8320222F7B8DA1000CE046 /* GoogleSignInSwift in Frameworks */,
 				9BC564B42F935F230081E8F7 /* FirebaseStorage in Frameworks */,
 				9BCFA1751CA0000000000002 /* FirebaseCrashlytics in Frameworks */,
+				9BCFA1751CA0000000000004 /* FirebaseAnalytics in Frameworks */,
 				9BFC17B52F91206C00D80402 /* RevenueCat in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -315,6 +344,15 @@
 				9BEA100A2F00000A0000F4E4 /* WebSyncView.swift */,
 				9BEA100A2F00000A0000F3E4 /* WebSyncService.swift */,
 				9BEA10172F0000170000F3E4 /* CommitmentImpact.swift */,
+				9BEA10202F0000200000F3E4 /* DateFormatterCache.swift */,
+				9BEA101F2F00001F0000F3E4 /* ScreenAnalytics.swift */,
+				9BEA101E2F00001E0000F3E4 /* AppMotion.swift */,
+				9BEA101D2F00001D0000F3E4 /* CardDeleteSheet.swift */,
+				9BEA101C2F00001C0000F3E4 /* SpendingAudit.swift */,
+				9BEA101B2F00001B0000F3E4 /* SpendingRhythm.swift */,
+				9BEA101A2F00001A0000F3E4 /* CardPicker.swift */,
+				9BEA10192F0000190000F3E4 /* MainCardGate.swift */,
+				9BEA10182F0000180000F3E4 /* MainCard.swift */,
 				9BEA10162F0000160000F3E4 /* CommitmentPriority.swift */,
 				9BEA10152F0000150000F3E4 /* WalletCarousel.swift */,
 				9BEA10142F0000140000F3E4 /* DataIntegrityCheck.swift */,
@@ -355,6 +393,7 @@
 		9BE64C372F7513F000662EC1 /* Products */ = {
 			isa = PBXGroup;
 			children = (
+				9BFA00062F00002000000006 /* DiPoTests.xctest */,
 				9BE64C362F7513F000662EC1 /* DiPo.app */,
 				9BCF249B2FB63FE40070A483 /* DiPoWidgetExtension.appex */,
 			);
@@ -373,6 +412,25 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		9BFA00012F00002000000001 /* DiPoTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 9BFA00032F00002000000003 /* Build configuration list for PBXNativeTarget "DiPoTests" */;
+			buildPhases = (
+				9BFA00022F00002000000002 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				9BFA00082F00002000000008 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				9BFA00072F00002000000007 /* DiPoTests */,
+			);
+			name = DiPoTests;
+			productName = DiPoTests;
+			productReference = 9BFA00062F00002000000006 /* DiPoTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 		9BCF249A2FB63FE40070A483 /* DiPoWidgetExtension */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 9BCF24B02FB63FE60070A483 /* Build configuration list for PBXNativeTarget "DiPoWidgetExtension" */;
@@ -422,6 +480,7 @@
 				9B944DB22F949ABB00C5892D /* FirebaseAuth */,
 				9B944DB42F94F45F00C5892D /* FirebaseMessaging */,
 				9BCFA1751CA0000000000001 /* FirebaseCrashlytics */,
+				9BCFA1751CA0000000000003 /* FirebaseAnalytics */,
 			);
 			productName = "Wall-E";
 			productReference = 9BE64C362F7513F000662EC1 /* DiPo.app */;
@@ -464,6 +523,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
+				9BFA00012F00002000000001 /* DiPoTests */,
 				9BE64C352F7513F000662EC1 /* DiPo */,
 				9BCF249A2FB63FE40070A483 /* DiPoWidgetExtension */,
 			);
@@ -489,6 +549,13 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		9BFA00022F00002000000002 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		9BCF24972FB63FE40070A483 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -561,6 +628,15 @@
 				9BEA100A2F00000A0000C4B4 /* WebSyncView.swift in Sources */,
 				9BEA100A2F00000A0000C3B4 /* WebSyncService.swift in Sources */,
 				9BEA10172F0000170000C3B4 /* CommitmentImpact.swift in Sources */,
+				9BEA10202F0000200000C3B4 /* DateFormatterCache.swift in Sources */,
+				9BEA101F2F00001F0000C3B4 /* ScreenAnalytics.swift in Sources */,
+				9BEA101E2F00001E0000C3B4 /* AppMotion.swift in Sources */,
+				9BEA101D2F00001D0000C3B4 /* CardDeleteSheet.swift in Sources */,
+				9BEA101C2F00001C0000C3B4 /* SpendingAudit.swift in Sources */,
+				9BEA101B2F00001B0000C3B4 /* SpendingRhythm.swift in Sources */,
+				9BEA101A2F00001A0000C3B4 /* CardPicker.swift in Sources */,
+				9BEA10192F0000190000C3B4 /* MainCardGate.swift in Sources */,
+				9BEA10182F0000180000C3B4 /* MainCard.swift in Sources */,
 				9BEA10162F0000160000C3B4 /* CommitmentPriority.swift in Sources */,
 				9BEA10152F0000150000C3B4 /* WalletCarousel.swift in Sources */,
 				9BEA10142F0000140000C3B4 /* DataIntegrityCheck.swift in Sources */,
@@ -580,6 +656,11 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		9BFA00082F00002000000008 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 9BE64C352F7513F000662EC1 /* DiPo */;
+			targetProxy = 9BFA00092F00002000000009 /* PBXContainerItemProxy */;
+		};
 		9BCF24AB2FB63FE60070A483 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 9BCF249A2FB63FE40070A483 /* DiPoWidgetExtension */;
@@ -588,6 +669,36 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		9BFA00042F00002000000004 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGNING_ALLOWED = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.fahmiaquinas.DiPoTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/DiPo.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/DiPo";
+			};
+			name = Debug;
+		};
+		9BFA00052F00002000000005 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGNING_ALLOWED = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.fahmiaquinas.DiPoTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/DiPo.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/DiPo";
+			};
+			name = Release;
+		};
 		9BCF24AE2FB63FE60070A483 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -870,6 +981,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		9BFA00032F00002000000003 /* Build configuration list for PBXNativeTarget "DiPoTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				9BFA00042F00002000000004 /* Debug */,
+				9BFA00052F00002000000005 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		9BCF24B02FB63FE60070A483 /* Build configuration list for PBXNativeTarget "DiPoWidgetExtension" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -961,6 +1081,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 9B8320252F7B9610000CE046 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
 			productName = FirebaseCrashlytics;
+		};
+		9BCFA1751CA0000000000003 /* FirebaseAnalytics */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 9B8320252F7B9610000CE046 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseAnalytics;
 		};
 		9BFC17B42F91206C00D80402 /* RevenueCat */ = {
 			isa = XCSwiftPackageProductDependency;
