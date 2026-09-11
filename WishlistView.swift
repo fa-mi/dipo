@@ -146,7 +146,7 @@ struct WishlistView: View {
         // Salary schedules also carry their own currency (a USD-paid expat
         // can have multiple salaries in mixed currencies). Same conversion
         // rationale applies.
-        salaries.filter { $0.isActive }.reduce(0) {
+        MainCard.salaries(salaries).reduce(0) {
             $0 + CurrencyManager.shared.convert(
                 $1.amount, from: $1.currency,
                 to: CurrencyManager.shared.preferredCurrency
@@ -200,7 +200,7 @@ struct WishlistView: View {
                     UnitySavingsSection(onCreate: { goalSheet = .shared })
                         .padding(.top, 18)
                         .opacity(appeared ? 1 : 0)
-                        .animation(.spring(response: 0.55, dampingFraction: 0.8).delay(0.04), value: appeared)
+                        .animation(AppMotion.appear, value: appeared)
 
                     if goals.isEmpty {
                         GoalsEmptyState(showAdd: $showAddGoal)
@@ -219,7 +219,7 @@ struct WishlistView: View {
                                 .padding(.horizontal, 22)
                                 .padding(.top, 16)
                                 .opacity(appeared ? 1 : 0)
-                                .animation(.spring(response: 0.55, dampingFraction: 0.8).delay(0.06), value: appeared)
+                                .animation(AppMotion.appear, value: appeared)
                             }
 
                             // Active goals
@@ -870,25 +870,10 @@ struct DepositSheet: View {
                         .foregroundStyle(AppTheme.orange)
                         .fixedSize(horizontal: false, vertical: true)
                 } else {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 8) {
-                            ForEach(fundingCards) { card in
-                                let isOn = (selectedCard?.id == card.id)
-                                Button {
-                                    HapticManager.shared.tap()
-                                    sourceCardID = card.id
-                                } label: {
-                                    Text(card.pickerLabel)
-                                        .font(.system(size: 12, weight: .semibold))
-                                        .foregroundStyle(isOn ? AppTheme.bg : AppTheme.textSecondary)
-                                        .padding(.horizontal, 12).padding(.vertical, 7)
-                                        .background(isOn ? AppTheme.accent : AppTheme.cardDark, in: Capsule())
-                                        .overlay(Capsule().stroke(AppTheme.accent.opacity(isOn ? 0 : 0.25), lineWidth: 1))
-                                }
-                                .buttonStyle(ScaleButtonStyle())
-                            }
-                        }
-                    }
+                    CardChipPicker(cards: fundingCards,
+                                   isSelected: { selectedCard?.id == $0.id },
+                                   onSelect: { sourceCardID = $0.id })
+                        .padding(.horizontal, -22)
                 }
             }
             .padding(14)
@@ -1203,7 +1188,7 @@ struct GoalFormSheet: View {
                         .opacity(appeared ? 1 : 0)
 
                         SheetField(label: loc("savings.description"), placeholder: loc("savings.description_placeholder"), text: $name)
-                            .opacity(appeared ? 1 : 0).animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.08), value: appeared)
+                            .opacity(appeared ? 1 : 0).animation(AppMotion.appear, value: appeared)
 
                         // Amounts
                         HStack(spacing: 12) {
@@ -1233,7 +1218,7 @@ struct GoalFormSheet: View {
                             }
                         }
                         .padding(.horizontal, 22)
-                        .opacity(appeared ? 1 : 0).animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.12), value: appeared)
+                        .opacity(appeared ? 1 : 0).animation(AppMotion.appear, value: appeared)
 
                         // Monthly + currency
                         HStack(spacing: 12) {
@@ -1262,7 +1247,7 @@ struct GoalFormSheet: View {
                             }
                         }
                         .padding(.horizontal, 22)
-                        .opacity(appeared ? 1 : 0).animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.16), value: appeared)
+                        .opacity(appeared ? 1 : 0).animation(AppMotion.appear, value: appeared)
 
                         // Priority
                         VStack(spacing: 8) {
@@ -1279,7 +1264,7 @@ struct GoalFormSheet: View {
                                 }
                             }.padding(.horizontal, 22)
                         }
-                        .opacity(appeared ? 1 : 0).animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.2), value: appeared)
+                        .opacity(appeared ? 1 : 0).animation(AppMotion.appear, value: appeared)
 
                         // Live preview
                         if let months = monthsPreview {
@@ -1325,7 +1310,7 @@ struct GoalFormSheet: View {
                         .buttonStyle(ScaleButtonStyle())
                         .disabled(!canSave)
                         .padding(.horizontal, 22)
-                        .opacity(appeared ? 1 : 0).animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.24), value: appeared)
+                        .opacity(appeared ? 1 : 0).animation(AppMotion.appear, value: appeared)
 
                         Spacer(minLength: 40)
                     }.padding(.top, 8)
@@ -1830,24 +1815,10 @@ struct RecordPastDepositSheet: View {
                                     .font(.system(size: 11, weight: .medium)).foregroundStyle(AppTheme.orange)
                                     .fixedSize(horizontal: false, vertical: true)
                             } else {
-                                ScrollView(.horizontal, showsIndicators: false) {
-                                    HStack(spacing: 8) {
-                                        ForEach(fundingCards) { card in
-                                            let isOn = (selectedCard?.id == card.id)
-                                            Button {
-                                                HapticManager.shared.tap(); sourceCardID = card.id
-                                            } label: {
-                                                Text(card.pickerLabel)
-                                                    .font(.system(size: 12, weight: .semibold))
-                                                    .foregroundStyle(isOn ? .white : AppTheme.textSecondary)
-                                                    .padding(.horizontal, 12).padding(.vertical, 7)
-                                                    .background(isOn ? AppTheme.purple : AppTheme.cardDark, in: Capsule())
-                                                    .overlay(Capsule().stroke(AppTheme.purple.opacity(isOn ? 0 : 0.25), lineWidth: 1))
-                                            }
-                                            .buttonStyle(ScaleButtonStyle())
-                                        }
-                                    }
-                                }
+                                CardChipPicker(cards: fundingCards,
+                                               isSelected: { selectedCard?.id == $0.id },
+                                               onSelect: { sourceCardID = $0.id })
+                                    .padding(.horizontal, -22)
                             }
                         }
 

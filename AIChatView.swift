@@ -429,43 +429,9 @@ struct AIChatView: View {
                                 selectedCardID = card.id
                                 showCardPicker = false
                             } label: {
-                                HStack(spacing: 12) {
-                                    RoundedRectangle(cornerRadius: 6)
-                                        .fill(LinearGradient(colors: [Color(hex: card.gradientStart),
-                                                                      Color(hex: card.gradientEnd)],
-                                                             startPoint: .topLeading,
-                                                             endPoint: .bottomTrailing))
-                                        .frame(width: 42, height: 28)
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        HStack(spacing: 5) {
-                                            Text(cardLabel(card))
-                                                .font(.system(size: 14, weight: .semibold))
-                                                .foregroundStyle(AppTheme.textPrimary)
-                                                .lineLimit(1)
-                                            if card.isCreditCard {
-                                                Text(loc("cc.badge"))
-                                                    .font(.system(size: 8, weight: .bold))
-                                                    .foregroundStyle(AppTheme.purple)
-                                                    .padding(.horizontal, 4).padding(.vertical, 1)
-                                                    .background(AppTheme.purple.opacity(0.15), in: Capsule())
-                                            }
-                                        }
-                                        Text(subtitle(for: card))
-                                            .font(.system(size: 11))
-                                            .foregroundStyle(AppTheme.textSecondary)
-                                    }
-                                    Spacer(minLength: 8)
-                                    if selectedCardID == card.id {
-                                        Image(systemName: "checkmark.circle.fill")
-                                            .font(.system(size: 18))
-                                            .foregroundStyle(AppTheme.accent)
-                                    }
-                                }
-                                .padding(12)
-                                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
-                                .overlay(RoundedRectangle(cornerRadius: 14)
-                                    .stroke(selectedCardID == card.id
-                                            ? AppTheme.accent.opacity(0.5) : Color.clear, lineWidth: 1.5))
+                                CardListRow(card: card,
+                                            selected: selectedCardID == card.id,
+                                            showsRadio: false)
                             }
                             .buttonStyle(.plain)
                         }
@@ -518,7 +484,7 @@ struct AIChatView: View {
                 Spacer(minLength: 50)
                 Text(msg.text)
                     .font(.system(size: 14))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(AppTheme.onSolid)
                     .padding(.horizontal, 14).padding(.vertical, 10)
                     .background(AppTheme.accent, in: RoundedRectangle(cornerRadius: 16))
             }
@@ -663,7 +629,7 @@ struct AIChatView: View {
                 } label: {
                     Image(systemName: "arrow.up")
                         .font(.system(size: 16, weight: .bold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(AppTheme.onSolid)
                         .frame(width: 38, height: 38)
                         .background(AppTheme.accent, in: Circle())
                 }

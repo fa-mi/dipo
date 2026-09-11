@@ -366,6 +366,26 @@ final class SmartBudgetManager {
             return sum + CurrencyManager.shared.convert(abs(tx.amount), from: txCur, to: target)
         } - debtPaid
         let savings = income - totalSpent - debtPaid
+        // Money ACTUALLY set aside this cycle — investments and debt payments.
+        //
+        // This is the distinction the insight got wrong. `savings` below is
+        // income the user has not yet SPENT, which is not the same thing as
+        // money saved, and calling it a savings rate put "You're saving 54% of
+        // income — above the 20% goal" directly beneath an Invest & Debt row
+        // reading Rp 0 of Rp 2.000.000. One screen congratulating and
+        // contradicting itself, with the celebratory half being the false one.
+        //
+        // It is also a function of the calendar: on day 8 of a 31-day cycle
+        // almost everything is unspent, so the figure falls all cycle and the
+        // praise expires on its own. The 20% goal is about money MOVED, so
+        // that is what gets measured against it.
+        let setAside = allTransactions
+            .filter { $0.amount < 0 && $0.date >= monthStart
+                      && ($0.category == .investment || $0.category == .debtPayment) }
+            .reduce(0.0) { sum, tx in
+                let txCur = tx.currency.isEmpty ? target : tx.currency
+                return sum + CurrencyManager.shared.convert(abs(tx.amount), from: txCur, to: target)
+            }
 
         // Add positive savings insight if primary was a warning AND user is
         // actually saving — this is the "balanced feedback" case.
@@ -379,7 +399,7 @@ final class SmartBudgetManager {
                          periodStart: periodStart) > limit
         }
         if primaryIsWarning, !anyGroupOver, savings > 0, income > 0 {
-            let rate = Int((savings / income) * 100)
+            let rate = Int((setAside / income) * 100)
             if rate >= 10 {  // only celebrate ≥10% — below that it's noise
                 results.append(SmartInsight(
                     icon: rate >= 20 ? "checkmark.seal.fill" : "info.circle.fill",
@@ -390,6 +410,18 @@ final class SmartBudgetManager {
                     body: rate >= 20
                         ? String(format: loc("insight.savings_great_body"), rate)
                         : String(format: loc("insight.savings_low_body"), rate)
+                ))
+            } else {
+                // A surplus with nothing moved out of it. Reported as the
+                // surplus it is — which is useful, and is the one sentence that
+                // turns it into a decision rather than a compliment.
+                results.append(SmartInsight(
+                    icon: "tray.and.arrow.down",
+                    color: AppTheme.blue,
+                    title: String(format: loc("insight.surplus_title"),
+                                  CurrencyManager.shared.formatted(savings, currency: target)),
+                    body: String(format: loc("insight.surplus_body"),
+                                 Int((savings / income) * 100))
                 ))
             }
         }
@@ -573,47 +605,19 @@ final class SmartBudgetManager {
                         let daysInMonth = cal.range(of: .day, in: .month, for: now)?.count ?? 30
                         return max(daysInMonth - dayOfMonth + 1, 1)
                     }()
-                    let remaining = max(limit - spent, 0)
-                    let dailyTarget = remaining / Double(daysLeft)
-                    let dailyFmt = CurrencyManager.shared.formatted(dailyTarget, currency: target)
-                    // For the Daily group specifically, decompose into fixed
-                    // (bills, already-committed) vs variable (food/transport,
-                    // user-adjustable). User can act on the variable portion
-                    // this week — not the fixed portion which is contracted.
-                    // Same framing as the Smart Budget screen: share-of-income vs
-                    // target. Reporting "28% over the limit" here while that
-                    // screen said "14% above your 50% target" described one fact
-                    // with two different numbers.
-                    // Money, not ratios. "Using 68% of income — 18% above your
-                    // 50% target" makes the reader do two subtractions before
-                    // they learn anything they can act on; the amount spent
-                    // against the amount allowed says it in one glance. The
-                    // percentages still exist on the Smart Budget screen, where
-                    // setting a ratio is the actual task.
-                    var bodyWithTarget = String(
-                        format: loc("insight.group_over_body"),
-                        CurrencyManager.shared.formatted(spent, currency: target),
-                        CurrencyManager.shared.formatted(limit, currency: target))
-                    if grp == .daily {
-                        // Same window as `spent` above — otherwise the breakdown
-                        // in this sentence wouldn't add up to the figure it explains.
-                        let bd = dailySpendBreakdown(transactions: allTransactions, targetCurrency: target,
-                                                     periodStart: periodStart)
-                        if bd.fixed > 0 || bd.variable > 0 {
-                            let fixedFmt = CurrencyManager.shared.formatted(bd.fixed, currency: target)
-                            let variableFmt = CurrencyManager.shared.formatted(bd.variable, currency: target)
-                            bodyWithTarget += " " + String(format: loc("insight.daily_breakdown"), fixedFmt, variableFmt)
-                        }
-                    }
-                    // Once the limit is blown there is no budget left, so a
-                    // "spend Rp 0/day" target is noise. State the shortfall
-                    // instead — that's the number the user can actually act on.
-                    if remaining > 0 {
-                        bodyWithTarget += " " + String(format: loc("insight.target_per_day"), dailyFmt, daysLeft)
-                    } else {
-                        let overFmt = CurrencyManager.shared.formatted(spent - limit, currency: target)
-                        bodyWithTarget += " " + String(format: loc("insight.over_by_recover"), overFmt, daysLeft)
-                    }
+                    // This branch is only reachable via `spent > limit`, so
+                    // the budget is already gone: a "target per day" figure
+                    // would always compute to zero. The shortfall is the one
+                    // number the reader can act on, so it is the only one the
+                    // card carries.
+                    //
+                    // One sentence, one money figure. The spent-vs-limit
+                    // split and the bills-vs-variable breakdown moved to the
+                    // Smart Budget screen, which is where someone goes when
+                    // they actually want the decomposition. Stacking six
+                    // figures into a paragraph meant none of them were read.
+                    let overFmt = CurrencyManager.shared.formatted(spent - limit, currency: target)
+                    let bodyWithTarget = String(format: loc("insight.over_by_recover"), daysLeft, overFmt)
                     return SmartInsight(
                         icon: "exclamationmark.triangle.fill",
                         color: AppTheme.red,
@@ -750,7 +754,27 @@ final class SmartBudgetManager {
             let txCur = tx.currency.isEmpty ? target : tx.currency
             return sum + CurrencyManager.shared.convert(abs(tx.amount), from: txCur, to: target)
         } - debtPaid
-        let savings = income - totalSpent - debtPaid  // what's truly left over
+        let savings = income - totalSpent - debtPaid  // unspent, NOT money saved
+        // Money ACTUALLY set aside this cycle — investments and debt payments.
+        //
+        // This is the distinction the insight got wrong. `savings` below is
+        // income the user has not yet SPENT, which is not the same thing as
+        // money saved, and calling it a savings rate put "You're saving 54% of
+        // income — above the 20% goal" directly beneath an Invest & Debt row
+        // reading Rp 0 of Rp 2.000.000. One screen congratulating and
+        // contradicting itself, with the celebratory half being the false one.
+        //
+        // It is also a function of the calendar: on day 8 of a 31-day cycle
+        // almost everything is unspent, so the figure falls all cycle and the
+        // praise expires on its own. The 20% goal is about money MOVED, so
+        // that is what gets measured against it.
+        let setAside = allTransactions
+            .filter { $0.amount < 0 && $0.date >= monthStart
+                      && ($0.category == .investment || $0.category == .debtPayment) }
+            .reduce(0.0) { sum, tx in
+                let txCur = tx.currency.isEmpty ? target : tx.currency
+                return sum + CurrencyManager.shared.convert(abs(tx.amount), from: txCur, to: target)
+            }
 
         // If user is actively paying debt, show a debt-focused insight instead
         if debtPaid > 0 {
@@ -784,8 +808,17 @@ final class SmartBudgetManager {
             return goalInsight
         }
 
-        if savings > 0 {
-            let rate = Int((savings / income) * 100)
+        if savings > 0, income > 0 {
+            let rate = Int((setAside / income) * 100)
+            guard rate > 0 else {
+                return SmartInsight(
+                    icon: "tray.and.arrow.down", color: AppTheme.blue,
+                    title: String(format: loc("insight.surplus_title"),
+                                  CurrencyManager.shared.formatted(savings, currency: target)),
+                    body: String(format: loc("insight.surplus_body"),
+                                 Int((savings / income) * 100))
+                )
+            }
             let icon = rate >= 20 ? "checkmark.seal.fill" : "info.circle.fill"
             let color: Color = rate >= 20 ? AppTheme.accent : AppTheme.orange
             return SmartInsight(
@@ -1855,7 +1888,21 @@ final class SmartBudgetManager {
         "sb_dismissed_insights",
     ]
 
+    /// True only while `load()` is assigning. See `save()`.
+    private var isLoading = false
+
     private func save() {
+        // Loading assigns these properties one by one, and every assignment
+        // fires `didSet { save() }`. The first of them therefore wrote the
+        // still-DEFAULT values of the other four back over the stored ones —
+        // and `set(nil, forKey:)` does not store nil, it REMOVES the key. So
+        // `sb_card_id` was deleted before the line that reads it ever ran, and
+        // the app asked for a main card again on every single launch. Custom
+        // ratios went the same way: a 60/20/20 split silently became 50/30/20.
+        //
+        // The setting was never failing to save. It was being destroyed while
+        // being loaded.
+        guard !isLoading else { return }
         UserDefaults.standard.set(isEnabled, forKey: "sb_enabled")
         UserDefaults.standard.set(dailyRatio, forKey: "sb_daily")
         UserDefaults.standard.set(lifestyleRatio, forKey: "sb_lifestyle")
@@ -1863,7 +1910,18 @@ final class SmartBudgetManager {
         UserDefaults.standard.set(budgetCardID, forKey: "sb_card_id")
     }
 
+    /// Re-reads persisted settings. Exists so a test can simulate the next
+    /// launch without rebuilding the singleton.
+    func reloadForTesting() { load() }
+
     private func load() {
+        isLoading = true
+        defer {
+            isLoading = false
+            // One deliberate write at the end, so the store is left holding
+            // exactly what was loaded rather than whatever the last didSet saw.
+            save()
+        }
         if UserDefaults.standard.object(forKey: "sb_enabled") != nil {
             isEnabled       = UserDefaults.standard.bool(forKey: "sb_enabled")
             dailyRatio      = UserDefaults.standard.double(forKey: "sb_daily")

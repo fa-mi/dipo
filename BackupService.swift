@@ -112,11 +112,13 @@ struct BackupTransaction: Codable {
     let fxOriginalAmount: Double
     let fxOriginalCurrency: String
     let fxRate: Double
+    /// User's correction to the engine's irregular-expense call. nil = auto.
+    let oneOffOverride: Bool?
 
     private enum CodingKeys: String, CodingKey {
         case id, cardID, name, date, amount, type, icon, iconBgHex,
              categoryRaw, currency, notes, linkedDebtID, linkedGoalID, subtype,
-             fxOriginalAmount, fxOriginalCurrency, fxRate
+             fxOriginalAmount, fxOriginalCurrency, fxRate, oneOffOverride
     }
 
     /// Custom decoder so older backups (exported before `subtype` existed)
@@ -142,6 +144,7 @@ struct BackupTransaction: Codable {
         fxOriginalAmount   = try c.decodeIfPresent(Double.self, forKey: .fxOriginalAmount) ?? 0
         fxOriginalCurrency = try c.decodeIfPresent(String.self, forKey: .fxOriginalCurrency) ?? ""
         fxRate             = try c.decodeIfPresent(Double.self, forKey: .fxRate) ?? 0
+        oneOffOverride     = try c.decodeIfPresent(Bool.self,   forKey: .oneOffOverride)
     }
 
     init(id: UUID, cardID: UUID, name: String, date: Date, amount: Double,
@@ -151,7 +154,8 @@ struct BackupTransaction: Codable {
          subtype: String = "normal",
          fxOriginalAmount: Double = 0,
          fxOriginalCurrency: String = "",
-         fxRate: Double = 0) {
+         fxRate: Double = 0,
+         oneOffOverride: Bool? = nil) {
         self.id = id
         self.cardID = cardID
         self.name = name
@@ -169,6 +173,7 @@ struct BackupTransaction: Codable {
         self.fxOriginalAmount = fxOriginalAmount
         self.fxOriginalCurrency = fxOriginalCurrency
         self.fxRate = fxRate
+        self.oneOffOverride = oneOffOverride
     }
 }
 
@@ -479,7 +484,8 @@ enum BackupService {
                     subtype: t.subtype,
                     fxOriginalAmount: t.fxOriginalAmount,
                     fxOriginalCurrency: t.fxOriginalCurrency,
-                    fxRate: t.fxRate
+                    fxRate: t.fxRate,
+                    oneOffOverride: t.oneOffOverride
                 )
             },
             salaries: salaries.map { s in
@@ -683,6 +689,7 @@ enum BackupService {
                 fxOriginalCurrency: t.fxOriginalCurrency,
                 fxRate: t.fxRate
             )
+            tx.oneOffOverride = t.oneOffOverride
             tx.id = t.id
             // CRITICAL: explicit insert. BankCard.transactions has a cascade
             // relationship but no `inverse:` declared on TxRecord, so SwiftData
@@ -788,6 +795,13 @@ enum BackupService {
             SmartBudgetManager.shared.budgetCardID    = payload.smartBudget.budgetCardID
             SmartBudgetManager.shared.isEnabled       = payload.smartBudget.isEnabled
 
+            // The restored main-card id may point at a card this backup does
+            // not contain. Reconciling here rather than waiting for the next
+            // launch means the app never reports on an anchor that isn't
+            // there — it either re-adopts the obvious card or asks.
+            let restoredCards: [BankCard] = (try? context.fetch(FetchDescriptor<BankCard>())) ?? []
+            MainCard.reconcile(cards: restoredCards)
+
             // Success — discard the snapshot so we don't leave stale temp
             // files on disk. Failure path keeps the snapshot so a future
             // run could conceivably auto-recover from it.
@@ -860,6 +874,7 @@ enum BackupService {
                 fxOriginalCurrency: t.fxOriginalCurrency,
                 fxRate: t.fxRate
             )
+            tx.oneOffOverride = t.oneOffOverride
             tx.id = t.id
             // Same critical pattern as the inline import path: explicit
             // insert + append. Without insert(), append-only relationships

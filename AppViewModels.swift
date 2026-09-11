@@ -90,6 +90,18 @@ enum StatTab: String, CaseIterable {
     case income   = "Income"
     case expenses = "Expenses"
 
+    /// The colour this side of the ledger already has everywhere else in the
+    /// app — green in, red out. The selector painted BOTH tabs accent green, so
+    /// the control that switches between money coming in and money going out
+    /// looked identical in either state, directly under a summary card that
+    /// colours the same two figures green and red.
+    var tint: Color {
+        switch self {
+        case .income:   return AppTheme.accent
+        case .expenses: return AppTheme.red
+        }
+    }
+
     /// Localized label for UI. rawValue stays English for internal logic.
     var localizedLabel: String {
         switch self {

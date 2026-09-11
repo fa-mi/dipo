@@ -57,7 +57,7 @@ struct CommitmentImpact {
         guard proposedAmount > 0, let group = mgr.group(for: category) else { return nil }
 
         var income = 0.0
-        for s in salaries where s.isActive {
+        for s in MainCard.salaries(salaries) {
             income += cm.convert(s.amount, from: s.currency, to: currency)
         }
         guard income > 0 else { return nil }

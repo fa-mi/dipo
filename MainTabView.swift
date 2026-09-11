@@ -24,6 +24,18 @@ struct MainTabView: View {
     /// Ask DiPo opened by the Back Tap / Siri shortcut, already listening.
     @State private var showVoiceEntry = false
 
+    /// Observed so the gate reacts the moment a main card is chosen or cleared.
+    @State private var sb = SmartBudgetManager.shared
+
+    /// The gate is derived, never stored. A `@State` flag would go stale the
+    /// instant a card is deleted from another screen, and the failure mode of a
+    /// stale flag here is the whole app locked behind a modal that no longer
+    /// has a reason to exist.
+    private var needsMainCard: Bool {
+        let _ = sb.budgetCardID
+        return MainCard.needsChoice(cards: vm.cards)
+    }
+
     var body: some View {
         ZStack(alignment: .bottom) {
             ZStack {
@@ -71,6 +83,23 @@ struct MainTabView: View {
             ActionFeedbackOverlay()
         }
         .ignoresSafeArea(edges: .bottom)
+        // Everything downstream reads the main card, so nothing downstream can
+        // be trusted until one exists. Presented without a dismiss path on
+        // purpose — the gate hosts the only action that legitimately gets you
+        // past it (adding an account), and swiping away would leave the user in
+        // an app quietly reporting on an account it picked for them.
+        .fullScreenCover(isPresented: Binding(get: { needsMainCard }, set: { _ in })) {
+            MainCardGate(vm: vm)
+        }
+        // Gated on `isLoaded`: reconciling against a list that has not arrived
+        // yet is how the saved choice got erased at launch.
+        .onAppear { if vm.isLoaded { MainCard.reconcile(cards: vm.cards) } }
+        .onChange(of: vm.isLoaded) { _, loaded in
+            if loaded { MainCard.reconcile(cards: vm.cards) }
+        }
+        .onChange(of: vm.cards.count) { _, _ in
+            if vm.isLoaded { MainCard.reconcile(cards: vm.cards) }
+        }
         // Clearing a debt is celebrated from here for the same reason: the debt
         // card that triggered it is filtered out of its own list the instant it
         // stops being active, so it cannot host its own moment.

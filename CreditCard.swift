@@ -12,6 +12,11 @@ import SwiftData
 
 struct CreditCardLiabilityRow: View {
     let card: BankCard
+    /// Instalments running on this card. Without them the row reported only
+    /// `owedBalance()` — logged transactions — while `InstallmentSection`
+    /// listed the very instalments it excluded directly underneath, so one
+    /// screen showed a debt and denied it in the same breath.
+    var installments: [CardInstallment] = []
     var onEdit: () -> Void
     /// Cross-link to log a purchase on this card (wired in F3).
     var onLogSpend: (() -> Void)? = nil
@@ -22,6 +27,16 @@ struct CreditCardLiabilityRow: View {
     /// lives on a different row type. So a credit card, once created, could not
     /// be deleted from anywhere in the app.
     var onDelete: (() -> Void)? = nil
+
+    private var owed: Double { card.totalOwed(installments) }
+    private var util: Double { card.utilisation(installments) }
+    private var owedFmt: String {
+        CurrencyManager.shared.formatted(owed, currency: card.resolvedCurrency)
+    }
+    private var availableFmt: String {
+        CurrencyManager.shared.formatted(card.availableCredit(installments),
+                                         currency: card.resolvedCurrency)
+    }
 
     private var issuer: BankIssuer? { BankIssuer.find(card.issuerID.isEmpty ? nil : card.issuerID) }
     private var title: String {
@@ -83,30 +98,20 @@ struct CreditCardLiabilityRow: View {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(loc("cc.owed")).font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
-                    Text(card.formattedOwed).font(.system(size: 18, weight: .bold)).foregroundStyle(AppTheme.red)
+                    Text(owedFmt).font(.system(size: 18, weight: .bold)).foregroundStyle(AppTheme.red)
                         .minimumScaleFactor(0.6).lineLimit(1)
                 }
                 Spacer()
                 VStack(alignment: .trailing, spacing: 2) {
                     Text(loc("cc.available")).font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
-                    Text(card.formattedAvailable).font(.system(size: 14, weight: .semibold)).foregroundStyle(AppTheme.accent)
+                    Text(availableFmt).font(.system(size: 14, weight: .semibold)).foregroundStyle(AppTheme.accent)
                         .minimumScaleFactor(0.6).lineLimit(1)
                 }
             }
 
-            // Utilization bar
-            GeometryReader { g in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(AppTheme.cardMid).frame(height: 6)
-                    Capsule()
-                        .fill(card.creditUtilization > 0.7 ? AppTheme.red : AppTheme.purple)
-                        .frame(width: g.size.width * CGFloat(card.creditUtilization), height: 6)
-                }
-            }.frame(height: 6)
-
-            Text(String(format: loc("cc.limit_of"), card.formattedBalanceLimit))
-                .font(.system(size: 10)).foregroundStyle(AppTheme.textSecondary)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            CreditLimitBar(used: owed,
+                           limit: card.creditLimit,
+                           currency: card.resolvedCurrency)
         }
         .padding(14)
         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 18))
@@ -114,9 +119,91 @@ struct CreditCardLiabilityRow: View {
     }
 }
 
-private extension BankCard {
-    var formattedBalanceLimit: String {
-        CurrencyManager.shared.formatted(creditLimit, currency: resolvedCurrency)
+// MARK: - Limit bar
+
+/// How much of the credit line is spoken for.
+///
+/// Replaces a flat 6pt progress strip. The spent portion is solid and the
+/// remainder is hatched, so "used" and "still available" are told apart by
+/// texture as well as by colour — the two halves of the bar were previously
+/// distinguished by fill alone, which made the figure easy to misread at a
+/// glance on a dark ground.
+struct CreditLimitBar: View {
+    let used: Double
+    let limit: Double
+    let currency: String
+
+    private var progress: Double {
+        guard limit > 0 else { return 0 }
+        return min(max(used / limit, 0), 1)
+    }
+    /// Above ~70% is where scoring models start treating utilisation as a risk
+    /// signal, so that is where the bar stops being decorative.
+    private var isHot: Bool { progress > 0.7 }
+    private var tint: Color { isHot ? AppTheme.red : AppTheme.purple }
+
+    private let barHeight: CGFloat = 12
+
+    var body: some View {
+        VStack(spacing: 9) {
+            GeometryReader { g in
+                let w = g.size.width
+                let fill = max(w * progress, progress > 0 ? barHeight : 0)
+
+                ZStack(alignment: .leading) {
+                    // Remainder — hatched, reading as "not yet spent".
+                    Canvas { ctx, size in
+                        let step: CGFloat = 7
+                        var x: CGFloat = -size.height
+                        while x < size.width + size.height {
+                            var line = Path()
+                            line.move(to: CGPoint(x: x, y: size.height))
+                            line.addLine(to: CGPoint(x: x + size.height, y: 0))
+                            ctx.stroke(line, with: .color(tint.opacity(0.28)), lineWidth: 2)
+                            x += step
+                        }
+                    }
+                    .frame(height: barHeight)
+                    .background(AppTheme.cardMid)
+                    .clipShape(Capsule())
+
+                    Capsule()
+                        .fill(tint)
+                        .frame(width: fill, height: barHeight)
+
+                    // Knob marks the exact position the way the reference does,
+                    // and gives the eye something to land on when the fill is
+                    // short enough to be hard to measure.
+                    if progress > 0 {
+                        Circle()
+                            .fill(AppTheme.cardDark)
+                            .frame(width: barHeight + 6, height: barHeight + 6)
+                            .overlay(Circle().stroke(tint, lineWidth: 3))
+                            .offset(x: min(max(fill - (barHeight + 6) / 2, 0), w - (barHeight + 6)))
+                    }
+                }
+                .frame(height: barHeight + 6)
+                .frame(maxHeight: .infinity, alignment: .center)
+            }
+            .frame(height: barHeight + 6)
+
+            HStack(spacing: 8) {
+                Text(loc("cc.limit_used"))
+                    .font(.system(size: 11))
+                    .foregroundStyle(AppTheme.textSecondary)
+                Spacer(minLength: 8)
+                Text(CurrencyManager.shared.formatted(used, currency: currency))
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(isHot ? AppTheme.red : AppTheme.textPrimary)
+                    .monospacedDigit()
+                Text("/ " + CurrencyManager.shared.formatted(limit, currency: currency))
+                    .font(.system(size: 12))
+                    .foregroundStyle(AppTheme.textSecondary)
+                    .monospacedDigit()
+            }
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
+        }
     }
 }
 

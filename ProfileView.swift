@@ -806,7 +806,7 @@ struct ProfileView: View {
         .overlay(RoundedRectangle(cornerRadius: 18).stroke(AppTheme.cardMid.opacity(0.6), lineWidth: 1))
         .padding(.horizontal, 22)
         .opacity(appeared ? 1 : 0)
-        .animation(.spring(response: 0.55, dampingFraction: 0.8).delay(0.08), value: appeared)
+        .animation(AppMotion.appear, value: appeared)
     }
 
     @ViewBuilder
@@ -857,7 +857,7 @@ struct ProfileView: View {
         .buttonStyle(ScaleButtonStyle())
         .padding(.horizontal, 22)
         .opacity(appeared ? 1 : 0)
-        .animation(.spring(response: 0.55, dampingFraction: 0.8).delay(0.1), value: appeared)
+        .animation(AppMotion.appear, value: appeared)
     }
 
     @ViewBuilder
@@ -919,7 +919,7 @@ struct ProfileView: View {
         .padding(.horizontal, 22)
         .opacity(appeared ? 1 : 0)
         .offset(y: appeared ? 0 : 20)
-        .animation(.spring(response: 0.55, dampingFraction: 0.8).delay(0.14), value: appeared)
+        .animation(AppMotion.appear, value: appeared)
     }
 
     @ViewBuilder
@@ -973,14 +973,14 @@ struct ProfileView: View {
         .padding(.horizontal, 22)
         .opacity(appeared ? 1 : 0)
         .offset(y: appeared ? 0 : 20)
-        .animation(.spring(response: 0.55, dampingFraction: 0.8).delay(0.18), value: appeared)
+        .animation(AppMotion.appear, value: appeared)
 
         // ── Language Toggle ──────────────────────────────────────────────
         languageSection
             .padding(.horizontal, 22)
             .opacity(appeared ? 1 : 0)
             .offset(y: appeared ? 0 : 20)
-            .animation(.spring(response: 0.55, dampingFraction: 0.8).delay(0.21), value: appeared)
+            .animation(AppMotion.appear, value: appeared)
     }
 
     @ViewBuilder
@@ -1310,7 +1310,7 @@ struct ProfileView: View {
         .padding(.horizontal, 22)
         .opacity(appeared ? 1 : 0)
         .offset(y: appeared ? 0 : 20)
-        .animation(.spring(response: 0.55, dampingFraction: 0.8).delay(0.26), value: appeared)
+        .animation(AppMotion.appear, value: appeared)
     }
 
     // MARK: - Actions
@@ -1629,7 +1629,7 @@ struct ProfileSignInSheet: View {
                         .font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary).multilineTextAlignment(.center)
                 }
                 .opacity(appeared ? 1 : 0).offset(y: appeared ? 0 : 10)
-                .animation(.spring(response: 0.45).delay(0.12), value: appeared)
+                .animation(AppMotion.appear, value: appeared)
             }
             .padding(.top, 28)
 
@@ -1682,7 +1682,7 @@ struct ProfileSignInSheet: View {
             }
             .padding(.horizontal, 24).padding(.top, 24)
             .opacity(appeared ? 1 : 0).offset(y: appeared ? 0 : 20)
-            .animation(.spring(response: 0.5, dampingFraction: 0.85).delay(0.18), value: appeared)
+            .animation(AppMotion.appear, value: appeared)
 
             Spacer()
         }
@@ -1947,7 +1947,7 @@ struct BackupPreviewSheet: View {
                 } label: {
                     Text(loc("backup.preview.continue"))
                         .font(.system(size: 15, weight: .bold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(AppTheme.onSolid)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 14)
                         .background(AppTheme.accent, in: RoundedRectangle(cornerRadius: 14))

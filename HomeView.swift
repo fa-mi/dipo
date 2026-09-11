@@ -20,6 +20,9 @@ struct HomeView: View {
     @Query private var cardBudgetConfigs: [CardBudgetConfig]
     /// For the Net Worth line: liabilities = credit-card owed + active debts.
     @Query(filter: #Predicate<DebtRecord> { $0.isActive }) private var activeDebts: [DebtRecord]
+    /// Instalment principal counts as owed. Without it net worth read as if a
+    /// 12-month instalment were not debt at all until each charge posted.
+    @Query private var installments: [CardInstallment]
     /// Declared Monthly Expenses — surfaced on Home when a charge is imminent,
     /// so the balance drop never comes as a surprise.
     @Query private var recurringExpenses: [RecurringExpense]
@@ -27,7 +30,7 @@ struct HomeView: View {
     /// The next DECLARED recurring charge due within 3 days (soonest first).
     private var upcomingDeclaredRecurring: RecurringExpense? {
         recurringExpenses
-            .filter { $0.isActive }
+            .filter { $0.isActive && !$0.isChargedForCurrentDue }
             .map { ($0, RecurringDateEngine.daysUntil(dayOfMonth: $0.dayOfMonth)) }
             .filter { $0.1 <= 3 }
             .min { $0.1 < $1.1 }?.0
@@ -44,6 +47,12 @@ struct HomeView: View {
     @State private var showAddCard          = false
     @State private var showAddSalary        = false
     @State private var categoryFilter: TxCategory? = nil
+    /// Home showed every banner that had something to say — up to nine
+    /// full-width cards before the user reached their own money. Each was
+    /// individually reasonable; nothing ranked them, so everything shouted and
+    /// nothing was heard. Now only the most urgent gets a card and the rest
+    /// collapse behind one quiet row.
+    @State private var showAllAttention = false
     @State private var showSmartBudget = false
     @State private var showSalarySheet   = false
     @State private var showWishlistSheet  = false
@@ -94,7 +103,7 @@ struct HomeView: View {
         let cm = CurrencyManager.shared
         let pref = cm.preferredCurrency
         let cc = vm.cards.filter { $0.isCreditCard }
-            .reduce(0.0) { $0 + cm.convert($1.owedBalance(), from: $1.resolvedCurrency, to: pref) }
+            .reduce(0.0) { $0 + cm.convert($1.totalOwed(installments), from: $1.resolvedCurrency, to: pref) }
         let debt = activeDebts.reduce(0.0) { $0 + cm.convert($1.currentBalance, from: $1.currency, to: pref) }
         return cc + debt
     }
@@ -146,8 +155,11 @@ struct HomeView: View {
         return queriedCards[idx]
     }
 
+    /// Unsorted on purpose — `TransactionSection` orders these itself, and
+    /// sorting here as well meant the same array was sorted twice on every
+    /// body pass. This is the section's only consumer.
     private var selectedCardTransactions: [TxRecord] {
-        (selectedCard?.transactions ?? []).sorted { $0.date > $1.date }
+        selectedCard?.transactions ?? []
     }
 
     // Negative balance is per selected card
@@ -168,14 +180,21 @@ struct HomeView: View {
     private var hasCards: Bool { !vm.cards.isEmpty }
     private var hasSalary: Bool { !salarySchedules.isEmpty }
 
-    /// The card "Wawasan Cerdas" insights are computed for. We deliberately
-    /// follow the carousel's `selectedCard` rather than a fixed setting — this
-    /// makes the home screen feel like Apple Wallet: swipe to a card, see THAT
-    /// card's insights, allocation, and savings rate instantly.
+    /// The card "Wawasan Cerdas" insights are computed for: the MAIN card.
     ///
-    /// Falls back to nil only when there are no cards, in which case downstream
-    /// computed props use aggregate/preferred-currency defaults.
-    private var budgetCard: BankCard? { selectedCard }
+    /// It used to follow the carousel — swipe to a card, see that card's
+    /// insights. That reads well and stopped being true the moment income was
+    /// anchored: swiping to a second account measured THAT card's spending
+    /// against the main card's salary, so the allowances belonged to one
+    /// account and the spending to another. The carousel still swipes for
+    /// balance and transactions; the budget block does not follow it, because a
+    /// budget is a statement about one pot of money.
+    ///
+    /// nil only when there are no cards, where downstream props fall back to
+    /// aggregate/preferred-currency defaults.
+    private var budgetCard: BankCard? {
+        MainCard.resolve(in: queriedCards) ?? selectedCard
+    }
     
     /// Currency the budget insights are denominated in. If a budget card is
     /// selected, use its currency; otherwise fall back to user's preferred.
@@ -196,8 +215,7 @@ struct HomeView: View {
         // whole stretch before payday (a late payday like the 24th), which
         // collapsed the budget limit and produced absurd insights ("416% over").
         if let card = budgetCard {
-            let cardSalaries = salarySchedules.filter { $0.isActive && $0.cardID == card.id }
-            let active = cardSalaries.isEmpty ? salarySchedules.filter { $0.isActive } : cardSalaries
+            let active = MainCard.salaries(salarySchedules)
             func conv(_ tx: TxRecord) -> Double {
                 CurrencyManager.shared.convert(tx.amount, from: tx.currency.isEmpty ? budgetCurrency : tx.currency,
                                                to: budgetCurrency)
@@ -217,7 +235,7 @@ struct HomeView: View {
         // Aggregate mode: prefer scheduled salary, otherwise sum all positive tx
         // Convert — a USD freelance schedule beside an IDR salary was being
         // added as a bare number, so budgets were sized off a nonsense income.
-        let scheduled = salarySchedules.filter { $0.isActive }
+        let scheduled = MainCard.salaries(salarySchedules)
             .reduce(0.0) { $0 + CurrencyManager.shared.toPreferred($1.amount, from: $1.currency) }
         if scheduled > 0 { return scheduled }
         return vm.cards.flatMap { $0.transactions }
@@ -250,8 +268,8 @@ struct HomeView: View {
         let tx = budgetTransactions
         // Scope insights to the PAY CYCLE (same window the Smart Budget screen
         // uses) so Home and Smart Budget can't disagree about being over budget.
-        let cycleStart: Date? = salarySchedules.first(where: { $0.isActive })
-            .map { StatPeriod.payCycleRange(payDay: $0.dayOfMonth).start }
+        let cycleStart: Date? = MainCard.payDay(salarySchedules)
+            .map { StatPeriod.payCycleRange(payDay: $0).start }
         cachedInsights = SmartBudgetManager.shared.evaluateAll(
             allTransactions: tx, income: totalMonthlyIncome,
             cardID: budgetCard?.id.uuidString, configs: cardBudgetConfigs,
@@ -262,6 +280,72 @@ struct HomeView: View {
         cachedAnomalies = SmartBudgetManager.shared.spendingAnomalies(
             allTransactions: tx, periodStart: cycleStart)
         cachedRecurring = SmartBudgetManager.shared.detectRecurring(allTransactions: tx)
+    }
+
+    /// Everything on Home with something to say, most urgent first.
+    ///
+    /// `rank` is urgency × actionability: a negative balance is both, a pinned
+    /// savings goal is neither. The ranks are unique and the order below IS the
+    /// policy — it is meant to be read as one list and argued with as one list,
+    /// rather than being implied by where each banner happened to sit in the
+    /// view hierarchy.
+    private var attentionItems: [HomeAttentionItem] {
+        var items: [HomeAttentionItem] = []
+
+        if selectedCardBalance < 0 {
+            items.append(.init(id: "negative", rank: 0, view: AnyView(
+                NegativeBalanceBanner(balance: selectedCardBalance,
+                                      currency: selectedCardCurrency))))
+        }
+        if !hasSalary {
+            items.append(.init(id: "setup-salary", rank: 1, view: AnyView(
+                SetupSalaryBanner(showAddSalary: $showAddSalary))))
+        }
+        for (idx, insight) in cachedInsights.prefix(2).enumerated() {
+            // The second insight drops to the bottom of the queue: it is
+            // context for the first, not a second emergency.
+            items.append(.init(id: "insight-\(budgetCard?.id.uuidString ?? "none")-\(idx)",
+                               rank: idx == 0 ? 2 : 7,
+                               view: AnyView(
+                Button { HapticManager.shared.tap(); showSmartBudget = true } label: {
+                    SmartInsightBanner(insight: insight,
+                                       tappable: idx == 0,
+                                       onAction: { kind in routeInsightAction(kind) })
+                }
+                .buttonStyle(ScaleButtonStyle()))))
+        }
+        for anomaly in cachedAnomalies.prefix(1) {
+            items.append(.init(id: "anomaly-\(anomaly.id)", rank: 3, view: AnyView(
+                SmartInsightBanner(insight: anomaly))))
+        }
+        // A declared schedule is a certainty; the detected pattern below is a
+        // guess. Certainty outranks guess.
+        if let due = upcomingDeclaredRecurring {
+            items.append(.init(id: "declared-recurring", rank: 4, view: AnyView(
+                DeclaredRecurringBanner(expense: due))))
+        }
+        // Payday is status, not a task — it ranks below anything asking for a
+        // decision.
+        if let salary = nearestSalary {
+            items.append(.init(id: "payday", rank: 5, view: AnyView(
+                Button { HapticManager.shared.tap(); showSalarySheet = true } label: {
+                    SalaryReminderBanner(schedule: salary, tappable: true)
+                }
+                .buttonStyle(ScaleButtonStyle()))))
+        }
+        if let next = cachedRecurring.first(where: { $0.isDueSoon }) {
+            items.append(.init(id: "recurring", rank: 6, view: AnyView(
+                RecurringReminderBanner(pattern: next,
+                                        onDismiss: { recomputeHomeInsights() }))))
+        }
+        if let pinned = pinnedGoals.first {
+            items.append(.init(id: "goal-\(pinned.id)", rank: 8, view: AnyView(
+                Button { HapticManager.shared.tap(); showWishlistSheet = true } label: {
+                    PinnedGoalBanner(goal: pinned, tappable: true)
+                }
+                .buttonStyle(ScaleButtonStyle()))))
+        }
+        return items.sorted { $0.rank < $1.rank }
     }
 
     var body: some View {
@@ -277,100 +361,48 @@ struct HomeView: View {
                         .padding(.top, 18)
                         .opacity(headerAppeared ? 1 : 0)
                         .offset(y: headerAppeared ? 0 : -16)
-                        .animation(.spring(response: 0.55, dampingFraction: 0.8).delay(0.05), value: headerAppeared)
+                        .animation(AppMotion.appear, value: headerAppeared)
 
                     if !hasCards {
                         NoCardState(showAddCard: $showAddCard, showAddSalary: $showAddSalary)
                             .padding(.top, 40)
                                                         .opacity(contentAppeared ? 1 : 0)
                             .offset(y: contentAppeared ? 0 : 30)
-                            .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.15), value: contentAppeared)
+                            .animation(AppMotion.appear, value: contentAppeared)
 
                     } else {
-                        if !hasSalary {
-                            SetupSalaryBanner(showAddSalary: $showAddSalary)
+                        // One attention slot. Candidates are ranked by how
+                        // urgent and how actionable they are; only the winner
+                        // gets a card. The rest sit behind a single row so
+                        // nothing is lost — it just stops competing.
+                        let attention = attentionItems
+                        if let top = attention.first {
+                            top.view
                                 .padding(.horizontal, 22)
                                 .padding(.top, 14)
-                                                                .transition(.move(edge: .top).combined(with: .opacity))
-                        }
+                                .transition(.move(edge: .top).combined(with: .opacity))
 
-                        if let salary = nearestSalary {
-                            Button { HapticManager.shared.tap(); showSalarySheet = true } label: {
-                                SalaryReminderBanner(schedule: salary, tappable: true)
+                            if showAllAttention {
+                                ForEach(attention.dropFirst()) { item in
+                                    item.view
+                                        .padding(.horizontal, 22)
+                                        .padding(.top, 8)
+                                        .transition(.move(edge: .top).combined(with: .opacity))
+                                }
                             }
-                            .buttonStyle(ScaleButtonStyle())
-                            .padding(.horizontal, 22)
-                            .padding(.top, hasSalary ? 14 : 8)
-                            .transition(.move(edge: .top).combined(with: .opacity))
-                        }
 
-                        // Smart Insights banner — Royal feature.
-                        // hasActiveBudget combines `isEnabled` and the Royal
-                        // canAccess check; using it here keeps the gate logic
-                        // identical to the export view, transaction blocker,
-                        // and any future caller — change once, propagates.
-                        // Multi-banner stack: primary + up to 1 secondary
-                        // (positive feedback when primary is a warning). Capped
-                        // at 2 to avoid stack-spam on a small home viewport.
-                        // Values are memoized (recomputeHomeInsights) so this
-                        // renders instantly without re-running the engine.
-                        ForEach(Array(cachedInsights.prefix(2).enumerated()), id: \.offset) { idx, insight in
-                            Button { HapticManager.shared.tap(); showSmartBudget = true } label: {
-                                SmartInsightBanner(
-                                    insight: insight,
-                                    tappable: idx == 0,  // chevron only on primary
-                                    onAction: { kind in routeInsightAction(kind) }
-                                )
-                            }
-                            .buttonStyle(ScaleButtonStyle())
-                            .padding(.horizontal, 22)
-                            .padding(.top, idx == 0 ? 10 : 6)
-                            .transition(.move(edge: .top).combined(with: .opacity))
-                            .id("insight-\(budgetCard?.id.uuidString ?? "none")-\(idx)")
-                        }
-
-                        // Spending anomaly banner — Royal feature (memoized).
-                        ForEach(cachedAnomalies.prefix(1)) { anomaly in
-                            SmartInsightBanner(insight: anomaly)
+                            if attention.count > 1 {
+                                Button {
+                                    HapticManager.shared.tap()
+                                    withAnimation(AppMotion.appear) { showAllAttention.toggle() }
+                                } label: {
+                                    MoreAttentionRow(count: attention.count - 1,
+                                                     expanded: showAllAttention)
+                                }
+                                .buttonStyle(ScaleButtonStyle())
                                 .padding(.horizontal, 22)
                                 .padding(.top, 8)
-                                .transition(.move(edge: .top).combined(with: .opacity))
-                        }
-
-                        // Declared recurring charge coming up — from the Monthly
-                        // Expenses schedules the user set up themselves. Shown
-                        // BEFORE the detected-pattern banner because a declared
-                        // schedule is a certainty, not a guess.
-                        if let due = upcomingDeclaredRecurring {
-                            DeclaredRecurringBanner(expense: due)
-                                .padding(.horizontal, 22)
-                                .padding(.top, 8)
-                                .transition(.move(edge: .top).combined(with: .opacity))
-                        }
-
-                        // Recurring reminder — Royal feature (memoized).
-                        if let next = cachedRecurring.first(where: { $0.isDueSoon }) {
-                            RecurringReminderBanner(pattern: next, onDismiss: { recomputeHomeInsights() })
-                                .padding(.horizontal, 22)
-                                .padding(.top, 8)
-                                .transition(.move(edge: .top).combined(with: .opacity))
-                        }
-
-                        if selectedCardBalance < 0 {
-                            NegativeBalanceBanner(balance: selectedCardBalance, currency: selectedCardCurrency)
-                                .padding(.horizontal, 22)
-                                .padding(.top, 10)
-                                                                .transition(.move(edge: .top).combined(with: .opacity))
-                        }
-
-                        if let pinned = pinnedGoals.first {
-                            Button { HapticManager.shared.tap(); showWishlistSheet = true } label: {
-                                PinnedGoalBanner(goal: pinned, tappable: true)
                             }
-                            .buttonStyle(ScaleButtonStyle())
-                            .padding(.horizontal, 22)
-                            .padding(.top, 14)
-                            .transition(.move(edge: .top).combined(with: .opacity))
                         }
 
                         // Card Carousel — capped width on iPad
@@ -378,7 +410,7 @@ struct HomeView: View {
                                                         .padding(.top, 18)
                             .opacity(contentAppeared ? 1 : 0)
                             .scaleEffect(contentAppeared ? 1 : 0.94)
-                            .animation(.spring(response: 0.6, dampingFraction: 0.78).delay(0.12), value: contentAppeared)
+                            .animation(AppMotion.appear, value: contentAppeared)
 
                         // Net Worth — cash minus liabilities. Only shown when the
                         // user actually has liabilities (credit cards / debts),
@@ -424,27 +456,29 @@ struct HomeView: View {
                                                         .padding(.top, 22)
                             .opacity(contentAppeared ? 1 : 0)
                             .offset(y: contentAppeared ? 0 : 20)
-                            .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.2), value: contentAppeared)
+                            .animation(AppMotion.appear, value: contentAppeared)
 
                         TransactionSection(
                             transactions: selectedCardTransactions,
                             cards: queriedCards,
-                            showViewAll: true,
-                            allTransactions: budgetTransactions,
                             categoryFilter: categoryFilter,
-                            onClearFilter: { withAnimation { categoryFilter = nil } }
+                            onClearFilter: { withAnimation { categoryFilter = nil } },
+                            sourceCard: selectedCard,
+                            onOpenSearch: { HapticManager.shared.tap(); showSearch = true }
                         )
                         .id(vm.selectedCardIndex)
                         .padding(.top, 28)
                         .padding(.horizontal, 22)
                                                 .opacity(contentAppeared ? 1 : 0)
                         .offset(y: contentAppeared ? 0 : 24)
-                        .animation(.spring(response: 0.55, dampingFraction: 0.8).delay(0.28), value: contentAppeared)
+                        .animation(AppMotion.appear, value: contentAppeared)
                     }
 
                     Spacer(minLength: 120)
                 }
-                .frame(maxWidth: .infinity) // Center the content column
+                // Centred AND capped. Without the cap the column simply
+                // stretched to 626 pt on the Duo's inner display.
+                .phoneWidthCapped()
             }
             
             // Receipt scan moved into AddTransactionSheet as an entry button at
@@ -462,10 +496,29 @@ struct HomeView: View {
         .onChange(of: budgetManager.dailyRatio)     { _, _ in recomputeHomeInsights() }
         .onChange(of: budgetManager.lifestyleRatio) { _, _ in recomputeHomeInsights() }
         .onChange(of: budgetManager.investDebtRatio){ _, _ in recomputeHomeInsights() }
+        .trackScreen(.home)
         .onAppear {
             headerAppeared  = true
             contentAppeared = true
+            // Open on the main card. The carousel remembers wherever it was
+            // last swiped, which meant Home could greet the user with a card
+            // that no other screen is talking about — the balance in front of
+            // them belonged to one account while every insight below it
+            // described another. Swiping away from it is still free; this only
+            // sets where "no choice yet" lands.
+            if let main = MainCard.resolve(in: queriedCards),
+               let idx = queriedCards.firstIndex(where: { $0.id == main.id }) {
+                vm.selectedCardIndex = idx
+            }
             recomputeHomeInsights()
+        }
+        // A main card chosen in Wallet moves Home with it, rather than leaving
+        // the two disagreeing until the next launch.
+        .onChange(of: budgetManager.budgetCardID) { _, _ in
+            if let main = MainCard.resolve(in: queriedCards),
+               let idx = queriedCards.firstIndex(where: { $0.id == main.id }) {
+                withAnimation(.spring(response: 0.4)) { vm.selectedCardIndex = idx }
+            }
         }
         .sheet(isPresented: $vm.showCardManager) {
             CardListView(vm: vm)
@@ -1072,7 +1125,7 @@ struct PinnedGoalBanner: View {
                         .stroke(AppTheme.accent, style: StrokeStyle(lineWidth: 3, lineCap: .round))
                         .frame(width: 44, height: 44)
                         .rotationEffect(.degrees(-90))
-                        .animation(.spring(response: 1.0, dampingFraction: 0.8).delay(0.2), value: appeared)
+                        .animation(AppMotion.appear, value: appeared)
                     Text(goal.emoji).font(.system(size: 20))
                 }
 
@@ -1112,7 +1165,7 @@ struct PinnedGoalBanner: View {
                         .fill(LinearGradient(colors: [AppTheme.accent, AppTheme.accent.opacity(0.6)],
                                              startPoint: .leading, endPoint: .trailing))
                         .frame(width: g.size.width * (appeared ? progress : 0), height: 5)
-                        .animation(.spring(response: 1.0, dampingFraction: 0.8).delay(0.2), value: appeared)
+                        .animation(AppMotion.appear, value: appeared)
                 }
             }
             .frame(height: 5)
@@ -1270,17 +1323,48 @@ struct SalaryReminderBanner: View {
 
 // MARK: - Home Header
 
+/// One candidate for Home's single attention slot.
+///
+/// `view` is type-erased because the candidates are unrelated banner types with
+/// unrelated initialisers; ranking them in one list is the whole point, and
+/// that needs them to share a type.
+struct HomeAttentionItem: Identifiable {
+    let id: String
+    /// Lower wins. See `HomeView.attentionItems` for the policy.
+    let rank: Int
+    let view: AnyView
+}
+
+/// The quiet row standing in for every candidate that lost the slot. Tapping it
+/// expands the rest in place rather than opening a sheet — the cards are
+/// already built, and a sheet would make "3 hal lain" feel like a destination.
+struct MoreAttentionRow: View {
+    let count: Int
+    let expanded: Bool
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: expanded ? "chevron.up" : "chevron.down")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(AppTheme.textSecondary)
+            Text(expanded ? loc("home.attention_less")
+                          : String(format: loc("home.attention_more"), count))
+                .font(.system(size: 13))
+                .foregroundStyle(AppTheme.textSecondary)
+            Spacer()
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(AppTheme.cardDark.opacity(0.6), in: RoundedRectangle(cornerRadius: 12))
+    }
+}
+
 struct HomeHeader: View {
     let vm: AppViewModel
     @Binding var showSearch: Bool
     @Binding var showNotifications: Bool
     private var notifMgr: NotificationManager { NotificationManager.shared }
 
-    private var savedName: String { Keychain.load(key: "user_name") ?? "User" }
-    private var initials: String {
-        savedName.split(separator: " ").prefix(2)
-            .compactMap { $0.first }.map(String.init).joined().uppercased()
-    }
     private var profileImage: UIImage? {
         guard let data = UserDefaults.standard.data(forKey: "profile_photo") else { return nil }
         return UIImage(data: data)
@@ -1312,10 +1396,12 @@ struct HomeHeader: View {
             }
             .shadow(color: AppTheme.accent.opacity(0.2), radius: 8)
 
-            VStack(alignment: .leading, spacing: 1) {
-                Text(loc("home.greeting")).font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
-                Text(savedName).font(.system(size: 17, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
-            }
+            // Name removed: the avatar identifies the account already, and the
+            // line it occupied was competing with the attention slot below.
+            // It still lives on the profile sheet, where identity is the point.
+            Text(loc("home.greeting"))
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(AppTheme.textPrimary)
             Spacer()
             HStack(spacing: 14) {
                 Button { HapticManager.shared.tap(); showSearch = true } label: {
@@ -1355,7 +1441,6 @@ struct HomeHeader: View {
 
 struct CardCarousel: View {
     @Bindable var vm: AppViewModel
-    private var isPad: Bool { UIDevice.current.userInterfaceIdiom == .pad }
 
     var body: some View {
         VStack(spacing: 12) {
@@ -1602,17 +1687,19 @@ struct CategoryFilterBar: View {
         .transport, .health, .commitment, .investment, .debtPayment, .salary, .other
     ]
 
-    private var isPad: Bool { UIDevice.current.userInterfaceIdiom == .pad }
-
     var body: some View {
-        if isPad {
+        // Spread the filters when they fit, scroll them when they do not.
+        // This replaced an `idiom == .pad` check, which reported `.phone` on
+        // both of the Duo's panels and so never took the spread branch on a
+        // 626 pt display that had ample room for it.
+        ViewThatFits(in: .horizontal) {
             HStack(spacing: 0) {
                 ForEach(filterCategories, id: \.self) { cat in
                     filterButton(cat).frame(maxWidth: .infinity)
                 }
             }
             .padding(.horizontal, 32)
-        } else {
+
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
                     ForEach(filterCategories, id: \.self) { cat in
@@ -1663,12 +1750,16 @@ struct CategoryFilterBar: View {
 struct TransactionSection: View {
     let transactions: [TxRecord]       // per-card transactions
     let cards: [BankCard]
-    var showViewAll: Bool = false
-    var allTransactions: [TxRecord] = []
     var categoryFilter: TxCategory? = nil
     var onClearFilter: (() -> Void)? = nil
+    /// The card every row here belongs to. Home feeds this section a single
+    /// card's transactions, so the owner is known up front — it used to be
+    /// recovered by scanning every card's entire history instead.
+    var sourceCard: BankCard? = nil
+    /// Category filtering only looks at the current month; this is how the
+    /// user reaches anything older.
+    var onOpenSearch: (() -> Void)? = nil
     @State private var showAll        = false
-    @State private var showAllCards   = false
     @State private var selectedTx: TxRecord? = nil
     @State private var pendingDelete: TxRecord? = nil
     @Environment(\.modelContext) private var context
@@ -1680,92 +1771,120 @@ struct TransactionSection: View {
                 set: { if !$0 { pendingDelete = nil } })
     }
 
-    // Home shows the most RECENT activity across all time (newest first),
-    // capped to a handful of rows below. It deliberately does NOT filter to
-    // the current calendar month: doing so left Home looking empty on the 1st
-    // of a new month even when the card had plenty of recent history (the
-    // card's "this month" figure and the Statistics tab stay month-scoped —
-    // this list is just a recent-activity preview). Full searchable history
-    // lives behind "View all".
-    private var recentTransactions: [TxRecord] {
-        transactions.sorted { $0.date > $1.date }
+    /// Everything the list needs, derived in ONE pass.
+    ///
+    /// This was three computed properties — `filtered`, `grouped` and
+    /// `cardLookup` — and `body` reads all three. Each one re-derived from
+    /// scratch on every body evaluation, so a single tap on "See more" sorted
+    /// the transaction list twice and rebuilt a `[UUID: BankCard]` map over
+    /// every card's entire history. That is what made repeated taps stall
+    /// scrolling: the work was proportional to total transactions, and it ran
+    /// again for each tap.
+    ///
+    /// The map is gone entirely — Home passes `sourceCard` in, because every
+    /// row here belongs to the one selected card.
+    private struct Derived {
+        var groups: [(key: String, date: Date, txs: [TxRecord], total: Double)] = []
+        /// True when widening to the 7-day window would actually reveal
+        /// something. Without this the toggle offered a wider view that turned
+        /// out to be identical.
+        var hasMoreInWeek = false
+        /// The card HAS transactions, they just fall outside the window on
+        /// screen. Distinguishes "you haven't spent in three days" from "this
+        /// card has no history", which look identical otherwise and make the
+        /// first one read as lost data.
+        var hasOlderOutsideWindow = false
     }
 
-    // Apply category filter on top of the recent-activity window.
-    private var filtered: [TxRecord] {
-        let base = recentTransactions
-        guard let filter = categoryFilter else { return base }
-        return base.filter { $0.category == filter }
-    }
-
-    // Group by calendar day. `txs` is the displayed (row-capped) slice, but
-    // `total` is the FULL day total across all filtered transactions — so the
-    // day header always shows the real amount, and "See more" only reveals
-    // more rows for detail (it never changes the header total).
-    private var grouped: [(key: String, date: Date, txs: [TxRecord], total: Double)] {
+    private var derived: Derived {
         let cal = Calendar.current
-        let locale = LanguageManager.shared.currentLocale
-        // Real per-day totals from ALL filtered transactions (not the visible prefix).
-        var fullByDay: [Date: Double] = [:]
-        for tx in filtered { fullByDay[cal.startOfDay(for: tx.date), default: 0] += tx.amount }
 
-        var dict: [Date: [TxRecord]] = [:]
-        let displaySource = showAll ? Array(filtered.prefix(20)) : Array(filtered.prefix(6))
-        for tx in displaySource {
-            let day = cal.startOfDay(for: tx.date)
-            dict[day, default: []].append(tx)
+        // Unfiltered, Home shows the most RECENT activity across all time.
+        // It deliberately does NOT month-scope that default view: doing so left
+        // Home looking empty on the 1st of a new month even when the card had
+        // plenty of recent history.
+        //
+        // A category filter is the exception, and scoping it to the current
+        // month is the point — "what did I spend on food this month" is the
+        // question being asked. Anything older is Search's job, and the empty
+        // state below says so rather than leaving a blank panel.
+        let now = Date()
+        let today = cal.startOfDay(for: now)
+        let sorted = transactions.sorted { $0.date > $1.date }
+
+        var out = Derived()
+        var rows: [TxRecord]
+
+        if let filter = categoryFilter {
+            rows = sorted.filter {
+                $0.category == filter && cal.isDate($0.date, equalTo: now, toGranularity: .month)
+            }
+        } else {
+            // Rolling windows, counted in calendar days INCLUSIVE of today:
+            // 3 days = today plus the two before it, 7 days = today plus six.
+            // The list used to be capped by row count instead, which meant the
+            // period it covered changed with how busy the days happened to be.
+            let weekCutoff = cal.date(byAdding: .day, value: -6, to: today) ?? .distantPast
+            let dayCutoff  = cal.date(byAdding: .day, value: -2, to: today) ?? .distantPast
+            let inWeek = sorted.filter { $0.date >= weekCutoff }
+            let inDays = inWeek.filter { $0.date >= dayCutoff }
+            out.hasMoreInWeek = inWeek.count > inDays.count
+            rows = showAll ? inWeek : inDays
+            out.hasOlderOutsideWindow = sorted.count > rows.count
         }
-        return dict.keys.sorted(by: >).map { day in
+
+        guard !rows.isEmpty else { return out }
+
+        // Real per-day totals come from ALL matching rows, so a day header
+        // keeps showing the true amount while "See more" only reveals more
+        // detail rows beneath it.
+        var fullByDay: [Date: Double] = [:]
+        for tx in rows { fullByDay[cal.startOfDay(for: tx.date), default: 0] += tx.amount }
+
+        var byDay: [Date: [TxRecord]] = [:]
+        var order: [Date] = []
+        for tx in rows {
+            let day = cal.startOfDay(for: tx.date)
+            if byDay[day] == nil { order.append(day) }
+            byDay[day, default: []].append(tx)
+        }
+
+        // `rows` is already newest-first, so insertion order IS date order and
+        // both the day sort and the per-day sort the old code ran are redundant.
+        out.groups = order.map { day in
             let label: String
             if cal.isDateInToday(day)          { label = loc("common.today") }
             else if cal.isDateInYesterday(day) { label = loc("common.yesterday") }
-            else {
-                let df = DateFormatter()
-                df.locale = locale
-                df.dateFormat = DateFormatter.dateFormat(fromTemplate: "EEEEdMMM", options: 0, locale: locale)
-                label = df.string(from: day)
-            }
-            return (key: label, date: day,
-                    txs: (dict[day] ?? []).sorted { $0.date > $1.date },
-                    total: fullByDay[day] ?? 0)
+            else { label = DateFormatterCache.template("EEEEdMMM").string(from: day) }
+            return (key: label, date: day, txs: byDay[day] ?? [], total: fullByDay[day] ?? 0)
         }
-    }
-
-    /// tx.id → owning card, built ONCE. The old `cardFor` scanned every card's
-    /// transactions per row (O(rows × total-tx)); this makes the per-row lookup
-    /// O(1). Empty for single-card users (the row falls back to the only card).
-    private var cardLookup: [UUID: BankCard] {
-        guard cards.count > 1 else { return [:] }
-        var map: [UUID: BankCard] = [:]
-        for card in cards { for tx in card.transactions { map[tx.id] = card } }
-        return map
+        return out
     }
 
     var body: some View {
         VStack(spacing: 0) {
+            // Derived once per body pass and read from here down. Reading the
+            // computed property repeatedly is what the old code did, and each
+            // read redid the whole derivation.
+            let d = derived
+
             HStack {
                 Text(loc("home.transactions"))
                     .font(.system(size: 17, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
                 Spacer()
                 HStack(spacing: 12) {
-                    // Only offer "See more" when there's actually more to
-                    // reveal beyond the default 6 rows this month.
-                    if filtered.count > 6 {
+                    // Names the window it switches to, rather than "See more"
+                    // — the list is bounded by days now, so how far back it
+                    // reaches is the thing worth stating. Hidden entirely when
+                    // widening would reveal nothing, and while a category
+                    // filter is on, since that already spans the whole month.
+                    if d.hasMoreInWeek {
                         Button {
                             HapticManager.shared.tap()
                             withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) { showAll.toggle() }
                         } label: {
-                            Text(showAll ? loc("home.show_less") : loc("home.see_more"))
+                            Text(showAll ? loc("home.window_3days") : loc("home.window_week"))
                                 .font(.system(size: 13, weight: .medium)).foregroundStyle(AppTheme.textSecondary)
-                        }
-                    }
-                    if showViewAll {
-                        Button {
-                            HapticManager.shared.tap()
-                            showAllCards = true
-                        } label: {
-                            Text(loc("home.view_all"))
-                                .font(.system(size: 13, weight: .medium)).foregroundStyle(AppTheme.accent)
                         }
                     }
                 }
@@ -1776,7 +1895,7 @@ struct TransactionSection: View {
             if let filter = categoryFilter {
                 HStack(spacing: 8) {
                     Image(systemName: filter.icon).font(.system(size: 12)).foregroundStyle(filter.color)
-                    Text(String(format: loc("home.filtered"), filter.displayLabel))
+                    Text(String(format: loc("home.filtered_month"), filter.displayLabel))
                         .font(.system(size: 12, weight: .medium)).foregroundStyle(filter.color)
                     Spacer()
                     Button {
@@ -1794,23 +1913,51 @@ struct TransactionSection: View {
                 .transition(.opacity)
             }
 
-            if filtered.isEmpty {
+            if d.groups.isEmpty {
                 VStack(spacing: 14) {
                     Image(systemName: categoryFilter != nil ? "line.3.horizontal.decrease.circle" : "tray")
                         .font(.system(size: 32)).foregroundStyle(AppTheme.textSecondary)
                     Text(categoryFilter != nil
-                         ? String(format: loc("home.no_cat_tx"), categoryFilter!.displayLabel)
-                         : loc("home.no_tx_card"))
+                         ? String(format: loc("home.no_cat_tx_month"), categoryFilter!.displayLabel)
+                         : (d.hasOlderOutsideWindow
+                            ? loc("home.quiet_window")
+                            : loc("home.no_tx_card")))
                         .font(.system(size: 14)).foregroundStyle(AppTheme.textSecondary)
-                    Text(categoryFilter != nil ? loc("home.try_diff_cat") : loc("home.tap_plus"))
+                        .multilineTextAlignment(.center)
+                    Text(categoryFilter != nil
+                         ? loc("home.older_in_search")
+                         : (d.hasOlderOutsideWindow
+                            ? loc("home.quiet_window_hint")
+                            : loc("home.tap_plus")))
                         .font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary.opacity(0.7))
+                        .multilineTextAlignment(.center)
+
+                    // The filter only looks at this month, so an empty result
+                    // is a range problem, not a missing-data problem. Hand the
+                    // user the tool that does search the full history.
+                    if categoryFilter != nil || d.hasOlderOutsideWindow, let onOpenSearch {
+                        Button {
+                            onOpenSearch()
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "magnifyingglass").font(.system(size: 14))
+                                Text(loc("home.search_older")).font(.system(size: 13, weight: .semibold))
+                            }
+                            .foregroundStyle(AppTheme.accent)
+                            .padding(.horizontal, 16).padding(.vertical, 9)
+                            .background(AppTheme.accent.opacity(0.12), in: Capsule())
+                            .overlay(Capsule().stroke(AppTheme.accent.opacity(0.3), lineWidth: 1))
+                        }
+                        .buttonStyle(ScaleButtonStyle())
+                        .padding(.top, 4)
+                    }
 
                     // Direct CTA — without this the user sees the empty
                     // state but has to know that the central "+" tab opens
                     // Add Transaction. Surfacing the action inline removes
                     // that guesswork and matches the pattern used by Wishlist
                     // / Debt empty states.
-                    if categoryFilter == nil {
+                    if categoryFilter == nil, !d.hasOlderOutsideWindow {
                         Button {
                             HapticManager.shared.tap()
                             NotificationCenter.default.post(name: .requestOpenAddTransaction, object: nil)
@@ -1830,10 +1977,8 @@ struct TransactionSection: View {
                 }
                 .padding(.vertical, 24)
             } else {
-                VStack(spacing: 20) {
-                    // Build the tx→card index once for this render, not per row.
-                    let cardIndex = cardLookup
-                    ForEach(grouped, id: \.key) { group in
+                LazyVStack(spacing: 20) {
+                    ForEach(d.groups, id: \.key) { group in
                         VStack(alignment: .leading, spacing: 10) {
                             // Date header with the REAL daily total (all txs that
                             // day, not just the visible rows).
@@ -1856,7 +2001,7 @@ struct TransactionSection: View {
                                         onTap: { selectedTx = tx },
                                         onDelete: { pendingDelete = tx }
                                     ) {
-                                        TxRow(tx: tx, sourceCard: cardIndex[tx.id] ?? cards.first, showCard: cards.count > 1)
+                                        TxRow(tx: tx, sourceCard: sourceCard ?? cards.first, showCard: cards.count > 1)
                                     }
                                     // Rows used to vanish instantly, which reads
                                     // as a glitch — the eye can't tell a deleted
@@ -1886,152 +2031,6 @@ struct TransactionSection: View {
             Button(loc("common.cancel"), role: .cancel) { pendingDelete = nil }
         } message: {
             Text(loc("tx.delete_confirm"))
-        }
-        .sheet(item: $selectedTx) { tx in
-            TransactionDetailSheet(tx: tx)
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
-                .presentationBackground(AppTheme.bg)
-                .preferredColorScheme(appColorScheme())
-        }
-        .sheet(isPresented: $showAllCards) {
-            AllTransactionsSheet(transactions: allTransactions, cards: cards)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-                .presentationBackground(AppTheme.bg)
-                .preferredColorScheme(appColorScheme())
-        }
-    }
-}
-
-// MARK: - All Transactions Sheet (cross-card combined view)
-
-struct AllTransactionsSheet: View {
-    let transactions: [TxRecord]
-    let cards: [BankCard]
-    @Environment(\.dismiss) private var dismiss
-    @Environment(\.modelContext) private var context
-    @State private var selectedTx: TxRecord? = nil
-    @State private var pendingDelete: TxRecord? = nil
-
-    private var deleteDialogBinding: Binding<Bool> {
-        Binding(get: { pendingDelete != nil },
-                set: { if !$0 { pendingDelete = nil } })
-    }
-
-    private var grouped: [(key: String, date: Date, txs: [TxRecord])] {
-        let cal = Calendar.current
-        let locale = LanguageManager.shared.currentLocale
-        // One formatter for the whole grouping pass — allocating it per day (the
-        // full history can be dozens of days) hitched every re-render.
-        let df = DateFormatter()
-        df.locale = locale
-        df.dateFormat = DateFormatter.dateFormat(fromTemplate: "EEEEdMMM", options: 0, locale: locale)
-        var dict: [Date: [TxRecord]] = [:]
-        for tx in transactions {
-            let day = cal.startOfDay(for: tx.date)
-            dict[day, default: []].append(tx)
-        }
-        return dict.keys.sorted(by: >).map { day in
-            let label: String
-            if cal.isDateInToday(day)          { label = loc("common.today") }
-            else if cal.isDateInYesterday(day) { label = loc("common.yesterday") }
-            else                               { label = df.string(from: day) }
-            return (key: label, date: day, txs: (dict[day] ?? []).sorted { $0.date > $1.date })
-        }
-    }
-
-    /// tx.id → owning card, built ONCE per render (this sheet spans all cards).
-    /// Replaces the per-row O(cards × total-tx) scan with an O(1) lookup.
-    private var cardLookup: [UUID: BankCard] {
-        var map: [UUID: BankCard] = [:]
-        for card in cards { for tx in card.transactions { map[tx.id] = card } }
-        return map
-    }
-
-    var body: some View {
-        NavigationStack {
-            ZStack {
-                AppTheme.bg.ignoresSafeArea()
-                if transactions.isEmpty {
-                    VStack(spacing: 10) {
-                        Image(systemName: "tray").font(.system(size: 40)).foregroundStyle(AppTheme.textSecondary)
-                        Text(loc("tx.no_transactions")).font(.system(size: 16)).foregroundStyle(AppTheme.textSecondary)
-                    }
-                } else {
-                    ScrollView(showsIndicators: false) {
-                        // LazyVStack: this sheet lists the ENTIRE history, so
-                        // rows must render on demand — a plain VStack built every
-                        // row up front and lagged badly with many transactions.
-                        LazyVStack(spacing: 20) {
-                            // tx→card index built once, not per row.
-                            let cardIndex = cardLookup
-                            ForEach(grouped, id: \.key) { group in
-                                VStack(alignment: .leading, spacing: 10) {
-                                    // This sheet shows ALL rows (no prefix cap), so the
-                                    // visible txs already equal the full day.
-                                    // Convert before summing, and label with the
-                                    // PREFERRED currency. Adding raw amounts and
-                                    // then borrowing the first transaction's
-                                    // currency turned a day holding both IDR and
-                                    // USD rows into a single nonsense figure.
-                                    let dayCurrency = CurrencyManager.shared.preferredCurrency
-                                    let dayTotal = group.txs.reduce(0.0) { sum, tx in
-                                        sum + CurrencyManager.shared.convert(
-                                            tx.amount,
-                                            from: tx.currency.isEmpty ? dayCurrency : tx.currency,
-                                            to: dayCurrency)
-                                    }
-                                    HStack {
-                                        Text(group.key)
-                                            .font(.system(size: 13, weight: .semibold))
-                                            .foregroundStyle(AppTheme.textSecondary)
-                                        Spacer()
-                                        Text(dayTotal >= 0
-                                             ? "+\(CurrencyManager.shared.formatted(dayTotal, currency: dayCurrency))"
-                                             : CurrencyManager.shared.formatted(dayTotal, currency: dayCurrency))
-                                            .font(.system(size: 12, weight: .medium))
-                                            .foregroundStyle(dayTotal >= 0 ? AppTheme.accent.opacity(0.7) : AppTheme.red.opacity(0.7))
-                                    }
-                                    VStack(spacing: 10) {
-                                        ForEach(group.txs) { tx in
-                                            SwipeToDeleteRow(
-                                                onTap: { selectedTx = tx },
-                                                onDelete: { pendingDelete = tx }
-                                            ) {
-                                                TxRow(tx: tx, sourceCard: cardIndex[tx.id] ?? cards.first, showCard: cards.count > 1, animateEntrance: false)
-                                            }
-                                            .transition(.scale(scale: 0.92).combined(with: .opacity))
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        .padding(.horizontal, 22)
-                        .padding(.top, 8)
-                        .padding(.bottom, 40)
-                    }
-                }
-            }
-            .confirmationDialog(loc("tx.delete_prompt"), isPresented: deleteDialogBinding, titleVisibility: .visible) {
-                Button(loc("common.delete"), role: .destructive) {
-                    if let tx = pendingDelete {
-                        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
-                            deleteTransactionWithGoalRollback(tx, context: context)
-                        }
-                        try? context.save()
-                        HapticManager.shared.warning()
-                    }
-                    pendingDelete = nil
-                }
-                Button(loc("common.cancel"), role: .cancel) { pendingDelete = nil }
-            } message: {
-                Text(loc("tx.delete_confirm"))
-            }
-            .navigationTitle(loc("tx.all"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(AppTheme.bg, for: .navigationBar)
-            .doneToolbar { dismiss() }
         }
         .sheet(item: $selectedTx) { tx in
             TransactionDetailSheet(tx: tx)

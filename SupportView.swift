@@ -411,7 +411,7 @@ struct NewTicketForm: View {
         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
         .overlay(RoundedRectangle(cornerRadius: 16).stroke(AppTheme.accent.opacity(0.2), lineWidth: 1))
         .padding(.horizontal, 22)
-        .opacity(appeared ? 1 : 0).animation(.spring(response: 0.5).delay(0.05), value: appeared)
+        .opacity(appeared ? 1 : 0).animation(AppMotion.appear, value: appeared)
     }
 
     private var formCategoryPicker: some View {
@@ -421,7 +421,7 @@ struct NewTicketForm: View {
             }
             .padding(.horizontal, 22)
         }
-        .opacity(appeared ? 1 : 0).animation(.spring(response: 0.5).delay(0.1), value: appeared)
+        .opacity(appeared ? 1 : 0).animation(AppMotion.appear, value: appeared)
     }
 
     @ViewBuilder
@@ -455,7 +455,7 @@ struct NewTicketForm: View {
                 .padding(14).background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
         }
         .padding(.horizontal, 22)
-        .opacity(appeared ? 1 : 0).animation(.spring(response: 0.5).delay(0.15), value: appeared)
+        .opacity(appeared ? 1 : 0).animation(AppMotion.appear, value: appeared)
     }
 
     private var formMessageField: some View {
@@ -475,7 +475,7 @@ struct NewTicketForm: View {
             }
         }
         .padding(.horizontal, 22)
-        .opacity(appeared ? 1 : 0).animation(.spring(response: 0.5).delay(0.2), value: appeared)
+        .opacity(appeared ? 1 : 0).animation(AppMotion.appear, value: appeared)
     }
 
     private var formMediaPicker: some View {
@@ -494,7 +494,7 @@ struct NewTicketForm: View {
             mediaThumbnailRow
         }
         .padding(.horizontal, 22)
-        .opacity(appeared ? 1 : 0).animation(.spring(response: 0.5).delay(0.22), value: appeared)
+        .opacity(appeared ? 1 : 0).animation(AppMotion.appear, value: appeared)
     }
 
     private var mediaThumbnailRow: some View {
@@ -551,7 +551,7 @@ struct NewTicketForm: View {
         .disabled(!canSend)
         .padding(.horizontal, 22)
         .opacity(appeared ? 1 : 0)
-        .animation(.spring(response: 0.5).delay(0.25), value: appeared)
+        .animation(AppMotion.appear, value: appeared)
     }
 
     @ViewBuilder
@@ -578,7 +578,7 @@ struct NewTicketForm: View {
                     .multilineTextAlignment(.center).padding(.horizontal, 32)
             }
             Button { onDone() } label: {
-                Text(loc("common.done")).font(.system(size: 16, weight: .semibold)).foregroundStyle(.white)
+                Text(loc("common.done")).font(.system(size: 16, weight: .semibold)).foregroundStyle(AppTheme.onSolid)
                     .frame(maxWidth: .infinity).padding(.vertical, 16)
                     .background(AppTheme.accent, in: RoundedRectangle(cornerRadius: 18))
             }
@@ -973,7 +973,7 @@ struct TicketThreadView: View {
             VStack(alignment: .trailing, spacing: 4) {
                 Text(reply.createdAt.formatted(date: .abbreviated, time: .shortened))
                     .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
-                Text(reply.message).font(.system(size: 14)).foregroundStyle(.white).lineSpacing(4)
+                Text(reply.message).font(.system(size: 14)).foregroundStyle(AppTheme.onSolid).lineSpacing(4)
                     .padding(14)
                     .background(AppTheme.accent, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
             }

@@ -129,7 +129,7 @@ struct SocialLoginView: View {
                     }
                     .scaleEffect(appeared ? 1 : 0.6)
                     .opacity(appeared ? 1 : 0)
-                    .animation(.spring(response: 0.65, dampingFraction: 0.65).delay(0.05), value: appeared)
+                    .animation(AppMotion.appear, value: appeared)
 
                     VStack(spacing: 8) {
                         Text(loc("auth.welcome"))
@@ -143,7 +143,7 @@ struct SocialLoginView: View {
                     }
                     .opacity(appeared ? 1 : 0)
                     .offset(y: appeared ? 0 : 16)
-                    .animation(.spring(response: 0.5).delay(0.15), value: appeared)
+                    .animation(AppMotion.appear, value: appeared)
                 }
                 .padding(.horizontal, 32)
 
@@ -273,7 +273,7 @@ struct SocialLoginView: View {
                 .padding(.horizontal, 28)
                 .opacity(appeared ? 1 : 0)
                 .offset(y: appeared ? 0 : 24)
-                .animation(.spring(response: 0.5, dampingFraction: 0.85).delay(0.22), value: appeared)
+                .animation(AppMotion.appear, value: appeared)
 
                 Spacer(minLength: 48)
             }
@@ -439,7 +439,7 @@ struct BiometricGateView: View {
                     }
                     .opacity(appeared ? 1 : 0)
                     .offset(y: appeared ? 0 : 16)
-                    .animation(.spring(response: 0.55, dampingFraction: 0.8).delay(0.1), value: appeared)
+                    .animation(AppMotion.appear, value: appeared)
 
                     // Error + retry button
                     if let err = authVM.errorMessage {
@@ -481,7 +481,7 @@ struct BiometricGateView: View {
                     .padding(.horizontal, 40)
                     .padding(.bottom, 52)
                     .opacity(appeared ? 1 : 0)
-                    .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.3), value: appeared)
+                    .animation(AppMotion.appear, value: appeared)
             }
         }
         .onAppear {

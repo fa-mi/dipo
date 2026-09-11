@@ -108,8 +108,23 @@ enum WidgetDataSync {
 
         let cal = Calendar.current
         let now = Date()
-        let monthStart = cal.date(from: cal.dateComponents([.year, .month], from: now)) ?? now
-        let txs: [TxRecord] = (try? context.fetch(FetchDescriptor<TxRecord>())) ?? []
+        let schedules: [SalarySchedule] = (try? context.fetch(FetchDescriptor<SalarySchedule>())) ?? []
+        let allCards: [BankCard] = (try? context.fetch(FetchDescriptor<BankCard>())) ?? []
+
+        // The widget claimed below to mirror StatisticsView. It did not, on
+        // three separate axes: every card instead of the main one, every salary
+        // schedule instead of the ones paid into it, and the calendar month
+        // instead of the pay cycle. On a payday of the 25th that is a different
+        // window, a different denominator and a different set of transactions —
+        // three ways for the lock screen to contradict the app behind it.
+        let monthStart: Date = {
+            if let day = MainCard.payDay(schedules) {
+                return StatPeriod.payCycleRange(payDay: day).start
+            }
+            return cal.date(from: cal.dateComponents([.year, .month], from: now)) ?? now
+        }()
+        let allTxs: [TxRecord] = (try? context.fetch(FetchDescriptor<TxRecord>())) ?? []
+        let txs: [TxRecord] = MainCard.resolve(in: allCards)?.transactions ?? allTxs
 
         let preferred = CurrencyManager.shared.preferredCurrency
         var expenses: Double = 0
@@ -122,16 +137,34 @@ enum WidgetDataSync {
         // so the weekly average matches StatisticsView (a one-off rent/debt
         // shouldn't inflate a "per week" figure).
         var variableExpenses: Double = 0
-        let fixedCats: Set<TxCategory> = [.bills, .investment, .debtPayment, .commitment]
+        /// Day-to-day totals per date, for the same median the app reports.
+        var variablePerDay: [Date: Double] = [:]
+        // The SAME engine the app uses, over the same card's history. The widget
+        // had its own hardcoded list of "fixed" categories and its own mean —
+        // so once Statistics moved to a learned rhythm and a median, the lock
+        // screen and the app were computing different weekly figures from the
+        // same transactions, with the widget's the one nobody would think to
+        // question.
+        let rhythm = SpendingRhythm(history: txs) { t in
+            CurrencyManager.shared.convert(
+                t.amount, from: t.currency.isEmpty ? preferred : t.currency, to: preferred)
+        }
+        let fixedCats = StatisticsView.fixedMonthlyCats
+        func isDayToDay(_ t: TxRecord) -> Bool {
+            guard !fixedCats.contains(t.category) else { return false }
+            let a = abs(CurrencyManager.shared.convert(
+                t.amount, from: t.currency.isEmpty ? preferred : t.currency, to: preferred))
+            return !rhythm.verdict(for: t, amount: a).isIrregular
+        }
         // Per-category running totals for Royal users' "top spend" insight.
         var perCategory: [TxCategory: Double] = [:]
 
-        // Mirror StatisticsView's subtype-aware logic so widget numbers
-        // match what the user sees in the in-app Stats screen.
+        // Subtype-aware, matching StatisticsView — which it now genuinely does,
+        // over the same window and the same account.
         for tx in txs where tx.date >= monthStart && tx.date <= now {
             let txCurrency = tx.currency.isEmpty ? preferred : tx.currency
             let converted  = CurrencyManager.shared.convert(tx.amount, from: txCurrency, to: preferred)
-            let isVariable = !fixedCats.contains(tx.category)
+            let isVariable = isDayToDay(tx)
             switch tx.txSubtype {
             case .transfer:
                 continue
@@ -143,7 +176,10 @@ enum WidgetDataSync {
                 if converted < 0 {
                     expenses += abs(converted)
                     perCategory[tx.category, default: 0] += abs(converted)
-                    if isVariable { variableExpenses += abs(converted) }
+                    if isVariable {
+                        variableExpenses += abs(converted)
+                        variablePerDay[cal.startOfDay(for: tx.date), default: 0] += abs(converted)
+                    }
                 } else {
                     income += converted
                     if tx.category == .salary { salaryIncome += converted }
@@ -158,8 +194,7 @@ enum WidgetDataSync {
         // of Rp 0 until payday. Non-salary income (bonus/freelance) logged this
         // month is added on top; the salary already received is swapped out for
         // the schedule so it isn't counted twice.
-        let schedules: [SalarySchedule] = (try? context.fetch(FetchDescriptor<SalarySchedule>())) ?? []
-        let scheduled = schedules.filter { $0.isActive }
+        let scheduled = MainCard.salaries(schedules)
             .reduce(0.0) { $0 + CurrencyManager.shared.convert($1.amount, from: $1.currency, to: preferred) }
         if scheduled > 0 {
             income = scheduled + max(income - salaryIncome, 0)
@@ -205,9 +240,18 @@ enum WidgetDataSync {
         // `daysElapsed` is tiny and a 0.1 floor made this explode ×10 (day 1 →
         // ÷ 0.1). The widget has no room for the "partial period" caveat, so we
         // treat the first week as one whole week — never over-projecting.
-        let daysElapsed = max(cal.dateComponents([.day], from: monthStart, to: now).day ?? 1, 1)
-        let weeks       = max(Double(daysElapsed) / 7.0, 1.0)
-        let weeklyAvg   = variableExpenses / weeks
+        // Median of the daily totals × 7, not the sum over weeks. A mean is
+        // dragged by one expensive day; on real data it read more than double a
+        // typical day. `weeks` stays used by nothing else here.
+        let dailyTotals = variablePerDay.values.sorted()
+        let typicalDaily: Double = {
+            guard !dailyTotals.isEmpty else { return 0 }
+            let m = dailyTotals.count / 2
+            return dailyTotals.count % 2 == 0
+                ? (dailyTotals[m - 1] + dailyTotals[m]) / 2
+                : dailyTotals[m]
+        }()
+        let weeklyAvg   = typicalDaily * 7
         let weeklyAvgFormatted = CurrencyManager.shared.formatted(weeklyAvg, currency: preferred)
 
         // ── Localized labels ───────────────────────────────────────────
@@ -451,6 +495,7 @@ struct RootView: View {
             CrashReporter.setUser(UserSession.shared.userID)
             // Listen for an admin-triggered maintenance window (real-time).
             FirebaseSupportService.shared.startListeningForMaintenance()
+            ScreenAnalytics.shared.startListening()
             // Admin broadcast + ticket-reply listener — on launch its initial
             // snapshot replays any admin notification (broadcasts AND support
             // replies) written to user_notifications while the app was closed,

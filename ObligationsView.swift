@@ -28,15 +28,28 @@ struct ObligationLoad {
     /// subscriptions are filed under Daily Needs (see `dailyCategories`).
     let debtAllowanceRatio: Double
     let dailyAllowanceRatio: Double
+    /// Active salary paid into OTHER accounts, deliberately absent from
+    /// `monthlyIncome`. Carried so the card can say so: a second job vanishing
+    /// from the plan with no explanation reads as the app losing it, and a
+    /// user with two jobs is exactly who notices.
+    var incomeElsewhere: Double = 0
+    var jobsElsewhere: Int = 0
 
     var total: Double { debtMinimums + commitments }
     var ratio: Double { monthlyIncome > 0 ? total / monthlyIncome : 0 }
 
     var debtAllowance: Double { monthlyIncome * debtAllowanceRatio }
     var dailyAllowance: Double { monthlyIncome * dailyAllowanceRatio }
-    /// What is left after everything contractual — the number that actually
-    /// answers "what can I decide about this month".
-    var freeAfterObligations: Double { max(monthlyIncome - total, 0) }
+    /// The share the plan reserves for saving and investing — debt payments
+    /// come out of it, so whatever debt does not use stays reserved.
+    var setAside: Double { max(debtAllowance, debtMinimums) }
+
+    /// What is left after everything contractual AND after the plan's own
+    /// reserve. Subtracting only debt and commitments left the Invest & Debt
+    /// allocation sitting in "free to decide", so this card said Rp 6.295.000
+    /// while the Salary Allocation Plan directly below it said Rp 4.295.000 —
+    /// two answers to one question, on one screen.
+    var freeAfterObligations: Double { max(monthlyIncome - total - setAside + debtMinimums, 0) }
 
     // Standard back-end DTI bands. This measure is exactly what lenders call
     // back-end debt-to-income: debt payments PLUS housing and other contractual
@@ -72,7 +85,9 @@ struct ObligationLoad {
                        debtMinimums: debtMinimums + instalment,
                        commitments: commitments,
                        debtAllowanceRatio: debtAllowanceRatio,
-                       dailyAllowanceRatio: dailyAllowanceRatio)
+                       dailyAllowanceRatio: dailyAllowanceRatio,
+                       incomeElsewhere: incomeElsewhere,
+                       jobsElsewhere: jobsElsewhere)
     }
 
     static func build(debts: [DebtRecord],
@@ -83,8 +98,13 @@ struct ObligationLoad {
         let pref = cm.preferredCurrency
 
         var income = 0.0
-        for s in salaries where s.isActive {
+        for s in MainCard.salaries(salaries) {
             income += cm.convert(s.amount, from: s.currency, to: pref)
+        }
+        let elsewhere = MainCard.salariesElsewhere(salaries)
+        var otherIncome = 0.0
+        for s in elsewhere {
+            otherIncome += cm.convert(s.amount, from: s.currency, to: pref)
         }
         var minimums = 0.0
         for d in debts where d.isActive && !d.manuallyClosed {
@@ -102,7 +122,9 @@ struct ObligationLoad {
                               debtMinimums: minimums,
                               commitments: commitments,
                               debtAllowanceRatio: r.investDebt,
-                              dailyAllowanceRatio: r.daily)
+                              dailyAllowanceRatio: r.daily,
+                              incomeElsewhere: otherIncome,
+                              jobsElsewhere: elsewhere.count)
     }
 }
 
@@ -185,6 +207,17 @@ struct ObligationLoadCard: View {
                     Divider().overlay(AppTheme.cardMid)
                     line(loc("oblig.free_after"), money(shown.freeAfterObligations),
                          tint: AppTheme.accent)
+                }
+
+                if load.incomeElsewhere > 0 {
+                    Label(String(format: loc(load.jobsElsewhere == 1
+                                             ? "oblig.income_elsewhere"
+                                             : "oblig.income_elsewhere_n"),
+                                 money(load.incomeElsewhere), load.jobsElsewhere),
+                          systemImage: "arrow.turn.down.right")
+                        .font(.system(size: 11))
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
         }
@@ -270,7 +303,7 @@ struct ObligationsView: View {
                     .padding(.top, 12)
 
                     switch tab {
-                    case .owed:     DebtView(embedded: true, obligationLoad: load)
+                    case .owed:     DebtView(embedded: true)
                     case .lent:     ReceivablesView(embedded: true)
                     // Only the tools that CREATE debt live here. Take-home pay
                     // and pension projections are income questions and moved to
@@ -280,6 +313,7 @@ struct ObligationsView: View {
                     }
                 }
             }
+            .trackScreen(.obligations)
             .navigationTitle(loc("oblig.nav"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(AppTheme.bg, for: .navigationBar)

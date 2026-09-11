@@ -350,7 +350,7 @@ private struct LandingView: View {
                                  : loc("receipt.landing.upload_now"))
                                 .font(.system(size: 16, weight: .bold))
                         }
-                        .foregroundStyle(.white)
+                        .foregroundStyle(AppTheme.onSolid)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 17)
                         .background(AppTheme.accent, in: RoundedRectangle(cornerRadius: 16))
@@ -385,7 +385,7 @@ private struct ReceiptIllustration: View {
                 .overlay(
                     Image(systemName: "dollarsign")
                         .font(.system(size: 18, weight: .heavy))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(AppTheme.onSolid)
                 )
                 .offset(x: -78, y: -82)
                 .shadow(color: AppTheme.accent.opacity(0.3), radius: 8, y: 4)
@@ -895,7 +895,7 @@ private struct ScanningProgressView: View {
                         Text(String(format: loc("receipt.scanning.progress"), Int(progress * 100)))
                             .font(.system(size: 12, weight: .semibold))
                     }
-                    .foregroundStyle(.white)
+                    .foregroundStyle(AppTheme.onSolid)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
                     .background(AppTheme.accent, in: Capsule())
@@ -989,7 +989,7 @@ private struct ScanErrorView: View {
                     } label: {
                         Text(loc("receipt.error.retry"))
                             .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(AppTheme.onSolid)
                             .padding(.horizontal, 22).padding(.vertical, 11)
                             .background(AppTheme.accent, in: Capsule())
                     }

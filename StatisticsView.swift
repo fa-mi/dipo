@@ -139,11 +139,16 @@ struct StatisticsView: View {
     // filter ran ~6× per render. `netWorthTrend` scans all tx across 6 buckets.
     // We now compute both once, only when inputs change (see recomputeStats).
     @State private var cachedFilteredTx: [TxRecord] = []
+    @State private var cachedRhythm = SpendingRhythm(history: []) { _ in 0 }
+    @State private var cachedFigures = SpendingFigures()
     @State private var cachedNetWorthTrend: [CycleTrendPoint] = []
     @State private var customStart: Date = Calendar.current.safeDate(byAdding: .month, value: -1, to: Date())
     @State private var customEnd: Date = Date()
     @State private var showCustomPicker = false
-    @State private var selectedCardID: String? = nil // Will auto-select first card on appear
+    @State private var selectedCardID: String? = nil // Kept only as a recompute trigger; the card itself comes from MainCard.
+    /// Observed so switching the main card in the Wallet redraws this screen.
+    @State private var sb = SmartBudgetManager.shared
+    @State private var showSpendingAudit = false
     @State private var showExportSheet = false
     @State private var showTidy = false
 
@@ -161,14 +166,14 @@ struct StatisticsView: View {
     /// to anchor the "Pay cycle" period. nil when the user has no active
     /// salary — in which case the Pay-cycle option is hidden entirely.
     private var payCycleDay: Int? {
-        salarySchedules.first(where: { $0.isActive })?.dayOfMonth
+        MainCard.payDay(salarySchedules)
     }
 
     /// Income for BUDGET MATH in the export insight: the stated salary schedule
     /// when there is one (so a pre-payday period doesn't distort the ratio),
     /// otherwise actual income received in the period.
     private var budgetInsightIncome: Double {
-        let active = salarySchedules.filter { $0.isActive }
+        let active = MainCard.salaries(salarySchedules)
         guard !active.isEmpty else { return filteredIncome }
         return active.reduce(0.0) { $0 + CurrencyManager.shared.convert($1.amount, from: $1.currency, to: displayCurrency) }
     }
@@ -325,7 +330,7 @@ struct StatisticsView: View {
         // covers 25 Aug – 24 Sep. The "Day 6 of 31" chip already reports how far
         // in you are; the title's job is to name the period, not the slice of it
         // that has happened.
-        if selectedPeriod == .payCycle, let day = payCycleDay {
+        if selectedPeriod == .payCycle, payCycleDay != nil {
             let cal = Calendar.current
             let m = cal.component(.month, from: start), y = cal.component(.year, from: start)
             let nm = m == 12 ? 1 : m + 1
@@ -358,22 +363,15 @@ struct StatisticsView: View {
         }
     }
 
-    /// Every card the user has. The picker used to list only cards with
-    /// activity in the period, so on a cycle that just began nine accounts
-    /// silently collapsed to one and it looked like the others had vanished.
-    /// "No spending on this card" is information too — show the chip, mark it
-    /// quiet, and let the user look.
-    private var availableCards: [BankCard] { appVM.cards }
-
-    private func hasActivity(_ card: BankCard) -> Bool {
-        let (start, end) = effectiveRange
-        return card.transactions.contains { $0.date >= start && $0.date <= end }
-    }
-    
-    /// The currently-selected card (resolved from selectedCardID).
+    /// The card every figure on this screen is about — the main card.
+    ///
+    /// This used to auto-select "the first card with activity", which is why
+    /// Statistics and Smart Budget could report different incomes for the same
+    /// month with nothing on either screen explaining the gap. They now read
+    /// the same anchor, so the two agree by construction rather than by luck.
     private var selectedCard: BankCard? {
-        guard let cardID = selectedCardID else { return nil }
-        return appVM.cards.first(where: { $0.id.uuidString == cardID })
+        let _ = sb.budgetCardID
+        return MainCard.resolve(in: appVM.cards)
     }
     
     /// The currency used to display all stats. Always derived from the selected card —
@@ -399,7 +397,11 @@ struct StatisticsView: View {
     /// Recompute the memoized heavy derivations. Called on appear and whenever
     /// period / card / custom dates / tx count change — never per render.
     private func recomputeStats() {
+        // Rhythm first: everything below reads it.
+        cachedRhythm = computeRhythm()
         cachedFilteredTx = computeFilteredTx()
+        // Figures LAST: they read both of the above.
+        cachedFigures = computeFigures()
         cachedNetWorthTrend = computeNetWorthTrend()
     }
     
@@ -453,24 +455,173 @@ struct StatisticsView: View {
             }
     }
     
-    private var weeklyAverage: Double {
-        let (start, end) = effectiveRange
-        let days = Calendar.current.dateComponents([.day], from: start, to: end).day ?? 1
-        let weeks = max(Double(days) / 7.0, 0.1)
-        // Exclude FIXED MONTHLY commitments — bills (rent, subscriptions,
-        // utilities), investments, and debt payments. These are paid once a
-        // month, so averaging them into a "per week" figure hugely inflates it
-        // and misrepresents day-to-day spending. Only variable/discretionary
-        // spend (food, transport, shopping, health, travel, other) is counted.
-        let fixed: Set<TxCategory> = [.bills, .investment, .debtPayment, .commitment]
-        let variable = filteredTx
-            .filter { $0.txSubtype != .transfer && !fixed.contains($0.category) }
-            .reduce(0.0) { sum, tx in
-                let amt = abs(convertedAmount(tx))
-                if tx.txSubtype == .refund { return sum - amt }
-                return tx.amount < 0 ? sum + amt : sum
+    /// Paid once a month rather than day to day: rent and kos, standing family
+    /// transfers, subscriptions, investments, debt instalments.
+    ///
+    /// Defined once and shared by every figure that expresses a RATE, because
+    /// they were each deciding separately and disagreeing. Rp 2.100.000 of kos
+    /// is not "what a day costs" — it is one charge that happens to land on a
+    /// day, and dividing it by elapsed days invents a spending habit nobody has.
+    static let fixedMonthlyCats: Set<TxCategory> = [.bills, .investment, .debtPayment, .commitment]
+
+    /// The user's own spending rhythm, learned from the main card's history.
+    ///
+    /// MEMOIZED, and it has to be. As a computed property this rebuilt every
+    /// category profile — sorting and taking medians over the full history —
+    /// and `isDayToDay` calls it once per transaction. On 383 transactions that
+    /// is 383 rebuilds of a 383-item model per render pass, several times per
+    /// frame across the filters that use it. The screen went from instant to
+    /// visibly stuttering, which is exactly what a computed property that looks
+    /// like a lookup and behaves like a full pass will do.
+    ///
+    /// Built over ALL history rather than the selected period: cadence measured
+    /// across nine days would call almost everything episodic, and the rhythm
+    /// should not change because someone tapped a different period chip.
+    private var rhythm: SpendingRhythm { cachedRhythm }
+
+    private func computeRhythm() -> SpendingRhythm {
+        SpendingRhythm(history: selectedCard?.transactions ?? []) { tx in
+            self.convertedAmount(tx)
+        }
+    }
+
+    /// Whether a transaction is part of "what a day costs".
+    ///
+    /// Fixed monthly commitments are excluded by category — those are
+    /// contractual, not behavioural. Everything else is the engine's call,
+    /// overridable per transaction.
+    private func isDayToDay(_ tx: TxRecord) -> Bool {
+        guard !Self.fixedMonthlyCats.contains(tx.category) else { return false }
+        return !rhythm.verdict(for: tx, amount: abs(convertedAmount(tx))).isIrregular
+    }
+
+    /// Everything the daily-rate figures need, computed in ONE pass.
+    ///
+    /// These used to be six computed properties, each walking `filteredTx` and
+    /// several calling one another — `weeklyAverage` → `typicalDailySpend` →
+    /// `variableDailyTotals`, `projectedSpend` → `variableSpend` + `fixedSpend`
+    /// + `upcomingFixed`. A single render did fifteen-odd full passes over the
+    /// history plus a sort, which is invisible on a small account and is
+    /// exactly the budget an animation needs to hit 60fps.
+    struct SpendingFigures {
+        var variable = 0.0
+        var fixed = 0.0
+        var dailyTotals: [Double] = []
+        var typicalDaily = 0.0
+        var irregularCount = 0
+        var irregularTotal = 0.0
+        /// Day-to-day spending per weekday: total, the number of distinct dates
+        /// that weekday occurred on, and how many purchases fell on it.
+        /// Sunday-based index, matching `Calendar.component(.weekday:)` - 1.
+        var byWeekday: [Int: (total: Double, days: Set<Date>, count: Int)] = [:]
+    }
+
+    private func computeFigures() -> SpendingFigures {
+        var f = SpendingFigures()
+        var perDay: [Date: Double] = [:]
+        let cal = Calendar.current
+        for tx in cachedFilteredTx where tx.txSubtype != .transfer {
+            let amt = abs(convertedAmount(tx))
+            guard tx.amount < 0 || tx.txSubtype == .refund else { continue }
+            let signed = tx.txSubtype == .refund ? -amt : amt
+            if isDayToDay(tx) {
+                f.variable += signed
+                if tx.amount < 0 {
+                    let day = cal.startOfDay(for: tx.date)
+                    perDay[day, default: 0] += amt
+                    let wd = cal.component(.weekday, from: tx.date) - 1
+                    var e = f.byWeekday[wd] ?? (0, [], 0)
+                    e.total += amt; e.days.insert(day); e.count += 1
+                    f.byWeekday[wd] = e
+                }
+            } else {
+                f.fixed += signed
+                // Fixed monthly commitments are excluded by contract; the
+                // irregular tally is only the engine's calls and the user's.
+                if !Self.fixedMonthlyCats.contains(tx.category), tx.amount < 0 {
+                    f.irregularCount += 1
+                    f.irregularTotal += amt
+                }
             }
-        return variable / weeks
+        }
+        f.dailyTotals = perDay.values.sorted()
+        if !f.dailyTotals.isEmpty {
+            let m = f.dailyTotals.count / 2
+            f.typicalDaily = f.dailyTotals.count % 2 == 0
+                ? (f.dailyTotals[m - 1] + f.dailyTotals[m]) / 2
+                : f.dailyTotals[m]
+        }
+        return f
+    }
+
+    /// Day-to-day spending only. The denominator of every rate on this screen.
+    private var variableSpend: Double { cachedFigures.variable }
+
+    /// Fixed commitments and irregular episodes charged this period — counted
+    /// ONCE, never rated.
+    private var fixedSpend: Double { cachedFigures.fixed }
+
+    private var variableDailyTotals: [Double] { cachedFigures.dailyTotals }
+
+    /// What a typical day costs — the MEDIAN, not the mean.
+    ///
+    /// Excluding fixed categories was necessary and not sufficient. What was
+    /// left still contained an annual vehicle tax, a one-off perfume, a loan to
+    /// a friend and three intercity tickets bought in one week — all of them
+    /// genuinely discretionary, none of them a daily habit. A mean over 71 days
+    /// of this user's data reads Rp 380.249 while half their days cost under
+    /// Rp 186.000: the figure is more than double a typical day, and every
+    /// insight built on it inherits the error.
+    ///
+    /// A median cannot be dragged by a handful of expensive days, which is
+    /// exactly the property this number needs. The big days are not hidden —
+    /// they are reported as what they are, in `irregularSpend`.
+    private var typicalDailySpend: Double { cachedFigures.typicalDaily }
+
+    /// The irregular spending this period: episodic categories plus anything
+    /// marked a one-off. Named rather than averaged away.
+    ///
+    /// Counted by TRANSACTION, not by day. An earlier version excluded whole
+    /// expensive DAYS, which threw out the coffee bought on the same afternoon
+    /// as the vehicle tax — the day was not unusual, one purchase in it was.
+    private var irregularSpend: (count: Int, total: Double) {
+        (cachedFigures.irregularCount, cachedFigures.irregularTotal)
+    }
+
+    private var weeklyAverage: Double { typicalDailySpend * 7 }
+
+    /// What a day actually has to spend: income for the cycle, minus everything
+    /// contractual, spread across the cycle's days.
+    ///
+    /// The point of a daily figure is to answer "am I fine today", and that
+    /// cannot be answered against gross income — the rent is already spoken
+    /// for. This is the number the typical-day figure should be read against.
+    private var dailyAllowance: Double? {
+        guard let p = periodProgress, p.total > 0 else { return nil }
+        let cm = CurrencyManager.shared
+        let income = MainCard.salaries(salarySchedules).reduce(0.0) {
+            $0 + cm.convert($1.amount, from: $1.currency, to: displayCurrency)
+        }
+        guard income > 0 else { return nil }
+
+        // Contractual commitments ONLY — the declared recurring plans.
+        //
+        // This used to subtract `fixedSpend + upcomingFixed`, and `fixedSpend`
+        // had quietly grown to mean "everything not day-to-day", which now
+        // includes episodic travel and health and anything the user marked a
+        // one-off. So a Rp 1.150.000 trip reduced the daily allowance as though
+        // it were rent, and the figure read Rp 149.839 where the honest answer
+        // — (Rp 10.000.000 − Rp 3.705.000) ÷ 31 — is Rp 203.065.
+        //
+        // A discretionary trip is spending measured AGAINST the allowance, not
+        // a deduction FROM it. Using the plan total also makes the figure
+        // stable: it is the same all cycle instead of stepping down each time a
+        // bill posts.
+        let mainID = selectedCard?.id
+        let committed = recurringPlans
+            .filter { $0.isActive && ($0.cardID == nil || $0.cardID == mainID) }
+            .reduce(0.0) { $0 + cm.convert(abs($1.amount), from: $1.currency, to: displayCurrency) }
+        return max(income - committed, 0) / Double(p.total)
     }
 
     /// Number of whole days spanned by the current period.
@@ -615,13 +766,27 @@ struct StatisticsView: View {
                     : String(format: loc("stats.pattern.pace_ok"), p.total)
             ))
         }
-        if let day = costliestWeekday {
+        if let w = weekdayStandout {
+            let fmt = DateFormatter()
+            fmt.locale = LanguageManager.shared.currentLocale
+            let name = fmt.weekdaySymbols[max(min(w.weekday, 6), 0)]
+            // Naming the day is the easy half. The half that changes anything is
+            // whether it is heavy from more purchases or bigger ones.
+            let detailKey = w.isSizeDriven ? "stats.pattern.weekday_size"
+                          : w.isFrequencyDriven ? "stats.pattern.weekday_freq"
+                          : "stats.pattern.weekday_plain"
             out.append((
                 "calendar",
                 AppTheme.blue,
-                String(format: loc("stats.pattern.weekday"), day.name),
-                String(format: loc("stats.pattern.weekday_sub"),
-                       cm.formatted(day.average, currency: displayCurrency))
+                String(format: loc("stats.pattern.weekday"), name,
+                       cm.formatted(w.average, currency: displayCurrency)),
+                w.isSizeDriven
+                    ? String(format: loc(detailKey),
+                             cm.formatted(w.avgTicket, currency: displayCurrency),
+                             cm.formatted(w.otherAvgTicket, currency: displayCurrency))
+                    : w.isFrequencyDriven
+                        ? String(format: loc(detailKey), w.txPerDay, w.otherTxPerDay)
+                        : String(format: loc(detailKey), w.ratio)
             ))
         }
         if let quiet = noSpendDays, quiet.count > 0 {
@@ -651,33 +816,116 @@ struct StatisticsView: View {
     /// forecast, it has a result.
     private var projectedSpend: Double? {
         guard let p = periodProgress, p.elapsed > 0, filteredExpenses > 0 else { return nil }
-        return filteredExpenses / Double(p.elapsed) * Double(p.total)
+        // Straight-lining EVERYTHING multiplied the monthly charges by however
+        // much of the cycle had elapsed. On day 9 of 31 that is 3.4×, so a
+        // single Rp 2.100.000 kos payment projected as Rp 7.200.000 of rent for
+        // one month, and the screen announced a pace of Rp 13.565.600 against
+        // Rp 10.000.000 of income. The alarm was arithmetic, not behaviour.
+        //
+        // Three parts, each treated as what it is:
+        //   • day-to-day spending, projected at the rate it is actually running;
+        //   • fixed charges already made, counted once;
+        //   • fixed charges still to come, taken from the recurring plans rather
+        //     than guessed — DiPo knows the rent is due on the 8th.
+        let rated = variableSpend / Double(p.elapsed) * Double(p.total)
+        return rated + fixedSpend + upcomingFixed
     }
 
-    /// The weekday that costs the most on average. Needs at least two of that
-    /// weekday, otherwise a single big Saturday would masquerade as a pattern.
-    private var costliestWeekday: (name: String, average: Double)? {
+    /// Recurring charges falling in the remainder of this period. Counted at
+    /// face value: a plan due once is one charge, not a rate.
+    private var upcomingFixed: Double {
         let cal = Calendar.current
-        var totals: [Int: (sum: Double, days: Set<Date>)] = [:]
-        for tx in filteredTx where tx.amount < 0 && tx.txSubtype == .normal {
-            let wd = cal.component(.weekday, from: tx.date)
-            let day = cal.startOfDay(for: tx.date)
-            var entry = totals[wd] ?? (0, [])
-            entry.sum += abs(convertedAmount(tx))
-            entry.days.insert(day)
-            totals[wd] = entry
-        }
-        let ranked = totals.compactMap { wd, v -> (Int, Double, Int)? in
-            guard v.days.count >= 2 else { return nil }
-            return (wd, v.sum / Double(v.days.count), v.days.count)
-        }.sorted { $0.1 > $1.1 }
-        guard let top = ranked.first else { return nil }
-        let fmt = DateFormatter()
-        fmt.locale = LanguageManager.shared.currentLocale
-        // weekdaySymbols is 0-indexed from Sunday; Calendar's weekday is 1-based.
-        let name = fmt.weekdaySymbols[max(top.0 - 1, 0)]
-        return (name, top.1)
+        let (start, _) = effectiveRange
+        // NOT `effectiveRange.end`: for a running pay cycle that is NOW, so
+        // `end > now` was false on every render and this entire component
+        // silently evaluated to zero. The window has to reach the next payday.
+        guard let periodEnd = cycleBoundary(monthsFromNow: 1)
+                ?? cal.date(byAdding: .month, value: 1, to: start) else { return 0 }
+        let today = cal.startOfDay(for: Date())
+        let cm = CurrencyManager.shared
+        // Only plans that charge THIS card. Statistics reports the main card;
+        // adding a subscription billed to another account would project money
+        // that will never leave the one being measured.
+        let mainID = selectedCard?.id
+        return recurringPlans
+            .filter { $0.isActive && ($0.cardID == nil || $0.cardID == mainID) }
+            .reduce(0.0) { sum, plan in
+                let due = RecurringDateEngine.nextDueDate(dayOfMonth: plan.dayOfMonth)
+                // `due` is midnight; comparing it against `now` dropped a charge
+                // falling TODAY — not yet in `fixedSpend` if it has not posted,
+                // and excluded here too, so it fell through both.
+                guard due >= today, due < periodEnd else { return sum }
+                // Already posted → it is in `fixedSpend`; counting it again here
+                // would double it.
+                guard !plan.isChargedForCurrentDue else { return sum }
+                return sum + cm.convert(abs(plan.amount), from: plan.currency, to: displayCurrency)
+            }
     }
+
+    /// The weekday that genuinely stands out, and WHY.
+    ///
+    /// The old version took the max weekday average and printed it. That names
+    /// a day even when every day is alike — some day is always the highest —
+    /// and it says nothing a person can act on.
+    ///
+    /// This one asks two questions instead. Is the day a real outlier against
+    /// the other six (median + MAD, so one blowout Saturday cannot manufacture
+    /// a pattern)? And is it heavy because of MORE purchases or BIGGER ones?
+    /// That distinction is the whole advice: on this user's data Sunday costs
+    /// 2.4× a typical weekday while the number of purchases is flat — 4.7 a day
+    /// against 4.4. The lever is not going out less, it is what each outing
+    /// costs, and "you spend more at weekends" would have pointed at the wrong
+    /// one.
+    struct WeekdayStandout {
+        let weekday: Int
+        let average: Double
+        /// Ratio against the median of the other days.
+        let ratio: Double
+        let txPerDay: Double
+        let otherTxPerDay: Double
+        let avgTicket: Double
+        let otherAvgTicket: Double
+        /// True when the day is heavy because each purchase is larger, rather
+        /// than because there are more of them.
+        var isSizeDriven: Bool { avgTicket > otherAvgTicket * 1.35 }
+        var isFrequencyDriven: Bool { txPerDay > otherTxPerDay * 1.35 }
+    }
+
+    private var weekdayStandout: WeekdayStandout? {
+        let by = cachedFigures.byWeekday
+        // Every weekday needs to have happened enough times for its average to
+        // mean anything; below this a single date IS the average.
+        let usable = by.filter { $0.value.days.count >= 3 }
+        guard usable.count >= 5 else { return nil }
+
+        let averages = usable.mapValues { $0.total / Double($0.days.count) }
+        guard let top = averages.max(by: { $0.value < $1.value }) else { return nil }
+
+        let others = averages.filter { $0.key != top.key }.map(\.value).sorted()
+        guard others.count >= 4 else { return nil }
+        let m = others[others.count / 2]
+        let mad = others.map { abs($0 - m) }.sorted()[others.count / 2]
+        guard mad > 0 else { return nil }
+        // Same robust cutoff the category engine uses.
+        guard 0.6745 * (top.value - m) / mad >= 2.0, m > 0 else { return nil }
+
+        let t = usable[top.key]!
+        let otherTx = usable.filter { $0.key != top.key }
+        let otherCount = otherTx.reduce(0) { $0 + $1.value.count }
+        let otherDays = otherTx.reduce(0) { $0 + $1.value.days.count }
+        let otherTotal = otherTx.reduce(0.0) { $0 + $1.value.total }
+        guard otherDays > 0, otherCount > 0 else { return nil }
+
+        return WeekdayStandout(
+            weekday: top.key,
+            average: top.value,
+            ratio: top.value / m,
+            txPerDay: Double(t.count) / Double(t.days.count),
+            otherTxPerDay: Double(otherCount) / Double(otherDays),
+            avgTicket: t.total / Double(t.count),
+            otherAvgTicket: otherTotal / Double(otherCount))
+    }
+
 
     /// Days in the elapsed period with no spending at all — the one metric here
     /// that rewards restraint instead of measuring damage.
@@ -819,42 +1067,37 @@ struct StatisticsView: View {
                     .padding(.horizontal, 22)
                     .padding(.top, 12)
 
-                    // Card filter — user must select a specific card (no aggregation across currencies)
-                    if !availableCards.isEmpty {
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 8) {
-                                // Individual cards only — no "All Cards" aggregation
-                                ForEach(availableCards, id: \.id) { card in
-                                    Button {
-                                        HapticManager.shared.tap()
-                                        withAnimation(.spring(response: 0.3)) {
-                                            selectedCardID = card.id.uuidString
-                                            statsVM.selectedSliceIndex = nil
-                                            statsVM.animateIn()
-                                        }
-                                    } label: {
-                                        let isSelected = selectedCardID == card.id.uuidString
-                                        let quiet = !hasActivity(card)
-                                        HStack(spacing: 6) {
-                                            Circle()
-                                                .fill(Color(hex: card.gradientStart))
-                                                .frame(width: 8, height: 8)
-                                                .opacity(quiet && !isSelected ? 0.35 : 1)
-                                            Text(cardLabel(card))
-                                                .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
-                                                .lineLimit(1)
-                                        }
-                                        .foregroundStyle(isSelected ? .white
-                                                         : AppTheme.textSecondary.opacity(quiet ? 0.5 : 1))
-                                        .padding(.horizontal, 14).padding(.vertical, 8)
-                                        .background(isSelected ? Color(hex: card.gradientStart) : AppTheme.cardDark, in: Capsule())
-                                        .overlay(Capsule().stroke(AppTheme.cardMid.opacity(quiet && !isSelected ? 0.5 : 0), lineWidth: 1))
-                                    }
-                                    .buttonStyle(ScaleButtonStyle())
-                                }
-                            }
-                            .padding(.horizontal, 22)
+                    // The anchor, named. Not a control.
+                    //
+                    // It briefly offered a "Change" affordance here, which put
+                    // the same decision in two places — and this is the worse
+                    // of the two: choosing which account the whole app reasons
+                    // about is a Wallet decision, made once, next to the cards
+                    // themselves. Offering it again mid-analysis invites
+                    // treating it as a per-screen filter, which is exactly the
+                    // browsing behaviour that produced contradictory numbers on
+                    // different screens in the first place.
+                    if let main = selectedCard {
+                        HStack(spacing: 9) {
+                            LinearGradient(colors: [Color(hex: main.gradientStart),
+                                                    Color(hex: main.gradientEnd)],
+                                           startPoint: .top, endPoint: .bottom)
+                                .frame(width: 4, height: 22)
+                                .clipShape(Capsule())
+                            Text(cardLabel(main))
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(AppTheme.textPrimary)
+                                .lineLimit(1)
+                            Text(loc("main.badge"))
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundStyle(AppTheme.accent)
+                                .padding(.horizontal, 6).padding(.vertical, 2)
+                                .background(AppTheme.accent.opacity(0.15), in: Capsule())
+                            Spacer(minLength: 0)
                         }
+                        .padding(.horizontal, 14).padding(.vertical, 10)
+                        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
+                        .padding(.horizontal, 22)
                         .padding(.top, 10)
                     }
 
@@ -912,7 +1155,12 @@ struct StatisticsView: View {
                     // insights. The weekly average says what happened; this says
                     // what it costs.
                     if premiumMgr.canAccess(.smartBudget), !commitmentReview.lines.isEmpty {
-                        CommitmentPriorityCard(review: commitmentReview, currency: displayCurrency)
+                        CommitmentPriorityCard(review: commitmentReview,
+                                               currency: displayCurrency,
+                                               dailyAllowance: dailyAllowance,
+                                               typicalDaily: typicalDailySpend,
+                                               irregularThisCycle: irregularSpend.total,
+                                               daysInCycle: periodProgress?.total ?? periodDays)
                             .padding(.horizontal, 22)
                             .padding(.top, 12)
                     }
@@ -920,11 +1168,17 @@ struct StatisticsView: View {
                     if filteredExpenses > 0 {
                         let insightsCard = SmartInsightsCard(
                             weeklyAverage: weeklyAverage,
+                            dailyAllowance: dailyAllowance,
+                            irregular: irregularSpend,
                             topCategories: topCategories,
                             totalExpenses: filteredExpenses,
                             currency: displayCurrency,
                             isPartialPeriod: isPartialWeeklyPeriod,
-                            periodDays: periodDays
+                            periodDays: periodDays,
+                            onAudit: {
+                                HapticManager.shared.tap()
+                                showSpendingAudit = true
+                            }
                         )
                         if premiumMgr.canAccess(.smartBudget) {
                             insightsCard
@@ -1059,9 +1313,7 @@ struct StatisticsView: View {
             }
             // Auto-select first available card if none is selected.
             // Statistics is always per-card to avoid mixing currencies.
-            if selectedCardID == nil, let first = (cardsWithActivity.first ?? availableCards.first) {
-                selectedCardID = first.id.uuidString
-            }
+            selectedCardID = MainCard.reconcile(cards: appVM.cards)?.id.uuidString
             // Populate the memoized derivations before reading realCategories.
             recomputeStats()
             // Update categories with real data on appear
@@ -1072,21 +1324,34 @@ struct StatisticsView: View {
             }
         }
         // StatisticsView lives in MainTabView's ZStack and is mounted ONCE at
-        // app launch (tab switching only toggles opacity). That means
-        // `.onAppear` fires before the user adds their first transaction —
-        // at that point `availableCards` is empty so `selectedCardID` stays
-        // nil. When transactions are added later from another tab, the body
-        // re-evaluates (SwiftData @Observable) and `availableCards` recomputes
-        // with the new card, BUT `selectedCardID` is never updated → the
-        // summary shows Rp 0 / Rp 0 even though the data is there.
-        // This onChange catches the "first card became available" transition
-        // and auto-selects it. Keyed by `count` so we don't churn on every
-        // tx insert into an already-selected card.
-        .onChange(of: cardsWithActivity.count) { _, newCount in
-            if selectedCardID == nil, newCount > 0,
-               let first = cardsWithActivity.first {
-                selectedCardID = first.id.uuidString
-            }
+        // app launch (tab switching only toggles opacity), so `.onAppear` fires
+        // before the user has added their first card. Re-running reconcile when
+        // activity first appears catches that transition — otherwise the screen
+        // reports Rp 0 / Rp 0 with the data sitting right there. Keyed by
+        // `count` so it doesn't churn on every tx insert.
+        .onChange(of: cardsWithActivity.count) { _, _ in
+            selectedCardID = MainCard.reconcile(cards: appVM.cards)?.id.uuidString
+        }
+        .onChange(of: sb.budgetCardID) { _, newID in
+            selectedCardID = newID
+        }
+        .trackScreen(.statistics)
+        .sheet(isPresented: $showSpendingAudit) {
+            SpendingAuditSheet(transactions: filteredTx,
+                               rhythm: rhythm,
+                               typicalDaily: typicalDailySpend,
+                               weekly: weeklyAverage,
+                               dailyAllowance: dailyAllowance,
+                               currency: displayCurrency)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+                .presentationBackground(AppTheme.bg)
+                .preferredColorScheme(appColorScheme())
+                // A swipe inside the sheet changes which transactions the rate
+                // is built from, so the figures behind it have to be rebuilt —
+                // otherwise the user corrects something and the number they
+                // came to check does not move.
+                .onDisappear { recomputeStats() }
         }
         .onChange(of: statsVM.selectedStatTab) { _, _ in
             statsVM.selectedSliceIndex = nil
@@ -1096,9 +1361,7 @@ struct StatisticsView: View {
         .onChange(of: selectedPeriod) { _, _ in
             statsVM.selectedSliceIndex = nil
             // If selected card has no tx in new period, auto-switch to a card that does
-            if selectedCardID == nil, let first = (cardsWithActivity.first ?? availableCards.first) {
-                selectedCardID = first.id.uuidString
-            }
+            selectedCardID = MainCard.reconcile(cards: appVM.cards)?.id.uuidString
             recomputeStats()
             withAnimation { statsVM.categories = realCategories }
             statsVM.animateIn()
@@ -1412,8 +1675,8 @@ struct StatSegmentPicker: View {
                         .background {
                             if vm.selectedStatTab == tab {
                                 Capsule()
-                                    .fill(AppTheme.accent)
-                                    .shadow(color: AppTheme.accent.opacity(0.4), radius: 10, y: 4)
+                                    .fill(tab.tint)
+                                    .shadow(color: tab.tint.opacity(0.35), radius: 8, y: 3)
                             }
                         }
                 }
@@ -1602,6 +1865,10 @@ struct NetWorthTrendCard: View {
 
 struct SmartInsightsCard: View {
     let weeklyAverage: Double
+    /// What a day has to spend once the month's fixed costs are set aside.
+    var dailyAllowance: Double? = nil
+    /// Days that cost several times a typical one — reported, not averaged in.
+    var irregular: (count: Int, total: Double) = (0, 0)
     let topCategories: [(category: TxCategory, amount: Double, percentage: Double)]
     let totalExpenses: Double
     let currency: String
@@ -1611,6 +1878,9 @@ struct SmartInsightsCard: View {
     /// flag it as a partial-period estimate so it isn't mistaken for a rate.
     var isPartialPeriod: Bool = false
     var periodDays: Int = 0
+    /// Opens the audit. A figure that excludes some of your spending has to be
+    /// traceable back to the transactions it did and did not use.
+    var onAudit: (() -> Void)? = nil
 
     @State private var appeared = false
     
@@ -1661,6 +1931,48 @@ struct SmartInsightsCard: View {
                      : loc("stats.weekly_avg_sub"))
                     .font(.system(size: 11))
                     .foregroundStyle(isPartialPeriod ? AppTheme.orange.opacity(0.9) : AppTheme.textSecondary.opacity(0.8))
+
+                // The figure only means something against what a day HAS.
+                if let allowance = dailyAllowance, allowance > 0 {
+                    let daily = weeklyAverage / 7
+                    HStack(spacing: 5) {
+                        Image(systemName: daily <= allowance ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
+                            .font(.system(size: 10))
+                        Text(String(format: loc("stats.daily_vs_allowance"),
+                                    CurrencyManager.shared.formatted(daily, currency: currency),
+                                    CurrencyManager.shared.formatted(allowance, currency: currency)))
+                            .font(.system(size: 11, weight: .medium))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .foregroundStyle(daily <= allowance ? AppTheme.accent : AppTheme.orange)
+                    .padding(.top, 2)
+                }
+
+                // The expensive days, named instead of smeared across the week.
+                if let onAudit {
+                    // Named, not just tappable. An invisible tap target on a
+                    // number is a feature only its author knows about.
+                    Button(action: onAudit) {
+                        HStack(spacing: 4) {
+                            Text(loc("audit.open"))
+                                .font(.system(size: 11, weight: .semibold))
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 9, weight: .bold))
+                        }
+                        .foregroundStyle(AppTheme.purple)
+                    }
+                    .buttonStyle(ScaleButtonStyle())
+                    .padding(.top, 2)
+                }
+
+                if irregular.count > 0 {
+                    Text(String(format: loc(irregular.count == 1 ? "stats.oneoff_day" : "stats.oneoff_days"),
+                                irregular.count,
+                                CurrencyManager.shared.formatted(irregular.total, currency: currency)))
+                        .font(.system(size: 11))
+                        .foregroundStyle(AppTheme.textSecondary.opacity(0.8))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(14)
