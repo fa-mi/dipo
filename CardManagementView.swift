@@ -620,10 +620,10 @@ struct CardFormSheet: View {
                                             Text(label)
                                                 .font(.system(size: 13, weight: .semibold))
                                         }
-                                        .foregroundStyle(isWallet == walletMode ? AppTheme.bg : AppTheme.textSecondary)
+                                        .foregroundStyle(isWallet == walletMode ? AppTheme.onVividFill : AppTheme.textSecondary)
                                         .frame(maxWidth: .infinity)
                                         .padding(.vertical, 11)
-                                        .background(isWallet == walletMode ? AppTheme.accent : Color.clear,
+                                        .background(isWallet == walletMode ? AppTheme.accentFill : Color.clear,
                                                     in: RoundedRectangle(cornerRadius: 12))
                                     }
                                     .buttonStyle(ScaleButtonStyle())
@@ -1537,9 +1537,9 @@ struct CardTransferSheet: View {
                 Image(systemName: "arrow.left.arrow.right").font(.system(size: 16, weight: .semibold))
                 Text(loc("transfer.button")).font(.system(size: 16, weight: .bold))
             }
-            .foregroundStyle(canTransfer ? AppTheme.bg : AppTheme.textSecondary)
+            .foregroundStyle(canTransfer ? AppTheme.onVividFill : AppTheme.textSecondary)
             .frame(maxWidth: .infinity).padding(.vertical, 17)
-            .background(canTransfer ? AppTheme.accent : AppTheme.cardMid, in: RoundedRectangle(cornerRadius: 16))
+            .background(canTransfer ? AppTheme.accentFill : AppTheme.cardMid, in: RoundedRectangle(cornerRadius: 16))
         }
         .buttonStyle(ScaleButtonStyle())
         .disabled(!canTransfer)

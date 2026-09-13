@@ -636,21 +636,21 @@ struct UpcomingPayPill: View {
                 .tracking(0.8)
             Text(dayLabel)
                 .font(.system(size: 22, weight: .bold))
-                .foregroundStyle(isToday ? AppTheme.bg : AppTheme.textPrimary)
+                .foregroundStyle(isToday ? AppTheme.onVividFill : AppTheme.textPrimary)
             Text(weekday)
                 .font(.system(size: 10, weight: .medium))
-                .foregroundStyle(isToday ? AppTheme.bg.opacity(0.7) : AppTheme.textSecondary)
+                .foregroundStyle(isToday ? AppTheme.onVividFill.opacity(0.7) : AppTheme.textSecondary)
             if wasAdjusted {
                 Image(systemName: "arrow.left.circle.fill")
                     .font(.system(size: 12))
-                    .foregroundStyle(isToday ? AppTheme.bg.opacity(0.8) : AppTheme.orange)
+                    .foregroundStyle(isToday ? AppTheme.onVividFill.opacity(0.8) : AppTheme.orange)
             } else {
                 Spacer().frame(height: 12)
             }
         }
         .frame(width: 64)
         .padding(.vertical, 12)
-        .background(isToday ? AppTheme.accent : AppTheme.cardMid,
+        .background(isToday ? AppTheme.accentFill : AppTheme.cardMid,
                     in: RoundedRectangle(cornerRadius: 14))
         .overlay(RoundedRectangle(cornerRadius: 14)
             .stroke(wasAdjusted && !isToday ? AppTheme.orange.opacity(0.4) : Color.clear, lineWidth: 1))
@@ -1226,22 +1226,22 @@ struct SalaryDetailView: View {
                                     VStack(spacing: 6) {
                                         Text(monthLabel.uppercased())
                                             .font(.system(size: 10, weight: .semibold))
-                                            .foregroundStyle(isToday ? AppTheme.bg : AppTheme.textSecondary).tracking(0.8)
+                                            .foregroundStyle(isToday ? AppTheme.onVividFill : AppTheme.textSecondary).tracking(0.8)
                                         Text(dayLabel)
                                             .font(.system(size: 22, weight: .bold))
-                                            .foregroundStyle(isToday ? AppTheme.bg : AppTheme.textPrimary)
+                                            .foregroundStyle(isToday ? AppTheme.onVividFill : AppTheme.textPrimary)
                                         Text(weekday)
                                             .font(.system(size: 10, weight: .medium))
-                                            .foregroundStyle(isToday ? AppTheme.bg.opacity(0.7) : AppTheme.textSecondary)
+                                            .foregroundStyle(isToday ? AppTheme.onVividFill.opacity(0.7) : AppTheme.textSecondary)
                                         if wasAdj {
                                             Image(systemName: "arrow.left.circle.fill").font(.system(size: 12))
-                                                .foregroundStyle(isToday ? AppTheme.bg.opacity(0.8) : AppTheme.orange)
+                                                .foregroundStyle(isToday ? AppTheme.onVividFill.opacity(0.8) : AppTheme.orange)
                                         } else {
                                             Spacer().frame(height: 12)
                                         }
                                     }
                                     .frame(width: 64).padding(.vertical, 12)
-                                    .background(isToday ? AppTheme.accent : AppTheme.cardMid, in: RoundedRectangle(cornerRadius: 14))
+                                    .background(isToday ? AppTheme.accentFill : AppTheme.cardMid, in: RoundedRectangle(cornerRadius: 14))
                                     .overlay(RoundedRectangle(cornerRadius: 14).stroke(wasAdj && !isToday ? AppTheme.orange.opacity(0.4) : Color.clear, lineWidth: 1))
                                     .shadow(color: isToday ? AppTheme.accent.opacity(0.3) : .clear, radius: 8, y: 4)
                                 }

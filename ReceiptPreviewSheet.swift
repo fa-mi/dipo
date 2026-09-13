@@ -352,16 +352,16 @@ struct ReceiptPreviewSheet: View {
                                             .lineLimit(1)
                                         Text(cardSubtitle(card))
                                             .font(.system(size: 10))
-                                            .foregroundStyle(isSel ? .white.opacity(0.85) : AppTheme.textSecondary)
+                                            .foregroundStyle(isSel ? AppTheme.onVividFill.opacity(0.85) : AppTheme.textSecondary)
                                     }
                                     if isSel {
                                         Image(systemName: "checkmark.circle.fill")
                                             .font(.system(size: 14))
                                     }
                                 }
-                                .foregroundStyle(isSel ? .white : AppTheme.textPrimary)
+                                .foregroundStyle(isSel ? AppTheme.onVividFill : AppTheme.textPrimary)
                                 .padding(.horizontal, 14).padding(.vertical, 10)
-                                .background(isSel ? AppTheme.accent : AppTheme.cardDark,
+                                .background(isSel ? AppTheme.accentFill : AppTheme.cardDark,
                                             in: RoundedRectangle(cornerRadius: 12))
                                 .overlay(RoundedRectangle(cornerRadius: 12)
                                     .stroke(isSel ? Color.clear : AppTheme.cardMid.opacity(0.5), lineWidth: 1))

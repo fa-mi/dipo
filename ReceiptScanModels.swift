@@ -82,7 +82,7 @@ struct ReceiptScanResult: Equatable {
     /// Convenience: color tied to confidence band.
     var confidenceColorHex: String {
         switch confidence {
-        case 0.85...:    return "#10B981"  // green
+        case 0.85...:    return "#34C759"  // systemGreen — the app's one green
         case 0.6..<0.85: return "#F59E0B"  // amber
         default:         return "#EF4444"  // red
         }

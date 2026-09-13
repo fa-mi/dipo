@@ -466,9 +466,9 @@ struct CreditCardPaymentSheet: View {
 
                         Button { record() } label: {
                             Text(loc("cc.pay_bill")).font(.system(size: 16, weight: .bold))
-                                .foregroundStyle(.white)
+                                .foregroundStyle(canSave ? AppTheme.onVividFill : AppTheme.textSecondary)
                                 .frame(maxWidth: .infinity).padding(.vertical, 15)
-                                .background(canSave ? AppTheme.accent : AppTheme.cardMid,
+                                .background(canSave ? AppTheme.accentFill : AppTheme.cardMid,
                                             in: RoundedRectangle(cornerRadius: 16))
                         }
                         .buttonStyle(ScaleButtonStyle())

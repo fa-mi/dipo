@@ -343,7 +343,7 @@ enum TxCategory: String, CaseIterable, Codable {
         case .salary:      return AppTheme.accent
         case .freelance:   return Color(hex: "#38BDF8")
         case .business:    return Color(hex: "#A78BFA")
-        case .investment:  return Color(hex: "#34D399")
+        case .investment:  return AppTheme.accent
         case .bonus:       return Color(hex: "#FBBF24")
         case .gift:        return Color(hex: "#F87171")
         case .incomeOther: return AppTheme.textSecondary
@@ -361,14 +361,34 @@ enum TxCategory: String, CaseIterable, Codable {
         case .health:      return "#EC4899"
         case .commitment:  return "#0D9488"
         case .other:       return "#5B6F6B"
-        case .salary:      return "#1D9E75"
+        case .salary:      return "#34C759"
         case .freelance:   return "#0EA5E9"
         case .business:    return "#7C3AED"
-        case .investment:  return "#059669"
+        case .investment:  return "#34C759"
         case .bonus:       return "#D97706"
         case .gift:        return "#DC2626"
         case .incomeOther: return "#5B6F6B"
         case .debtPayment: return "#FF4444"
+        }
+    }
+}
+
+// MARK: - Icon background (display)
+
+extension TxRecord {
+    /// The colour a row's icon circle is painted with.
+    ///
+    /// `iconBgHex` is STORED per transaction, so re-colouring a category only
+    /// reaches rows created afterwards — every salary logged before the green
+    /// was unified would keep its old emerald. The retired greens are mapped
+    /// to the current one here, at display time, rather than rewriting every
+    /// record (and every backup that carries the old value).
+    var displayIconBg: Color {
+        switch iconBgHex.uppercased() {
+        case "#1D9E75", "#059669", "#1DB87A", "#10B981", "#34D399":
+            return AppTheme.accent
+        default:
+            return Color(hex: iconBgHex)
         }
     }
 }

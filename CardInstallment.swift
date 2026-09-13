@@ -386,9 +386,9 @@ struct InstallmentFormSheet: View {
                                         } label: {
                                             Text("\(t)×")
                                                 .font(.system(size: 13, weight: .semibold))
-                                                .foregroundStyle(tenor == t ? .white : AppTheme.textSecondary)
+                                                .foregroundStyle(tenor == t ? AppTheme.onVividFill : AppTheme.textSecondary)
                                                 .padding(.horizontal, 14).padding(.vertical, 9)
-                                                .background(tenor == t ? AppTheme.accent : AppTheme.cardDark,
+                                                .background(tenor == t ? AppTheme.accentFill : AppTheme.cardDark,
                                                             in: Capsule())
                                         }
                                         .buttonStyle(.plain)

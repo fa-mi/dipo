@@ -243,9 +243,9 @@ struct SearchView: View {
                                                 .font(.system(size: 12, weight: selectedPeriod == period ? .semibold : .regular))
                                         }
                                     }
-                                    .foregroundStyle(selectedPeriod == period ? AppTheme.bg : AppTheme.textSecondary)
+                                    .foregroundStyle(selectedPeriod == period ? AppTheme.onVividFill : AppTheme.textSecondary)
                                     .padding(.horizontal, 12).padding(.vertical, 7)
-                                    .background(selectedPeriod == period ? AppTheme.accent : AppTheme.cardDark, in: Capsule())
+                                    .background(selectedPeriod == period ? AppTheme.accentFill : AppTheme.cardDark, in: Capsule())
                                 }
                                 .buttonStyle(ScaleButtonStyle())
                             }
@@ -438,7 +438,7 @@ struct SearchTxRow: View {
         HStack(spacing: 14) {
             ZStack {
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(Color(hex: tx.iconBgHex))
+                    .fill(tx.displayIconBg)
                     .frame(width: 42, height: 42)
                 Text(tx.icon)
                     .font(.system(size: tx.icon.count == 1 ? 15 : 18))
@@ -533,9 +533,9 @@ struct TransactionDetailSheet: View {
         } label: {
             Text(title)
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(on ? AppTheme.bg : AppTheme.textSecondary)
+                .foregroundStyle(on ? AppTheme.onVividFill : AppTheme.textSecondary)
                 .padding(.horizontal, 12).padding(.vertical, 7)
-                .background(on ? AppTheme.accent : AppTheme.cardMid, in: Capsule())
+                .background(on ? AppTheme.accentFill : AppTheme.cardMid, in: Capsule())
         }
         .buttonStyle(ScaleButtonStyle())
     }
@@ -676,7 +676,7 @@ struct TransactionDetailSheet: View {
             VStack(spacing: 8) {
                 ZStack {
                     RoundedRectangle(cornerRadius: 18)
-                        .fill(Color(hex: tx.iconBgHex))
+                        .fill(tx.displayIconBg)
                         .frame(width: 64, height: 64)
                     Text(tx.icon)
                         .font(.system(size: tx.icon.count == 1 ? 24 : 30))

@@ -97,7 +97,7 @@ enum PremiumFeature: String {
         case .savingsGoals:    return Color(hex: "#FB923C")
         case .smartDebt:       return Color(hex: "#FF6B6B")
         case .smartBudget:     return Color(hex: "#A78BFA")
-        case .scanReceipt:     return Color(hex: "#10B981")
+        case .scanReceipt:     return AppTheme.accent
         case .aiAdvisor:       return Color(hex: "#A78BFA")
         case .cardTransfer:    return Color(hex: "#38BDF8")
         }

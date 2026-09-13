@@ -904,7 +904,7 @@ struct BudgetGroupCard: View {
                         ForEach(groupTx.prefix(2)) { tx in
                             HStack(spacing: 10) {
                                 ZStack {
-                                    RoundedRectangle(cornerRadius: 9).fill(Color(hex: tx.iconBgHex)).frame(width: 30, height: 30)
+                                    RoundedRectangle(cornerRadius: 9).fill(tx.displayIconBg).frame(width: 30, height: 30)
                                     Text(tx.icon).font(.system(size: tx.icon.count == 1 ? 12 : 15)).foregroundStyle(.white)
                                 }
                                 Text(tx.name).font(.system(size: 12, weight: .medium)).foregroundStyle(AppTheme.textPrimary).lineLimit(1)
@@ -1245,7 +1245,7 @@ struct BudgetGroupDetailView: View {
                                                 let converted = CurrencyManager.shared.convert(abs(tx.amount), from: tx.currency, to: currency)
                                                 HStack(spacing: 14) {
                                                     ZStack {
-                                                        RoundedRectangle(cornerRadius: 12).fill(Color(hex: tx.iconBgHex)).frame(width: 44, height: 44)
+                                                        RoundedRectangle(cornerRadius: 12).fill(tx.displayIconBg).frame(width: 44, height: 44)
                                                         Text(tx.icon).font(.system(size: tx.icon.count == 1 ? 16 : 20)).foregroundStyle(.white)
                                                     }
                                                     VStack(alignment: .leading, spacing: 3) {

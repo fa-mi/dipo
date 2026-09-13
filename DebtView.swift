@@ -1386,9 +1386,9 @@ struct DebtFormSheet: View {
                                     ForEach(vm.currencies, id: \.self) { c in
                                         Button { HapticManager.shared.tap(); vm.formCurrency = c } label: {
                                             Text(c).font(.system(size: 13, weight: .semibold))
-                                                .foregroundStyle(vm.formCurrency == c ? AppTheme.bg : AppTheme.textSecondary)
+                                                .foregroundStyle(vm.formCurrency == c ? AppTheme.onVividFill : AppTheme.textSecondary)
                                                 .padding(.horizontal, 16).padding(.vertical, 8)
-                                                .background(vm.formCurrency == c ? AppTheme.accent : AppTheme.cardDark, in: Capsule())
+                                                .background(vm.formCurrency == c ? AppTheme.accentFill : AppTheme.cardDark, in: Capsule())
                                         }.buttonStyle(ScaleButtonStyle())
                                     }
                                 }.padding(.horizontal, 22)
@@ -1974,9 +1974,9 @@ struct PayoffSimulatorSheet: View {
                                             } label: {
                                                 Text(d.name)
                                                     .font(.system(size: 13, weight: selectedDebt.id == d.id ? .semibold : .regular))
-                                                    .foregroundStyle(selectedDebt.id == d.id ? AppTheme.bg : AppTheme.textPrimary)
+                                                    .foregroundStyle(selectedDebt.id == d.id ? AppTheme.onVividFill : AppTheme.textPrimary)
                                                     .padding(.horizontal, 14).padding(.vertical, 8)
-                                                    .background(selectedDebt.id == d.id ? AppTheme.accent : AppTheme.cardMid,
+                                                    .background(selectedDebt.id == d.id ? AppTheme.accentFill : AppTheme.cardMid,
                                                                 in: Capsule())
                                             }.buttonStyle(ScaleButtonStyle())
                                         }

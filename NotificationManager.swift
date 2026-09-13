@@ -208,7 +208,7 @@ final class NotificationManager {
         let icon: String, hex: String, title: String, body: String, time: String
         switch daysUntil {
         case 0:
-            icon = "banknote.fill"; hex = "#1DB87A"
+            icon = "banknote.fill"; hex = "#34C759"
             title = loc("notif.payday.today_title")
             body  = String(format: loc("notif.payday.today_body"), label, amount)
             time  = loc("notif.time.today")
@@ -366,7 +366,7 @@ final class NotificationManager {
             title = loc("notif.answered")
             body  = loc("notif.answeredbody")
             icon  = "checkmark.circle.fill"
-            hex   = "#1DB87A"
+            hex   = "#34C759"
         case "closed":
             title = loc("notif.closed")
             body  = loc("notif.closedbody")

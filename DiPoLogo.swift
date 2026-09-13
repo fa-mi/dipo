@@ -17,7 +17,7 @@ struct DiPoLogo: View {
                         colors: [Color(hex: "#1A2E2A"), Color(hex: "#0D1F1C")],
                         startPoint: .topLeading, endPoint: .bottomTrailing))
                     .frame(width: size, height: size)
-                    .shadow(color: Color(hex: "#1DB87A").opacity(0.35), radius: size * 0.18, y: size * 0.06)
+                    .shadow(color: AppTheme.accent.opacity(0.35), radius: size * 0.18, y: size * 0.06)
             }
             DiPoLogoMark(size: size * 0.62)
         }
@@ -48,7 +48,7 @@ struct DiPoLogoMark: View {
                 let rect = CGRect(x: x, y: y, width: barW, height: barH)
                 let path = Path(roundedRect: rect, cornerRadius: barW * 0.35)
                 let alpha = 0.55 + Double(i) * 0.15
-                ctx.fill(path, with: .color(Color(hex: "#1DB87A").opacity(alpha)))
+                ctx.fill(path, with: .color(AppTheme.accent.opacity(alpha)))
             }
 
             // Draw trend line

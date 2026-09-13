@@ -893,10 +893,10 @@ struct DepositSheet: View {
                      ? String(format: loc("savings.add_amount"), CurrencyManager.shared.formatted(amount, currency: goal.currency))
                      : loc("savings.add"))
                     .font(.system(size: 16, weight: .bold))
-                    .foregroundStyle(AppTheme.bg)
+                    .foregroundStyle(canDeposit ? AppTheme.onVividFill : AppTheme.textSecondary)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
-                    .background(canDeposit ? AppTheme.accent : AppTheme.cardMid, in: Capsule())
+                    .background(canDeposit ? AppTheme.accentFill : AppTheme.cardMid, in: Capsule())
                     .shadow(color: canDeposit ? AppTheme.accent.opacity(0.35) : .clear, radius: 12, y: 6)
             }
             .buttonStyle(ScaleButtonStyle())

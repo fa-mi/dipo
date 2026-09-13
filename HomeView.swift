@@ -2308,7 +2308,7 @@ struct TxRow: View {
         HStack(spacing: 14) {
             ZStack {
                 Circle()
-                    .fill(Color(hex: tx.iconBgHex)).frame(width: 44, height: 44)
+                    .fill(tx.displayIconBg).frame(width: 44, height: 44)
                 Text(tx.icon)
                     .font(.system(size: tx.icon.count == 1 ? 16 : 18)).foregroundStyle(.white)
             }

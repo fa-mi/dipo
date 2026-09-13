@@ -89,20 +89,20 @@ struct CardChip: View {
                     if showsCurrency {
                         Text(cardCurrency)
                             .font(.system(size: 10, weight: .bold))
-                            .foregroundStyle(selected ? AppTheme.bg.opacity(0.75) : AppTheme.accent)
+                            .foregroundStyle(selected ? AppTheme.onVividFill.opacity(0.75) : AppTheme.accent)
                     }
                     if card.isCreditCard {
                         Text(loc("cc.badge"))
                             .font(.system(size: 9, weight: .bold))
-                            .foregroundStyle(selected ? AppTheme.bg.opacity(0.75) : AppTheme.purple)
+                            .foregroundStyle(selected ? AppTheme.onVividFill.opacity(0.75) : AppTheme.purple)
                     }
                 }
-                .foregroundStyle(selected ? AppTheme.bg.opacity(0.7) : AppTheme.textSecondary)
+                .foregroundStyle(selected ? AppTheme.onVividFill.opacity(0.7) : AppTheme.textSecondary)
             }
         }
-        .foregroundStyle(selected ? AppTheme.bg : AppTheme.textPrimary)
+        .foregroundStyle(selected ? AppTheme.onVividFill : AppTheme.textPrimary)
         .padding(.horizontal, 13).padding(.vertical, 9)
-        .background(selected ? AppTheme.accent : AppTheme.cardDark,
+        .background(selected ? AppTheme.accentFill : AppTheme.cardDark,
                     in: RoundedRectangle(cornerRadius: 13))
         .overlay {
             RoundedRectangle(cornerRadius: 13)

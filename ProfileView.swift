@@ -548,7 +548,7 @@ struct ProfileView: View {
                     Circle().fill(AppTheme.accentFill).frame(width: 32, height: 32)
                         .shadow(color: AppTheme.accent.opacity(0.55), radius: 8, y: 3)
                     Image(systemName: "camera.fill")
-                        .font(.system(size: 13, weight: .semibold)).foregroundStyle(.white)
+                        .font(.system(size: 13, weight: .semibold)).foregroundStyle(AppTheme.onVividFill)
                 }
             }
             .buttonStyle(ScaleButtonStyle())
@@ -970,13 +970,13 @@ struct ProfileView: View {
                     } label: {
                         VStack(spacing: 5) {
                             Image(systemName: item.icon).font(.system(size: 16))
-                                .foregroundStyle(appearanceMode == item.mode ? AppTheme.bg : AppTheme.textSecondary)
+                                .foregroundStyle(appearanceMode == item.mode ? AppTheme.onVividFill : AppTheme.textSecondary)
                             Text(item.label)
                                 .font(.system(size: 11, weight: appearanceMode == item.mode ? .semibold : .regular))
-                                .foregroundStyle(appearanceMode == item.mode ? AppTheme.bg : AppTheme.textSecondary)
+                                .foregroundStyle(appearanceMode == item.mode ? AppTheme.onVividFill : AppTheme.textSecondary)
                         }
                         .frame(maxWidth: .infinity).padding(.vertical, 10)
-                        .background(appearanceMode == item.mode ? AppTheme.accent : Color.clear,
+                        .background(appearanceMode == item.mode ? AppTheme.accentFill : Color.clear,
                                     in: RoundedRectangle(cornerRadius: 10))
                     }
                     .buttonStyle(ScaleButtonStyle())
@@ -1034,11 +1034,11 @@ struct ProfileView: View {
                             Text(language.nativeName)
                                 .font(.system(size: 11,
                                               weight: language == lang.current ? .semibold : .regular))
-                                .foregroundStyle(language == lang.current ? AppTheme.bg : AppTheme.textSecondary)
+                                .foregroundStyle(language == lang.current ? AppTheme.onVividFill : AppTheme.textSecondary)
                                 .lineLimit(1).minimumScaleFactor(0.7)
                         }
                         .frame(maxWidth: .infinity).padding(.vertical, 10)
-                        .background(language == lang.current ? AppTheme.accent : Color.clear,
+                        .background(language == lang.current ? AppTheme.accentFill : Color.clear,
                                     in: RoundedRectangle(cornerRadius: 10))
                     }
                     .buttonStyle(ScaleButtonStyle())

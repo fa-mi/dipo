@@ -24,12 +24,17 @@ struct AppTheme {
     // lightness until the ratio clears 4.5:1, so the app reads as the same
     // product in both themes rather than gaining a second identity.
 
-    /// Green as TEXT or an icon sitting on the page ground. Light mode has to
-    /// be dark enough to clear 4.5:1 there, which is why it cannot be neon.
-    /// For the vivid one, see `accentFill` — these are two different jobs and
-    /// they were fighting over one value.
-    static let accent  = Color(UIColor.adaptive(dark: "#1DB87A", light: "#008049"))  // 6.51 / 4.54
-    static let green   = Color(UIColor.adaptive(dark: "#1DB87A", light: "#008049"))  // 6.51 / 4.54
+    /// ONE green, app-wide: the iPhone's charging green, `UIColor.systemGreen`
+    /// (#34C759 light / #30D158 dark). Text, icons, fills and the money-in
+    /// figure all resolve to this, so no screen shows two greens side by side.
+    ///
+    /// This replaced a split where light-mode text used a darker #008049 to
+    /// clear 4.5:1. That trade was chosen against, on purpose: as text on white
+    /// systemGreen measures 2.22:1 (7.41:1 in dark mode). Keep it legible
+    /// through structure — larger/bolder type, and `onVividFill` (≈9:1) for any
+    /// label placed ON a green fill, never white or `bg`.
+    static let accent  = Color(uiColor: .systemGreen)
+    static let green   = Color(uiColor: .systemGreen)
     /// Red as TEXT or an icon on the page ground. Light mode has to be dark
     /// enough to clear 4.5:1 there. For a red FILL see `redFill` — same split
     /// as `accent` / `accentFill`, and for the same reason.
@@ -72,9 +77,9 @@ struct AppTheme {
     /// text, below the 4.5 used for `accent`/`red`. In dark mode they are
     /// 7.41:1 and 4.40:1. Use them for figures set large and bold, and for
     /// solid badges — put `onVividFill` glyphs on them (≈9:1 and ≈5.6:1).
-    static let flowIn  = Color(uiColor: .systemGreen)
+    static let flowIn  = accent
     static let flowOut = Color(uiColor: .systemRed)
-    static let voiceGlow = Color(UIColor.adaptive(dark: "#2BFF9E", light: "#00C86E"))
+    static let voiceGlow = Color(uiColor: .systemGreen)   // one green, even in the orb
 
     static let blue    = Color(UIColor.adaptive(dark: "#38BDF8", light: "#0676A8"))  // 7.79 / 4.58
     static let purple  = Color(UIColor.adaptive(dark: "#A78BFA", light: "#784CF7"))  // 6.13 / 4.54
@@ -100,7 +105,7 @@ struct AppTheme {
     ///
     /// The four 6–8pt indicator dots that DID rely on the boundary were moved
     /// to `accent`, where they read better than they ever did here.
-    static let accentFill = Color(UIColor.adaptive(dark: "#1DB87A", light: "#00D07A"))
+    static let accentFill = Color(uiColor: .systemGreen)   // same green as `accent` — see there
 
     /// The track behind an `accentFill` progress bar.
     ///
@@ -116,8 +121,8 @@ struct AppTheme {
     ///
     /// Unlike `onSolid` this does NOT invert with the theme, because both of
     /// those fills are bright in BOTH modes, so the text on them is dark in
-    /// both: 7.22:1 on dark-mode green, 5.52:1 on light-mode green, 6.08:1 on
-    /// red. Using `onSolid` here would put white on a light fill — 3.35:1 on
+    /// both: 9.16:1 on dark-mode systemGreen, 8.34:1 on light-mode systemGreen,
+    /// 6.08:1 on red. Using `onSolid` here would put white on a light fill — 3.35:1 on
     /// green, 2.76:1 on red — which is exactly the failure this token set
     /// exists to prevent.
     static let onVividFill = Color(hex: "#0D1514")

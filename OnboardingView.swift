@@ -11,7 +11,7 @@ struct OnboardingView: View {
     private var pages: [(icon: String, color: Color, titleKey: String, bodyKey: String, tipKey: String?)] {[
         ("creditcard.fill", Color(hex: "#38BDF8"),
          "onboard.p1_title", "onboard.p1_body", nil),
-        ("chart.pie.fill",  Color(hex: "#1DB87A"),
+        ("chart.pie.fill",  AppTheme.accent,
          "onboard.p2_title", "onboard.p2_body", "onboard.p2_tip"),
         ("brain.fill",      Color(hex: "#A78BFA"),
          "onboard.p3_title", "onboard.p3_body", "onboard.p3_tip"),

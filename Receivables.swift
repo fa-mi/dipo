@@ -578,9 +578,9 @@ struct RepaymentSheet: View {
                             record()
                         } label: {
                             Text(loc("receivable.record_repayment"))
-                                .font(.system(size: 16, weight: .bold)).foregroundStyle(.white)
+                                .font(.system(size: 16, weight: .bold)).foregroundStyle(canSave ? AppTheme.onVividFill : AppTheme.textSecondary)
                                 .frame(maxWidth: .infinity).padding(.vertical, 15)
-                                .background(canSave ? AppTheme.accent : AppTheme.cardMid,
+                                .background(canSave ? AppTheme.accentFill : AppTheme.cardMid,
                                             in: RoundedRectangle(cornerRadius: 16))
                         }
                         .buttonStyle(ScaleButtonStyle())

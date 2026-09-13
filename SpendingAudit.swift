@@ -210,10 +210,10 @@ struct SpendingAuditSheet: View {
         } label: {
             Text(title)
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(on ? AppTheme.bg : AppTheme.textSecondary)
+                .foregroundStyle(on ? AppTheme.onVividFill : AppTheme.textSecondary)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 10)
-                .background(on ? AppTheme.accent : AppTheme.cardDark, in: Capsule())
+                .background(on ? AppTheme.accentFill : AppTheme.cardDark, in: Capsule())
         }
         .buttonStyle(ScaleButtonStyle())
     }
