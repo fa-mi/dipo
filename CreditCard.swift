@@ -355,7 +355,7 @@ struct CreditCardFormSheet: View {
             guard isValid else { HapticManager.shared.error(); return }
             save()
         } label: {
-            Text(loc("cc.save")).font(.system(size: 16, weight: .bold)).foregroundStyle(.white)
+            Text(loc("cc.save")).font(.system(size: 16, weight: .bold)).foregroundStyle(AppTheme.onVividFill)
                 .frame(maxWidth: .infinity).padding(.vertical, 16)
                 .background(isValid ? AppTheme.purple : AppTheme.cardMid, in: RoundedRectangle(cornerRadius: 16))
         }

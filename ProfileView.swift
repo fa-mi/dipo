@@ -680,7 +680,7 @@ struct ProfileView: View {
     @ViewBuilder
     private var dipoIDSection: some View {
         let id = session.dipoID ?? "—"
-        let brandA = Color(hex: "#38BDF8") // sky
+        let brandA = AppTheme.blue // sky
         let brandB = Color(hex: "#6366F1") // indigo
         let grad = LinearGradient(colors: [brandA, brandB],
                                   startPoint: .topLeading, endPoint: .bottomTrailing)
@@ -1854,7 +1854,7 @@ struct DangerConfirmSheet: View {
                 } label: {
                     Text(confirmLabel)
                         .font(.system(size: 15, weight: .bold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(AppTheme.onVividFill)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 15)
                         .background(tone.color, in: RoundedRectangle(cornerRadius: 14))

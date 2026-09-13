@@ -232,7 +232,7 @@ struct CardListView: View {
                                         if !pm.canAccess(.cardTransfer) {
                                             Image(systemName: "crown.fill")
                                                 .font(.system(size: 8, weight: .bold))
-                                                .foregroundStyle(.white)
+                                                .foregroundStyle(AppTheme.onVividFill)
                                                 .padding(3)
                                                 .background(PremiumPlan.royal.color, in: Circle())
                                                 .offset(x: 15, y: -15)

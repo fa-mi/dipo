@@ -74,7 +74,7 @@ struct SmartRecommendationDetailView: View {
                 } label: {
                     Text(t.title)
                         .font(.system(size: 12, weight: tab == t ? .bold : .medium))
-                        .foregroundStyle(tab == t ? .white : AppTheme.textSecondary)
+                        .foregroundStyle(tab == t ? AppTheme.onVividFill : AppTheme.textSecondary)
                         .frame(maxWidth: .infinity).padding(.vertical, 9)
                         .background(tab == t ? AppTheme.purple : AppTheme.cardDark, in: Capsule())
                 }

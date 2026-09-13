@@ -9,13 +9,13 @@ struct OnboardingView: View {
     // Pages defined as key tuples so they re-read loc() on every render,
     // meaning language switches take effect immediately even on this screen.
     private var pages: [(icon: String, color: Color, titleKey: String, bodyKey: String, tipKey: String?)] {[
-        ("creditcard.fill", Color(hex: "#38BDF8"),
+        ("creditcard.fill", AppTheme.blue,
          "onboard.p1_title", "onboard.p1_body", nil),
         ("chart.pie.fill",  AppTheme.accent,
          "onboard.p2_title", "onboard.p2_body", "onboard.p2_tip"),
-        ("brain.fill",      Color(hex: "#A78BFA"),
+        ("brain.fill",      AppTheme.purple,
          "onboard.p3_title", "onboard.p3_body", "onboard.p3_tip"),
-        ("banknote.fill",   Color(hex: "#FB923C"),
+        ("banknote.fill",   AppTheme.orange,
          "onboard.p4_title", "onboard.p4_body", "onboard.p4_tip"),
     ]}
 

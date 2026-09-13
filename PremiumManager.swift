@@ -33,7 +33,7 @@ enum PremiumPlan: String, CaseIterable {
     var color: Color {
         switch self {
         case .free:  return AppTheme.textSecondary
-        case .royal: return Color(hex: "#A78BFA")
+        case .royal: return AppTheme.purple
         }
     }
 
@@ -93,13 +93,14 @@ enum PremiumFeature: String {
 
     var color: Color {
         switch self {
-        case .smartConversion: return Color(hex: "#38BDF8")
-        case .savingsGoals:    return Color(hex: "#FB923C")
-        case .smartDebt:       return Color(hex: "#FF6B6B")
-        case .smartBudget:     return Color(hex: "#A78BFA")
+        // A feature is not a warning, so none of these is red.
+        case .smartConversion: return AppTheme.blue
+        case .savingsGoals:    return AppTheme.orange
+        case .smartDebt:       return AppTheme.teal
+        case .smartBudget:     return AppTheme.purple
         case .scanReceipt:     return AppTheme.accent
-        case .aiAdvisor:       return Color(hex: "#A78BFA")
-        case .cardTransfer:    return Color(hex: "#38BDF8")
+        case .aiAdvisor:       return AppTheme.purple
+        case .cardTransfer:    return AppTheme.blue
         }
     }
 

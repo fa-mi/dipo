@@ -124,7 +124,22 @@ struct AppNotificationItem: Identifiable, Codable {
         self.route        = route
     }
 
-    var iconColor: Color { Color(hex: iconColorHex) }
+    /// The hex is STORED with each notification (and arrives from the server
+    /// for support replies), so it cannot adapt to the theme by itself. Every
+    /// palette colour a notification has ever been posted with resolves to its
+    /// adaptive token here — old notifications included — and anything else
+    /// is shown as sent.
+    var iconColor: Color {
+        switch iconColorHex.uppercased() {
+        case "#1D8637", "#34C759", "#1DB87A":            return AppTheme.accent
+        case "#D92D20", "#FF6B6B", "#FF5B5B", "#EF4444": return AppTheme.red
+        case "#FB923C", "#F59E0B":                       return AppTheme.orange
+        case "#38BDF8":                                  return AppTheme.blue
+        case "#A78BFA":                                  return AppTheme.purple
+        case "#8A9693":                                  return AppTheme.textSecondary
+        default:                                         return Color(hex: iconColorHex)
+        }
+    }
 }
 
 // MARK: - Notification Manager
@@ -208,7 +223,7 @@ final class NotificationManager {
         let icon: String, hex: String, title: String, body: String, time: String
         switch daysUntil {
         case 0:
-            icon = "banknote.fill"; hex = "#34C759"
+            icon = "banknote.fill"; hex = "#1D8637"
             title = loc("notif.payday.today_title")
             body  = String(format: loc("notif.payday.today_body"), label, amount)
             time  = loc("notif.time.today")
@@ -313,7 +328,7 @@ final class NotificationManager {
         )
 
         NotificationManager.shared.post(AppNotificationItem(
-            icon: "exclamationmark.triangle.fill", iconColorHex: "#FF6B6B",
+            icon: "exclamationmark.triangle.fill", iconColorHex: "#D92D20",
             title: title, body: body, time: loc("notif.time.now"), isUrgent: true,
             advice: advice, route: NotificationRoute.smartBudget.rawValue
         ), pushToDevice: false)
@@ -325,7 +340,7 @@ final class NotificationManager {
     ///     should say what happens and where to act — not just the date.
     func postDebtReminder(name: String, amount: String, dueDay: Int,
                           advice: String? = nil) {
-        post(AppNotificationItem(icon: "creditcard.trianglebadge.exclamationmark", iconColorHex: "#FF6B6B",
+        post(AppNotificationItem(icon: "creditcard.trianglebadge.exclamationmark", iconColorHex: "#D92D20",
             title: loc("notif.debt_due_title"),
             body:  String(format: loc("notif.debt_due_body"), name, amount, dueDay),
             time:  loc("notif.time.upcoming"), isUrgent: true,
@@ -366,7 +381,7 @@ final class NotificationManager {
             title = loc("notif.answered")
             body  = loc("notif.answeredbody")
             icon  = "checkmark.circle.fill"
-            hex   = "#34C759"
+            hex   = "#1D8637"
         case "closed":
             title = loc("notif.closed")
             body  = loc("notif.closedbody")
@@ -575,7 +590,7 @@ final class NotificationManager {
             Task { @MainActor in
                 NotificationManager.shared.post(AppNotificationItem(
                     icon:         status == .expired ? "xmark.circle.fill" : "exclamationmark.triangle.fill",
-                    iconColorHex: "#FF5B5B",
+                    iconColorHex: "#D92D20",
                     title:        status == .expired
                         ? String(format: loc("notif.card_expired_inapp_title"), last4)
                         : String(format: loc("notif.card_expiring_inapp_title"), last4, days),
@@ -821,7 +836,7 @@ final class NotificationManager {
         }()
 
         NotificationManager.shared.post(AppNotificationItem(
-            icon: "exclamationmark.triangle.fill", iconColorHex: "#FF5B5B",
+            icon: "exclamationmark.triangle.fill", iconColorHex: "#D92D20",
             title: loc("notif.overspend.title"),
             body:  String(format: loc("notif.overspend.body"), overBy),
             time:  loc("notif.time.now"), isUrgent: true,
@@ -1124,7 +1139,7 @@ struct NotificationDetailView: View {
                                             Image(systemName: "arrow.right")
                                                 .font(.system(size: 12, weight: .semibold))
                                         }
-                                        .foregroundStyle(.white)
+                                        .foregroundStyle(AppTheme.onVividFill)
                                         .frame(maxWidth: .infinity)
                                         .padding(.vertical, 13)
                                         .background(AppTheme.purple, in: Capsule())

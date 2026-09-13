@@ -99,9 +99,9 @@ final class SavingsGoal {
 
     var priorityColor: Color {
         switch priority {
-        case 1: return Color(hex: "#FF6B6B")
-        case 2: return Color(hex: "#FB923C")
-        default: return Color(hex: "#38BDF8")
+        case 1: return AppTheme.red
+        case 2: return AppTheme.orange
+        default: return AppTheme.blue
         }
     }
 }
@@ -1001,7 +1001,7 @@ private struct ConfettiPiece: Identifiable {
 struct ConfettiView: View {
     private let palette: [Color] = [
         AppTheme.accent, AppTheme.orange, AppTheme.purple,
-        AppTheme.blue, Color(hex: "#FF6B6B"), Color(hex: "#FBBF24"),
+        AppTheme.blue, AppTheme.fuchsia, AppTheme.amber,
     ]
 
     @State private var pieces: [ConfettiPiece] = []
@@ -1254,7 +1254,7 @@ struct GoalFormSheet: View {
                             Text(loc("debt.priority")).font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
                                 .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 22)
                             HStack(spacing: 10) {
-                                ForEach([(1,loc("savings.high"),Color(hex: "#FF6B6B")),(2,loc("savings.medium"),AppTheme.orange),(3,loc("savings.low"),AppTheme.blue)], id: \.0) { p, label, color in
+                                ForEach([(1,loc("savings.high"),AppTheme.red),(2,loc("savings.medium"),AppTheme.orange),(3,loc("savings.low"),AppTheme.blue)], id: \.0) { p, label, color in
                                     Button { HapticManager.shared.tap(); priority = p } label: {
                                         Text(label).font(.system(size: 13, weight: .semibold))
                                             .foregroundStyle(priority == p ? AppTheme.bg : AppTheme.textSecondary)
@@ -1843,7 +1843,7 @@ struct RecordPastDepositSheet: View {
                             save()
                         } label: {
                             Text(loc("savings.past_save"))
-                                .font(.system(size: 16, weight: .bold)).foregroundStyle(.white)
+                                .font(.system(size: 16, weight: .bold)).foregroundStyle(AppTheme.onVividFill)
                                 .frame(maxWidth: .infinity).padding(.vertical, 15)
                                 .background(canSave ? AppTheme.purple : AppTheme.cardMid,
                                             in: RoundedRectangle(cornerRadius: 14))

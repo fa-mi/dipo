@@ -1264,7 +1264,7 @@ struct AddTransactionSheet: View {
                             if !PremiumManager.shared.canAccess(.scanReceipt) {
                                 Image(systemName: "crown.fill")
                                     .font(.system(size: 9, weight: .bold))
-                                    .foregroundStyle(.white)
+                                    .foregroundStyle(AppTheme.onVividFill)
                                     .padding(3)
                                     .background(PremiumPlan.royal.color, in: Circle())
                             }
@@ -1350,7 +1350,7 @@ struct AddTransactionSheet: View {
                             .overlay(alignment: .topTrailing) {
                                 Image(systemName: "lock.fill")
                                     .font(.system(size: 8, weight: .bold))
-                                    .foregroundStyle(.white)
+                                    .foregroundStyle(AppTheme.onVividFill)
                                     .padding(3)
                                     .background(PremiumPlan.royal.color, in: Circle())
                                     .offset(x: 4, y: -4)

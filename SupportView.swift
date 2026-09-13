@@ -37,10 +37,10 @@ enum SupportCategory: String, CaseIterable {
 
     var color: Color {
         switch self {
-        case .bug:     return Color(hex: "#FF6B6B")
-        case .feature: return Color(hex: "#38BDF8")
-        case .billing: return Color(hex: "#FB923C")
-        case .other:   return Color(hex: "#8A9693")
+        case .bug:     return AppTheme.red
+        case .feature: return AppTheme.blue
+        case .billing: return AppTheme.orange
+        case .other:   return AppTheme.textSecondary
         }
     }
 }
@@ -59,7 +59,7 @@ private struct TicketStatusConfig {
         switch status {
         case "answered": return .init(label: loc("support.answered"), color: AppTheme.accent,       icon: "checkmark.circle.fill", step: 1)
         case "closed":   return .init(label: loc("support.closed"),   color: AppTheme.textSecondary, icon: "xmark.circle.fill",     step: 2)
-        default:         return .init(label: loc("support.open"),     color: Color(hex: "#FB923C"),  icon: "clock.fill",            step: 0)
+        default:         return .init(label: loc("support.open"),     color: AppTheme.orange,  icon: "clock.fill",            step: 0)
         }
     }
 }
@@ -308,7 +308,7 @@ struct ContactAdminSheet: View {
                             .frame(width: 18, height: 18)
                         Image(systemName: step.icon)
                             .font(.system(size: 8, weight: .bold))
-                            .foregroundStyle(step.active ? .white : AppTheme.textSecondary.opacity(0.5))
+                            .foregroundStyle(step.active ? AppTheme.onVividFill : AppTheme.textSecondary.opacity(0.5))
                     }
                     Text(step.label)
                         .font(.system(size: 8, weight: step.active ? .semibold : .regular))
@@ -912,7 +912,7 @@ struct TicketThreadView: View {
                         Text(date.displayDateTimeShort)
                             .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
                     }
-                    Text(text).font(.system(size: 14)).foregroundStyle(.white).lineSpacing(4)
+                    Text(text).font(.system(size: 14)).foregroundStyle(AppTheme.onVividFill).lineSpacing(4)
                         .padding(14)
                         .background(category.color, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                     if !mediaBase64.isEmpty {

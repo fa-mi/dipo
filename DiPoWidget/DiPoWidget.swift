@@ -418,12 +418,17 @@ struct DiPoWidgetEntryView: View {
             VStack(spacing: 8) {
                 ZStack {
                     Circle()
-                        .fill(Color.green)   // systemGreen — the app's one green
+                        // AppTheme.accent: #1D8637 light / #30D158 dark.
+                        .fill(colorScheme == .dark
+                              ? Color(red: 0.188, green: 0.820, blue: 0.345)
+                              : Color(red: 0.114, green: 0.525, blue: 0.216))
                         .frame(width: 44, height: 44)
-                    // Dark glyph, as in the app: white on systemGreen is 2.2:1.
+                    // AppTheme.onVividFill: white on the deep green, near-black on the bright one.
                     Image(systemName: "plus")
                         .font(.system(size: 22, weight: .bold))
-                        .foregroundStyle(Color(red: 0.05, green: 0.08, blue: 0.08))
+                        .foregroundStyle(colorScheme == .dark
+                                         ? Color(red: 0.05, green: 0.08, blue: 0.08)
+                                         : .white)
                 }
                 Text(entry.labelQuickAdd)
                     .font(.system(size: 12, weight: .semibold))

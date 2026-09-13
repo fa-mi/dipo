@@ -844,7 +844,7 @@ private struct UnityEmptyCard: View {
                 HapticManager.shared.tap(); onCreate()
             } label: {
                 Text(loc("unity.create")).font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(AppTheme.onVividFill)
                     .padding(.horizontal, 18).padding(.vertical, 9)
                     .background(AppTheme.purple, in: Capsule())
             }
@@ -898,7 +898,7 @@ struct InviteInboxRow: View {
                         }
                     } label: {
                         Image(systemName: "checkmark").font(.system(size: 13, weight: .bold))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(AppTheme.onVividFill)
                             .frame(width: 34, height: 34).background(AppTheme.purple, in: Circle())
                     }.buttonStyle(ScaleButtonStyle())
                 }
@@ -1047,7 +1047,7 @@ struct SharedGoalDetailView: View {
                                 Image(systemName: "plus.circle.fill").font(.system(size: 16))
                                 Text(loc("unity.add_savings")).font(.system(size: 15, weight: .bold))
                             }
-                            .foregroundStyle(.white).frame(maxWidth: .infinity).padding(.vertical, 14)
+                            .foregroundStyle(AppTheme.onVividFill).frame(maxWidth: .infinity).padding(.vertical, 14)
                             .background(AppTheme.purple, in: RoundedRectangle(cornerRadius: 14))
                         }.buttonStyle(ScaleButtonStyle()).padding(.horizontal, 22)
 
@@ -1197,7 +1197,7 @@ struct AddContributionSheet: View {
             // re-add the expense by hand.
             print("[DiPo][unity] ✗ local contribution tx not saved: \(error.localizedDescription)")
             NotificationManager.shared.post(AppNotificationItem(
-                icon: "exclamationmark.triangle.fill", iconColorHex: "#FF6B6B",
+                icon: "exclamationmark.triangle.fill", iconColorHex: "#D92D20",
                 title: loc("unity.local_save_failed_title"),
                 body: String(format: loc("unity.local_save_failed_body"), goal.title),
                 time: loc("notif.time.now"), isUrgent: true), pushToDevice: false)

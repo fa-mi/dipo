@@ -178,7 +178,7 @@ struct CardDeleteSheet: View {
             } label: {
                 Text(loc("cards.delete_confirm_btn"))
                     .font(.system(size: 15, weight: .bold))
-                    .foregroundStyle(canDelete ? .white : AppTheme.textSecondary)
+                    .foregroundStyle(canDelete ? AppTheme.onVividFill : AppTheme.textSecondary)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
                     .background(canDelete ? AppTheme.red : AppTheme.cardMid,

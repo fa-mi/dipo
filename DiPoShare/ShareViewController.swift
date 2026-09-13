@@ -48,11 +48,12 @@ private enum SharePalette {
     static let card      = Color(UIColor { $0.userInterfaceStyle == .dark ? UIColor(red: 0.13, green: 0.16, blue: 0.15, alpha: 1) : .white })
     static let primary   = Color(UIColor { $0.userInterfaceStyle == .dark ? .white : UIColor(red: 0.05, green: 0.08, blue: 0.08, alpha: 1) })
     static let secondary = Color(UIColor { $0.userInterfaceStyle == .dark ? UIColor(red: 0.54, green: 0.59, blue: 0.58, alpha: 1) : UIColor(red: 0.30, green: 0.42, blue: 0.38, alpha: 1) })
-    /// The app's one green — systemGreen, the iPhone charging green.
-    static let green     = Color(uiColor: .systemGreen)
-    /// Text on the green: near-black, ≈8–9:1 in both modes. White is 2.2:1.
-    static let onGreen   = Color(red: 0.05, green: 0.08, blue: 0.08)
-    static let red       = Color(uiColor: .systemRed)
+    /// AppTheme.accent — #1D8637 light / #30D158 dark.
+    static let green     = Color(UIColor { $0.userInterfaceStyle == .dark ? UIColor(red: 0.188, green: 0.820, blue: 0.345, alpha: 1) : UIColor(red: 0.114, green: 0.525, blue: 0.216, alpha: 1) })
+    /// AppTheme.onVividFill — white on the deep green, near-black on the bright one.
+    static let onGreen   = Color(UIColor { $0.userInterfaceStyle == .dark ? UIColor(red: 0.05, green: 0.08, blue: 0.08, alpha: 1) : .white })
+    /// AppTheme.red — #D92D20 light / #FF5A52 dark.
+    static let red       = Color(UIColor { $0.userInterfaceStyle == .dark ? UIColor(red: 1.0, green: 0.353, blue: 0.322, alpha: 1) : UIColor(red: 0.851, green: 0.176, blue: 0.125, alpha: 1) })
 }
 
 // MARK: - Strings

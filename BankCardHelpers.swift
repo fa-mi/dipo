@@ -196,9 +196,9 @@ enum CardExpiryStatus {
     var color: Color {
         switch self {
         case .ok:      return .clear
-        case .soon:    return Color(hex: "#FB923C")   // orange
-        case .urgent:  return Color(hex: "#FF5B5B")   // red
-        case .expired: return Color(hex: "#FF5B5B")   // red
+        case .soon:    return AppTheme.orange   // orange
+        case .urgent:  return AppTheme.red
+        case .expired: return AppTheme.red
         }
     }
 

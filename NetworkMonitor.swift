@@ -152,13 +152,13 @@ struct NoInternetOverlay: View {
                         .font(.system(size: 16, weight: .semibold))
                 }
             }
-            .foregroundStyle(.white)
+            .foregroundStyle(monitor.isChecking ? AppTheme.textSecondary : AppTheme.onVividFill)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
             .background(
                 monitor.isChecking
-                    ? AppTheme.textSecondary.opacity(0.4)
-                    : Color(hex: "#FF5B5B"),
+                    ? AppTheme.textSecondary.opacity(0.25)
+                    : AppTheme.red,
                 in: RoundedRectangle(cornerRadius: 18)
             )
         }

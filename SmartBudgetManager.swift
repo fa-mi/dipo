@@ -2048,7 +2048,7 @@ enum BudgetProfile: String, CaseIterable, Identifiable {
         case .salaryStarter:   return AppTheme.accent
         case .familyWithKids:  return AppTheme.orange
         case .mortgagePayer:   return AppTheme.purple
-        case .freelancer:      return Color(hex: "#EF4444")
+        case .freelancer:      return AppTheme.teal
         case .custom:          return AppTheme.textSecondary
         }
     }
