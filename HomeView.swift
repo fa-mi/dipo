@@ -2131,7 +2131,7 @@ struct TransactionSection: View {
                     pendingDelete = nil
                     // Let the sheet start leaving before the row collapses, so
                     // the removal animation plays where the user can see it.
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
                         withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
                             deleteTransactionWithGoalRollback(tx, context: context)
                         }

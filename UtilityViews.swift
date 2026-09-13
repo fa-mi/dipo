@@ -658,10 +658,14 @@ struct TransactionDetailSheet: View {
                 card: allCards.first { $0.transactions.contains(where: { $0.id == pending.id }) },
                 onConfirm: {
                     pendingDelete = nil
-                    deleteTransactionWithGoalRollback(pending, context: context)
-                    try? context.save()
-                    HapticManager.shared.success()
                     dismiss()
+                    // Delete once both sheets have gone: deleting first leaves the
+                    // closing detail sheet re-rendering a detached model.
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                        deleteTransactionWithGoalRollback(pending, context: context)
+                        try? context.save()
+                        HapticManager.shared.success()
+                    }
                 },
                 onCancel: { pendingDelete = nil })
             .preferredColorScheme(appColorScheme())
@@ -1516,103 +1520,26 @@ struct AddTransactionSheet: View {
         }
     }
 
-    /// Swipe between cards — the same gesture as the card carousel on Home, so
-    /// there is one way to move between cards anywhere in the app. A menu hid
-    /// the other cards behind a tap; a pager shows that there ARE others (the
-    /// dots) and moves to one with the thumb already resting on the screen.
-    ///
-    /// Always shown, even with a single card: "which account does this land on"
-    /// is worth answering before saving, not only when there is a choice.
+    /// Always shown, even with a single card: "which account does this land
+    /// on" is worth answering before saving, not only when there is a choice.
     @ViewBuilder
     private var cardSection: some View {
         if !vm.cards.isEmpty {
             VStack(alignment: .leading, spacing: 10) {
                 FormSectionLabel(text: loc("debt.card"))
                     .padding(.horizontal, 22)
-                if vm.cards.count > 1 {
-                    TabView(selection: $selectedCardIndex) {
-                        ForEach(Array(vm.cards.enumerated()), id: \.element.id) { index, card in
-                            formCardFace(card)
-                                .padding(.horizontal, 22)
-                                .tag(index)
-                        }
-                    }
-                    .tabViewStyle(.page(indexDisplayMode: .never))
-                    .frame(height: 100)
-
-                    HStack(spacing: 5) {
-                        ForEach(vm.cards.indices, id: \.self) { i in
-                            Capsule()
-                                .fill(i == selectedCardIndex ? AppTheme.accent : AppTheme.textSecondary.opacity(0.35))
-                                .frame(width: i == selectedCardIndex ? 18 : 6, height: 6)
-                        }
-                    }
-                    .frame(maxWidth: .infinity)
-                    .animation(.spring(response: 0.35, dampingFraction: 0.7), value: selectedCardIndex)
-                } else {
-                    formCardFace(vm.cards[0])
-                        .padding(.horizontal, 22)
+                // For a credit card the face states the room left on the limit,
+                // not what is owed — at the moment of spending, that is the
+                // number that matters.
+                CardSwipePicker(cards: vm.cards, selectedIndex: $selectedCardIndex) { card in
+                    card.isCreditCard
+                        ? (loc("cc.available"),
+                           CurrencyManager.shared.formatted(card.availableCredit(allInstallments),
+                                                            currency: card.resolvedCurrency))
+                        : (loc("home.balance_total"), card.formattedBalance)
                 }
             }
         }
-    }
-
-    /// A short card face: enough to recognise the card (its colours, name,
-    /// digits) and to know whether this purchase fits on it. For a credit card
-    /// that is the room left on the limit, not what is owed — what matters at
-    /// the moment of spending is what can still be spent.
-    private func formCardFace(_ card: BankCard) -> some View {
-        let figure: String = {
-            if card.isHidden { return "••••••" }
-            if card.isCreditCard {
-                return CurrencyManager.shared.formatted(card.availableCredit(allInstallments),
-                                                        currency: card.resolvedCurrency)
-            }
-            return card.formattedBalance
-        }()
-        return VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(CardLabel.title(card))
-                        .font(.system(size: 14, weight: .semibold))
-                        .lineLimit(1)
-                    let sub = CardLabel.subtitle(card)
-                    if !sub.isEmpty {
-                        Text(sub)
-                            .font(.system(size: 11))
-                            .opacity(0.75)
-                            .lineLimit(1)
-                    }
-                }
-                Spacer(minLength: 8)
-                if card.isDigitalWallet, let wp = WalletProvider(rawValue: card.walletProvider) {
-                    Image(systemName: wp.icon)
-                        .font(.system(size: 16, weight: .semibold))
-                        .opacity(0.9)
-                } else {
-                    CardNetworkLogo(network: CardNetwork.detect(from: card.cardNumber))
-                        .scaleEffect(0.75, anchor: .topTrailing)
-                }
-            }
-            Spacer(minLength: 6)
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(card.isCreditCard ? loc("cc.available") : loc("home.balance_total"))
-                    .font(.system(size: 10, weight: .medium))
-                    .opacity(0.75)
-                Spacer(minLength: 6)
-                Text(figure)
-                    .font(.system(size: 17, weight: .bold))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-            }
-        }
-        .foregroundStyle(.white)
-        .padding(14)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(
-            LinearGradient(colors: [Color(hex: card.gradientStart), Color(hex: card.gradientEnd)],
-                           startPoint: .topLeading, endPoint: .bottomTrailing),
-            in: RoundedRectangle(cornerRadius: 18))
     }
 
     private var dateSection: some View {

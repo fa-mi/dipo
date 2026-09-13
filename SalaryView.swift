@@ -134,7 +134,10 @@ struct SalaryDateEngine {
         var year  = cal.component(.year, from: now)
         while results.count < count {
             let d = actualPayDate(dayOfMonth: dayOfMonth, month: month, year: year)
-            if d >= cal.startOfDay(for: now) || results.isEmpty {
+            // Only dates still ahead. This also accepted the FIRST date
+            // unconditionally, so after the 25th this month's payday led the
+            // "upcoming" row even though it had already passed.
+            if d >= cal.startOfDay(for: now) {
                 results.append(d)
             }
             month += 1
@@ -191,7 +194,8 @@ final class SalaryViewModel {
 
     func loadForEdit(_ s: SalarySchedule, cards: [BankCard]) {
         formLabel  = s.label
-        formAmount = String(s.amount)
+        // "10000000", not "10000000.0" — the amount field shows it at 34pt.
+        formAmount = s.amount.rounded() == s.amount ? String(Int64(s.amount)) : String(s.amount)
         formDay    = s.dayOfMonth
         formCardID = s.cardID
         formAutoRecord = s.autoRecord
@@ -220,6 +224,135 @@ final class SalaryViewModel {
     }
 }
 
+// MARK: - Pay Cycle
+
+/// Where a schedule stands between its last payday and its next one.
+///
+/// Every salary surface used to state only "In 12 days". A countdown answers
+/// when, but not how far through the month's money someone is — and that is
+/// what they are actually weighing when they check. Both ends are ACTUAL pay
+/// dates (weekend/holiday-adjusted), the same ones the credit engine posts on.
+struct SalaryCycle {
+    let next: Date
+    let previous: Date
+    let daysLeft: Int
+    let length: Int
+
+    var elapsed: Int { max(length - daysLeft, 0) }
+    var progress: Double { min(max(Double(elapsed) / Double(length), 0), 1) }
+
+    init(dayOfMonth: Int) {
+        let cal = Calendar.current
+        next = SalaryDateEngine.nextPayDate(dayOfMonth: dayOfMonth)
+        let m = cal.component(.month, from: next)
+        let y = cal.component(.year, from: next)
+        previous = SalaryDateEngine.actualPayDate(dayOfMonth: dayOfMonth,
+                                                  month: m == 1 ? 12 : m - 1,
+                                                  year: m == 1 ? y - 1 : y)
+        daysLeft = SalaryDateEngine.daysUntilPay(dayOfMonth: dayOfMonth)
+        length = max(cal.dateComponents([.day], from: cal.startOfDay(for: previous),
+                                        to: cal.startOfDay(for: next)).day ?? 30, 1)
+    }
+
+    /// "12 days", "Tomorrow", "Payday today".
+    var countdown: String {
+        switch daysLeft {
+        case 0:  return loc("salary.today_big")
+        case 1:  return loc("salary.tomorrow_big")
+        default: return String(format: loc("salary.days_big"), daysLeft)
+        }
+    }
+
+    /// Green on payday, orange in the last three days, quiet otherwise.
+    var tint: Color {
+        if daysLeft == 0 { return AppTheme.accent }
+        if daysLeft <= 3 { return AppTheme.orange }
+        return AppTheme.textPrimary
+    }
+}
+
+private enum SalaryFormat {
+    static func date(_ d: Date, _ template: String) -> String {
+        let df = DateFormatter()
+        df.locale = LanguageManager.shared.currentLocale
+        df.setLocalizedDateFormatFromTemplate(template)
+        return df.string(from: d)
+    }
+}
+
+// MARK: - Pay Cycle Bar
+
+struct PayCycleBar: View {
+    let cycle: SalaryCycle
+    var showsEnds: Bool = true
+
+    var body: some View {
+        VStack(spacing: 6) {
+            GeometryReader { g in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(AppTheme.cardMid)
+                    Capsule()
+                        .fill(AppTheme.accentFill)
+                        .frame(width: max(g.size.width * cycle.progress, 8))
+                }
+            }
+            .frame(height: 8)
+            .animation(.spring(response: 0.6, dampingFraction: 0.85), value: cycle.progress)
+
+            if showsEnds {
+                HStack {
+                    Text(SalaryFormat.date(cycle.previous, "d MMM"))
+                    Spacer()
+                    Text(String(format: loc("salary.cycle_day"), cycle.elapsed, cycle.length))
+                        .fontWeight(.semibold)
+                        .foregroundStyle(AppTheme.textPrimary)
+                    Spacer()
+                    Text(SalaryFormat.date(cycle.next, "d MMM"))
+                }
+                .font(.system(size: 11))
+                .foregroundStyle(AppTheme.textSecondary)
+            }
+        }
+    }
+}
+
+// MARK: - Payday Tile
+
+/// One actual payday: month, day, weekday. An orange dot marks a date the
+/// engine moved earlier for a weekend or public holiday — the dot, not a
+/// border, so a row of four stays calm when two of them moved.
+struct PaydayTile: View {
+    let date: Date
+    let intended: Int
+
+    private var isToday: Bool { SalaryDateEngine.isToday(date) }
+    private var moved: Bool { SalaryDateEngine.wasAdjusted(intended: intended, actual: date) }
+
+    var body: some View {
+        VStack(spacing: 3) {
+            Text(SalaryFormat.date(date, "MMM").uppercased())
+                .font(.system(size: 10, weight: .semibold))
+                .tracking(0.6)
+                .foregroundStyle(isToday ? AppTheme.onVividFill.opacity(0.75) : AppTheme.textSecondary)
+            Text(SalaryFormat.date(date, "d"))
+                .font(.system(size: 20, weight: .bold))
+                .foregroundStyle(isToday ? AppTheme.onVividFill : AppTheme.textPrimary)
+            Text(SalaryFormat.date(date, "EEE"))
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(isToday ? AppTheme.onVividFill.opacity(0.75) : AppTheme.textSecondary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 10)
+        .background(isToday ? AppTheme.accentFill : AppTheme.cardMid.opacity(0.55),
+                    in: RoundedRectangle(cornerRadius: 14))
+        .overlay(alignment: .topTrailing) {
+            if moved {
+                Circle().fill(AppTheme.orange).frame(width: 7, height: 7).padding(7)
+            }
+        }
+    }
+}
+
 // MARK: - Salary Main View
 
 struct SalaryView: View {
@@ -228,91 +361,185 @@ struct SalaryView: View {
     @Query(sort: \BankCard.sortOrder) private var cards: [BankCard]
     @State private var vm = SalaryViewModel()
     @State private var appeared = false
+    @State private var actionsFor: SalarySchedule? = nil
+    @State private var deleteFor: SalarySchedule? = nil
+
+    /// The schedule the rest of the app runs its pay cycle on — pinned, or the
+    /// largest active salary on the main card. The hero follows the same rule,
+    /// so the date it shows is the date Home and the budget roll over on.
+    private var anchor: SalarySchedule? { MainCard.anchorSalary(schedules) }
 
     var body: some View {
         NavigationStack {
-        ZStack {
-            AppTheme.bg.ignoresSafeArea()
-            ScrollView(showsIndicators: false) {
-                VStack(spacing: 0) {
-                    SalaryNavBar(vm: vm)
-                        .padding(.horizontal, 22)
-                        .padding(.top, 20)
-                        .opacity(appeared ? 1 : 0)
-                        .offset(y: appeared ? 0 : -12)
+            ZStack {
+                AppTheme.bg.ignoresSafeArea()
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 18) {
+                        header
+                            .padding(.horizontal, 22)
+                            .padding(.top, 20)
 
-                    if schedules.isEmpty {
-                        SalaryEmptyState(vm: vm)
-                            .padding(.top, 60)
-                            .opacity(appeared ? 1 : 0)
-                    } else {
-                        VStack(spacing: 20) {
-                            ForEach(Array(schedules.enumerated()), id: \.element.id) { i, schedule in
-                                SalaryCard(schedule: schedule, allSchedules: schedules, cards: cards, vm: vm, context: context)
-                                    .opacity(appeared ? 1 : 0)
-                                    .offset(y: appeared ? 0 : 24)
-                                    .animation(
-                                        .spring(response: 0.55, dampingFraction: 0.8)
-                                            .delay(Double(i) * 0.07),
-                                        value: appeared
-                                    )
+                        if schedules.isEmpty {
+                            SalaryEmptyState(vm: vm, hasCards: !cards.isEmpty)
+                                .padding(.top, 40)
+                        } else {
+                            if let anchor {
+                                PaydayHeroCard(schedule: anchor)
+                                    .padding(.horizontal, 22)
+                            }
+                            ForEach(schedules) { schedule in
+                                SalaryCard(schedule: schedule,
+                                           card: cards.first { $0.id == schedule.cardID },
+                                           isAnchor: schedule.id == anchor?.id,
+                                           onMore: { HapticManager.shared.tap(); actionsFor = schedule })
+                                    .padding(.horizontal, 22)
                             }
                         }
-                        .padding(.horizontal, 22)
-                        .padding(.top, 24)
+                        Spacer(minLength: 100)
                     }
-                    Spacer(minLength: 120)
+                    .opacity(appeared ? 1 : 0)
+                    .offset(y: appeared ? 0 : 16)
                 }
             }
-        }
-        .onAppear {
-            withAnimation(.spring(response: 0.55, dampingFraction: 0.8)) { appeared = true }
-        }
-        .sheet(isPresented: $vm.showAddSheet, onDismiss: { vm.resetForm() }) {
-            SalaryFormSheet(vm: vm, context: context)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-                .presentationBackground(AppTheme.bg)
+            .toolbar(.hidden, for: .navigationBar)
+            .onAppear {
+                withAnimation(.spring(response: 0.55, dampingFraction: 0.85)) { appeared = true }
+            }
+            .sheet(isPresented: $vm.showAddSheet, onDismiss: { vm.resetForm() }) {
+                SalaryFormSheet(vm: vm, context: context)
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
+                    .presentationBackground(AppTheme.bg)
+                    .preferredColorScheme(appColorScheme())
+            }
+            .sheet(item: $actionsFor) { schedule in
+                SalaryActionsSheet(
+                    schedule: schedule,
+                    isAnchor: schedule.id == anchor?.id,
+                    onEdit: {
+                        actionsFor = nil
+                        // iOS drops a sheet presented while another is still
+                        // animating away, so wait for the actions sheet to leave.
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
+                            vm.loadForEdit(schedule, cards: cards)
+                        }
+                    },
+                    onTogglePin: {
+                        if !schedule.isPinned {
+                            for s in schedules where s.id != schedule.id { s.isPinned = false }
+                        }
+                        schedule.isPinned.toggle()
+                        try? context.save()
+                        HapticManager.shared.success()
+                    },
+                    onToggleActive: {
+                        schedule.isActive.toggle()
+                        try? context.save()
+                        HapticManager.shared.tap()
+                    },
+                    onDelete: {
+                        actionsFor = nil
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { deleteFor = schedule }
+                    })
                 .preferredColorScheme(appColorScheme())
+            }
+            .sheet(item: $deleteFor) { schedule in
+                SalaryDeleteSheet(
+                    schedule: schedule,
+                    isAnchor: schedule.id == anchor?.id,
+                    hasOtherActive: schedules.contains { $0.id != schedule.id && $0.isActive },
+                    onConfirm: {
+                        deleteFor = nil
+                        // Delete after the sheet has gone. Deleting first leaves a
+                        // closing sheet re-rendering a model whose backing data is
+                        // already detached, which SwiftData traps on.
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                            context.delete(schedule)
+                            try? context.save()
+                            HapticManager.shared.success()
+                        }
+                    },
+                    onCancel: { deleteFor = nil })
+                .preferredColorScheme(appColorScheme())
+            }
         }
-        } // end NavigationStack
     }
-}
 
-// MARK: - Nav Bar
-
-struct SalaryNavBar: View {
-    @Bindable var vm: SalaryViewModel
-    @Query(sort: \BankCard.sortOrder) private var cards: [BankCard]
-    var body: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 2) {
+    private var header: some View {
+        HStack(alignment: .center) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text(loc("salary.title"))
-                    .font(.system(size: 24, weight: .bold))
+                    .font(.system(size: 26, weight: .bold))
                     .foregroundStyle(AppTheme.textPrimary)
                 Text(loc("salary.smart_sub"))
                     .font(.system(size: 13))
                     .foregroundStyle(AppTheme.textSecondary)
             }
             Spacer()
-            Button {
-                HapticManager.shared.tap()
-                vm.resetForm()
-                vm.showAddSheet = true
-            } label: {
-                ZStack {
-                    Circle()
-                        .fill(cards.isEmpty ? AppTheme.cardMid : AppTheme.accent)
-                        .frame(width: 42, height: 42)
-                        .shadow(color: cards.isEmpty ? .clear : AppTheme.accent.opacity(0.4), radius: 10, y: 4)
+            if !schedules.isEmpty {
+                Button {
+                    HapticManager.shared.tap()
+                    vm.resetForm()
+                    vm.showAddSheet = true
+                } label: {
                     Image(systemName: "plus")
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundStyle(cards.isEmpty ? AppTheme.textSecondary : AppTheme.bg)
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundStyle(cards.isEmpty ? AppTheme.textSecondary : AppTheme.onVividFill)
+                        .frame(width: 44, height: 44)
+                        .background(cards.isEmpty ? AppTheme.cardMid : AppTheme.accentFill, in: Circle())
                 }
+                .disabled(cards.isEmpty)
+                .buttonStyle(ScaleButtonStyle())
             }
-            .disabled(cards.isEmpty)
-            .buttonStyle(ScaleButtonStyle())
         }
+    }
+}
+
+// MARK: - Payday Hero
+
+/// The one question this screen is opened for — how long until I am paid, and
+/// how far through this month's money am I — answered before anything else.
+struct PaydayHeroCard: View {
+    let schedule: SalarySchedule
+
+    var body: some View {
+        let cycle = SalaryCycle(dayOfMonth: schedule.dayOfMonth)
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 8) {
+                Circle().fill(AppTheme.accentFill).frame(width: 8, height: 8)
+                Text(loc("salary.next_payday"))
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(AppTheme.textSecondary)
+                Spacer()
+                Text(schedule.label)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(AppTheme.textPrimary)
+                    .lineLimit(1)
+                    .padding(.horizontal, 10).padding(.vertical, 4)
+                    .background(AppTheme.cardDark.opacity(0.8), in: Capsule())
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(cycle.countdown)
+                    .font(.system(size: 36, weight: .bold))
+                    .foregroundStyle(cycle.daysLeft == 0 ? AppTheme.accent : AppTheme.textPrimary)
+                    .contentTransition(.numericText())
+                Text(SalaryFormat.date(cycle.next, "EEEE d MMMM") + "  ·  "
+                     + CurrencyManager.shared.formatted(schedule.amount, currency: schedule.currency))
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(AppTheme.textSecondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+
+            PayCycleBar(cycle: cycle)
+        }
+        .padding(18)
+        .background(
+            LinearGradient(colors: [AppTheme.accent.opacity(0.20), AppTheme.cardDark],
+                           startPoint: .topLeading, endPoint: .bottomTrailing),
+            in: RoundedRectangle(cornerRadius: 24))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 24))
     }
 }
 
@@ -320,20 +547,20 @@ struct SalaryNavBar: View {
 
 struct SalaryEmptyState: View {
     @Bindable var vm: SalaryViewModel
+    var hasCards: Bool = true
+
     var body: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: 22) {
             ZStack {
-                Circle()
-                    .fill(AppTheme.cardDark)
-                    .frame(width: 88, height: 88)
-                    .overlay(Circle().stroke(AppTheme.accent.opacity(0.2), lineWidth: 1))
-                Image(systemName: "banknote")
-                    .font(.system(size: 36))
-                    .foregroundStyle(AppTheme.accent)
+                Circle().fill(AppTheme.accent.opacity(0.14)).frame(width: 120, height: 120)
+                Circle().fill(AppTheme.accentFill).frame(width: 76, height: 76)
+                Image(systemName: "banknote.fill")
+                    .font(.system(size: 30, weight: .semibold))
+                    .foregroundStyle(AppTheme.onVividFill)
             }
             VStack(spacing: 8) {
                 Text(loc("salary.no_salary"))
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(.system(size: 20, weight: .bold))
                     .foregroundStyle(AppTheme.textPrimary)
                 Text(loc("salary.nil"))
                     .font(.system(size: 14))
@@ -341,24 +568,28 @@ struct SalaryEmptyState: View {
                     .multilineTextAlignment(.center)
                     .lineSpacing(3)
             }
+            if !hasCards {
+                InlineBanner(tone: .warning, message: loc("home.add_card_salary"))
+            }
             Button {
                 HapticManager.shared.tap()
                 vm.resetForm()
                 vm.showAddSheet = true
             } label: {
                 HStack(spacing: 8) {
-                    Image(systemName: "plus").font(.system(size: 14, weight: .semibold))
-                    Text(loc("salary.add")).font(.system(size: 15, weight: .semibold))
+                    Image(systemName: "plus.circle.fill").font(.system(size: 17))
+                    Text(loc("salary.add_full")).font(.system(size: 16, weight: .bold))
                 }
-                .foregroundStyle(AppTheme.bg)
-                .padding(.horizontal, 32)
-                .padding(.vertical, 14)
-                .background(AppTheme.accentFill, in: Capsule())
-                .shadow(color: AppTheme.accent.opacity(0.35), radius: 12, y: 6)
+                .foregroundStyle(hasCards ? AppTheme.onVividFill : AppTheme.textSecondary)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 16)
+                .background(hasCards ? AppTheme.accentFill : AppTheme.cardMid,
+                            in: RoundedRectangle(cornerRadius: 20))
             }
             .buttonStyle(ScaleButtonStyle())
+            .disabled(!hasCards)
         }
-        .padding(.horizontal, 40)
+        .padding(.horizontal, 32)
     }
 }
 
@@ -366,295 +597,426 @@ struct SalaryEmptyState: View {
 
 struct SalaryCard: View {
     let schedule: SalarySchedule
-    let allSchedules: [SalarySchedule]
-    let cards: [BankCard]
-    @Bindable var vm: SalaryViewModel
-    let context: ModelContext
+    let card: BankCard?
+    let isAnchor: Bool
+    let onMore: () -> Void
 
-    @State private var showActions = false
-    @State private var showDeleteConfirm = false
-
-    private var nextDate: Date { SalaryDateEngine.nextPayDate(dayOfMonth: schedule.dayOfMonth) }
-    private var daysLeft: Int  { SalaryDateEngine.daysUntilPay(dayOfMonth: schedule.dayOfMonth) }
-    private var adjusted: Bool { SalaryDateEngine.wasAdjusted(intended: schedule.dayOfMonth, actual: nextDate) }
-    private var upcoming: [Date] { SalaryDateEngine.upcomingDates(dayOfMonth: schedule.dayOfMonth, count: 4) }
-
-    private var creditedThisMonth: Bool {
+    /// This month's payday has passed AND the engine recorded it. A new
+    /// schedule marks the current month as done so it never back-posts, which
+    /// is why "passed" is part of the test: without it every freshly added
+    /// salary would claim to have been paid already.
+    private var recordedThisMonth: Bool {
         let cal = Calendar.current
         let now = Date()
-        return schedule.lastCreditedMonth == cal.component(.month, from: now) &&
-               schedule.lastCreditedYear  == cal.component(.year,  from: now)
-    }
-
-    private var daysLabel: String {
-        if daysLeft == 0 { return loc("salary.today_short") }
-        if daysLeft == 1 { return loc("salary.tomorrow_short") }
-        return String(format: loc("salary.in_days"), daysLeft)
-    }
-
-    private var daysColor: Color {
-        if daysLeft == 0 { return AppTheme.accent }
-        if daysLeft <= 3 { return AppTheme.orange }
-        return AppTheme.textSecondary
+        let m = cal.component(.month, from: now), y = cal.component(.year, from: now)
+        let thisMonthPay = SalaryDateEngine.actualPayDate(dayOfMonth: schedule.dayOfMonth, month: m, year: y)
+        return schedule.autoRecord
+            && schedule.lastCreditedMonth == m && schedule.lastCreditedYear == y
+            && cal.startOfDay(for: thisMonthPay) <= cal.startOfDay(for: now)
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            VStack(spacing: 14) {
-                // Header row
-                HStack(alignment: .top) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack(spacing: 8) {
-                            Text(schedule.label)
-                                .font(.system(size: 17, weight: .semibold))
-                                .foregroundStyle(AppTheme.textPrimary)
-                            if schedule.isPinned {
-                                Image(systemName: "pin.fill")
-                                    .font(.system(size: 10))
-                                    .foregroundStyle(AppTheme.accent)
-                                    .transition(.scale.combined(with: .opacity))
-                            }
-                            if !schedule.isActive {
-                                Text(loc("salary.paused"))
-                                    .font(.system(size: 10, weight: .semibold))
-                                    .foregroundStyle(AppTheme.textSecondary)
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 3)
-                                    .background(AppTheme.cardMid, in: Capsule())
-                            } else if !schedule.autoRecord {
-                                // Auto-record off: schedule still shows upcoming
-                                // paydays for planning but creates no income tx.
-                                HStack(spacing: 3) {
-                                    Image(systemName: "hand.raised.fill").font(.system(size: 8, weight: .bold))
-                                    Text(loc("salary.manual")).font(.system(size: 10, weight: .semibold))
-                                }
-                                .foregroundStyle(AppTheme.orange)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 3)
-                                .background(AppTheme.orange.opacity(0.15), in: Capsule())
-                            }
-                        }
-                        Text(String(format: loc("salary.every_day"), schedule.dayOfMonth))
-                            .font(.system(size: 13))
-                            .foregroundStyle(AppTheme.textSecondary)
-                    }
-                    Spacer()
-
-                    // FIXED: plain button -> confirmationDialog, no Menu
-                    Button {
-                        HapticManager.shared.tap()
-                        showActions = true
-                    } label: {
-                        ZStack {
-                            Circle()
-                                .fill(AppTheme.cardMid)
-                                .frame(width: 44, height: 44)
-                            Image(systemName: "ellipsis")
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundStyle(AppTheme.textSecondary)
-                        }
-                        .contentShape(Circle())
-                    }
-                    .buttonStyle(ScaleButtonStyle())
+        let cycle = SalaryCycle(dayOfMonth: schedule.dayOfMonth)
+        let active = schedule.isActive
+        VStack(alignment: .leading, spacing: 16) {
+            // Identity + actions
+            HStack(alignment: .top, spacing: 12) {
+                ZStack {
+                    Circle()
+                        .fill(active ? AppTheme.accentFill : AppTheme.cardMid)
+                        .frame(width: 44, height: 44)
+                    Image(systemName: "banknote.fill")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(active ? AppTheme.onVividFill : AppTheme.textSecondary)
                 }
-
-                // Amount + countdown
-                HStack(alignment: .bottom) {
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(loc("common.amount"))
-                            .font(.system(size: 11))
-                            .foregroundStyle(AppTheme.textSecondary)
-                        Text(CurrencyManager.shared.formatted(schedule.amount, currency: schedule.currency))
-                            .font(.system(size: 26, weight: .bold))
-                            .foregroundStyle(AppTheme.textPrimary)
-                            .contentTransition(.numericText())
-                    }
-                    Spacer()
-                    VStack(alignment: .trailing, spacing: 3) {
-                        Text(loc("salary.next_payday"))
-                            .font(.system(size: 11))
-                            .foregroundStyle(AppTheme.textSecondary)
-                        Text(daysLabel)
-                            .font(.system(size: 18, weight: .bold))
-                            .foregroundStyle(daysColor)
-                    }
-                }
-
-                // Pay date row
-                HStack(spacing: 8) {
-                    Image(systemName: creditedThisMonth ? "checkmark.circle.fill" : "calendar")
-                        .font(.system(size: 13))
-                        .foregroundStyle(creditedThisMonth ? AppTheme.accent : AppTheme.accent)
-                    Text(creditedThisMonth
-                         ? String(format: loc("salary.credited_on"), nextDate.displayDate)
-                         : nextDate.displayDate)
-                        .font(.system(size: 13, weight: .medium))
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(schedule.label)
+                        .font(.system(size: 17, weight: .bold))
                         .foregroundStyle(AppTheme.textPrimary)
-                    if adjusted && !creditedThisMonth {
-                        Text(loc("home.adjusted"))
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(AppTheme.orange)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 3)
-                            .background(AppTheme.orange.opacity(0.15), in: Capsule())
-                            .overlay(Capsule().stroke(AppTheme.orange.opacity(0.3), lineWidth: 1))
+                        .lineLimit(1)
+                    HStack(spacing: 6) {
+                        Text(String(format: loc("salary.every_day"), schedule.dayOfMonth))
+                            .font(.system(size: 12))
+                            .foregroundStyle(AppTheme.textSecondary)
+                        if !active {
+                            chip(loc("salary.paused"), icon: "pause.fill", tint: AppTheme.textSecondary)
+                        } else {
+                            chip(schedule.autoRecord ? loc("salary.auto_chip") : loc("salary.manual"),
+                                 icon: schedule.autoRecord ? "wand.and.stars" : "hand.raised.fill",
+                                 tint: schedule.autoRecord ? AppTheme.textPrimary : AppTheme.orange)
+                        }
+                        if isAnchor && active {
+                            chip(loc("salary.anchor_chip"), icon: "pin.fill", tint: AppTheme.textPrimary)
+                        }
                     }
-                    if creditedThisMonth {
-                        Text(loc("salary.paid"))
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundStyle(AppTheme.bg)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 3)
-                            .background(AppTheme.accentFill, in: Capsule())
-                    }
-                    Spacer()
                 }
-                .padding(12)
-                .background(
-                    creditedThisMonth ? AppTheme.accent.opacity(0.1) : AppTheme.accent.opacity(0.07),
-                    in: RoundedRectangle(cornerRadius: 12)
-                )
-                .overlay(RoundedRectangle(cornerRadius: 12)
-                    .stroke(creditedThisMonth ? AppTheme.accent.opacity(0.4) : AppTheme.accent.opacity(0.15), lineWidth: 1))
+                Spacer(minLength: 4)
+                Button(action: onMore) {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundStyle(AppTheme.textPrimary)
+                        .frame(width: 38, height: 38)
+                        .background(AppTheme.cardMid.opacity(0.7), in: Circle())
+                        .contentShape(Circle())
+                }
+                .buttonStyle(ScaleButtonStyle())
             }
-            .padding(18)
 
-            Divider().background(AppTheme.cardMid)
+            // Amount + countdown
+            HStack(alignment: .firstTextBaseline) {
+                Text(CurrencyManager.shared.formatted(schedule.amount, currency: schedule.currency))
+                    .font(.system(size: 28, weight: .bold))
+                    .foregroundStyle(active ? AppTheme.textPrimary : AppTheme.textSecondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                    .contentTransition(.numericText())
+                Spacer(minLength: 8)
+                if active {
+                    Text(cycle.countdown)
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(cycle.daysLeft == 0 ? AppTheme.onVividFill : cycle.tint)
+                        .padding(.horizontal, 12).padding(.vertical, 6)
+                        .background(cycle.daysLeft == 0 ? AppTheme.accentFill
+                                    : (cycle.daysLeft <= 3 ? AppTheme.orange.opacity(0.14) : AppTheme.cardMid.opacity(0.7)),
+                                    in: Capsule())
+                }
+            }
 
-            // Details navigation
-            NavigationLink(destination: SalaryDetailView(schedule: schedule)) {
-                HStack {
-                    Text(loc("salary.view_schedule"))
-                        .font(.system(size: 13, weight: .medium))
+            if active {
+                PayCycleBar(cycle: cycle)
+            }
+
+            if recordedThisMonth {
+                // Green on the glyph only — the words stay in textPrimary, where
+                // systemGreen as 12pt text would be 2.2:1 on a white card.
+                HStack(spacing: 6) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 13))
                         .foregroundStyle(AppTheme.accent)
-                    Spacer()
-                    Image(systemName: "chevron.right")
+                    Text(loc("salary.recorded_this_month"))
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(AppTheme.textPrimary)
+                }
+            }
+
+            // The next four actual paydays
+            HStack(spacing: 8) {
+                ForEach(SalaryDateEngine.upcomingDates(dayOfMonth: schedule.dayOfMonth, count: 4), id: \.self) { d in
+                    PaydayTile(date: d, intended: schedule.dayOfMonth)
+                }
+            }
+            .opacity(active ? 1 : 0.55)
+
+            // Where it lands + full schedule
+            HStack(spacing: 10) {
+                if let card {
+                    LinearGradient(colors: [Color(hex: card.gradientStart), Color(hex: card.gradientEnd)],
+                                   startPoint: .topLeading, endPoint: .bottomTrailing)
+                        .frame(width: 28, height: 20)
+                        .clipShape(RoundedRectangle(cornerRadius: 5))
+                    Text(String(format: loc("salary.lands_on"),
+                                "\(CardLabel.title(card)) \(CardLabel.subtitle(card))"))
                         .font(.system(size: 12))
                         .foregroundStyle(AppTheme.textSecondary)
+                        .lineLimit(1)
                 }
-                .padding(.horizontal, 18)
-                .padding(.vertical, 10)
-            }
-            .buttonStyle(.plain)
-
-            Divider().background(AppTheme.cardMid)
-
-            // Upcoming strip
-            VStack(alignment: .leading, spacing: 12) {
-                Text(loc("salary.upcoming"))
-                    .font(.system(size: 12))
-                    .foregroundStyle(AppTheme.textSecondary)
-                    .padding(.horizontal, 18)
-                    .padding(.top, 14)
-
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 10) {
-                        ForEach(upcoming, id: \.self) { date in
-                            UpcomingPayPill(
-                                date: date,
-                                intended: schedule.dayOfMonth,
-                                currency: schedule.currency,
-                                amount: schedule.amount
-                            )
-                        }
+                Spacer(minLength: 6)
+                NavigationLink(destination: SalaryDetailView(schedule: schedule)) {
+                    HStack(spacing: 3) {
+                        Text(loc("salary.full_schedule"))
+                            .font(.system(size: 12, weight: .semibold))
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 10, weight: .bold))
                     }
-                    .padding(.horizontal, 18)
-                    .padding(.bottom, 16)
+                    .foregroundStyle(AppTheme.textPrimary)
                 }
+                .buttonStyle(.plain)
             }
         }
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 20))
-        .overlay(RoundedRectangle(cornerRadius: 20)
-            .stroke(daysLeft == 0 ? AppTheme.accent.opacity(0.4) : Color.clear, lineWidth: 1.5))
-        // Action sheet (works reliably on real device)
-        .confirmationDialog(schedule.label, isPresented: $showActions, titleVisibility: .visible) {
-            Button(loc("common.edit")) { vm.loadForEdit(schedule, cards: cards) }
-            Button(schedule.isPinned ? loc("salary.unpin") : loc("salary.pin")) {
-                if !schedule.isPinned {
-                    for s in allSchedules where s.id != schedule.id { s.isPinned = false }
-                }
-                schedule.isPinned.toggle()
-                try? context.save()
-                HapticManager.shared.tap()
-            }
-            Button(schedule.isActive ? loc("salary.pause") : loc("salary.resume")) {
-                schedule.isActive.toggle()
-                try? context.save()
-            }
-            Button(schedule.autoRecord ? loc("salary.autorecord_off") : loc("salary.autorecord_on")) {
-                schedule.autoRecord.toggle()
-                try? context.save()
-                HapticManager.shared.tap()
-            }
-            Button(loc("common.delete"), role: .destructive) { showDeleteConfirm = true }
-            Button(loc("common.cancel"), role: .cancel) {}
+        .padding(18)
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 24))
+    }
+
+    private func chip(_ text: String, icon: String, tint: Color) -> some View {
+        HStack(spacing: 3) {
+            Image(systemName: icon).font(.system(size: 8, weight: .bold))
+            Text(text).font(.system(size: 10, weight: .semibold))
         }
-        .confirmationDialog(String(format: loc("salary.delete_title"), schedule.label),
-                            isPresented: $showDeleteConfirm,
-                            titleVisibility: .visible) {
-            Button(loc("common.delete"), role: .destructive) {
-                context.delete(schedule)
-                try? context.save()
-                HapticManager.shared.warning()
+        .foregroundStyle(tint)
+        .padding(.horizontal, 7).padding(.vertical, 3)
+        .background(AppTheme.cardMid.opacity(0.7), in: Capsule())
+    }
+}
+
+// MARK: - Actions Sheet (⋯)
+
+/// What the ⋯ button opens.
+///
+/// It replaces a system action sheet listing five bare verbs — "📌 Pin to
+/// Home", "Pause", "Turn off auto-record" — none of which said what it would
+/// do. "Pin" in particular was mislabelled: it does not put anything on Home,
+/// it makes this salary's payday the day the pay cycle starts for Home, the
+/// budget and statistics. Each row now says its consequence, and auto-record
+/// is a switch that shows its current state instead of a verb that hides it.
+struct SalaryActionsSheet: View {
+    @Bindable var schedule: SalarySchedule
+    let isAnchor: Bool
+    let onEdit: () -> Void
+    let onTogglePin: () -> Void
+    let onToggleActive: () -> Void
+    let onDelete: () -> Void
+
+    @Environment(\.modelContext) private var context
+    @State private var contentHeight: CGFloat = 480
+
+    var body: some View {
+        VStack(spacing: 16) {
+            HStack(spacing: 12) {
+                ZStack {
+                    Circle().fill(schedule.isActive ? AppTheme.accentFill : AppTheme.cardMid)
+                        .frame(width: 46, height: 46)
+                    Image(systemName: "banknote.fill")
+                        .font(.system(size: 19, weight: .semibold))
+                        .foregroundStyle(schedule.isActive ? AppTheme.onVividFill : AppTheme.textSecondary)
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(schedule.label)
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundStyle(AppTheme.textPrimary)
+                        .lineLimit(1)
+                    Text(CurrencyManager.shared.formatted(schedule.amount, currency: schedule.currency)
+                         + "  ·  " + String(format: loc("salary.every_day"), schedule.dayOfMonth))
+                        .font(.system(size: 13))
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 0)
             }
-            Button(loc("common.cancel"), role: .cancel) {}
-        } message: {
-            Text(loc("salary.delete_confirm"))
+            .padding(.top, 6)
+
+            VStack(spacing: 0) {
+                row(icon: "pencil", tint: AppTheme.blue,
+                    title: loc("salary.action.edit"), detail: loc("salary.action.edit_sub"),
+                    action: onEdit)
+                divider
+                row(icon: schedule.isPinned ? "pin.slash.fill" : "pin.fill", tint: AppTheme.purple,
+                    title: loc(schedule.isPinned ? "salary.action.unpin" : "salary.action.pin"),
+                    detail: loc(schedule.isPinned ? "salary.action.unpin_sub" : "salary.action.pin_sub"),
+                    action: onTogglePin)
+                divider
+                row(icon: schedule.isActive ? "pause.fill" : "play.fill", tint: AppTheme.orange,
+                    title: loc(schedule.isActive ? "salary.pause" : "salary.resume"),
+                    detail: loc(schedule.isActive ? "salary.action.pause_sub" : "salary.action.resume_sub"),
+                    action: onToggleActive)
+                divider
+                HStack(spacing: 12) {
+                    iconTile("wand.and.stars", tint: AppTheme.accentFill, solid: true)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(loc("salary.autorecord_label"))
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(AppTheme.textPrimary)
+                        Text(loc("salary.autorecord_hint"))
+                            .font(.system(size: 12))
+                            .foregroundStyle(AppTheme.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: 6)
+                    Toggle("", isOn: $schedule.autoRecord)
+                        .labelsHidden()
+                        .tint(AppTheme.accentFill)
+                        .onChange(of: schedule.autoRecord) { _, _ in
+                            try? context.save()
+                            HapticManager.shared.tap()
+                        }
+                }
+                .padding(.horizontal, 14).padding(.vertical, 12)
+            }
+            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 20))
+
+            Button(action: onDelete) {
+                HStack(spacing: 12) {
+                    iconTile("trash.fill", tint: AppTheme.flowOut, solid: true)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(loc("salary.action.delete"))
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(AppTheme.flowOut)
+                        Text(loc("salary.delete_keeps"))
+                            .font(.system(size: 12))
+                            .foregroundStyle(AppTheme.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 14).padding(.vertical, 12)
+                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 20))
+            }
+            .buttonStyle(ScaleButtonStyle())
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 14)
+        .padding(.bottom, 8)
+        .fixedSize(horizontal: false, vertical: true)
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { contentHeight = $0 + 24 }
+        .presentationDetents([.height(contentHeight)])
+        .presentationDragIndicator(.visible)
+        .presentationBackground(AppTheme.bg)
+        .presentationCornerRadius(28)
+    }
+
+    private var divider: some View {
+        Rectangle().fill(AppTheme.cardMid.opacity(0.7)).frame(height: 1).padding(.leading, 62)
+    }
+
+    /// Blue, purple and orange are dark enough in light mode to sit as glyphs
+    /// on their own pale tint. systemGreen and systemRed are not (≈1.9:1 and
+    /// ≈3:1), so those two go SOLID with a dark glyph, like every other green
+    /// and red badge in the app.
+    private func iconTile(_ icon: String, tint: Color, solid: Bool = false) -> some View {
+        Image(systemName: icon)
+            .font(.system(size: 15, weight: .semibold))
+            .foregroundStyle(solid ? AppTheme.onVividFill : tint)
+            .frame(width: 36, height: 36)
+            .background(solid ? tint : tint.opacity(0.14), in: RoundedRectangle(cornerRadius: 11))
+    }
+
+    private func row(icon: String, tint: Color, title: String, detail: String,
+                     action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                iconTile(icon, tint: tint)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(AppTheme.textPrimary)
+                    Text(detail)
+                        .font(.system(size: 12))
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .multilineTextAlignment(.leading)
+                }
+                Spacer(minLength: 6)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(AppTheme.textSecondary)
+            }
+            .padding(.horizontal, 14).padding(.vertical, 12)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Delete Sheet
+
+/// Says what deleting a salary schedule does and does NOT do. The old dialog
+/// said "remove permanently", which reads as if recorded salary would vanish
+/// too — it does not — and said nothing about the pay cycle moving, which it
+/// does when this is the schedule the cycle runs on.
+struct SalaryDeleteSheet: View {
+    let schedule: SalarySchedule
+    let isAnchor: Bool
+    let hasOtherActive: Bool
+    let onConfirm: () -> Void
+    let onCancel: () -> Void
+    @State private var contentHeight: CGFloat = 380
+
+    var body: some View {
+        VStack(spacing: 18) {
+            ZStack {
+                Circle().fill(AppTheme.flowOut).frame(width: 56, height: 56)
+                Image(systemName: "trash.fill")
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundStyle(AppTheme.onVividFill)
+            }
+            .padding(.top, 8)
+
+            Text(String(format: loc("salary.delete_title"), schedule.label))
+                .font(.system(size: 19, weight: .bold))
+                .foregroundStyle(AppTheme.textPrimary)
+                .multilineTextAlignment(.center)
+
+            VStack(alignment: .leading, spacing: 10) {
+                note("checkmark.circle.fill", AppTheme.accent, loc("salary.delete_keeps"))
+                if isAnchor && schedule.isActive {
+                    note("arrow.triangle.2.circlepath", AppTheme.orange,
+                         loc(hasOtherActive ? "salary.delete_anchor_other" : "salary.delete_anchor_month"))
+                }
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 18))
+
+            VStack(spacing: 10) {
+                Button(action: onConfirm) {
+                    Text(loc("common.delete"))
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundStyle(AppTheme.onVividFill)
+                        .frame(maxWidth: .infinity).padding(.vertical, 16)
+                        .background(AppTheme.flowOut, in: RoundedRectangle(cornerRadius: 18))
+                }
+                .buttonStyle(ScaleButtonStyle())
+                Button {
+                    HapticManager.shared.tap(); onCancel()
+                } label: {
+                    Text(loc("tx.delete_keep"))
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(AppTheme.textPrimary)
+                        .frame(maxWidth: .infinity).padding(.vertical, 16)
+                        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 18))
+                }
+                .buttonStyle(ScaleButtonStyle())
+            }
+        }
+        .padding(.horizontal, 22)
+        .padding(.top, 14)
+        .padding(.bottom, 10)
+        .fixedSize(horizontal: false, vertical: true)
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { contentHeight = $0 + 24 }
+        .presentationDetents([.height(contentHeight)])
+        .presentationDragIndicator(.visible)
+        .presentationBackground(AppTheme.bg)
+        .presentationCornerRadius(28)
+        .onAppear { HapticManager.shared.warning() }
+    }
+
+    private func note(_ icon: String, _ tint: Color, _ text: String) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: icon).font(.system(size: 14)).foregroundStyle(tint)
+            Text(text)
+                .font(.system(size: 13))
+                .foregroundStyle(AppTheme.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 }
 
-// MARK: - Upcoming Pay Pill
+// MARK: - Payday Grid
 
-struct UpcomingPayPill: View {
-    let date: Date
-    let intended: Int
-    let currency: String
-    let amount: Double
-
-    private var isToday:     Bool { SalaryDateEngine.isToday(date) }
-    private var wasAdjusted: Bool { SalaryDateEngine.wasAdjusted(intended: intended, actual: date) }
-    private var locale:      Locale { LanguageManager.shared.currentLocale }
-    private var monthLabel:  String {
-        let df = DateFormatter(); df.locale = locale; df.dateFormat = "MMM"
-        return df.string(from: date)
-    }
-    private var dayLabel:    String {
-        let df = DateFormatter(); df.locale = locale; df.dateFormat = "d"
-        return df.string(from: date)
-    }
-    private var weekday:     String {
-        let df = DateFormatter(); df.locale = locale; df.dateFormat = "EEE"
-        return df.string(from: date)
-    }
+/// The month laid out as the 31 days it can be. Picking day 25 on the old
+/// stepper was 24 taps of "+"; this is one.
+struct PaydayGrid: View {
+    @Binding var day: Int
+    private let columns = Array(repeating: GridItem(.flexible(), spacing: 6), count: 7)
 
     var body: some View {
-        VStack(spacing: 6) {
-            Text(monthLabel.uppercased())
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundStyle(isToday ? AppTheme.bg : AppTheme.textSecondary)
-                .tracking(0.8)
-            Text(dayLabel)
-                .font(.system(size: 22, weight: .bold))
-                .foregroundStyle(isToday ? AppTheme.onVividFill : AppTheme.textPrimary)
-            Text(weekday)
-                .font(.system(size: 10, weight: .medium))
-                .foregroundStyle(isToday ? AppTheme.onVividFill.opacity(0.7) : AppTheme.textSecondary)
-            if wasAdjusted {
-                Image(systemName: "arrow.left.circle.fill")
-                    .font(.system(size: 12))
-                    .foregroundStyle(isToday ? AppTheme.onVividFill.opacity(0.8) : AppTheme.orange)
-            } else {
-                Spacer().frame(height: 12)
+        LazyVGrid(columns: columns, spacing: 6) {
+            ForEach(1...31, id: \.self) { d in
+                let on = d == day
+                Button {
+                    HapticManager.shared.select()
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) { day = d }
+                } label: {
+                    Text("\(d)")
+                        .font(.system(size: 15, weight: on ? .bold : .medium))
+                        .foregroundStyle(on ? AppTheme.onVividFill : AppTheme.textPrimary)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 38)
+                        .background(on ? AppTheme.accentFill : Color.clear, in: Circle())
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
             }
         }
-        .frame(width: 64)
-        .padding(.vertical, 12)
-        .background(isToday ? AppTheme.accentFill : AppTheme.cardMid,
-                    in: RoundedRectangle(cornerRadius: 14))
-        .overlay(RoundedRectangle(cornerRadius: 14)
-            .stroke(wasAdjusted && !isToday ? AppTheme.orange.opacity(0.4) : Color.clear, lineWidth: 1))
-        .shadow(color: isToday ? AppTheme.accent.opacity(0.3) : .clear, radius: 8, y: 4)
     }
 }
 
@@ -671,14 +1033,17 @@ struct SalaryFormSheet: View {
 
     private var previewDate: Date {
         let cal = Calendar.current
-        let month = cal.component(.month, from: .now)
-        let year  = cal.component(.year, from: .now)
         return SalaryDateEngine.actualPayDate(dayOfMonth: vm.formDay,
-                                              month: month, year: year)
+                                              month: cal.component(.month, from: .now),
+                                              year: cal.component(.year, from: .now))
     }
-
     private var previewAdjusted: Bool {
         SalaryDateEngine.wasAdjusted(intended: vm.formDay, actual: previewDate)
+    }
+    private var lockedCard: BankCard? { cards.first { $0.id == vm.formCardID } }
+    private var cardIndex: Binding<Int> {
+        Binding(get: { cards.firstIndex { $0.id == vm.formCardID } ?? 0 },
+                set: { i in if cards.indices.contains(i) { vm.formCardID = cards[i].id } })
     }
 
     var body: some View {
@@ -687,293 +1052,32 @@ struct SalaryFormSheet: View {
                 AppTheme.bg.ignoresSafeArea()
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 22) {
-
-                        SheetField(label: loc("salary.label"),
-                                   placeholder: loc("salary.label_placeholder"),
-                                   text: $vm.formLabel)
-                        .opacity(appeared ? 1 : 0)
-                        .offset(y: appeared ? 0 : 20)
-
-                        // Amount + currency
-                        VStack(spacing: 8) {
-                            Text(loc("salary.amount"))
-                                .font(.system(size: 13))
-                                .foregroundStyle(AppTheme.textSecondary)
-                                .frame(maxWidth: .infinity, alignment: .leading)
+                        amountSection
+                        IconField(label: loc("salary.label"),
+                                  icon: "briefcase.fill",
+                                  placeholder: loc("salary.label_placeholder"),
+                                  text: $vm.formLabel)
+                            .padding(.horizontal, 22)
+                        paydaySection
+                        cardSection
+                        autoRecordSection
+                        if !isEditing {
+                            InlineBanner(tone: .info,
+                                         message: loc("salary.auto_note") + "\n" + loc("salary.auto_note_sub"))
                                 .padding(.horizontal, 22)
-
-                            HStack(spacing: 10) {
-                                // Locked to card currency when a card is selected
-                                if let cardID = vm.formCardID,
-                                   let card = cards.first(where: { $0.id == cardID }) {
-                                    HStack(spacing: 6) {
-                                        Text(card.currency)
-                                            .font(.system(size: 15, weight: .semibold))
-                                            .foregroundStyle(AppTheme.textPrimary)
-                                        Image(systemName: "lock.fill")
-                                            .font(.system(size: 10))
-                                            .foregroundStyle(AppTheme.textSecondary)
-                                    }
-                                    .padding(.horizontal, 14)
-                                    .padding(.vertical, 14)
-                                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
-                                } else {
-                                    Menu {
-                                        ForEach(vm.currencies, id: \.self) { c in
-                                            Button(c) {
-                                                HapticManager.shared.tap()
-                                                vm.formCurrency = c
-                                            }
-                                        }
-                                    } label: {
-                                        HStack(spacing: 6) {
-                                            Text(vm.formCurrency)
-                                                .font(.system(size: 15, weight: .semibold))
-                                                .foregroundStyle(AppTheme.textPrimary)
-                                            Image(systemName: "chevron.up.chevron.down")
-                                                .font(.system(size: 10))
-                                                .foregroundStyle(AppTheme.textSecondary)
-                                        }
-                                        .padding(.horizontal, 14)
-                                        .padding(.vertical, 14)
-                                        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
-                                    }
-                                }
-
-                                TextField("0", text: $vm.formAmount)
-                                    .font(.system(size: 22, weight: .bold))
-                                    .foregroundStyle(AppTheme.textPrimary)
-                                    .keyboardType(.decimalPad)
-                                    .padding(.horizontal, 16)
-                                    .padding(.vertical, 14)
-                                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
-                                    .frame(maxWidth: .infinity)
-                            }
-                            .padding(.horizontal, 22)
                         }
-                        .opacity(appeared ? 1 : 0)
-                        .offset(y: appeared ? 0 : 20)
-                        .animation(AppMotion.appear, value: appeared)
-
-                        // Day stepper
-                        VStack(spacing: 8) {
-                            Text(loc("salary.intended"))
-                                .font(.system(size: 13))
-                                .foregroundStyle(AppTheme.textSecondary)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.horizontal, 22)
-
-                            HStack {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(String(format: loc("salary.day_of"), vm.formDay))
-                                        .font(.system(size: 17, weight: .semibold))
-                                        .foregroundStyle(AppTheme.textPrimary)
-                                    Text(loc("salary.contracted"))
-                                        .font(.system(size: 12))
-                                        .foregroundStyle(AppTheme.textSecondary)
-                                }
-                                Spacer()
-                                HStack(spacing: 0) {
-                                    Button {
-                                        HapticManager.shared.tap()
-                                        if vm.formDay > 1 { vm.formDay -= 1 }
-                                    } label: {
-                                        Image(systemName: "minus")
-                                            .font(.system(size: 14, weight: .semibold))
-                                            .foregroundStyle(AppTheme.textPrimary)
-                                            .frame(width: 40, height: 40)
-                                    }
-                                    Text("\(vm.formDay)")
-                                        .font(.system(size: 20, weight: .bold))
-                                        .foregroundStyle(AppTheme.accent)
-                                        .frame(width: 44)
-                                        .contentTransition(.numericText())
-                                    Button {
-                                        HapticManager.shared.tap()
-                                        if vm.formDay < 31 { vm.formDay += 1 }
-                                    } label: {
-                                        Image(systemName: "plus")
-                                            .font(.system(size: 14, weight: .semibold))
-                                            .foregroundStyle(AppTheme.textPrimary)
-                                            .frame(width: 40, height: 40)
-                                    }
-                                }
-                                .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: 12))
-                            }
-                            .padding(16)
-                            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
-                            .padding(.horizontal, 22)
-                        }
-                        .opacity(appeared ? 1 : 0)
-                        .offset(y: appeared ? 0 : 20)
-                        .animation(AppMotion.appear, value: appeared)
-
-                        // Card picker — REQUIRED: which card receives salary
-                        VStack(spacing: 8) {
-                            HStack(spacing: 6) {
-                                Image(systemName: "exclamationmark.circle.fill")
-                                    .font(.system(size: 12)).foregroundStyle(AppTheme.orange)
-                                Text(loc("salary.choose_card"))
-                                    .font(.system(size: 12, weight: .medium)).foregroundStyle(AppTheme.orange)
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.horizontal, 22)
-
-                            CardPickerSection(selectedCardID: $vm.formCardID)
-
-                            // Someone with two jobs paid into two accounts is
-                            // exactly who hits this: the form pre-fills the main
-                            // card, and a second job left on that default would
-                            // silently raise the budget on an account that never
-                            // receives it. Said here, while the choice is open,
-                            // rather than discovered as an allowance that grew
-                            // for no visible reason.
-                            if let id = vm.formCardID, MainCard.id != nil,
-                               id.uuidString != MainCard.id {
-                                Label(loc("salary.not_main_card"),
-                                      systemImage: "info.circle")
-                                    .font(.system(size: 11))
-                                    .foregroundStyle(AppTheme.textSecondary)
-                                    .fixedSize(horizontal: false, vertical: true)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .padding(.horizontal, 22)
-                            }
-                        }
-                        .onChange(of: vm.formCardID) { _, newID in
-                            if let id = newID, let card = cards.first(where: { $0.id == id }) {
-                                vm.formCurrency = card.currency
-                            }
-                        }
-                        .opacity(appeared ? 1 : 0)
-                        .animation(AppMotion.appear, value: appeared)
-
-                        // Auto-record toggle — when off, the schedule still shows
-                        // upcoming paydays but creates no income transaction.
-                        HStack(spacing: 12) {
-                            Image(systemName: "wand.and.stars")
-                                .font(.system(size: 16))
-                                .foregroundStyle(AppTheme.accent)
-                                .frame(width: 36, height: 36)
-                                .background(AppTheme.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(loc("salary.autorecord_label"))
-                                    .font(.system(size: 14, weight: .medium)).foregroundStyle(AppTheme.textPrimary)
-                                Text(loc("salary.autorecord_hint"))
-                                    .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-                            Spacer()
-                            Toggle("", isOn: $vm.formAutoRecord)
-                                .labelsHidden().tint(AppTheme.accent)
-                        }
-                        .padding(14)
-                        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
-                        .overlay(RoundedRectangle(cornerRadius: 16).stroke(AppTheme.cardMid.opacity(0.6), lineWidth: 1))
-                        .padding(.horizontal, 22)
-                        .opacity(appeared ? 1 : 0)
-                        .animation(AppMotion.appear, value: appeared)
-
-                        // Live preview
-                        VStack(spacing: 8) {
-                            Text(loc("salary.actual_this"))
-                                .font(.system(size: 13))
-                                .foregroundStyle(AppTheme.textSecondary)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.horizontal, 22)
-
-                            HStack(spacing: 12) {
-                                Image(systemName: previewAdjusted
-                                      ? "arrow.left.circle.fill"
-                                      : "checkmark.circle.fill")
-                                    .font(.system(size: 20))
-                                    .foregroundStyle(previewAdjusted ? AppTheme.orange : AppTheme.accent)
-
-                                VStack(alignment: .leading, spacing: 3) {
-                                    Text(previewDate.formatted(
-                                        .dateTime
-                                            .day()
-                                            .month()
-                                            .year()
-                                    ))
-                                        .font(.system(size: 14, weight: .semibold))
-                                        .foregroundStyle(AppTheme.textPrimary)
-                                    if previewAdjusted {
-                                        Text(String(format: loc("salary.moved"), vm.formDay))
-                                            .font(.system(size: 12))
-                                            .foregroundStyle(AppTheme.orange)
-                                    } else {
-                                        Text(loc("cards.falls_regular"))
-                                            .font(.system(size: 12))
-                                            .foregroundStyle(AppTheme.textSecondary)
-                                    }
-                                }
-                                Spacer()
-                            }
-                            .padding(14)
-                            .background(
-                                (previewAdjusted ? AppTheme.orange : AppTheme.accent).opacity(0.08),
-                                in: RoundedRectangle(cornerRadius: 14)
-                            )
-                            .overlay(RoundedRectangle(cornerRadius: 14)
-                                .stroke((previewAdjusted ? AppTheme.orange : AppTheme.accent).opacity(0.2),
-                                        lineWidth: 1))
-                            .padding(.horizontal, 22)
-                            .animation(.spring(response: 0.3), value: vm.formDay)
-                        }
-                        .opacity(appeared ? 1 : 0)
-                        .animation(AppMotion.appear, value: appeared)
-
                         if let err = vm.formError {
-                            Text(err)
-                                .font(.system(size: 13))
-                                .foregroundStyle(AppTheme.red)
+                            InlineBanner(tone: .error, message: err)
                                 .padding(.horizontal, 22)
                                 .transition(.opacity)
                         }
-
-                        // Info banner
-                        if !isEditing {
-                            HStack(spacing: 10) {
-                                Image(systemName: "info.circle.fill")
-                                    .font(.system(size: 16))
-                                    .foregroundStyle(AppTheme.blue)
-                                VStack(alignment: .leading, spacing: 3) {
-                                    Text(loc("salary.auto_note"))
-                                        .font(.system(size: 13, weight: .semibold))
-                                        .foregroundStyle(AppTheme.textPrimary)
-                                    Text(loc("salary.auto_note_sub"))
-                                        .font(.system(size: 12))
-                                        .foregroundStyle(AppTheme.textSecondary)
-                                        .lineSpacing(2)
-                                }
-                            }
-                            .padding(14)
-                            .background(AppTheme.blue.opacity(0.08), in: RoundedRectangle(cornerRadius: 14))
-                            .overlay(RoundedRectangle(cornerRadius: 14).stroke(AppTheme.blue.opacity(0.2), lineWidth: 1))
-                            .padding(.horizontal, 22)
-                            .opacity(appeared ? 1 : 0)
-                            .animation(AppMotion.appear, value: appeared)
-                        }
-
-                        Button { save() } label: {
-                            Text(isEditing ? loc("common.save") : loc("salary.add"))
-                                .font(.system(size: 16, weight: .bold))
-                                .foregroundStyle(AppTheme.bg)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 16)
-                                .background(cards.isEmpty ? AppTheme.textSecondary.opacity(0.3) : AppTheme.accent, in: Capsule())
-                                .shadow(color: cards.isEmpty ? .clear : AppTheme.accent.opacity(0.35), radius: 12, y: 6)
-                        }
-                        .buttonStyle(ScaleButtonStyle())
-                        .disabled(cards.isEmpty)
-                        .padding(.horizontal, 22)
-                        .padding(.top, 6)
-                        .opacity(appeared ? 1 : 0)
-                        .animation(AppMotion.appear, value: appeared)
-
-                        Spacer(minLength: 40)
+                        saveButton
+                        Spacer(minLength: 30)
                     }
                     .padding(.top, 8)
+                    .opacity(appeared ? 1 : 0)
+                    .offset(y: appeared ? 0 : 16)
+                    .animation(AppMotion.appear, value: appeared)
                 }
             }
             .navigationTitle(isEditing ? loc("salary.edit") : loc("salary.new"))
@@ -981,18 +1085,177 @@ struct SalaryFormSheet: View {
             .toolbarBackground(AppTheme.bg, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(loc("common.cancel")) {
-                        HapticManager.shared.tap()
-                        dismiss()
-                    }
-                    .foregroundStyle(AppTheme.textSecondary)
+                    Button(loc("common.cancel")) { HapticManager.shared.tap(); dismiss() }
+                        .foregroundStyle(AppTheme.textSecondary)
                 }
-
             }
         }
         .onAppear {
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.1)) { appeared = true }
+            // The pager always shows a card, so something must be selected to
+            // match it — otherwise the form showed a card and then refused to
+            // save because "no card was chosen".
+            if vm.formCardID == nil, let first = cards.first { vm.formCardID = first.id }
+            if let card = lockedCard { vm.formCurrency = card.currency }
+            withAnimation { appeared = true }
         }
+        .onChange(of: vm.formCardID) { _, newID in
+            if let id = newID, let card = cards.first(where: { $0.id == id }) {
+                vm.formCurrency = card.currency
+            }
+        }
+    }
+
+    private var amountSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 12) {
+                // Locked to the receiving card's currency: salary is recorded
+                // on that card, so any other currency would be converted anyway.
+                HStack(spacing: 6) {
+                    Text(CurrencyManager.symbol(for: vm.formCurrency))
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(AppTheme.textPrimary)
+                    Text(vm.formCurrency)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(AppTheme.textSecondary)
+                    if lockedCard != nil {
+                        Image(systemName: "lock.fill").font(.system(size: 9))
+                            .foregroundStyle(AppTheme.textSecondary)
+                    }
+                }
+                .padding(.horizontal, 13).padding(.vertical, 12)
+                .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: 13))
+
+                TextField("0", text: $vm.formAmount)
+                    .font(.system(size: 34, weight: .bold))
+                    .foregroundStyle(AppTheme.textPrimary)
+                    .keyboardType(.decimalPad)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(14)
+            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 20))
+
+            if let p = AmountInputHelper.preview(vm.formAmount, currency: vm.formCurrency) {
+                Text(p)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(AppTheme.textSecondary)
+            }
+        }
+        .padding(.horizontal, 22)
+    }
+
+    private var paydaySection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            FormSectionLabel(text: loc("salary.payday"))
+            VStack(spacing: 12) {
+                PaydayGrid(day: $vm.formDay)
+
+                Rectangle().fill(AppTheme.cardMid.opacity(0.7)).frame(height: 1)
+
+                // What that choice means THIS month, live.
+                HStack(spacing: 12) {
+                    Image(systemName: previewAdjusted ? "arrow.uturn.backward" : "checkmark")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(AppTheme.onVividFill)
+                        .frame(width: 32, height: 32)
+                        .background(previewAdjusted ? AppTheme.orange : AppTheme.accentFill, in: Circle())
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(String(format: loc("salary.this_month_on"),
+                                    SalaryFormat.date(previewDate, "EEEE d MMM")))
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(AppTheme.textPrimary)
+                        Text(previewAdjusted
+                             ? String(format: loc("salary.moved"), vm.formDay)
+                             : loc("salary.on_business_day"))
+                            .font(.system(size: 12))
+                            .foregroundStyle(previewAdjusted ? AppTheme.orange : AppTheme.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .animation(.spring(response: 0.3), value: vm.formDay)
+
+                if vm.formDay >= 29 {
+                    Label(loc("salary.short_month_hint"), systemImage: "info.circle")
+                        .font(.system(size: 11))
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+            .padding(14)
+            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 20))
+        }
+        .padding(.horizontal, 22)
+    }
+
+    @ViewBuilder
+    private var cardSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            FormSectionLabel(text: loc("salary.deposit_to"))
+                .padding(.horizontal, 22)
+            if cards.isEmpty {
+                InlineBanner(tone: .warning, message: loc("home.add_card_salary"))
+                    .padding(.horizontal, 22)
+            } else {
+                CardSwipePicker(cards: cards, selectedIndex: cardIndex) { card in
+                    (loc("home.balance_total"), card.formattedBalance)
+                }
+                // Someone with two jobs paid into two accounts is exactly who
+                // hits this. Said while the choice is open, rather than
+                // discovered later as a budget that ignores this income.
+                if let id = vm.formCardID, MainCard.id != nil, id.uuidString != MainCard.id {
+                    Label(loc("salary.not_main_card"), systemImage: "info.circle")
+                        .font(.system(size: 11))
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.horizontal, 22)
+                }
+            }
+        }
+    }
+
+    private var autoRecordSection: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "wand.and.stars")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(AppTheme.onVividFill)
+                .frame(width: 36, height: 36)
+                .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: 11))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(loc("salary.autorecord_label"))
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(AppTheme.textPrimary)
+                Text(loc("salary.autorecord_hint"))
+                    .font(.system(size: 12))
+                    .foregroundStyle(AppTheme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 6)
+            Toggle("", isOn: $vm.formAutoRecord)
+                .labelsHidden()
+                .tint(AppTheme.accentFill)
+        }
+        .padding(14)
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 20))
+        .padding(.horizontal, 22)
+    }
+
+    private var saveButton: some View {
+        Button { save() } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "checkmark.circle.fill").font(.system(size: 17))
+                Text(isEditing ? loc("common.save") : loc("salary.add_full"))
+                    .font(.system(size: 16, weight: .bold))
+            }
+            .foregroundStyle(cards.isEmpty ? AppTheme.textSecondary : AppTheme.onVividFill)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 17)
+            .background(cards.isEmpty ? AppTheme.textSecondary.opacity(0.25) : AppTheme.accentFill,
+                        in: RoundedRectangle(cornerRadius: 20))
+        }
+        .buttonStyle(ScaleButtonStyle())
+        .disabled(cards.isEmpty)
+        .padding(.horizontal, 22)
+        .padding(.top, 4)
     }
 
     private func save() {
@@ -1024,7 +1287,7 @@ struct SalaryFormSheet: View {
         try? context.save()
         HapticManager.shared.success()
 
-        // ✅ Schedule 3-day and 1-day advance device + in-app notifications
+        // Schedule 3-day and 1-day advance device + in-app notifications
         let savedLabel  = vm.formLabel.trimmingCharacters(in: .whitespaces)
         let savedDay    = vm.formDay
         let savedAmount = vm.formAmount
@@ -1086,187 +1349,99 @@ struct SalaryDetailView: View {
     @State private var appeared = false
 
     private var linkedCard: BankCard? { cards.first(where: { $0.id == schedule.cardID }) }
-    private var upcoming12: [Date]    { SalaryDateEngine.upcomingDates(dayOfMonth: schedule.dayOfMonth, count: 12) }
-    private var nextDate: Date        { SalaryDateEngine.nextPayDate(dayOfMonth: schedule.dayOfMonth) }
-    private var daysLeft: Int         { SalaryDateEngine.daysUntilPay(dayOfMonth: schedule.dayOfMonth) }
-
-    private var creditedThisMonth: Bool {
-        let cal = Calendar.current; let now = Date()
-        return schedule.lastCreditedMonth == cal.component(.month, from: now) &&
-               schedule.lastCreditedYear  == cal.component(.year,  from: now)
-    }
+    private let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 4)
 
     var body: some View {
+        let cycle = SalaryCycle(dayOfMonth: schedule.dayOfMonth)
+        let dates = SalaryDateEngine.upcomingDates(dayOfMonth: schedule.dayOfMonth, count: 12)
         ZStack {
             AppTheme.bg.ignoresSafeArea()
             ScrollView(showsIndicators: false) {
-                VStack(spacing: 20) {
-
-                    // Hero card
-                    VStack(spacing: 16) {
-                        HStack(spacing: 14) {
+                VStack(alignment: .leading, spacing: 22) {
+                    // Hero
+                    VStack(alignment: .leading, spacing: 14) {
+                        HStack(spacing: 12) {
                             ZStack {
-                                RoundedRectangle(cornerRadius: 14).fill(AppTheme.accent.opacity(0.12)).frame(width: 54, height: 54)
-                                Image(systemName: "banknote.fill").font(.system(size: 24)).foregroundStyle(AppTheme.accent)
+                                Circle().fill(schedule.isActive ? AppTheme.accentFill : AppTheme.cardMid)
+                                    .frame(width: 48, height: 48)
+                                Image(systemName: "banknote.fill")
+                                    .font(.system(size: 20, weight: .semibold))
+                                    .foregroundStyle(schedule.isActive ? AppTheme.onVividFill : AppTheme.textSecondary)
                             }
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(schedule.label).font(.system(size: 18, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
-                                HStack(spacing: 6) {
-                                    Text(String(format: loc("salary.every_day"), schedule.dayOfMonth))
-                                        .font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
-                                    if !schedule.isActive {
-                                        Text(loc("salary.paused")).font(.system(size: 10, weight: .semibold))
-                                            .foregroundStyle(AppTheme.textSecondary)
-                                            .padding(.horizontal, 7).padding(.vertical, 2)
-                                            .background(AppTheme.cardMid, in: Capsule())
-                                    }
-                                }
-                            }
-                            Spacer()
-                        }
-
-                        Divider().background(AppTheme.cardMid)
-
-                        HStack {
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(loc("common.amount")).font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
+                            VStack(alignment: .leading, spacing: 2) {
                                 Text(CurrencyManager.shared.formatted(schedule.amount, currency: schedule.currency))
-                                    .font(.system(size: 22, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
+                                    .font(.system(size: 26, weight: .bold))
+                                    .foregroundStyle(AppTheme.textPrimary)
+                                    .lineLimit(1).minimumScaleFactor(0.7)
+                                Text(String(format: loc("salary.every_day"), schedule.dayOfMonth)
+                                     + (schedule.isActive ? "" : "  ·  " + loc("salary.paused")))
+                                    .font(.system(size: 13))
+                                    .foregroundStyle(AppTheme.textSecondary)
                             }
-                            Spacer()
-                            VStack(alignment: .trailing, spacing: 3) {
-                                Text(loc("salary.next_payday")).font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
-                                Text(daysLeft == 0 ? loc("salary.today_short") : daysLeft == 1 ? loc("salary.tomorrow_short") : String(format: loc("salary.in_days"), daysLeft))
-                                    .font(.system(size: 16, weight: .bold))
-                                    .foregroundStyle(daysLeft == 0 ? AppTheme.accent : daysLeft <= 3 ? AppTheme.orange : AppTheme.textPrimary)
-                            }
+                            Spacer(minLength: 0)
                         }
-
-                        // Next pay date row
-                        HStack(spacing: 8) {
-                            Image(systemName: creditedThisMonth ? "checkmark.circle.fill" : "calendar")
-                                .font(.system(size: 13)).foregroundStyle(creditedThisMonth ? AppTheme.accent : AppTheme.accent)
-                            Text(creditedThisMonth
-                                 ? loc("salary.credited_this_month")
-                                 : nextDate.displayDate)
-                                .font(.system(size: 13, weight: .medium))
-                                .foregroundStyle(AppTheme.textPrimary)
-                            if SalaryDateEngine.wasAdjusted(intended: schedule.dayOfMonth, actual: nextDate) && !creditedThisMonth {
-                                Text(loc("home.adjusted")).font(.system(size: 11, weight: .semibold)).foregroundStyle(AppTheme.orange)
-                                    .padding(.horizontal, 8).padding(.vertical, 3)
-                                    .background(AppTheme.orange.opacity(0.15), in: Capsule())
+                        if schedule.isActive {
+                            HStack(alignment: .firstTextBaseline) {
+                                Text(loc("salary.next_payday"))
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundStyle(AppTheme.textSecondary)
+                                Spacer()
+                                Text(cycle.countdown)
+                                    .font(.system(size: 20, weight: .bold))
+                                    .foregroundStyle(cycle.daysLeft == 0 ? AppTheme.accent : cycle.tint)
                             }
-                            Spacer()
-                            if creditedThisMonth {
-                                Text(loc("salary.paid")).font(.system(size: 11, weight: .bold)).foregroundStyle(AppTheme.bg)
-                                    .padding(.horizontal, 10).padding(.vertical, 3).background(AppTheme.accentFill, in: Capsule())
-                            }
+                            PayCycleBar(cycle: cycle)
                         }
-                        .padding(12)
-                        .background(AppTheme.accent.opacity(creditedThisMonth ? 0.1 : 0.07), in: RoundedRectangle(cornerRadius: 12))
-                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(AppTheme.accent.opacity(creditedThisMonth ? 0.4 : 0.15), lineWidth: 1))
                     }
-                    .padding(16)
-                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 18))
-                    .overlay(RoundedRectangle(cornerRadius: 18).stroke(AppTheme.accent.opacity(0.2), lineWidth: 1))
+                    .padding(18)
+                    .background(
+                        LinearGradient(colors: [AppTheme.accent.opacity(0.20), AppTheme.cardDark],
+                                       startPoint: .topLeading, endPoint: .bottomTrailing),
+                        in: RoundedRectangle(cornerRadius: 24))
+                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 24))
                     .padding(.horizontal, 22)
-                    .opacity(appeared ? 1 : 0).offset(y: appeared ? 0 : 20)
-                    .animation(AppMotion.appear, value: appeared)
 
-                    // Linked card
                     if let card = linkedCard {
                         VStack(alignment: .leading, spacing: 10) {
-                            Text(loc("salary.credited_to")).font(.system(size: 13, weight: .semibold)).foregroundStyle(AppTheme.textSecondary)
-                            HStack(spacing: 12) {
-                                ZStack {
-                                    RoundedRectangle(cornerRadius: 10)
-                                        .fill(LinearGradient(colors: [Color(hex: card.gradientStart), Color(hex: card.gradientEnd)], startPoint: .leading, endPoint: .trailing))
-                                        .frame(width: 56, height: 36)
-                                    Text("•••• \(card.cardNumber.suffix(4))").font(.system(size: 9, weight: .semibold)).foregroundStyle(.white)
-                                }
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(card.holderName).font(.system(size: 14, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
-                                    Text(card.currency).font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
-                                }
-                                Spacer()
-                                Image(systemName: "checkmark.circle.fill").font(.system(size: 18)).foregroundStyle(AppTheme.accent)
-                            }
-                            .padding(12)
-                            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
+                            FormSectionLabel(text: loc("salary.credited_to"))
+                                .padding(.horizontal, 22)
+                            CardFaceView(card: card, label: loc("home.balance_total"), value: card.formattedBalance)
+                                .frame(height: 100)
+                                .padding(.horizontal, 22)
                         }
-                        .padding(.horizontal, 22)
-                        .opacity(appeared ? 1 : 0).offset(y: appeared ? 0 : 20)
-                        .animation(AppMotion.appear, value: appeared)
                     }
 
-                    // Upcoming 12 months
                     VStack(alignment: .leading, spacing: 12) {
-                        Text(loc("salary.upcoming_12"))
-                            .font(.system(size: 14, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
-                            .padding(.horizontal, 22)
-
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 10) {
-                                ForEach(upcoming12, id: \.self) { date in
-                                    let isToday = SalaryDateEngine.isToday(date)
-                                    let wasAdj  = SalaryDateEngine.wasAdjusted(intended: schedule.dayOfMonth, actual: date)
-                                    let locale  = LanguageManager.shared.currentLocale
-                                    let monthLabel: String = {
-                                        let df = DateFormatter(); df.locale = locale; df.dateFormat = "MMM"
-                                        return df.string(from: date)
-                                    }()
-                                    let dayLabel: String = {
-                                        let df = DateFormatter(); df.locale = locale; df.dateFormat = "d"
-                                        return df.string(from: date)
-                                    }()
-                                    let weekday: String = {
-                                        let df = DateFormatter(); df.locale = locale; df.dateFormat = "EEE"
-                                        return df.string(from: date)
-                                    }()
-                                    VStack(spacing: 6) {
-                                        Text(monthLabel.uppercased())
-                                            .font(.system(size: 10, weight: .semibold))
-                                            .foregroundStyle(isToday ? AppTheme.onVividFill : AppTheme.textSecondary).tracking(0.8)
-                                        Text(dayLabel)
-                                            .font(.system(size: 22, weight: .bold))
-                                            .foregroundStyle(isToday ? AppTheme.onVividFill : AppTheme.textPrimary)
-                                        Text(weekday)
-                                            .font(.system(size: 10, weight: .medium))
-                                            .foregroundStyle(isToday ? AppTheme.onVividFill.opacity(0.7) : AppTheme.textSecondary)
-                                        if wasAdj {
-                                            Image(systemName: "arrow.left.circle.fill").font(.system(size: 12))
-                                                .foregroundStyle(isToday ? AppTheme.onVividFill.opacity(0.8) : AppTheme.orange)
-                                        } else {
-                                            Spacer().frame(height: 12)
-                                        }
-                                    }
-                                    .frame(width: 64).padding(.vertical, 12)
-                                    .background(isToday ? AppTheme.accentFill : AppTheme.cardMid, in: RoundedRectangle(cornerRadius: 14))
-                                    .overlay(RoundedRectangle(cornerRadius: 14).stroke(wasAdj && !isToday ? AppTheme.orange.opacity(0.4) : Color.clear, lineWidth: 1))
-                                    .shadow(color: isToday ? AppTheme.accent.opacity(0.3) : .clear, radius: 8, y: 4)
-                                }
+                        FormSectionLabel(text: loc("salary.upcoming_12"))
+                        LazyVGrid(columns: columns, spacing: 8) {
+                            ForEach(dates, id: \.self) { d in
+                                PaydayTile(date: d, intended: schedule.dayOfMonth)
                             }
-                            .padding(.horizontal, 22)
                         }
-
-                        // Adjustment legend
                         HStack(spacing: 6) {
-                            Image(systemName: "arrow.left.circle.fill").font(.system(size: 11)).foregroundStyle(AppTheme.orange)
-                            Text(loc("salary.adjusted_legend")).font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                            Circle().fill(AppTheme.orange).frame(width: 7, height: 7)
+                            Text(loc("salary.adjusted_legend"))
+                                .font(.system(size: 11))
+                                .foregroundStyle(AppTheme.textSecondary)
                         }
-                        .padding(.horizontal, 22)
                     }
-                    .opacity(appeared ? 1 : 0).offset(y: appeared ? 0 : 20)
-                    .animation(AppMotion.appear, value: appeared)
+                    .padding(16)
+                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 24))
+                    .padding(.horizontal, 22)
 
                     Spacer(minLength: 40)
                 }
-                .padding(.top, 16)
+                .padding(.top, 12)
+                .opacity(appeared ? 1 : 0)
+                .offset(y: appeared ? 0 : 16)
             }
         }
         .navigationTitle(schedule.label)
         .navigationBarTitleDisplayMode(.large)
+        // The list hides its bar for the custom header; this screen needs one
+        // for its title and the way back.
+        .toolbar(.visible, for: .navigationBar)
         .toolbarBackground(AppTheme.bg, for: .navigationBar)
-        .onAppear { withAnimation(.spring(response: 0.55, dampingFraction: 0.8)) { appeared = true } }
+        .onAppear { withAnimation(.spring(response: 0.55, dampingFraction: 0.85)) { appeared = true } }
     }
 }

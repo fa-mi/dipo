@@ -256,6 +256,106 @@ struct DateTimeFields: View {
     }
 }
 
+// MARK: - Card Swipe Picker
+
+/// Swipe between cards — the same gesture as the card carousel on Home, so
+/// there is one way to move between cards anywhere in the app. A menu hides the
+/// other cards behind a tap; a pager shows that there ARE others (the dots) and
+/// reaches one with the thumb already on the screen.
+///
+/// Used by the transaction form and the salary form. `figure` decides what each
+/// face states: a balance, or the room left on a credit limit.
+struct CardSwipePicker: View {
+    let cards: [BankCard]
+    @Binding var selectedIndex: Int
+    let figure: (BankCard) -> (label: String, value: String)
+
+    var body: some View {
+        if cards.count > 1 {
+            VStack(spacing: 10) {
+                TabView(selection: $selectedIndex) {
+                    ForEach(Array(cards.enumerated()), id: \.element.id) { index, card in
+                        let f = figure(card)
+                        CardFaceView(card: card, label: f.label, value: f.value)
+                            .padding(.horizontal, 22)
+                            .tag(index)
+                    }
+                }
+                .tabViewStyle(.page(indexDisplayMode: .never))
+                .frame(height: 100)
+
+                HStack(spacing: 5) {
+                    ForEach(cards.indices, id: \.self) { i in
+                        Capsule()
+                            .fill(i == selectedIndex ? AppTheme.accent : AppTheme.textSecondary.opacity(0.35))
+                            .frame(width: i == selectedIndex ? 18 : 6, height: 6)
+                    }
+                }
+                .animation(.spring(response: 0.35, dampingFraction: 0.7), value: selectedIndex)
+            }
+        } else if let card = cards.first {
+            let f = figure(card)
+            CardFaceView(card: card, label: f.label, value: f.value)
+                .frame(height: 100)
+                .padding(.horizontal, 22)
+        }
+    }
+}
+
+/// A short card face: enough to recognise the card — its colours, name and
+/// digits — plus one figure.
+struct CardFaceView: View {
+    let card: BankCard
+    let label: String
+    let value: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(CardLabel.title(card))
+                        .font(.system(size: 14, weight: .semibold))
+                        .lineLimit(1)
+                    let sub = CardLabel.subtitle(card)
+                    if !sub.isEmpty {
+                        Text(sub)
+                            .font(.system(size: 11))
+                            .opacity(0.75)
+                            .lineLimit(1)
+                    }
+                }
+                Spacer(minLength: 8)
+                if card.isDigitalWallet, let wp = WalletProvider(rawValue: card.walletProvider) {
+                    Image(systemName: wp.icon)
+                        .font(.system(size: 16, weight: .semibold))
+                        .opacity(0.9)
+                } else {
+                    CardNetworkLogo(network: CardNetwork.detect(from: card.cardNumber))
+                        .scaleEffect(0.75, anchor: .topTrailing)
+                }
+            }
+            Spacer(minLength: 6)
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text(label)
+                    .font(.system(size: 10, weight: .medium))
+                    .opacity(0.75)
+                Spacer(minLength: 6)
+                Text(card.isHidden ? "••••••" : value)
+                    .font(.system(size: 17, weight: .bold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
+        }
+        .foregroundStyle(.white)
+        .padding(14)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(
+            LinearGradient(colors: [Color(hex: card.gradientStart), Color(hex: card.gradientEnd)],
+                           startPoint: .topLeading, endPoint: .bottomTrailing),
+            in: RoundedRectangle(cornerRadius: 18))
+    }
+}
+
 // MARK: - Animated Appearance Wrapper
 // Eliminates the repeated @State var appeared + onAppear pattern across views.
 //
