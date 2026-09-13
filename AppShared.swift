@@ -167,6 +167,95 @@ struct FormSectionLabel: View {
     }
 }
 
+// MARK: - Category Tile Picker
+
+/// Icon-over-label category tiles, shared by the create AND edit forms so the
+/// two cannot drift apart again — the edit form was still on the old pills a
+/// release after the create form moved on.
+///
+/// Neither glyph nor label is tinted with the category colour, deliberately.
+/// Ten of the sixteen category colours are bright hexes picked for dark mode;
+/// against their own pale tint on a white card they measure 1.55:1 (bonus
+/// #FBBF24) to 2.96:1 (health #EC4899), under the 3:1 floor for a graphic that
+/// carries meaning. Selection is said four ways that do not depend on hue —
+/// tinted fill, coloured border, darker glyph, heavier label — and the hue is
+/// left to the fill, which only has to be told apart, not read.
+struct CategoryTilePicker: View {
+    let categories: [TxCategory]
+    @Binding var selection: TxCategory
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 10) {
+                ForEach(categories, id: \.self) { cat in
+                    let on = selection == cat
+                    Button {
+                        HapticManager.shared.tap()
+                        withAnimation(.spring(response: 0.3)) { selection = cat }
+                    } label: {
+                        VStack(spacing: 7) {
+                            Image(systemName: cat.icon)
+                                .font(.system(size: 19, weight: .medium))
+                            Text(cat.displayLabel)
+                                .font(.system(size: 11, weight: on ? .semibold : .regular))
+                                .multilineTextAlignment(.center)
+                                .lineLimit(2)
+                                .minimumScaleFactor(0.8)
+                        }
+                        .foregroundStyle(on ? AppTheme.textPrimary : AppTheme.textSecondary)
+                        .frame(width: 84, height: 78)
+                        .background(on ? cat.color.opacity(0.16) : AppTheme.cardDark,
+                                    in: RoundedRectangle(cornerRadius: 18))
+                        .overlay(RoundedRectangle(cornerRadius: 18)
+                            .stroke(on ? cat.color.opacity(0.65) : Color.clear, lineWidth: 1.5))
+                    }
+                    .buttonStyle(ScaleButtonStyle())
+                }
+            }
+            .padding(.horizontal, 22)
+            .padding(.vertical, 2)
+        }
+    }
+}
+
+// MARK: - Date & Time Fields
+
+/// Date and time as two separate controls bound to one `Date`. A single
+/// combined `.compact` picker made changing only the time a detour through a
+/// calendar.
+struct DateTimeFields: View {
+    @Binding var date: Date
+
+    var body: some View {
+        HStack(spacing: 12) {
+            box(icon: "calendar") {
+                DatePicker("", selection: $date, displayedComponents: .date)
+                    .datePickerStyle(.compact).labelsHidden().tint(AppTheme.accent)
+            }
+            box(icon: "clock") {
+                DatePicker("", selection: $date, displayedComponents: .hourAndMinute)
+                    .datePickerStyle(.compact).labelsHidden().tint(AppTheme.accent)
+            }
+        }
+    }
+
+    private func box<Content: View>(icon: String, @ViewBuilder content: () -> Content) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.system(size: 14))
+                .foregroundStyle(AppTheme.textSecondary)
+            content()
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        // Expand BEFORE painting: with `.frame` after `.background` the fill
+        // hugged its own text and the two boxes came out different widths.
+        .frame(maxWidth: .infinity)
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
+    }
+}
+
 // MARK: - Animated Appearance Wrapper
 // Eliminates the repeated @State var appeared + onAppear pattern across views.
 //

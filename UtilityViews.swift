@@ -499,7 +499,9 @@ struct TransactionDetailSheet: View {
     @State private var editCategory: TxCategory = .other
     @State private var editDate = Date()
     @State private var editNotes = ""
-    @State private var showDeleteConfirm = false
+    /// Non-nil while the delete confirmation is up. Holds the tx so the sheet
+    /// is the same `DeleteTransactionSheet` the swipe gesture opens.
+    @State private var pendingDelete: TxRecord? = nil
     
     /// History the rhythm is measured over: every transaction on this card, not
     /// just this one. Cadence is a property of a habit, not of a purchase.
@@ -555,6 +557,8 @@ struct TransactionDetailSheet: View {
         /// dragged the light-mode button from salmon to a hard red when `red`
         /// was darkened for TEXT legibility — a change the fill never needed.
         var color: Color { self == .expense ? AppTheme.redFill : AppTheme.accentFill }
+        /// Same glyphs as the create form's type picker.
+        var icon: String { self == .expense ? "arrow.up.circle.fill" : "arrow.down.circle.fill" }
 
         /// Localized label for the segmented picker. The rawValue stays English
         /// since it's used purely internally (Hashable for ForEach); it never
@@ -626,11 +630,9 @@ struct TransactionDetailSheet: View {
                     .foregroundStyle(AppTheme.textSecondary)
                 }
                 ToolbarItem(placement: .primaryAction) {
-                    if isEditing {
-                        Button(loc("common.save")) { saveEdits() }
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(AppTheme.accent)
-                    } else {
+                    // While editing, Save lives at the bottom of the form, as it
+                    // does when creating — not in two places at once.
+                    if !isEditing {
                         Button {
                             loadEditState()
                             withAnimation { isEditing = true }
@@ -650,16 +652,19 @@ struct TransactionDetailSheet: View {
                     to: CurrencyManager.shared.preferredCurrency)
             }
         }
-        .confirmationDialog(loc("tx.delete_prompt"), isPresented: $showDeleteConfirm, titleVisibility: .visible) {
-            Button(loc("common.delete"), role: .destructive) {
-                deleteTransactionWithGoalRollback(tx, context: context)
-                try? context.save()
-                HapticManager.shared.warning()
-                dismiss()
-            }
-            Button(loc("common.cancel"), role: .cancel) {}
-        } message: {
-            Text(loc("tx.delete_confirm"))
+        .sheet(item: $pendingDelete) { pending in
+            DeleteTransactionSheet(
+                tx: pending,
+                card: allCards.first { $0.transactions.contains(where: { $0.id == pending.id }) },
+                onConfirm: {
+                    pendingDelete = nil
+                    deleteTransactionWithGoalRollback(pending, context: context)
+                    try? context.save()
+                    HapticManager.shared.success()
+                    dismiss()
+                },
+                onCancel: { pendingDelete = nil })
+            .preferredColorScheme(appColorScheme())
         }
     }
 
@@ -697,7 +702,8 @@ struct TransactionDetailSheet: View {
 
                 Text(tx.amount >= 0 ? "+\(formattedAmount)" : "-\(formattedAmount)")
                     .font(.system(size: 34, weight: .bold))
-                    .foregroundStyle(tx.amount >= 0 ? AppTheme.green : AppTheme.red)
+                    // The same money-in / money-out pair as Home's flow card.
+                    .foregroundStyle(tx.amount >= 0 ? AppTheme.flowIn : AppTheme.flowOut)
 
                 if tx.isFXConverted {
                     // Settled row: show what was declared and the rate applied
@@ -804,7 +810,7 @@ struct TransactionDetailSheet: View {
             // Delete button
             Button {
                 HapticManager.shared.warning()
-                showDeleteConfirm = true
+                pendingDelete = tx
             } label: {
                 HStack(spacing: 10) {
                     Image(systemName: "trash").font(.system(size: 16))
@@ -824,14 +830,16 @@ struct TransactionDetailSheet: View {
 
     // MARK: Edit form
 
+    /// Built from the same parts as the create form — amount hero, icon
+    /// fields, category tiles, split date and time, one primary button — so
+    /// editing a transaction looks and behaves like making one.
     var editForm: some View {
         VStack(spacing: 20) {
-            // Type picker
             HStack(spacing: 0) {
                 ForEach(EditType.allCases, id: \.self) { type in
                     Button {
-                        HapticManager.shared.tap()
-                        withAnimation(.spring(response: 0.3)) { editType = type }
+                        HapticManager.shared.select()
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) { editType = type }
                         // Keep category valid for the new type — an expense
                         // category left selected after switching to Income (or
                         // vice-versa) would save a nonsensical pairing.
@@ -839,12 +847,19 @@ struct TransactionDetailSheet: View {
                             editCategory = type == .expense ? .shopping : .salary
                         }
                     } label: {
-                        Text(type.localizedLabel)
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(editType == type ? AppTheme.onVividFill : AppTheme.textSecondary)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 12)
-                            .background { if editType == type { Capsule().fill(type.color) } }
+                        HStack(spacing: 8) {
+                            Image(systemName: type.icon).font(.system(size: 15))
+                            Text(type.localizedLabel).font(.system(size: 15, weight: .semibold))
+                        }
+                        .foregroundStyle(editType == type ? AppTheme.onVividFill : AppTheme.textSecondary)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 13)
+                        .background {
+                            if editType == type {
+                                Capsule().fill(type.color)
+                                    .shadow(color: type.color.opacity(0.4), radius: 8, y: 4)
+                            }
+                        }
                     }
                 }
             }
@@ -852,86 +867,84 @@ struct TransactionDetailSheet: View {
             .background(AppTheme.cardDark, in: Capsule())
             .padding(.horizontal, 22)
 
-            // Amount + currency
-            VStack(spacing: 8) {
-                Text(loc("common.amount")).font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
-                    .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 22)
-                HStack(spacing: 10) {
-                    // Currency — locked while editing. Changing a transaction's
-                    // currency after the fact would silently rewrite the amount
-                    // that hits the card balance (the stored figure is in this
-                    // currency), so it's read-only here. Currency is chosen up
-                    // front when the transaction is created.
-                    HStack(spacing: 5) {
-                        Text(editCurrency)
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 12) {
+                    // Currency is locked while editing. The stored amount is IN
+                    // this currency, so changing it after the fact would
+                    // silently rewrite what hits the card balance.
+                    HStack(spacing: 6) {
+                        Text(CurrencyManager.symbol(for: editCurrency))
                             .font(.system(size: 15, weight: .bold))
+                            .foregroundStyle(AppTheme.accent)
+                        Text(editCurrency)
+                            .font(.system(size: 13, weight: .medium))
                         Image(systemName: "lock.fill")
-                            .font(.system(size: 10))
+                            .font(.system(size: 9))
                     }
                     .foregroundStyle(AppTheme.textSecondary)
-                    .padding(.horizontal, 14).padding(.vertical, 14)
-                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 12))
-                    .overlay(RoundedRectangle(cornerRadius: 12)
-                        .stroke(AppTheme.cardMid.opacity(0.6), lineWidth: 1))
+                    .padding(.horizontal, 13).padding(.vertical, 12)
+                    .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: 13))
 
-                    TextField("0.00", text: $editAmount)
-                        .font(.system(size: 28, weight: .bold))
+                    TextField("0", text: $editAmount)
+                        .font(.system(size: 34, weight: .bold))
                         .foregroundStyle(AppTheme.textPrimary)
                         .keyboardType(.decimalPad)
-                        .padding(.horizontal, 16).padding(.vertical, 12)
-                        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
-                        .frame(maxWidth: .infinity)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .padding(.horizontal, 22)
+                .padding(14)
+                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 20))
 
-                // Conversion preview
-                if let amt = Double(editAmount), amt > 0 {
-                    let pref2 = CurrencyManager.shared.preferredCurrency
-                    let other = editCurrency == pref2 ? "USD" : pref2
-                    let conv  = CurrencyManager.shared.convert(amt, from: editCurrency, to: other)
-                    Text("= \(CurrencyManager.shared.formatted(conv, currency: other))")
-                        .font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
-                        .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 22)
+                // Same single helper line as the create form: echo the typed
+                // digits back formatted, so a missing zero is caught here.
+                if let p = AmountInputHelper.preview(editAmount, currency: editCurrency) {
+                    Text(p)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(AppTheme.textSecondary)
                 }
             }
+            .padding(.horizontal, 22)
 
-            SheetField(label: loc("tx.name_label"), placeholder: loc("tx.name_placeholder"), text: $editName)
+            IconField(label: loc("tx.name_label"),
+                      icon: "textformat",
+                      placeholder: loc("tx.name_placeholder"),
+                      text: $editName)
+                .padding(.horizontal, 22)
 
-            // Category
-            VStack(spacing: 8) {
-                Text(loc("common.category")).font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
-                    .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 22)
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        ForEach(availableCategories, id: \.self) { cat in
-                            Button {
-                                HapticManager.shared.tap()
-                                editCategory = cat
-                            } label: {
-                                Text(cat.displayLabel)
-                                    .font(.system(size: 13, weight: editCategory == cat ? .semibold : .regular))
-                                    .foregroundStyle(editCategory == cat ? AppTheme.bg : AppTheme.textSecondary)
-                                    .padding(.horizontal, 14).padding(.vertical, 8)
-                                    .background(editCategory == cat ? cat.color : AppTheme.cardDark, in: Capsule())
-                            }
-                            .buttonStyle(ScaleButtonStyle())
-                        }
-                    }
+            VStack(alignment: .leading, spacing: 10) {
+                FormSectionLabel(text: loc("common.category"))
                     .padding(.horizontal, 22)
-                }
+                CategoryTilePicker(categories: availableCategories, selection: $editCategory)
             }
 
-            // Date
-            VStack(spacing: 8) {
-                Text(loc("common.date")).font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
-                    .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 22)
-                DatePicker("", selection: $editDate, displayedComponents: [.date, .hourAndMinute])
-                    .datePickerStyle(.compact).labelsHidden().tint(AppTheme.accent)
-                    .padding(.horizontal, 22).frame(maxWidth: .infinity, alignment: .leading)
+            VStack(alignment: .leading, spacing: 10) {
+                FormSectionLabel(text: loc("tx.date_time"))
+                DateTimeFields(date: $editDate)
             }
+            .padding(.horizontal, 22)
 
-            SheetField(label: loc("tx.notes"), placeholder: loc("tx.notes_placeholder"), text: $editNotes)
+            IconField(label: loc("tx.notes"),
+                      icon: "text.alignleft",
+                      placeholder: loc("tx.notes_placeholder"),
+                      text: $editNotes,
+                      optionalHint: loc("common.optional"))
                 .padding(.horizontal, 22)
+
+            Button { saveEdits() } label: {
+                let canSave = (Double(editAmount) ?? 0) > 0
+                HStack(spacing: 10) {
+                    Image(systemName: "checkmark.circle.fill").font(.system(size: 17))
+                    Text(loc("common.save")).font(.system(size: 16, weight: .bold))
+                }
+                .foregroundStyle(canSave ? AppTheme.onVividFill : AppTheme.textSecondary)
+                .frame(maxWidth: .infinity).padding(.vertical, 17)
+                .background(canSave ? editType.color : AppTheme.textSecondary.opacity(0.25),
+                            in: RoundedRectangle(cornerRadius: 20))
+                .shadow(color: canSave ? editType.color.opacity(0.35) : .clear, radius: 12, y: 6)
+            }
+            .buttonStyle(ScaleButtonStyle())
+            .disabled((Double(editAmount) ?? 0) <= 0)
+            .padding(.horizontal, 22)
+            .padding(.top, 4)
 
             Spacer(minLength: 40)
         }
@@ -939,7 +952,9 @@ struct TransactionDetailSheet: View {
 
     private func loadEditState() {
         editName     = tx.name
-        editAmount   = String(abs(tx.amount))
+        // "20000", not "20000.0" — the hero field shows this at 34pt.
+        let a = abs(tx.amount)
+        editAmount   = a.rounded() == a ? String(Int64(a)) : String(a)
         editCurrency = tx.currency
         editType     = tx.amount >= 0 ? .income : .expense
         editCategory = tx.category
@@ -1493,164 +1508,119 @@ struct AddTransactionSheet: View {
         .padding(.horizontal, 22)
     }
 
-    /// Icon above label, two lines, in a tile. The old single-line pills put the
-    /// glyph and the word on one baseline, which meant the longest category name
-    /// set the width of everything and a row of ten was mostly whitespace.
     private var categorySection: some View {
         VStack(alignment: .leading, spacing: 10) {
             FormSectionLabel(text: loc("common.category"))
                 .padding(.horizontal, 22)
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 10) {
-                    ForEach(availableCategories, id: \.self) { cat in
-                        let on = selectedCategory == cat
-                        Button {
-                            HapticManager.shared.tap()
-                            withAnimation(.spring(response: 0.3)) { selectedCategory = cat }
-                        } label: {
-                            VStack(spacing: 7) {
-                                // Neither glyph nor label is tinted with
-                                // cat.color, and that is deliberate. Ten of the
-                                // sixteen category colours are bright hexes
-                                // picked for dark mode — measured against their
-                                // own pale tint on a white card they land
-                                // between 1.55:1 (bonus #FBBF24) and 2.96:1
-                                // (health #EC4899), i.e. under the 3:1 floor for
-                                // a graphic that carries meaning. So selection
-                                // is said four ways that do not depend on the
-                                // hue at all — tinted fill, coloured border,
-                                // darker glyph, heavier label — and the hue is
-                                // left to the fill, which only has to be
-                                // TELLABLE APART, not readable.
-                                Image(systemName: cat.icon)
-                                    .font(.system(size: 19, weight: .medium))
-                                    .foregroundStyle(on ? AppTheme.textPrimary : AppTheme.textSecondary)
-                                Text(cat.displayLabel)
-                                    .foregroundStyle(on ? AppTheme.textPrimary : AppTheme.textSecondary)
-                                    .font(.system(size: 11, weight: on ? .semibold : .regular))
-                                    .multilineTextAlignment(.center)
-                                    .lineLimit(2)
-                                    .minimumScaleFactor(0.8)
-                            }
-                            .frame(width: 84, height: 78)
-                            .background(on ? cat.color.opacity(0.16) : AppTheme.cardDark,
-                                        in: RoundedRectangle(cornerRadius: 18))
-                            .overlay(RoundedRectangle(cornerRadius: 18)
-                                .stroke(on ? cat.color.opacity(0.65) : Color.clear, lineWidth: 1.5))
-                        }
-                        .buttonStyle(ScaleButtonStyle())
-                    }
-                }
-                .padding(.horizontal, 22)
-                .padding(.vertical, 2)
-            }
+            CategoryTilePicker(categories: availableCategories, selection: $selectedCategory)
         }
     }
 
-    /// Always visible, even with one card — "which account does this land on"
-    /// is a question worth answering before saving, not only when there is a
-    /// choice to make.
+    /// Swipe between cards — the same gesture as the card carousel on Home, so
+    /// there is one way to move between cards anywhere in the app. A menu hid
+    /// the other cards behind a tap; a pager shows that there ARE others (the
+    /// dots) and moves to one with the thumb already resting on the screen.
+    ///
+    /// Always shown, even with a single card: "which account does this land on"
+    /// is worth answering before saving, not only when there is a choice.
     @ViewBuilder
     private var cardSection: some View {
         if !vm.cards.isEmpty {
             VStack(alignment: .leading, spacing: 10) {
                 FormSectionLabel(text: loc("debt.card"))
+                    .padding(.horizontal, 22)
                 if vm.cards.count > 1 {
-                    Menu {
-                        ForEach(vm.cards) { c in
-                            Button {
-                                HapticManager.shared.tap()
-                                if let i = vm.cards.firstIndex(where: { $0.id == c.id }) {
-                                    selectedCardIndex = i
-                                }
-                            } label: {
-                                Label("\(CardLabel.title(c)) \(CardLabel.subtitle(c))",
-                                      systemImage: vm.cards[min(selectedCardIndex, vm.cards.count - 1)].id == c.id
-                                                   ? "checkmark" : "creditcard")
-                            }
+                    TabView(selection: $selectedCardIndex) {
+                        ForEach(Array(vm.cards.enumerated()), id: \.element.id) { index, card in
+                            formCardFace(card)
+                                .padding(.horizontal, 22)
+                                .tag(index)
                         }
-                    } label: {
-                        cardRowLabel(interactive: true)
                     }
+                    .tabViewStyle(.page(indexDisplayMode: .never))
+                    .frame(height: 100)
+
+                    HStack(spacing: 5) {
+                        ForEach(vm.cards.indices, id: \.self) { i in
+                            Capsule()
+                                .fill(i == selectedCardIndex ? AppTheme.accent : AppTheme.textSecondary.opacity(0.35))
+                                .frame(width: i == selectedCardIndex ? 18 : 6, height: 6)
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                    .animation(.spring(response: 0.35, dampingFraction: 0.7), value: selectedCardIndex)
                 } else {
-                    cardRowLabel(interactive: false)
+                    formCardFace(vm.cards[0])
+                        .padding(.horizontal, 22)
                 }
             }
-            .padding(.horizontal, 22)
         }
     }
 
-    @ViewBuilder
-    private func cardRowLabel(interactive: Bool) -> some View {
-        let card = selectedCardOrNil
-        HStack(spacing: 12) {
-            if let card {
-                LinearGradient(colors: [Color(hex: card.gradientStart), Color(hex: card.gradientEnd)],
-                               startPoint: .top, endPoint: .bottom)
-                    .frame(width: 34, height: 34)
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
-                    .overlay {
-                        Image(systemName: "creditcard.fill")
-                            .font(.system(size: 14))
-                            .foregroundStyle(.white.opacity(0.9))
-                    }
+    /// A short card face: enough to recognise the card (its colours, name,
+    /// digits) and to know whether this purchase fits on it. For a credit card
+    /// that is the room left on the limit, not what is owed — what matters at
+    /// the moment of spending is what can still be spent.
+    private func formCardFace(_ card: BankCard) -> some View {
+        let figure: String = {
+            if card.isHidden { return "••••••" }
+            if card.isCreditCard {
+                return CurrencyManager.shared.formatted(card.availableCredit(allInstallments),
+                                                        currency: card.resolvedCurrency)
+            }
+            return card.formattedBalance
+        }()
+        return VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(CardLabel.title(card))
                         .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(AppTheme.textPrimary)
                         .lineLimit(1)
-                    Text(CardLabel.subtitle(card))
-                        .font(.system(size: 11))
-                        .foregroundStyle(AppTheme.textSecondary)
-                        .lineLimit(1)
+                    let sub = CardLabel.subtitle(card)
+                    if !sub.isEmpty {
+                        Text(sub)
+                            .font(.system(size: 11))
+                            .opacity(0.75)
+                            .lineLimit(1)
+                    }
+                }
+                Spacer(minLength: 8)
+                if card.isDigitalWallet, let wp = WalletProvider(rawValue: card.walletProvider) {
+                    Image(systemName: wp.icon)
+                        .font(.system(size: 16, weight: .semibold))
+                        .opacity(0.9)
+                } else {
+                    CardNetworkLogo(network: CardNetwork.detect(from: card.cardNumber))
+                        .scaleEffect(0.75, anchor: .topTrailing)
                 }
             }
-            Spacer(minLength: 4)
-            if interactive {
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(AppTheme.textSecondary)
+            Spacer(minLength: 6)
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text(card.isCreditCard ? loc("cc.available") : loc("home.balance_total"))
+                    .font(.system(size: 10, weight: .medium))
+                    .opacity(0.75)
+                Spacer(minLength: 6)
+                Text(figure)
+                    .font(.system(size: 17, weight: .bold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
+        .foregroundStyle(.white)
+        .padding(14)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(
+            LinearGradient(colors: [Color(hex: card.gradientStart), Color(hex: card.gradientEnd)],
+                           startPoint: .topLeading, endPoint: .bottomTrailing),
+            in: RoundedRectangle(cornerRadius: 18))
     }
 
-    /// Date and time as two separate controls. One combined `.compact` picker
-    /// made changing only the time a two-step detour through a calendar.
     private var dateSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             FormSectionLabel(text: loc("tx.date_time"))
-            HStack(spacing: 12) {
-                dateBox(icon: "calendar") {
-                    DatePicker("", selection: $selectedDate, displayedComponents: .date)
-                        .datePickerStyle(.compact).labelsHidden().tint(AppTheme.accent)
-                }
-                dateBox(icon: "clock") {
-                    DatePicker("", selection: $selectedDate, displayedComponents: .hourAndMinute)
-                        .datePickerStyle(.compact).labelsHidden().tint(AppTheme.accent)
-                }
-            }
+            DateTimeFields(date: $selectedDate)
         }
         .padding(.horizontal, 22)
-    }
-
-    @ViewBuilder
-    private func dateBox<Content: View>(icon: String, @ViewBuilder content: () -> Content) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: icon)
-                .font(.system(size: 14))
-                .foregroundStyle(AppTheme.textSecondary)
-            content()
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        // Expand BEFORE painting: with `.frame` after `.background` the fill
-        // hugged its own text and the two boxes came out different widths.
-        .frame(maxWidth: .infinity)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
     }
 
     private var notesSection: some View {
@@ -1694,6 +1664,9 @@ struct AddTransactionSheet: View {
     }
 
     private var submitSection: some View {
+        // No Cancel under Save: the toolbar already has one, and a second exit
+        // a thumb's width below the primary action is a mis-tap waiting to
+        // throw away a filled-in form.
         VStack(spacing: 6) {
             Button { saveTransaction() } label: {
                 // Computed once for both fill and label: the old code styled the
@@ -1713,14 +1686,6 @@ struct AddTransactionSheet: View {
             }
             .buttonStyle(ScaleButtonStyle())
             .disabled(!isValid || vm.cards.isEmpty || (wouldGoNegative && txType == .expense))
-
-            Button { HapticManager.shared.tap(); dismiss() } label: {
-                Text(loc("common.cancel"))
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundStyle(AppTheme.textSecondary)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-            }
         }
         .padding(.horizontal, 22)
         .padding(.top, 4)

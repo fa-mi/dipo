@@ -58,6 +58,22 @@ struct AppTheme {
     /// 12% opacity reads as a smudge rather than a light.
     ///
     /// Never use it for text, an icon, or a control's fill.
+    /// Money in / money out — a matched PAIR, not two unrelated colours.
+    ///
+    /// `flowIn` is the green of the iPhone battery while it charges: literally
+    /// `UIColor.systemGreen` (#34C759 light / #30D158 dark), so it tracks the
+    /// system rather than approximating it. `flowOut` is `systemRed`, the red
+    /// Apple tunes alongside it — lightness 49% vs 59%, both fully saturated —
+    /// so the two halves of an income/expense comparison read as equals. Our
+    /// `red` (#DC0000, 43% lightness, pure hue) is deliberately darker for
+    /// small text and looked heavy and flat beside the charging green.
+    ///
+    /// Trade-off, measured: on a white card these are 2.22:1 and 3.55:1 as
+    /// text, below the 4.5 used for `accent`/`red`. In dark mode they are
+    /// 7.41:1 and 4.40:1. Use them for figures set large and bold, and for
+    /// solid badges — put `onVividFill` glyphs on them (≈9:1 and ≈5.6:1).
+    static let flowIn  = Color(uiColor: .systemGreen)
+    static let flowOut = Color(uiColor: .systemRed)
     static let voiceGlow = Color(UIColor.adaptive(dark: "#2BFF9E", light: "#00C86E"))
 
     static let blue    = Color(UIColor.adaptive(dark: "#38BDF8", light: "#0676A8"))  // 7.79 / 4.58

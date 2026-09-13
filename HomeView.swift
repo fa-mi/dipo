@@ -59,6 +59,7 @@ struct HomeView: View {
     /// cache is refreshed.
     @State private var monthIncome: Double = 0
     @State private var monthExpense: Double = 0
+    @State private var flowPeriodLabel: String = ""
     @State private var showAllAttention = false
     @State private var showSmartBudget = false
     @State private var showSalarySheet   = false
@@ -270,16 +271,33 @@ struct HomeView: View {
     /// One linear pass over the selected card's transactions, converted into
     /// that card's currency — the same conversion the card face and the list
     /// use, so the three figures on this screen cannot contradict each other.
+    ///
+    /// The window is the PAY CYCLE, the same one Smart Budget and the Home
+    /// insights already use. For someone paid on the 25th a calendar month is
+    /// the wrong unit twice over: on the 3rd it shows three days of spending
+    /// and no salary, and it splits one paycheque's spending across two months.
+    /// No salary schedule → no cycle to speak of, so it falls back to the month.
     private func recomputeMonthFlow() {
-        guard let card = selectedCard else { monthIncome = 0; monthExpense = 0; return }
         let cal = Calendar.current
-        let monthStart = cal.safeDate(from: cal.dateComponents([.year, .month], from: Date()))
+        let windowStart: Date
+        if let payDay = MainCard.payDay(salarySchedules) {
+            windowStart = StatPeriod.payCycleRange(payDay: payDay).start
+            let df = DateFormatter()
+            df.locale = LanguageManager.shared.currentLocale
+            df.setLocalizedDateFormatFromTemplate("d MMM")
+            flowPeriodLabel = String(format: loc("home.since_payday"), df.string(from: windowStart))
+        } else {
+            windowStart = cal.safeDate(from: cal.dateComponents([.year, .month], from: Date()))
+            flowPeriodLabel = loc("home.this_month")
+        }
+
+        guard let card = selectedCard else { monthIncome = 0; monthExpense = 0; return }
         let cur = card.resolvedCurrency
         var income = 0.0
         var expense = 0.0
-        for tx in card.transactions where tx.date >= monthStart && tx.txSubtype != .transfer {
+        for tx in card.transactions where tx.date >= windowStart && tx.txSubtype != .transfer {
             // Transfers are money moving between the user's own accounts. Counting
-            // them would inflate both sides and make the month look twice as busy
+            // them would inflate both sides and make the cycle look twice as busy
             // as it was.
             let v = CurrencyManager.shared.convert(tx.amount, from: tx.currency, to: cur)
             if v >= 0 { income += v } else { expense -= v }
@@ -440,13 +458,14 @@ struct HomeView: View {
                             .scaleEffect(contentAppeared ? 1 : 0.94)
                             .animation(AppMotion.appear, value: contentAppeared)
 
-                        // What came in and what went out this month. The card
+                        // What came in and what went out this pay cycle. The card
                         // above says where the money stands; this says which
                         // direction it has been moving to get there.
                         MonthFlowCard(income: monthIncome,
                                       expense: monthExpense,
                                       currency: selectedCard?.resolvedCurrency
                                                 ?? CurrencyManager.shared.preferredCurrency,
+                                      periodLabel: flowPeriodLabel,
                                       isHidden: selectedCard?.isHidden ?? false)
                             .padding(.horizontal, 22)
                             .padding(.top, 14)
@@ -545,6 +564,8 @@ struct HomeView: View {
         // on a stale figure. The balance is already computed each body pass, so
         // watching it costs nothing and catches every edit that moves money.
         .onChange(of: selectedCardBalance)     { _, _ in recomputeMonthFlow() }
+        // Setting up or moving the salary schedule moves where the cycle starts.
+        .onChange(of: MainCard.payDay(salarySchedules)) { _, _ in recomputeMonthFlow() }
         .onChange(of: budgetManager.isEnabled) { _, _ in recomputeHomeInsights() }
         .onChange(of: budgetManager.dailyRatio)     { _, _ in recomputeHomeInsights() }
         .onChange(of: budgetManager.lifestyleRatio) { _, _ in recomputeHomeInsights() }
@@ -1855,12 +1876,6 @@ struct TransactionSection: View {
     @State private var pendingDelete: TxRecord? = nil
     @Environment(\.modelContext) private var context
 
-    /// Bridges the optional `pendingDelete` to the Bool the confirmation dialog
-    /// needs; clearing it on dismiss cancels the pending delete.
-    private var deleteDialogBinding: Binding<Bool> {
-        Binding(get: { pendingDelete != nil },
-                set: { if !$0 { pendingDelete = nil } })
-    }
 
     /// Everything the list needs, derived in ONE pass.
     ///
@@ -1977,22 +1992,6 @@ struct TransactionSection: View {
                             Text(showAll ? loc("home.window_3days") : loc("home.window_week"))
                                 .font(.system(size: 13, weight: .medium)).foregroundStyle(AppTheme.textSecondary)
                         }
-                    }
-                    // Anything older than this window lives in Search — which is
-                    // deliberate, since the month-wide list here is what used to
-                    // stall scrolling. "See all" now says where it went instead
-                    // of leaving the user to guess.
-                    if let onOpenSearch {
-                        Button(action: onOpenSearch) {
-                            HStack(spacing: 3) {
-                                Text(loc("home.see_all"))
-                                    .font(.system(size: 13, weight: .semibold))
-                                Image(systemName: "chevron.right")
-                                    .font(.system(size: 10, weight: .semibold))
-                            }
-                            .foregroundStyle(AppTheme.accent)
-                        }
-                        .buttonStyle(ScaleButtonStyle())
                     }
                 }
             }
@@ -2124,20 +2123,24 @@ struct TransactionSection: View {
                 }
             }
         }
-        .confirmationDialog(loc("tx.delete_prompt"), isPresented: deleteDialogBinding, titleVisibility: .visible) {
-            Button(loc("common.delete"), role: .destructive) {
-                if let tx = pendingDelete {
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
-                        deleteTransactionWithGoalRollback(tx, context: context)
+        .sheet(item: $pendingDelete) { tx in
+            DeleteTransactionSheet(
+                tx: tx,
+                card: sourceCard ?? cards.first,
+                onConfirm: {
+                    pendingDelete = nil
+                    // Let the sheet start leaving before the row collapses, so
+                    // the removal animation plays where the user can see it.
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                            deleteTransactionWithGoalRollback(tx, context: context)
+                        }
+                        try? context.save()
+                        HapticManager.shared.success()
                     }
-                    try? context.save()
-                    HapticManager.shared.warning()
-                }
-                pendingDelete = nil
-            }
-            Button(loc("common.cancel"), role: .cancel) { pendingDelete = nil }
-        } message: {
-            Text(loc("tx.delete_confirm"))
+                },
+                onCancel: { pendingDelete = nil })
+            .preferredColorScheme(appColorScheme())
         }
         .sheet(item: $selectedTx) { tx in
             TransactionDetailSheet(tx: tx)
@@ -2223,8 +2226,10 @@ struct SwipeToDeleteRow<Content: View>: View {
             }
 
             content
-                // Opaque background so the red action is hidden when closed.
-                .background(AppTheme.bg)
+                // Opaque so the red action is hidden when closed — and the SAME
+                // colour as the card the list now sits in. It was `AppTheme.bg`,
+                // which on a white card painted a grey slab behind every row.
+                .background(AppTheme.cardDark)
                 .offset(x: offset)
                 .gesture(
                     DragGesture(minimumDistance: 16)
