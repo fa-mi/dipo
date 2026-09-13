@@ -964,7 +964,12 @@ final class SmartBudgetManager {
           "iqiyi", "we tv", "vidio", "hbo", "subscription", "langganan",
           "asuransi", "insurance", "prudential", "allianz", "manulife", "axa",
           "bpjs", "pajak", "tax", "pbb",
-          "icloud", "google one", "dropbox"], .bills),
+          "icloud", "google one", "dropbox",
+          // Household services billed like utilities. "laundry" was absent
+          // entirely, so a laundry payment landed in Other with no way for the
+          // app to learn otherwise until the user corrected it by hand.
+          "laundry", "londri", "binatu", "dry clean", "cuci baju", "setrika",
+          "kiloan", "cleaning service", "pembantu"], .bills),
         // Health — pharmacies, hospitals, clinics, fitness
         (["apotik", "apotek", "pharmacy", "kimia farma", "guardian", "watson",
           "century", "k-24", "viva apotek",

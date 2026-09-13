@@ -51,6 +51,11 @@ struct ReceiptScanFlow: View {
     /// Card currency to use as fallback for the parser.
     let cardCurrency: String
 
+    /// Supplied when the flow was entered with an image already in hand — the
+    /// Shortcut hands over a screenshot, so the landing screen and its "Start
+    /// Scan" button would be a step the user already took with the gesture.
+    var initialImage: UIImage? = nil
+
     /// Called after a tx is successfully saved.
     let onCompleted: () -> Void
 
@@ -143,6 +148,14 @@ struct ReceiptScanFlow: View {
             Button(loc("common.cancel"), role: .cancel) { }
         } message: {
             Text(loc("receipt.permission.denied_body"))
+        }
+        // Entered with a screenshot already in hand: skip the landing screen
+        // and go straight to reading it. Guarded on `.landing` so a re-render
+        // cannot restart a scan that is already running or reviewed.
+        .onAppear {
+            guard let img = initialImage, case .landing = phase else { return }
+            phase = .scanning(img)
+            runScan(image: img)
         }
     }
 
@@ -350,10 +363,10 @@ private struct LandingView: View {
                                  : loc("receipt.landing.upload_now"))
                                 .font(.system(size: 16, weight: .bold))
                         }
-                        .foregroundStyle(AppTheme.onSolid)
+                        .foregroundStyle(AppTheme.onAccentFill)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 17)
-                        .background(AppTheme.accent, in: RoundedRectangle(cornerRadius: 16))
+                        .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: 16))
                         .shadow(color: AppTheme.accent.opacity(0.35), radius: 14, y: 8)
                     }
                     .buttonStyle(ScaleButtonStyle())
@@ -380,12 +393,12 @@ private struct ReceiptIllustration: View {
         ZStack {
             // Floating coin badges
             Circle()
-                .fill(AppTheme.accent)
+                .fill(AppTheme.accentFill)
                 .frame(width: 44, height: 44)
                 .overlay(
                     Image(systemName: "dollarsign")
                         .font(.system(size: 18, weight: .heavy))
-                        .foregroundStyle(AppTheme.onSolid)
+                        .foregroundStyle(AppTheme.onAccentFill)
                 )
                 .offset(x: -78, y: -82)
                 .shadow(color: AppTheme.accent.opacity(0.3), radius: 8, y: 4)
@@ -396,7 +409,7 @@ private struct ReceiptIllustration: View {
                 .overlay(
                     Image(systemName: "dollarsign")
                         .font(.system(size: 14, weight: .heavy))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(AppTheme.onSolid)
                 )
                 .offset(x: 70, y: -90)
 
@@ -883,7 +896,7 @@ private struct ScanningProgressView: View {
                                 .fill(.white.opacity(0.25))
                                 .frame(height: 8)
                             Capsule()
-                                .fill(AppTheme.accent)
+                                .fill(AppTheme.accentFill)
                                 .frame(width: max(8, geo.size.width * progress), height: 8)
                         }
                     }
@@ -895,10 +908,10 @@ private struct ScanningProgressView: View {
                         Text(String(format: loc("receipt.scanning.progress"), Int(progress * 100)))
                             .font(.system(size: 12, weight: .semibold))
                     }
-                    .foregroundStyle(AppTheme.onSolid)
+                    .foregroundStyle(AppTheme.onAccentFill)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
-                    .background(AppTheme.accent, in: Capsule())
+                    .background(AppTheme.accentFill, in: Capsule())
                 }
                 .padding(.horizontal, 22)
                 .padding(.top, 6)
@@ -989,9 +1002,9 @@ private struct ScanErrorView: View {
                     } label: {
                         Text(loc("receipt.error.retry"))
                             .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(AppTheme.onSolid)
+                            .foregroundStyle(AppTheme.onAccentFill)
                             .padding(.horizontal, 22).padding(.vertical, 11)
-                            .background(AppTheme.accent, in: Capsule())
+                            .background(AppTheme.accentFill, in: Capsule())
                     }
                     .buttonStyle(ScaleButtonStyle())
                 }

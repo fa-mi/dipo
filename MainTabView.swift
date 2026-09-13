@@ -23,6 +23,8 @@ struct MainTabView: View {
     @State private var showGoalsFromNotif = false
     /// Ask DiPo opened by the Back Tap / Siri shortcut, already listening.
     @State private var showVoiceEntry = false
+    /// Screenshot from the Back Tap shortcut, presented straight to the scanner.
+    @State private var shortcutScan: ScanPayload? = nil
 
     /// Observed so the gate reacts the moment a main card is chosen or cleared.
     @State private var sb = SmartBudgetManager.shared
@@ -34,6 +36,30 @@ struct MainTabView: View {
     private var needsMainCard: Bool {
         let _ = sb.budgetCardID
         return MainCard.needsChoice(cards: vm.cards)
+    }
+
+    /// Currency the parser falls back to when the receipt carries no marker.
+    private var shortcutCardCurrency: String {
+        guard !vm.cards.isEmpty else { return CurrencyManager.shared.preferredCurrency }
+        return vm.cards[min(vm.selectedCardIndex, vm.cards.count - 1)].resolvedCurrency
+    }
+
+    /// Same two gates the in-app scan entry applies. Skipping them here would
+    /// open the scanner for someone with no card to save to, or for a
+    /// non-Royal user whose scan dies at the last step.
+    private func presentShortcutScan(_ image: UIImage) {
+        guard !vm.cards.isEmpty else {
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) { showNoCardBanner = true }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+                withAnimation { showNoCardBanner = false }
+            }
+            return
+        }
+        guard PremiumManager.shared.canAccess(.scanReceipt) else {
+            showPaywall = true
+            return
+        }
+        shortcutScan = ScanPayload(image: image)
     }
 
     var body: some View {
@@ -110,6 +136,35 @@ struct MainTabView: View {
             .presentationBackground(.clear)
         }
         .animation(.spring(response: 0.4, dampingFraction: 0.8), value: showNoCardBanner)
+        // Back Tap: scanner directly. `item:` rather than a Bool so the image
+        // and the presentation cannot drift apart — the cover only exists when
+        // there is something to read.
+        .fullScreenCover(item: $shortcutScan) { payload in
+            ReceiptScanFlow(
+                cardCurrency: shortcutCardCurrency,
+                initialImage: payload.image,
+                onCompleted: { shortcutScan = nil }
+            )
+            .preferredColorScheme(appColorScheme())
+        }
+        .task {
+            // Cold launch: the intent fired before this view existed, so the
+            // notification landed with nobody listening.
+            if let img = QuickScanRoute.shared.consume() {
+                try? await Task.sleep(for: .milliseconds(400))
+                presentShortcutScan(img)
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .requestOpenScanFromShortcut)) { _ in
+            guard let img = QuickScanRoute.shared.consume() else { return }
+            // iOS silently drops a cover presented on top of an open sheet.
+            if showAddSheet {
+                showAddSheet = false
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { presentShortcutScan(img) }
+            } else {
+                presentShortcutScan(img)
+            }
+        }
         .sheet(isPresented: $showAddSheet) {
             AddTransactionSheet(vm: vm)
                 .presentationDetents([.large])

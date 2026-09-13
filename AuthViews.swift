@@ -463,7 +463,7 @@ struct BiometricGateView: View {
                                 .foregroundStyle(AppTheme.bg)
                                 .padding(.horizontal, 28)
                                 .padding(.vertical, 14)
-                                .background(AppTheme.accent, in: Capsule())
+                                .background(AppTheme.accentFill, in: Capsule())
                                 .shadow(color: AppTheme.accent.opacity(0.35), radius: 12, y: 6)
                             }
                             .buttonStyle(ScaleButtonStyle())

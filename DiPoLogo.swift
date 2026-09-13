@@ -87,7 +87,7 @@ struct TabLogoButton: View {
         Button(action: action) {
             ZStack {
                 RoundedRectangle(cornerRadius: 18)
-                    .fill(AppTheme.accent)
+                    .fill(AppTheme.accentFill)
                     .frame(width: 58, height: 58)
                     .shadow(
                         color: AppTheme.accent.opacity(0.5),

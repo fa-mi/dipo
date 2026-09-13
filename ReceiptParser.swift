@@ -35,7 +35,8 @@ enum ReceiptParser {
         let cleaned = normalize(rawText)
         let lines = cleaned.split(separator: "\n", omittingEmptySubsequences: true).map(String.init)
 
-        let merchant = extractMerchant(from: lines)
+        let issuer   = extractIssuer(from: lines)
+        let merchant = extractMerchant(from: lines, excluding: issuer)
         let currency = extractCurrency(from: cleaned, fallback: fallbackCurrency)
         let amount   = extractAmount(from: lines, currency: currency)
         let date     = extractDate(from: cleaned, fallback: fallbackDate)
@@ -47,8 +48,16 @@ enum ReceiptParser {
         var confidence: Double = 0
         if !merchant.isEmpty && merchant != loc("receipt.unknown_merchant") { confidence += 0.35 }
         if amount > 0     { confidence += 0.40 }   // Amount is most critical
-        if !cleaned.isEmpty && date != fallbackDate { confidence += 0.15 }
+        let dateParsed = !cleaned.isEmpty && date != fallbackDate
+        if dateParsed { confidence += 0.15 }
         if category != .other { confidence += 0.10 }
+
+        // A failed date does not lower the reading — it silently substitutes
+        // TODAY, which looks like a real answer. With merchant, amount and
+        // category all found, the total still reached exactly 0.85 and earned
+        // a "high confidence — looks accurate" badge over a wrong date. Hold
+        // it below the high threshold so the sheet opens editable and says so.
+        if !dateParsed { confidence = min(confidence, 0.84) }
 
         return ReceiptScanResult(
             merchantName: merchant.isEmpty ? loc("receipt.unknown_merchant") : merchant,
@@ -59,7 +68,8 @@ enum ReceiptParser {
             confidence: confidence,
             mode: .vision,
             rawText: cleaned,
-            notes: notes
+            notes: notes,
+            issuer: issuer
         )
     }
 
@@ -84,8 +94,192 @@ enum ReceiptParser {
     /// uppercase or title case, often the largest text. We:
     ///   1. Cross-check the first 6 lines against merchantMap (gold standard).
     ///   2. If no match, take the first non-empty line that's mostly letters.
-    private static func extractMerchant(from lines: [String]) -> String {
-        let topLines = Array(lines.prefix(6))
+    /// Labels that introduce the party being PAID. On a QRIS or transfer
+    /// receipt this is the only authoritative merchant signal — everything
+    /// else on the slip belongs to the bank moving the money.
+    private static let payeeLabels = [
+        "payment to", "paid to", "pay to", "payee", "recipient",
+        "merchant name", "merchant", "nama merchant",
+        "pembayaran ke", "bayar ke", "penerima", "kepada", "tujuan",
+        "rekening tujuan", "transfer ke", "kirim ke", "ke rekening",
+        "tujuan transfer", "destination", "beneficiary",
+    ]
+
+    /// Labels whose value is about the RAILS, never the shop.
+    private static let railLabels = [
+        "acquirer", "issuer", "rrn", "ref", "reference", "trace", "terminal",
+        "merchant pan", "approval", "batch", "no. kartu", "card number",
+        "sumber dana", "source of fund", "metode", "payment method",
+        "detail transaksi", "transaction detail", "rincian transaksi",
+        "sumber rekening", "rekening sumber", "dari rekening", "nomor referensi",
+    ]
+
+    /// Banks and wallets. These appear on every payment slip — often as a
+    /// repeated watermark — and are the single most likely thing to be
+    /// mistaken for the shop. `LAUNDRY EXPERT` lost to a `BCA` watermark
+    /// because the heuristic below simply took the first wordy line.
+    private static let paymentBrands = [
+        // Banks
+        "bca", "bri", "bni", "mandiri", "cimb", "niaga", "permata", "danamon",
+        "ocbc", "panin", "btn", "bsi", "maybank", "jago", "seabank", "blu",
+        "bjb", "muamalat", "sinarmas", "btpn", "mega", "bukopin", "superbank",
+        "krom", "neobank", "allo", "hana", "line bank",
+        // Schemes
+        "qris", "gpn", "visa", "mastercard", "prima", "alto", "artajasa",
+        // Mobile banking APP names. These are branded separately from the bank
+        // and change often — "Qita by BRI" launched after this parser was
+        // written and was read as the merchant on a BRI transfer slip. The app
+        // name is splashed across its own receipt screen exactly the way a
+        // bank watermark is.
+        "brimo", "qita", "qita by bri",
+        "livin", "livin by mandiri", "kopra",
+        "wondr", "wondr by bni",
+        "mybca", "bca mobile", "blu by bca digital",
+        "bale", "balé", "bale by btn", "btn mobile",
+        "byond", "byond by bsi", "bsi mobile",
+        "octo", "octo mobile", "octo clicks",
+        "permatamobile", "permata mobile", "d-bank", "dbank", "d-bank pro",
+        "one mobile", "paninmobile", "m2u", "m2u id", "jenius",
+        "simobiplus", "bjb digi", "mdin",
+        // Wallets that appear as the rail on a payment slip
+        "gopay", "ovo", "dana", "shopeepay", "linkaja", "sakuku", "flip",
+    ]
+
+    /// True when the line is nothing but a payment brand — "BCA", "QRIS",
+    /// "Bank BCA". A shop whose name merely CONTAINS one of these (say
+    /// "Toko Mandiri Jaya") is left alone, since only near-exact matches are
+    /// rejected.
+    /// Status banners. Every banking app leads with one, and with the app
+    /// name, the bank and the user all excluded it becomes the first wordy
+    /// line left standing — "Transaksi Berhasil" would have been filed as the
+    /// shop.
+    private static let statusWords = [
+        "berhasil", "sukses", "successful", "success", "completed", "selesai",
+        "gagal", "failed", "pending", "diproses", "in process",
+        "menunggu", "waiting", "dibatalkan", "cancelled",
+    ]
+
+    private static func isStatusLine(_ line: String) -> Bool {
+        let l = line.lowercased()
+        return statusWords.contains { l.contains($0) }
+    }
+
+    /// The account holder's own name.
+    ///
+    /// A transfer slip shows sender and recipient as two blocks, and the
+    /// sender is the user. With the app name and the bank excluded, that block
+    /// is the next thing the heuristic reaches — which would file the user as
+    /// their own merchant. Nobody pays themselves.
+    private static var accountHolderName: String {
+        (Keychain.load(key: "user_name") ?? "")
+            .lowercased()
+            .trimmingCharacters(in: .whitespaces)
+    }
+
+    private static func isAccountHolder(_ line: String) -> Bool {
+        let holder = accountHolderName
+        guard holder.count >= 4 else { return false }   // too short to match safely
+        let l = line.lowercased().trimmingCharacters(in: .whitespaces)
+        return l == holder || l.contains(holder)
+    }
+
+    private static func isPaymentBrandOnly(_ line: String) -> Bool {
+        let cleaned = line.lowercased()
+            .replacingOccurrences(of: "bank", with: " ")
+            .trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
+            .trimmingCharacters(in: .whitespaces)
+        return paymentBrands.contains(cleaned)
+    }
+
+    /// Labels that introduce the bank or wallet that moved the money.
+    private static let issuerLabels = [
+        "acquirer", "issuer", "penerbit", "bank", "sumber dana",
+        "source of fund", "payment method", "metode pembayaran", "dibayar dengan",
+    ]
+
+    /// Reads the payment rail off the slip. Tried BEFORE the merchant so its
+    /// value can be excluded there — on a QRIS receipt the bank is splashed
+    /// across the image as a watermark and is the single likeliest thing to be
+    /// mistaken for the shop.
+    static func extractIssuer(from lines: [String]) -> String {
+        // A labelled value is authoritative.
+        for (i, line) in lines.enumerated() {
+            let lower = line.lowercased()
+            guard issuerLabels.contains(where: { lower.contains($0) }) else { continue }
+            if let sep = line.range(of: ":") {
+                let tail = String(line[sep.upperBound...]).trimmingCharacters(in: .whitespaces)
+                if !tail.isEmpty, tail.count <= 24 { return tail }
+            }
+            if let label = issuerLabels.first(where: { lower.contains($0) }),
+               let r = lower.range(of: label) {
+                let tail = String(line[r.upperBound...])
+                    .trimmingCharacters(in: CharacterSet(charactersIn: " \t:-"))
+                if !tail.isEmpty, tail.count <= 24 { return tail }
+            }
+            for next in lines.dropFirst(i + 1).prefix(1) {
+                let candidate = next.trimmingCharacters(in: .whitespaces)
+                if !candidate.isEmpty, candidate.count <= 24 { return candidate }
+            }
+        }
+        // No label: fall back to a brand appearing on its own line. This is
+        // what catches a bare watermark, which is exactly the case that
+        // poisoned the merchant before.
+        for line in lines where isPaymentBrandOnly(line) {
+            return line.trimmingCharacters(in: .whitespaces)
+        }
+        return ""
+    }
+
+    private static func extractMerchant(from lines: [String], excluding issuer: String = "") -> String {
+        // Whatever the slip itself named as the payment rail is not the shop,
+        // whether or not it happens to be in `paymentBrands`.
+        let issuerKey = issuer.lowercased().trimmingCharacters(in: .whitespaces)
+        func isIssuer(_ s: String) -> Bool {
+            guard !issuerKey.isEmpty else { return false }
+            return s.lowercased().trimmingCharacters(in: .whitespaces) == issuerKey
+        }
+
+        // Pass 0: an explicit "paid to" label anywhere on the slip beats every
+        // heuristic below, and is checked across ALL lines rather than the top
+        // few — on a QRIS receipt the header is the amount and the bank logo,
+        // and the shop name sits well below them.
+        for (i, line) in lines.enumerated() {
+            let lower = line.lowercased()
+            guard payeeLabels.contains(where: { lower.contains($0) }) else { continue }
+            guard !railLabels.contains(where: { lower.contains($0) }) else { continue }
+
+            // "Payment to: SHOP" — value on the same line, after the label.
+            if let sep = line.range(of: ":") {
+                let tail = String(line[sep.upperBound...]).trimmingCharacters(in: .whitespaces)
+                if tail.count >= 3, !isPaymentBrandOnly(tail), !isIssuer(tail) { return tail }
+            }
+            // Same line, no colon — OCR often merges a two-column row into
+            // "Payment to JOURDAN LAUNDRY EXPERT".
+            if let label = payeeLabels.first(where: { lower.contains($0) }),
+               let r = lower.range(of: label) {
+                let tail = String(line[r.upperBound...])
+                    .trimmingCharacters(in: CharacterSet(charactersIn: " \t:-"))
+                if tail.count >= 3, !isPaymentBrandOnly(tail), !isIssuer(tail) { return tail }
+            }
+            // Otherwise the label is its own line (or a left column) and the
+            // value follows. Receipts wrap long names, so take up to two lines.
+            var value = ""
+            for next in lines.dropFirst(i + 1).prefix(2) {
+                let candidate = next.trimmingCharacters(in: .whitespaces)
+                guard !candidate.isEmpty else { continue }
+                let candLower = candidate.lowercased()
+                if payeeLabels.contains(where: { candLower.contains($0) }) { break }
+                if railLabels.contains(where: { candLower.contains($0) }) { break }
+                if isPaymentBrandOnly(candidate) || isIssuer(candidate) { break }
+                if isAccountHolder(candidate) || isStatusLine(candidate) { break }
+                // Stop at the next label/amount row rather than swallowing it.
+                if candidate.filter({ $0.isNumber }).count > candidate.filter({ $0.isLetter }).count { break }
+                value += (value.isEmpty ? "" : " ") + candidate
+            }
+            if value.count >= 3 { return value }
+        }
+
+        let topLines = Array(lines.prefix(10))
 
         // Pass 1: known merchants. This catches Indomaret/Alfamart/etc. even if
         // they appear lower than line 1 (sometimes there's a logo region first).
@@ -116,6 +310,11 @@ enum ReceiptParser {
                lower.contains("www.") || lower.contains("@") {
                 continue
             }
+            // A bare bank or scheme name is the payment rail, not the shop.
+            if isPaymentBrandOnly(line) || isIssuer(line) { continue }
+            if isAccountHolder(line) || isStatusLine(line) { continue }
+            // Nor is the label of a rail field.
+            if railLabels.contains(where: { lower.contains($0) }) { continue }
             return line
         }
 
@@ -335,6 +534,52 @@ enum ReceiptParser {
 
     // MARK: - Date Extraction
 
+    // MARK: - Is this even a payment?
+
+    /// Words that only appear where money actually changed hands.
+    private static let totalWords = [
+        "total", "subtotal", "grand total", "jumlah", "amount", "amount due",
+        "total payment", "total bayar", "dibayar", "pembayaran", "payment",
+        "tagihan", "bill", "harga", "tunai", "cash", "kembali", "change",
+    ]
+    private static let receiptWords = [
+        "struk", "receipt", "invoice", "nota", "faktur", "qris", "transaksi",
+        "transaction", "kasir", "cashier", "npwp", "ppn", "pajak", "tax",
+        "rrn", "ref", "approval", "merchant", "terminal", "no. transaksi",
+        "berhasil", "successful", "sukses", "order", "pesanan", "struk belanja",
+    ]
+
+    /// Does this image look like a payment at all?
+    ///
+    /// Back Tap fires on whatever is on screen, so the parser gets handed home
+    /// screens and app UIs. Those still contain digits, and the amount
+    /// extractor will happily find one — a DiPo card screen produced a
+    /// confident-looking Rp 1.910.500 that sat one tap away from being saved.
+    /// Refusing is the only safe answer: a fabricated transaction is worse
+    /// than asking the user to try again.
+    ///
+    /// Requires a currency marker AND some word that belongs to a payment.
+    /// A screen full of numbers with neither is not a receipt.
+    static func looksLikeReceipt(_ text: String) -> Bool {
+        let lower = text.lowercased()
+
+        // Currency has to sit next to digits — a stray "rp" in prose is not a
+        // price, and neither is the "IDR" label on a card list.
+        let currencyNearDigits = [
+            #"(?:rp|idr)\s?\.?\s?\d"#,
+            #"\d\s?(?:rp|idr)\b"#,
+            #"\$\s?\d"#,
+            #"\busd\s?\d"#,
+        ].contains { pattern in
+            (try? NSRegularExpression(pattern: pattern))?
+                .firstMatch(in: lower, range: NSRange(location: 0, length: (lower as NSString).length)) != nil
+        }
+        guard currencyNearDigits else { return false }
+
+        return totalWords.contains(where: { lower.contains($0) })
+            || receiptWords.contains(where: { lower.contains($0) })
+    }
+
     private static let datePatterns: [(pattern: String, dateFormat: String)] = [
         // 28/04/2026, 28-04-2026, 28.04.2026 (dd/mm/yyyy — Indonesian default)
         (#"\b(\d{1,2})[/.\-](\d{1,2})[/.\-](\d{4})\b"#, "dd/MM/yyyy"),
@@ -344,10 +589,76 @@ enum ReceiptParser {
         (#"\b(\d{4})-(\d{1,2})-(\d{1,2})\b"#, "yyyy-MM-dd"),
     ]
 
+    /// Month words to month numbers, Indonesian and English, abbreviated and
+    /// full. Built as a lookup rather than handed to a `DateFormatter` because
+    /// the formatter runs on `en_US_POSIX` for unambiguous numeric parsing,
+    /// and that locale cannot read "Mei", "Agu", "Okt" or "Des" at all —
+    /// switching its locale to fix that would make the numeric patterns
+    /// ambiguous again.
+    private static let monthWords: [String: Int] = [
+        "jan": 1, "januari": 1, "january": 1,
+        "feb": 2, "februari": 2, "february": 2, "pebruari": 2,
+        "mar": 3, "maret": 3, "march": 3,
+        "apr": 4, "april": 4,
+        "mei": 5, "may": 5,
+        "jun": 6, "juni": 6, "june": 6,
+        "jul": 7, "juli": 7, "july": 7,
+        "agu": 8, "ags": 8, "agt": 8, "agustus": 8, "aug": 8, "august": 8,
+        "sep": 9, "sept": 9, "september": 9,
+        "okt": 10, "oct": 10, "oktober": 10, "october": 10,
+        "nov": 11, "november": 11, "nop": 11, "nopember": 11,
+        "des": 12, "dec": 12, "desember": 12, "december": 12,
+    ]
+
+    /// Dates written with the month spelled out — "12 Sep 2026",
+    /// "12 September 2026", "Sep 12, 2026".
+    ///
+    /// The numeric patterns below miss these entirely, which is how a BCA QRIS
+    /// slip reading "12 Sep 2026 20:41:20" silently became today's date.
+    private static func extractMonthNameDate(from text: String) -> Date? {
+        let patterns = [
+            // 12 Sep 2026  /  12 September 2026
+            (#"\b(\d{1,2})\s+([A-Za-z]{3,12})\.?\s+(\d{4})\b"#, true),
+            // Sep 12, 2026  /  September 12 2026
+            (#"\b([A-Za-z]{3,12})\.?\s+(\d{1,2}),?\s+(\d{4})\b"#, false),
+        ]
+        for (pattern, dayFirst) in patterns {
+            guard let regex = try? NSRegularExpression(pattern: pattern) else { continue }
+            let ns = text as NSString
+            for m in regex.matches(in: text, range: NSRange(location: 0, length: ns.length)) {
+                guard m.numberOfRanges == 4 else { continue }
+                let a = ns.substring(with: m.range(at: 1))
+                let b = ns.substring(with: m.range(at: 2))
+                let y = ns.substring(with: m.range(at: 3))
+                let dayStr   = dayFirst ? a : b
+                let monthStr = dayFirst ? b : a
+                guard let day = Int(dayStr), let year = Int(y),
+                      let month = monthWords[monthStr.lowercased()] else { continue }
+                var c = DateComponents()
+                c.year = year; c.month = month; c.day = day
+                c.hour = 12   // midday, so a timezone shift cannot slide the date
+                guard let d = Calendar.current.date(from: c) else { continue }
+                if isPlausibleReceiptDate(d) { return d }
+            }
+        }
+        return nil
+    }
+
+    /// Not in the future beyond clock skew, not older than five years.
+    private static func isPlausibleReceiptDate(_ d: Date) -> Bool {
+        let now = Date()
+        return d <= now.addingTimeInterval(86400)
+            && d >= now.addingTimeInterval(-86400 * 365 * 5)
+    }
+
     /// Try multiple date formats. Indonesian receipts use dd/mm/yyyy almost
     /// universally — we try that first. If we ever expand to US receipts we'd
     /// need disambiguation logic for ambiguous dates like 03/04/2026.
     private static func extractDate(from text: String, fallback: Date) -> Date {
+        // Spelled-out months first: they are unambiguous, while "12/09" could
+        // be either order.
+        if let named = extractMonthNameDate(from: text) { return named }
+
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")  // unambiguous parsing
 

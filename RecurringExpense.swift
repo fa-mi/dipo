@@ -566,7 +566,7 @@ struct RecurringExpensesView: View {
                         Text(loc("recurring.add")).font(.system(size: 15, weight: .semibold))
                     }
                     .foregroundStyle(AppTheme.bg).padding(.horizontal, 32).padding(.vertical, 14)
-                    .background(AppTheme.accent, in: Capsule())
+                    .background(AppTheme.accentFill, in: Capsule())
                     .shadow(color: AppTheme.accent.opacity(0.35), radius: 12, y: 6)
                 }
                 .buttonStyle(ScaleButtonStyle())
@@ -904,7 +904,7 @@ struct RecurringFormSheet: View {
         } label: {
             Text(loc("recurring.save")).font(.system(size: 16, weight: .bold))
                 .foregroundStyle(AppTheme.bg).frame(maxWidth: .infinity).padding(.vertical, 17)
-                .background(AppTheme.accent, in: RoundedRectangle(cornerRadius: 16))
+                .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: 16))
         }
         .buttonStyle(ScaleButtonStyle())
         .padding(.horizontal, 22)

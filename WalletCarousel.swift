@@ -356,7 +356,7 @@ struct WalletCardActions: View {
                         .font(.system(size: 14))
                         .foregroundStyle(AppTheme.bg)
                         .frame(width: 36, height: 36)
-                        .background(AppTheme.accent, in: Circle())
+                        .background(AppTheme.accentFill, in: Circle())
                         .accessibilityLabel(loc("main.is_main"))
                 } else {
                     Button {

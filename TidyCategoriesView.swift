@@ -137,7 +137,7 @@ struct TidyCategoriesView: View {
             Text(String(format: loc("tidy.apply"), suggestions.count))
                 .font(.system(size: 16, weight: .bold)).foregroundStyle(AppTheme.bg)
                 .frame(maxWidth: .infinity).padding(.vertical, 16)
-                .background(AppTheme.accent, in: RoundedRectangle(cornerRadius: 16))
+                .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: 16))
         }
         .buttonStyle(ScaleButtonStyle())
         .padding(.horizontal, 22).padding(.bottom, 20)

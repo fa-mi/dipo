@@ -42,6 +42,30 @@ struct ReceiptPreviewSheet: View {
 
     private var availableCards: [BankCard] { cards }
 
+    /// Does this card belong to the bank the receipt says paid?
+    ///
+    /// Matched against both the card's own issuer catalogue entry and the
+    /// holder label the user typed, since a card added manually may carry the
+    /// bank's name only in the latter. Substring in EITHER direction, because
+    /// a slip may say "Bank BCA" where the catalogue says "BCA".
+    private func cardMatchesIssuer(_ card: BankCard) -> Bool {
+        let key = scan.issuer
+            .lowercased()
+            .replacingOccurrences(of: "bank", with: " ")
+            .trimmingCharacters(in: .whitespaces)
+        guard key.count >= 2 else { return false }
+
+        var names: [String] = [card.holderName.lowercased()]
+        if !card.issuerID.isEmpty, let issuer = BankIssuer.find(card.issuerID) {
+            names.append(issuer.name.lowercased())
+        }
+        return names.contains { name in
+            guard !name.isEmpty else { return false }
+            return name.contains(key) || key.contains(name)
+        }
+    }
+
+
     private var selectedCard: BankCard? {
         guard !availableCards.isEmpty else { return nil }
         return availableCards[min(selectedCardIndex, availableCards.count - 1)]
@@ -64,6 +88,7 @@ struct ReceiptPreviewSheet: View {
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 18) {
                         receiptThumbnail
+                        confidenceChip
                         infoCard
                         cardSelector
                         if let err = saveError {
@@ -95,7 +120,15 @@ struct ReceiptPreviewSheet: View {
             }
             .onAppear {
                 amountText = formatAmountForEditing(scan.amount, currency: scan.currency)
-                if let idx = availableCards.firstIndex(where: { $0.resolvedCurrency == scan.currency }) {
+                // Prefer the card that actually paid. The slip names the bank
+                // that moved the money, so a BCA payment should not preselect
+                // a BRI card just because it happened to be the first one in
+                // the right currency.
+                if let idx = availableCards.firstIndex(where: {
+                    $0.resolvedCurrency == scan.currency && cardMatchesIssuer($0)
+                }) {
+                    selectedCardIndex = idx
+                } else if let idx = availableCards.firstIndex(where: { $0.resolvedCurrency == scan.currency }) {
                     selectedCardIndex = idx
                 }
                 // The parser only knows the shipped keyword map — it is a pure
@@ -108,6 +141,12 @@ struct ReceiptPreviewSheet: View {
                     for: scan.merchantName, transactions: allTransactions) {
                     scan.category = learned.category
                 }
+                // Open already editable when the parser is not confident.
+                // `confidence` was computed and then never used, so a shaky
+                // reading looked exactly as settled as a certain one, and
+                // correcting it cost a tap the user had no reason to think
+                // they needed.
+                if scan.confidence < 0.85 { isEditing = true }
             }
             .sheet(isPresented: $showImageZoom) {
                 ZoomableImageView(image: receiptImage)
@@ -146,9 +185,35 @@ struct ReceiptPreviewSheet: View {
         .buttonStyle(ScaleButtonStyle())
     }
 
+    /// How sure the parser is, stated instead of implied.
+    ///
+    /// `confidence` existed on the result from the start but nothing showed
+    /// it, so a guess and a certainty looked identical — and the user had no
+    /// signal telling them which readings deserved a second look.
+    private var confidenceChip: some View {
+        let low = scan.confidence < 0.85
+        return HStack(spacing: 7) {
+            Image(systemName: low ? "eye.trianglebadge.exclamationmark.fill" : "checkmark.seal.fill")
+                .font(.system(size: 12, weight: .semibold))
+            Text(low ? loc("receipt.check_fields") : loc("receipt.looks_clear"))
+                .font(.system(size: 12, weight: .medium))
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+            Text(scan.confidenceLabel)
+                .font(.system(size: 11, weight: .semibold))
+                .padding(.horizontal, 8).padding(.vertical, 3)
+                .background((low ? AppTheme.orange : AppTheme.accent).opacity(0.16), in: Capsule())
+        }
+        .foregroundStyle(low ? AppTheme.orange : AppTheme.accent)
+        .padding(.horizontal, 13).padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background((low ? AppTheme.orange : AppTheme.accent).opacity(0.09),
+                    in: RoundedRectangle(cornerRadius: 12))
+    }
+
     private var infoCard: some View {
         VStack(spacing: 0) {
-            // Vendor
+            // Merchant — the shop, never the bank that moved the money.
             row(label: loc("receipt.field.vendor")) {
                 if isEditing {
                     TextField(loc("receipt.field.merchant_placeholder"), text: $scan.merchantName)

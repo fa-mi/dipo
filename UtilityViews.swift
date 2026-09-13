@@ -986,6 +986,7 @@ struct AddTransactionSheet: View {
     @Query(sort: \SalarySchedule.createdAt) private var salarySchedules: [SalarySchedule]
     /// Whole history, used to learn how THIS user categorises merchants.
     @Query private var allTransactions: [TxRecord]
+    @Query private var allInstallments: [CardInstallment]
 
     @State private var txType: AddTxType = .expense
     @State private var name: String = ""
@@ -1093,6 +1094,17 @@ struct AddTransactionSheet: View {
     ///   Kartu IDR dengan tx +5.000.000 IDR dan +1.000 USD → salah jadi 5.001.000.
     /// Sesudah: tiap tx dikonversi ke mata uang kartu sebelum dijumlahkan,
     ///   sama persis dengan liveTransactionBalance() di BankCardHelpers.
+    /// A credit card cannot receive income. Money arriving on one is a bill
+    /// payment or a refund, which have their own flows — and logging it as
+    /// Income here would count toward reported income (StatisticsView sums
+    /// `amount > 0`), inflating what the user appears to earn.
+    private var selectedIsCredit: Bool { selectedCardOrNil?.isCreditCard == true }
+
+    private var selectedCardOrNil: BankCard? {
+        guard !vm.cards.isEmpty else { return nil }
+        return vm.cards[min(selectedCardIndex, vm.cards.count - 1)]
+    }
+
     private var selectedCardBalance: Double {
         guard !vm.cards.isEmpty else { return 0 }
         let card = vm.cards[min(selectedCardIndex, vm.cards.count - 1)]
@@ -1108,6 +1120,13 @@ struct AddTransactionSheet: View {
     /// Sesudah:    selalu konversi ke selectedCardCurrency sebelum dibandingkan.
     private var wouldGoNegative: Bool {
         guard txType == .expense, amount > 0 else { return false }
+        // A credit card holds no cash, so `balance` is meaningless for it —
+        // spending room is limit minus what is owed. Blocking here compared
+        // the purchase against a leftover cash figure and refused perfectly
+        // affordable purchases on a card with millions of rupiah of credit
+        // still free. The real ceiling is enforced in `saveTransaction()`,
+        // which warns and still lets the user proceed the way an issuer does.
+        if let card = selectedCardOrNil, card.isCreditCard { return false }
         let amountInCardCurrency: Double
         if saveInPreferred {
             // sudah dikonversi ke selectedCardCurrency
@@ -1254,6 +1273,7 @@ struct AddTransactionSheet: View {
                         // Type
                         HStack(spacing: 0) {
                             ForEach(AddTxType.allCases, id: \.self) { type in
+                                let blocked = (type == .income && selectedIsCredit)
                                 Button {
                                     HapticManager.shared.select()
                                     withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) { txType = type }
@@ -1266,10 +1286,12 @@ struct AddTransactionSheet: View {
                                         Image(systemName: type.icon).font(.system(size: 15))
                                         Text(type.title).font(.system(size: 15, weight: .semibold))
                                     }
-                                    .foregroundStyle(txType == type ? AppTheme.bg : AppTheme.textSecondary)
+                                    .foregroundStyle(txType == type ? AppTheme.bg
+                                                     : AppTheme.textSecondary.opacity(blocked ? 0.35 : 1))
                                     .frame(maxWidth: .infinity).padding(.vertical, 13)
                                     .background { if txType == type { Capsule().fill(type.color).shadow(color: type.color.opacity(0.4), radius: 8, y: 4) } }
                                 }
+                                .disabled(blocked)
                                 .animation(.spring(response: 0.3, dampingFraction: 0.7), value: txType)
                             }
                         }
@@ -1541,6 +1563,17 @@ struct AddTransactionSheet: View {
                                     : card.currency
                                 currency = cardCur
                                 saveInPreferred = false  // reset, kartu baru pasti sama currency-nya
+                                // Switching to a credit card while Income is
+                                // selected would leave the form on a type its
+                                // own picker now refuses to select.
+                                if card.isCreditCard, txType == .income {
+                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
+                                        txType = .expense
+                                    }
+                                    if !availableCategories.contains(selectedCategory) {
+                                        selectedCategory = .shopping
+                                    }
+                                }
                             }
                             // Bug 1 fix: auto-enable konversi saat user pilih mata uang
                             // berbeda dari kartu. Tanpa ini user bisa simpan transaksi USD
@@ -1566,6 +1599,14 @@ struct AddTransactionSheet: View {
                             .padding(.horizontal, 22)
                             .opacity(appeared ? 1 : 0)
                             .animation(AppMotion.appear, value: appeared)
+
+                        // A disabled control with no explanation reads as a
+                        // bug. Name the reason and point at the flow that does
+                        // handle money arriving on a credit card.
+                        if selectedIsCredit {
+                            InlineBanner(tone: .info, message: loc("tx.credit_no_income"))
+                                .padding(.horizontal, 22)
+                        }
 
                         // No card warning — uses warning tone (orange) since
                         // the user can resolve this by adding a card; not
@@ -1709,7 +1750,9 @@ struct AddTransactionSheet: View {
         } message: {
             if vm.cards.indices.contains(selectedCardIndex) {
                 let card = vm.cards[selectedCardIndex]
-                Text(String(format: loc("cc.over_limit_msg"), card.formattedAvailable))
+                Text(String(format: loc("cc.over_limit_msg"),
+                            CurrencyManager.shared.formatted(card.availableCredit(allInstallments),
+                                                             currency: card.resolvedCurrency)))
             }
         }
     }
@@ -1727,7 +1770,10 @@ struct AddTransactionSheet: View {
             let card = vm.cards[selectedCardIndex]
             if card.isCreditCard, card.creditLimit > 0, !creditOverConfirmed {
                 let addInCardCur = CurrencyManager.shared.convert(abs(effectiveAmount), from: effectiveCurrency, to: card.resolvedCurrency)
-                if card.owedBalance() + addInCardCur > card.creditLimit {
+                // `totalOwed` counts instalment principal; `owedBalance()` does
+                // not, so this used to let a purchase through that the card had
+                // no room for once running instalments were taken into account.
+                if card.totalOwed(allInstallments) + addInCardCur > card.creditLimit {
                     showCreditLimitAlert = true
                     HapticManager.shared.warning()
                     return
@@ -1895,7 +1941,7 @@ struct CustomDateRangeSheet: View {
                 Text(loc("tx.apply_range"))
                     .font(.system(size: 16, weight: .bold)).foregroundStyle(AppTheme.bg)
                     .frame(maxWidth: .infinity).padding(.vertical, 16)
-                    .background(AppTheme.accent, in: Capsule())
+                    .background(AppTheme.accentFill, in: Capsule())
                     .shadow(color: AppTheme.accent.opacity(0.35), radius: 12, y: 6)
             }
             .buttonStyle(ScaleButtonStyle())

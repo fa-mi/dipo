@@ -577,10 +577,10 @@ struct SalarySetupCTA: View {
                     Image(systemName: "plus.circle.fill").font(.system(size: 15))
                     Text(loc("salary.cta.button")).font(.system(size: 15, weight: .bold))
                 }
-                .foregroundStyle(AppTheme.onSolid)
+                .foregroundStyle(AppTheme.onAccentFill)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 14)
-                .background(AppTheme.accent, in: RoundedRectangle(cornerRadius: 14))
+                .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: 14))
             }
             .buttonStyle(ScaleButtonStyle())
         }
@@ -1131,7 +1131,7 @@ struct DebtPayoffCelebration: View {
                         .font(.system(size: 16, weight: .bold))
                         .foregroundStyle(AppTheme.bg)
                         .padding(.horizontal, 44).padding(.vertical, 15)
-                        .background(AppTheme.accent, in: Capsule())
+                        .background(AppTheme.accentFill, in: Capsule())
                         .shadow(color: AppTheme.accent.opacity(0.5), radius: 16, y: 8)
                 }
                 .buttonStyle(ScaleButtonStyle())

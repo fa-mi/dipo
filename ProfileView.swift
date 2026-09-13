@@ -155,6 +155,7 @@ struct ProfileView: View {
     @State private var idCopied           = false
     @State private var emailText          = ""
     @State private var showObligations = false
+    @State private var showBackTapGuide = false
     @State private var showWebSync        = false
     @State private var showPaywall        = false
     @State private var appearanceMode: String = UserDefaults.standard.string(forKey: "appearance_mode") ?? "system"
@@ -461,6 +462,11 @@ struct ProfileView: View {
                 .presentationDetents([.large]).presentationDragIndicator(.visible)
                 .presentationBackground(AppTheme.bg).preferredColorScheme(appColorScheme())
         }
+        .sheet(isPresented: $showBackTapGuide) {
+            BackTapGuideView()
+                .presentationDetents([.large]).presentationDragIndicator(.visible)
+                .presentationBackground(AppTheme.bg).preferredColorScheme(appColorScheme())
+        }
         .sheet(isPresented: $showWebSync) {
             WebSyncView().presentationDetents([.large]).presentationDragIndicator(.visible)
                 .presentationBackground(AppTheme.bg).preferredColorScheme(appColorScheme())
@@ -539,7 +545,7 @@ struct ProfileView: View {
             }
             Button { showPhotoOptions = true } label: {
                 ZStack {
-                    Circle().fill(AppTheme.accent).frame(width: 32, height: 32)
+                    Circle().fill(AppTheme.accentFill).frame(width: 32, height: 32)
                         .shadow(color: AppTheme.accent.opacity(0.55), radius: 8, y: 3)
                     Image(systemName: "camera.fill")
                         .font(.system(size: 13, weight: .semibold)).foregroundStyle(.white)
@@ -912,6 +918,18 @@ struct ProfileView: View {
                 iconOverride: "laptopcomputer.and.iphone",
                 tintOverride: AppTheme.teal,
                 showPaywall: $showPaywall) { showWebSync = true }
+
+            // Scanning is the Royal-gated part, so the row is gated the same
+            // way — the walkthrough would otherwise teach a gesture that dies
+            // at the last step.
+            PremiumLockedFeatureLink(
+                feature: .scanReceipt, title: loc("profile.backtap"),
+                subtitle: premiumMgr.canAccess(.scanReceipt)
+                    ? loc("profile.backtap_sub")
+                    : loc("profile.requires_royal"),
+                iconOverride: "hand.tap.fill",
+                tintOverride: AppTheme.orange,
+                showPaywall: $showPaywall) { showBackTapGuide = true }
         }
         .padding(16)
         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
@@ -1714,6 +1732,11 @@ extension Notification.Name {
     static let requestOpenSmartBudget    = Notification.Name("requestOpenSmartBudget")
     /// Posted by AskDiPoVoiceIntent (Back Tap / Siri / Shortcuts).
     static let requestOpenVoiceEntry     = Notification.Name("requestOpenVoiceEntry")
+    /// Back Tap handed over a screenshot. Distinct from
+    /// `requestOpenAddTransaction` because the gesture already said what the
+    /// user wants — routing it through the transaction form first renders a
+    /// screen nobody asked for on the way to the scanner.
+    static let requestOpenScanFromShortcut = Notification.Name("requestOpenScanFromShortcut")
     static let requestOpenDebt           = Notification.Name("requestOpenDebt")
     static let requestOpenSavingsGoals   = Notification.Name("requestOpenSavingsGoals")
 }
@@ -1947,10 +1970,10 @@ struct BackupPreviewSheet: View {
                 } label: {
                     Text(loc("backup.preview.continue"))
                         .font(.system(size: 15, weight: .bold))
-                        .foregroundStyle(AppTheme.onSolid)
+                        .foregroundStyle(AppTheme.onAccentFill)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 14)
-                        .background(AppTheme.accent, in: RoundedRectangle(cornerRadius: 14))
+                        .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: 14))
                 }
                 .buttonStyle(ScaleButtonStyle())
             }
@@ -2008,5 +2031,171 @@ struct BackupPreviewSheet: View {
         .padding(.horizontal, 10).padding(.vertical, 8)
         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 12))
         .overlay(RoundedRectangle(cornerRadius: 12).stroke(AppTheme.cardMid.opacity(0.4), lineWidth: 1))
+    }
+}
+
+// MARK: - Back Tap walkthrough
+
+/// How to wire "pay with QRIS → double-tap the back of the phone → the expense
+/// is logged".
+///
+/// Every step here happens OUTSIDE DiPo, which is the whole reason this screen
+/// exists. Back Tap is an Accessibility setting and cannot be claimed by an
+/// app; it only offers Shortcuts. So DiPo publishes the action and the user
+/// binds it — and without a guide that chain is three apps deep and invisible.
+struct BackTapGuideView: View {
+    @Environment(\.dismiss) private var dismiss
+
+    private struct Step: Identifiable {
+        let id: Int
+        let title: String
+        let body: String
+        let glyph: String
+    }
+
+    private var steps: [Step] {
+        [
+            Step(id: 1, title: loc("backtap.s1_title"), body: loc("backtap.s1_body"),
+                 glyph: "plus.square.on.square"),
+            Step(id: 2, title: loc("backtap.s2_title"), body: loc("backtap.s2_body"),
+                 glyph: "camera.viewfinder"),
+            Step(id: 3, title: loc("backtap.s3_title"), body: loc("backtap.s3_body"),
+                 glyph: "text.viewfinder"),
+            Step(id: 4, title: loc("backtap.s4_title"), body: loc("backtap.s4_body"),
+                 glyph: "textformat"),
+            Step(id: 5, title: loc("backtap.s5_title"), body: loc("backtap.s5_body"),
+                 glyph: "hand.tap.fill"),
+        ]
+    }
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                AppTheme.bg.ignoresSafeArea()
+                ScrollView(showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 22) {
+
+                        // What the finished gesture feels like, before the setup
+                        // that earns it.
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(loc("backtap.hero_title"))
+                                .font(.system(size: 21, weight: .bold))
+                                .foregroundStyle(AppTheme.textPrimary)
+                            Text(loc("backtap.hero_body"))
+                                .font(.system(size: 14))
+                                .foregroundStyle(AppTheme.textSecondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .padding(16)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
+                        .overlay(RoundedRectangle(cornerRadius: 16)
+                            .stroke(AppTheme.orange.opacity(0.25), lineWidth: 1))
+
+                        Text(loc("backtap.setup_heading"))
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(AppTheme.textSecondary)
+
+                        VStack(spacing: 0) {
+                            ForEach(steps) { step in
+                                HStack(alignment: .top, spacing: 13) {
+                                    VStack(spacing: 0) {
+                                        ZStack {
+                                            Circle().fill(AppTheme.orange.opacity(0.14))
+                                                .frame(width: 30, height: 30)
+                                            Text("\(step.id)")
+                                                .font(.system(size: 13, weight: .bold))
+                                                .foregroundStyle(AppTheme.orange)
+                                        }
+                                        // The rail makes the order explicit —
+                                        // these steps genuinely must happen in
+                                        // sequence, so the numbering is real
+                                        // information rather than decoration.
+                                        if step.id != steps.count {
+                                            Rectangle()
+                                                .fill(AppTheme.orange.opacity(0.18))
+                                                .frame(width: 2)
+                                                .frame(maxHeight: .infinity)
+                                        }
+                                    }
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        HStack(spacing: 7) {
+                                            Image(systemName: step.glyph)
+                                                .font(.system(size: 12, weight: .semibold))
+                                                .foregroundStyle(AppTheme.orange)
+                                            Text(step.title)
+                                                .font(.system(size: 14, weight: .semibold))
+                                                .foregroundStyle(AppTheme.textPrimary)
+                                        }
+                                        Text(step.body)
+                                            .font(.system(size: 13))
+                                            .foregroundStyle(AppTheme.textSecondary)
+                                            .fixedSize(horizontal: false, vertical: true)
+                                    }
+                                    .padding(.bottom, step.id == steps.count ? 0 : 20)
+                                    Spacer(minLength: 0)
+                                }
+                                .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                        .padding(16)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
+
+                        VStack(alignment: .leading, spacing: 8) {
+                            Label(loc("backtap.using_heading"), systemImage: "sparkles")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(AppTheme.accent)
+                            Text(loc("backtap.using_body"))
+                                .font(.system(size: 13))
+                                .foregroundStyle(AppTheme.textSecondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .padding(16)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(AppTheme.accent.opacity(0.08), in: RoundedRectangle(cornerRadius: 16))
+
+                        // Stated plainly rather than buried: the parser is good,
+                        // not infallible, and a wrong amount saved silently is
+                        // worse than one the user was asked to confirm.
+                        VStack(alignment: .leading, spacing: 8) {
+                            Label(loc("backtap.limits_heading"), systemImage: "exclamationmark.circle")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(AppTheme.textSecondary)
+                            Text(loc("backtap.limits_body"))
+                                .font(.system(size: 13))
+                                .foregroundStyle(AppTheme.textSecondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .padding(16)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(AppTheme.cardMid.opacity(0.45), in: RoundedRectangle(cornerRadius: 16))
+
+                        Button {
+                            HapticManager.shared.tap()
+                            if let url = URL(string: "shortcuts://create-shortcut") {
+                                UIApplication.shared.open(url)
+                            }
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "arrow.up.forward.app.fill").font(.system(size: 14))
+                                Text(loc("backtap.open_shortcuts")).font(.system(size: 15, weight: .semibold))
+                            }
+                            .foregroundStyle(AppTheme.onAccentFill)
+                            .frame(maxWidth: .infinity).padding(.vertical, 14)
+                            .background(AppTheme.accentFill, in: Capsule())
+                        }
+                        .buttonStyle(ScaleButtonStyle())
+                    }
+                    .padding(.horizontal, 22)
+                    .padding(.top, 8)
+                    .padding(.bottom, 40)
+                }
+            }
+            .navigationTitle(loc("profile.backtap"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(AppTheme.bg, for: .navigationBar)
+            .doneToolbar { dismiss() }
+        }
     }
 }

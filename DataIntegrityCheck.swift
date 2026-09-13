@@ -439,10 +439,10 @@ struct WindfallCard: View {
                 HStack(spacing: 2) {
                     if p > 0 {
                         RoundedRectangle(cornerRadius: 4)
-                            .fill(AppTheme.accent).frame(width: g.size.width * p, height: 10)
+                            .fill(AppTheme.accentFill).frame(width: g.size.width * p, height: 10)
                     }
                     RoundedRectangle(cornerRadius: 4)
-                        .fill(AppTheme.cardMid).frame(width: g.size.width * (1 - p), height: 10)
+                        .fill(AppTheme.accentTrack).frame(width: g.size.width * (1 - p), height: 10)
                 }
             }
             .frame(height: 10)

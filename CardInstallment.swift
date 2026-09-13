@@ -204,6 +204,9 @@ struct InstallmentSection: View {
     let context: ModelContext
     @State private var showAdd = false
     @State private var simulating: CardInstallment? = nil
+    @State private var editing: CardInstallment? = nil
+    /// Deleting rewrites what the card owes, so it asks first.
+    @State private var deleting: CardInstallment? = nil
 
     private var mine: [CardInstallment] {
         installments.filter { $0.cardID == card.id && $0.isActive }
@@ -256,6 +259,23 @@ struct InstallmentSection: View {
                 .presentationDetents([.large]).presentationDragIndicator(.visible)
                 .presentationBackground(AppTheme.bg).preferredColorScheme(appColorScheme())
         }
+        .sheet(item: $editing) { inst in
+            InstallmentFormSheet(card: card, context: context, editing: inst)
+                .presentationDetents([.large]).presentationDragIndicator(.visible)
+                .presentationBackground(AppTheme.bg).preferredColorScheme(appColorScheme())
+        }
+        .confirmationDialog(loc("inst.delete_prompt"),
+                            isPresented: Binding(get: { deleting != nil },
+                                                 set: { if !$0 { deleting = nil } }),
+                            titleVisibility: .visible) {
+            Button(loc("common.delete"), role: .destructive) {
+                if let d = deleting { context.delete(d); try? context.save() }
+                deleting = nil
+            }
+            Button(loc("common.cancel"), role: .cancel) { deleting = nil }
+        } message: {
+            Text(loc("inst.delete_confirm"))
+        }
         .sheet(item: $simulating) { inst in
             InstallmentSimulatorSheet(installment: inst, card: card, installments: installments)
                 .presentationDetents([.large]).presentationDragIndicator(.visible)
@@ -266,22 +286,36 @@ struct InstallmentSection: View {
     private func row(_ inst: CardInstallment) -> some View {
         let billed = inst.billedCount()
         let progress = Double(billed) / Double(inst.tenorMonths)
-        return Button {
-            HapticManager.shared.tap(); simulating = inst
-        } label: {
-            VStack(alignment: .leading, spacing: 7) {
-                HStack {
+        return VStack(alignment: .leading, spacing: 7) {
+                HStack(spacing: 8) {
                     Text(inst.merchant)
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(AppTheme.textPrimary).lineLimit(1)
-                    Spacer()
+                    Spacer(minLength: 4)
                     Text(cm.formatted(inst.monthlyAmount, currency: inst.currency) + loc("inst.per_month"))
                         .font(.system(size: 12, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                    Menu {
+                        Button { HapticManager.shared.tap(); editing = inst } label: {
+                            Label(loc("common.edit"), systemImage: "pencil")
+                        }
+                        Divider()
+                        Button(role: .destructive) {
+                            HapticManager.shared.warning()
+                            deleting = inst
+                        } label: { Label(loc("action.delete"), systemImage: "trash") }
+                    } label: {
+                        Image(systemName: "ellipsis")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(AppTheme.textSecondary)
+                            .frame(width: 24, height: 24)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
                 }
                 GeometryReader { geo in
                     ZStack(alignment: .leading) {
-                        Capsule().fill(AppTheme.cardMid).frame(height: 4)
-                        Capsule().fill(AppTheme.accent)
+                        Capsule().fill(AppTheme.accentTrack).frame(height: 4)
+                        Capsule().fill(AppTheme.accentFill)
                             .frame(width: geo.size.width * progress, height: 4)
                     }
                 }
@@ -297,13 +331,8 @@ struct InstallmentSection: View {
             }
             .padding(11)
             .background(AppTheme.cardMid.opacity(0.5), in: RoundedRectangle(cornerRadius: 12))
-        }
-        .buttonStyle(.plain)
-        .contextMenu {
-            Button(role: .destructive) {
-                context.delete(inst); try? context.save()
-            } label: { Label(loc("action.delete"), systemImage: "trash") }
-        }
+            .contentShape(Rectangle())
+            .onTapGesture { HapticManager.shared.tap(); simulating = inst }
     }
 }
 
@@ -312,6 +341,11 @@ struct InstallmentSection: View {
 struct InstallmentFormSheet: View {
     let card: BankCard
     let context: ModelContext
+    /// When set, the form edits this instalment instead of creating one. A
+    /// mistyped amount or tenor used to be permanent: the row opened the
+    /// simulator and nothing else, so the only way out was deleting and
+    /// re-entering from scratch.
+    var editing: CardInstallment? = nil
     @Environment(\.dismiss) private var dismiss
 
     @State private var merchant = ""
@@ -386,7 +420,15 @@ struct InstallmentFormSheet: View {
                     .padding(.top, 14)
                 }
             }
-            .navigationTitle(loc("inst.add"))
+            .navigationTitle(editing == nil ? loc("inst.add") : loc("inst.edit"))
+            .onAppear {
+                guard let inst = editing else { return }
+                merchant = inst.merchant
+                amount   = String(inst.totalAmount)
+                tenor    = inst.tenorMonths
+                rate     = String(inst.flatRatePercent)
+                start    = inst.startDate
+            }
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(AppTheme.bg, for: .navigationBar)
             .doneToolbar { dismiss() }
@@ -433,12 +475,25 @@ struct InstallmentFormSheet: View {
     private func save() {
         guard let a = Double(amount), a > 0 else { return }
         let name = merchant.trimmingCharacters(in: .whitespaces)
-        let inst = CardInstallment(cardID: card.id,
-                                   merchant: name.isEmpty ? loc("inst.untitled") : name,
-                                   totalAmount: a, tenorMonths: tenor, startDate: start,
-                                   flatRatePercent: Double(rate) ?? 0,
-                                   currency: card.resolvedCurrency)
-        context.insert(inst)
+        let label = name.isEmpty ? loc("inst.untitled") : name
+
+        if let inst = editing {
+            // Mutate in place: the id is referenced by `cardID` lookups and by
+            // anything holding this instalment, so replacing the object would
+            // orphan those.
+            inst.merchant = label
+            inst.totalAmount = a
+            inst.tenorMonths = max(tenor, 1)
+            inst.startDate = start
+            inst.flatRatePercent = Double(rate) ?? 0
+        } else {
+            let inst = CardInstallment(cardID: card.id,
+                                       merchant: label,
+                                       totalAmount: a, tenorMonths: tenor, startDate: start,
+                                       flatRatePercent: Double(rate) ?? 0,
+                                       currency: card.resolvedCurrency)
+            context.insert(inst)
+        }
         try? context.save()
         HapticManager.shared.success()
         dismiss()

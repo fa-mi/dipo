@@ -641,8 +641,8 @@ struct NoCardState: View {
             // Progress bar
             GeometryReader { g in
                 ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 4).fill(AppTheme.cardMid).frame(height: 6)
-                    RoundedRectangle(cornerRadius: 4).fill(AppTheme.accent).frame(width: g.size.width * 0, height: 6)
+                    RoundedRectangle(cornerRadius: 4).fill(AppTheme.accentTrack).frame(height: 6)
+                    RoundedRectangle(cornerRadius: 4).fill(AppTheme.accentFill).frame(width: g.size.width * 0, height: 6)
                 }
             }
             .frame(height: 6)
@@ -676,7 +676,7 @@ struct NoCardState: View {
                 }
                 .foregroundStyle(AppTheme.bg)
                 .padding(.horizontal, 36).padding(.vertical, 16)
-                .background(AppTheme.accent, in: Capsule())
+                .background(AppTheme.accentFill, in: Capsule())
                 .shadow(color: AppTheme.accent.opacity(0.65), radius: 18, y: 6)
             }
             .buttonStyle(ScaleButtonStyle())
@@ -718,7 +718,7 @@ struct TappableSetupStep: View {
             Spacer()
             if isActive {
                 ZStack {
-                    Circle().fill(AppTheme.accent).frame(width: 28, height: 28)
+                    Circle().fill(AppTheme.accentFill).frame(width: 28, height: 28)
                     Image(systemName: "chevron.right").font(.system(size: 11, weight: .bold)).foregroundStyle(AppTheme.bg)
                 }
             } else if isDone {
@@ -1424,7 +1424,7 @@ struct HomeHeader: View {
                             ZStack {
                                 Circle().fill(AppTheme.red).frame(width: 18, height: 18)
                                 Text(notifMgr.unreadCount > 9 ? "9+" : "\(notifMgr.unreadCount)")
-                                    .font(.system(size: 9, weight: .bold)).foregroundStyle(.white)
+                                    .font(.system(size: 9, weight: .bold)).foregroundStyle(AppTheme.onSolid)
                             }
                             .offset(x: 4, y: -4)
                         }
@@ -2101,7 +2101,7 @@ struct SwipeToDeleteRow<Content: View>: View {
                                 .shadow(color: AppTheme.red.opacity(0.22), radius: 4, y: 2)
                             Image(systemName: "trash.fill")
                                 .font(.system(size: 16, weight: .semibold))
-                                .foregroundStyle(.white)
+                                .foregroundStyle(AppTheme.onSolid)
                         }
                         Text(loc("common.delete"))
                             .font(.system(size: 11, weight: .semibold))
