@@ -23,6 +23,9 @@ struct MainTabView: View {
     @State private var showGoalsFromNotif = false
     /// Ask DiPo opened by the Back Tap / Siri shortcut, already listening.
     @State private var showVoiceEntry = false
+    /// A captured sentence waiting for Ask DiPo. `item:` rather than a Bool so
+    /// the sheet cannot exist without the text it was opened to send.
+    @State private var spokenEntry: SpokenEntry? = nil
     /// Screenshot from the Back Tap shortcut, presented straight to the scanner.
     @State private var shortcutScan: ScanPayload? = nil
 
@@ -214,8 +217,16 @@ struct MainTabView: View {
                 .presentationDetents([.large]).presentationDragIndicator(.visible)
                 .presentationBackground(AppTheme.bg).preferredColorScheme(appColorScheme())
         }
-        .sheet(isPresented: $showVoiceEntry) {
-            AIChatView(autoStartVoice: true)
+        .fullScreenCover(isPresented: $showVoiceEntry) {
+            VoiceCaptureView { text in
+                spokenEntry = SpokenEntry(text: text)
+            }
+            .preferredColorScheme(appColorScheme())
+        }
+        // Ask DiPo opens only once there is something to send, so the gesture
+        // never lands the user in a chat they then have to talk into.
+        .sheet(item: $spokenEntry) { entry in
+            AIChatView(initialMessage: entry.text)
                 .presentationDetents([.large]).presentationDragIndicator(.visible)
                 .presentationBackground(AppTheme.bg).preferredColorScheme(appColorScheme())
         }

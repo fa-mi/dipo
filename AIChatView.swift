@@ -238,6 +238,11 @@ struct AIChatView: View {
 
     /// Set by the Back Tap / Siri shortcut so the sheet opens already listening.
     var autoStartVoice: Bool = false
+    /// A sentence already captured elsewhere — by `VoiceCaptureView` — to be
+    /// sent as soon as this view appears. The voice screen deliberately does
+    /// no parsing of its own; this is where the sentence lands.
+    var initialMessage: String? = nil
+    @State private var showVoiceCapture = false
 
     @State private var voice = VoiceDictation()
     @State private var voiceNotice: String? = nil
@@ -284,7 +289,14 @@ struct AIChatView: View {
                 let snapshot = buildFinancialContext()
                 Task { await vm.send(context: snapshot) }
             }
-            if autoStartVoice {
+            if let initialMessage, !initialMessage.isEmpty, vm.messages.isEmpty {
+                vm.input = initialMessage
+                let snapshot = buildFinancialContext()
+                await vm.send(context: snapshot)
+            } else if autoStartVoice {
+                // Legacy path. New entry points open `VoiceCaptureView`, which
+                // gives dictation a screen of its own instead of running it
+                // inside a chat with a keyboard competing for the same space.
                 await voice.start()
             }
         }
@@ -302,6 +314,14 @@ struct AIChatView: View {
             }
         }
         .onDisappear { voice.cancel() }
+        .fullScreenCover(isPresented: $showVoiceCapture) {
+            VoiceCaptureView { text in
+                vm.input = text
+                let snapshot = buildFinancialContext()
+                Task { await vm.send(context: snapshot) }
+            }
+            .preferredColorScheme(appColorScheme())
+        }
         .sheet(isPresented: $showCardPicker) {
             cardPickerSheet
                 .presentationDetents([.medium, .large])
@@ -566,11 +586,11 @@ struct AIChatView: View {
             HapticManager.shared.tap()
             voiceNotice = nil
             if voice.isListening {
+                // Only reachable from the legacy auto-start path.
                 voice.stop()
             } else {
-                voice.reset()
                 inputFocused = false
-                Task { await voice.start() }
+                showVoiceCapture = true
             }
         } label: {
             ZStack {

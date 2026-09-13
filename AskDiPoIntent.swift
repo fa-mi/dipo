@@ -16,7 +16,7 @@ import UIKit
 struct AskDiPoVoiceIntent: AppIntent {
     static var title: LocalizedStringResource = "Log with Voice"
     static var description = IntentDescription(
-        "Opens DiPo and starts listening so you can log a transaction just by saying it."
+        "Opens a listening screen so you can log a transaction just by saying it. Bind it to Back Tap's triple tap to keep double tap for screenshots."
     )
     /// Must be a stored property on the type for the app to be foregrounded.
     static var openAppWhenRun: Bool = true
