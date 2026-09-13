@@ -100,7 +100,9 @@ final class ReceiptParsingTests: XCTestCase {
         TOTAL Rp 4.000
         """
         let r = ReceiptParser.parse(rawText: text, fallbackCurrency: "IDR")
-        XCTAssertEqual(r.merchantName, "INDOMARET")
+        // Canonical Title Case, deliberately: a chain is folded to one name so
+        // every branch lands in one place in the user's history.
+        XCTAssertEqual(r.merchantName, "Indomaret")
         XCTAssertTrue(r.issuer.isEmpty)
     }
 
