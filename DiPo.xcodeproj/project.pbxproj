@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		9BD5A1012FC0000000000003 /* DiPoShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 9BD5A1012FC0000000000002 /* DiPoShare.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		9BD5A1012FC0000000000010 /* SharedScanInbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BD5A1012FC000000000000F /* SharedScanInbox.swift */; };
 		9B04D3EC2F835EAC0015F772 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 9B04D3EB2F835EAC0015F772 /* GoogleService-Info.plist */; };
 		9B1C11D02FA029540032CD2C /* CryptoManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B1C11CB2FA029540032CD2C /* CryptoManager.swift */; };
 		9B1C11D12FA029540032CD2C /* NetworkLayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B1C11CD2FA029540032CD2C /* NetworkLayer.swift */; };
@@ -107,6 +109,13 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		9BD5A1012FC000000000000C /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 9BE64C2E2F7513F000662EC1 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 9BD5A1012FC0000000000001;
+			remoteInfo = DiPoShare;
+		};
 		9BCF24AA2FB63FE60070A483 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 9BE64C2E2F7513F000662EC1 /* Project object */;
@@ -131,6 +140,7 @@
 			dstSubfolderSpec = 13;
 			files = (
 				9BCF24AC2FB63FE60070A483 /* DiPoWidgetExtension.appex in Embed Foundation Extensions */,
+				9BD5A1012FC0000000000003 /* DiPoShare.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -138,6 +148,9 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		9BD5A1012FC0000000000002 /* DiPoShare.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = DiPoShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		9BD5A1012FC000000000000E /* DiPoShareExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = DiPoShareExtension.entitlements; sourceTree = "<group>"; };
+		9BD5A1012FC000000000000F /* SharedScanInbox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedScanInbox.swift; sourceTree = "<group>"; };
 		9B04D3EB2F835EAC0015F772 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		9B1C11CB2FA029540032CD2C /* CryptoManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CryptoManager.swift; sourceTree = "<group>"; };
 		9B1C11CD2FA029540032CD2C /* NetworkLayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkLayer.swift; sourceTree = "<group>"; };
@@ -232,6 +245,13 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		9BD5A1012FC0000000000008 /* Exceptions for "DiPoShare" folder in "DiPoShare" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 9BD5A1012FC0000000000001 /* DiPoShare */;
+		};
 		9BCF24B12FB63FE60070A483 /* Exceptions for "DiPoWidget" folder in "DiPoWidgetExtension" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
@@ -249,6 +269,14 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		9BD5A1012FC0000000000007 /* DiPoShare */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				9BD5A1012FC0000000000008 /* Exceptions for "DiPoShare" folder in "DiPoShare" target */,
+			);
+			path = DiPoShare;
+			sourceTree = "<group>";
+		};
 		9BCF24A02FB63FE40070A483 /* DiPoWidget */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
@@ -273,6 +301,13 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		9BD5A1012FC0000000000005 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		9BCF24982FB63FE40070A483 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -313,6 +348,8 @@
 			isa = PBXGroup;
 			children = (
 				9BCF24B72FB640B70070A483 /* DiPoWidgetExtension.entitlements */,
+				9BD5A1012FC000000000000E /* DiPoShareExtension.entitlements */,
+				9BD5A1012FC000000000000F /* SharedScanInbox.swift */,
 				9B638F722F8F8B84007868B9 /* BankCardHelpers.swift */,
 				9B37C3942F7B71DC00035E23 /* PremiumManager.swift */,
 				9B50CD7E2F907E1300E384B6 /* AppShared.swift */,
@@ -400,6 +437,7 @@
 				9B88EB8B2F7A1A34006966E4 /* StatisticsView.swift */,
 				9BE64C382F7513F000662EC1 /* DiPo */,
 				9BCF24A02FB63FE40070A483 /* DiPoWidget */,
+				9BD5A1012FC0000000000007 /* DiPoShare */,
 				9BFC17B32F91206C00D80402 /* Frameworks */,
 				9BE64C372F7513F000662EC1 /* Products */,
 				9B32E07C3054C7A4004E8230 /* Recovered References */,
@@ -412,6 +450,7 @@
 				9BFA00062F00002000000006 /* DiPoTests.xctest */,
 				9BE64C362F7513F000662EC1 /* DiPo.app */,
 				9BCF249B2FB63FE40070A483 /* DiPoWidgetExtension.appex */,
+				9BD5A1012FC0000000000002 /* DiPoShare.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -428,6 +467,28 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		9BD5A1012FC0000000000001 /* DiPoShare */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 9BD5A1012FC0000000000009 /* Build configuration list for PBXNativeTarget "DiPoShare" */;
+			buildPhases = (
+				9BD5A1012FC0000000000004 /* Sources */,
+				9BD5A1012FC0000000000005 /* Frameworks */,
+				9BD5A1012FC0000000000006 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				9BD5A1012FC0000000000007 /* DiPoShare */,
+			);
+			name = DiPoShare;
+			packageProductDependencies = (
+			);
+			productName = DiPoShare;
+			productReference = 9BD5A1012FC0000000000002 /* DiPoShare.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		9BCF249A2FB63FE40070A483 /* DiPoWidgetExtension */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 9BCF24B02FB63FE60070A483 /* Build configuration list for PBXNativeTarget "DiPoWidgetExtension" */;
@@ -463,6 +524,7 @@
 			);
 			dependencies = (
 				9BCF24AB2FB63FE60070A483 /* PBXTargetDependency */,
+				9BD5A1012FC000000000000D /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				9BE64C382F7513F000662EC1 /* DiPo */,
@@ -512,6 +574,9 @@
 				LastSwiftUpdateCheck = 2650;
 				LastUpgradeCheck = 2640;
 				TargetAttributes = {
+					9BD5A1012FC0000000000001 = {
+						CreatedOnToolsVersion = 26.5;
+					};
 					9BCF249A2FB63FE40070A483 = {
 						CreatedOnToolsVersion = 26.5;
 					};
@@ -542,11 +607,19 @@
 				9BFA00012F00002000000001 /* DiPoTests */,
 				9BE64C352F7513F000662EC1 /* DiPo */,
 				9BCF249A2FB63FE40070A483 /* DiPoWidgetExtension */,
+				9BD5A1012FC0000000000001 /* DiPoShare */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		9BD5A1012FC0000000000006 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		9BCF24992FB63FE40070A483 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -565,6 +638,13 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		9BD5A1012FC0000000000004 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		9BCF24972FB63FE40070A483 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -657,6 +737,7 @@
 				9BEA100C2F00000C0000C3B4 /* AskDiPoIntent.swift in Sources */,
 				9BEA100B2F00000B0000C3B4 /* VoiceDictation.swift in Sources */,
 				9BEA10A12F0000A10000C3B4 /* HomeSummary.swift in Sources */,
+				9BD5A1012FC0000000000010 /* SharedScanInbox.swift in Sources */,
 				9BEA100A2F00000A0000C2B4 /* BackgroundRefresh.swift in Sources */,
 				9BEA100A2F00000A0000B6B4 /* CycleIntentView.swift in Sources */,
 				9BEA100A2F00000A0000B5B4 /* CycleIntent.swift in Sources */,
@@ -673,6 +754,11 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		9BD5A1012FC000000000000D /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 9BD5A1012FC0000000000001 /* DiPoShare */;
+			targetProxy = 9BD5A1012FC000000000000C /* PBXContainerItemProxy */;
+		};
 		9BCF24AB2FB63FE60070A483 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 9BCF249A2FB63FE40070A483 /* DiPoWidgetExtension */;
@@ -686,6 +772,64 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		9BD5A1012FC000000000000A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = DiPoShareExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 63;
+				DEVELOPMENT_TEAM = 3C6KN7P2NC;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = DiPoShare/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = DiPo;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 2.4;
+				PRODUCT_BUNDLE_IDENTIFIER = com.fahmiaquinas.DiPo.DiPoShare;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		9BD5A1012FC000000000000B /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = DiPoShareExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 63;
+				DEVELOPMENT_TEAM = 3C6KN7P2NC;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = DiPoShare/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = DiPo;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 2.4;
+				PRODUCT_BUNDLE_IDENTIFIER = com.fahmiaquinas.DiPo.DiPoShare;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 		9BCF24AE2FB63FE60070A483 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -998,6 +1142,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		9BD5A1012FC0000000000009 /* Build configuration list for PBXNativeTarget "DiPoShare" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				9BD5A1012FC000000000000A /* Debug */,
+				9BD5A1012FC000000000000B /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		9BCF24B02FB63FE60070A483 /* Build configuration list for PBXNativeTarget "DiPoWidgetExtension" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

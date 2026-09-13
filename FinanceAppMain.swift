@@ -292,6 +292,11 @@ struct DiPoApp: App {
                             // tap widget → see paywall, no detours through
                             // settings tab first.
                             NotificationCenter.default.post(name: .requestOpenPaywall, object: nil)
+                        case "scan-shared":
+                            // "Log with DiPo" from the share sheet. The image is
+                            // already in the App Group inbox; MainTabView takes it
+                            // and opens the same review form Back Tap uses.
+                            NotificationCenter.default.post(name: .requestOpenSharedScan, object: nil)
                         case "support":
                             // Support-reply notifications ("Learn more") deep-link
                             // here. Open the Support screen so the user lands on

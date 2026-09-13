@@ -28,6 +28,7 @@ struct MainTabView: View {
     @State private var spokenEntry: SpokenEntry? = nil
     /// Screenshot from the Back Tap shortcut, presented straight to the scanner.
     @State private var shortcutScan: ScanPayload? = nil
+    @Environment(\.scenePhase) private var scenePhase
 
     /// Observed so the gate reacts the moment a main card is chosen or cleared.
     @State private var sb = SmartBudgetManager.shared
@@ -50,6 +51,17 @@ struct MainTabView: View {
     /// Same two gates the in-app scan entry applies. Skipping them here would
     /// open the scanner for someone with no card to save to, or for a
     /// non-Royal user whose scan dies at the last step.
+    /// iOS silently drops a cover presented on top of an open sheet, so an
+    /// open Add Transaction sheet is closed first.
+    private func routeScan(_ image: UIImage) {
+        if showAddSheet {
+            showAddSheet = false
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { presentShortcutScan(image) }
+        } else {
+            presentShortcutScan(image)
+        }
+    }
+
     private func presentShortcutScan(_ image: UIImage) {
         guard !vm.cards.isEmpty else {
             withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) { showNoCardBanner = true }
@@ -65,7 +77,10 @@ struct MainTabView: View {
         shortcutScan = ScanPayload(image: image)
     }
 
-    var body: some View {
+    /// The tabs plus everything that routes INTO them from outside — shortcuts,
+    /// the share extension, notifications. Split from `body` because the single
+    /// chain of ~30 modifiers had grown past what the type checker will infer.
+    private var core: some View {
         ZStack(alignment: .bottom) {
             ZStack {
                 ForEach(AppTab.allCases, id: \.self) { tab in
@@ -151,23 +166,33 @@ struct MainTabView: View {
             .preferredColorScheme(appColorScheme())
         }
         .task {
-            // Cold launch: the intent fired before this view existed, so the
-            // notification landed with nobody listening.
-            if let img = QuickScanRoute.shared.consume() {
+            // Cold launch: the intent fired (or the share extension handed an
+            // image over) before this view existed, so the notification landed
+            // with nobody listening.
+            if let img = QuickScanRoute.shared.consume() ?? SharedScanInbox.take() {
                 try? await Task.sleep(for: .milliseconds(400))
                 presentShortcutScan(img)
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .requestOpenScanFromShortcut)) { _ in
             guard let img = QuickScanRoute.shared.consume() else { return }
-            // iOS silently drops a cover presented on top of an open sheet.
-            if showAddSheet {
-                showAddSheet = false
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { presentShortcutScan(img) }
-            } else {
-                presentShortcutScan(img)
-            }
+            routeScan(img)
         }
+        .onReceive(NotificationCenter.default.publisher(for: .requestOpenSharedScan)) { _ in
+            guard let img = SharedScanInbox.take() else { return }
+            routeScan(img)
+        }
+        // The share extension's fallback: if it could not bring DiPo forward,
+        // the image is still waiting, and coming back to the app collects it.
+        // `take()` removes the file, so this and the URL route never both fire.
+        .onChange(of: scenePhase) { _, phase in
+            guard phase == .active, let img = SharedScanInbox.take() else { return }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { routeScan(img) }
+        }
+    }
+
+    var body: some View {
+        core
         .sheet(isPresented: $showAddSheet) {
             AddTransactionSheet(vm: vm)
                 .presentationDetents([.large])

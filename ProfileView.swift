@@ -1739,6 +1739,9 @@ extension Notification.Name {
     /// user wants — routing it through the transaction form first renders a
     /// screen nobody asked for on the way to the scanner.
     static let requestOpenScanFromShortcut = Notification.Name("requestOpenScanFromShortcut")
+    /// Posted when the share extension opens `dipo://scan-shared`. The image
+    /// itself waits in `SharedScanInbox`; MainTabView collects it.
+    static let requestOpenSharedScan       = Notification.Name("requestOpenSharedScan")
     static let requestOpenDebt           = Notification.Name("requestOpenDebt")
     static let requestOpenSavingsGoals   = Notification.Name("requestOpenSavingsGoals")
 }

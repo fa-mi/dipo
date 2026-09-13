@@ -34,6 +34,7 @@ final class LanguageManager {
     var current: Language {
         didSet {
             UserDefaults.standard.set(current.rawValue, forKey: "dipo_language")
+            Self.mirrorToAppGroup(current)
             // Cached formatters carry the OLD locale; keeping them would leave
             // dates in the previous language until the app restarted.
             DateFormatterCache.invalidate()
@@ -59,6 +60,16 @@ final class LanguageManager {
     private init() {
         let saved = UserDefaults.standard.string(forKey: "dipo_language") ?? "en"
         self.current = Language(rawValue: saved) ?? .english
+        // `didSet` does not run from init, and existing users never change the
+        // setting again — write it once per launch so extensions can read it.
+        Self.mirrorToAppGroup(current)
+    }
+
+    /// The share extension cannot see `UserDefaults.standard`; it reads the
+    /// in-app language from the App Group so its sheet speaks the same language
+    /// as the app rather than the phone's system language.
+    private static func mirrorToAppGroup(_ language: Language) {
+        UserDefaults(suiteName: "group.com.fahmiaquinas.DiPo")?.set(language.rawValue, forKey: "dipo_language")
     }
 
     // MARK: - Translation
