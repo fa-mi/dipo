@@ -2036,13 +2036,16 @@ struct BackupPreviewSheet: View {
 
 // MARK: - Back Tap walkthrough
 
-/// How to wire "pay with QRIS → double-tap the back of the phone → the expense
-/// is logged".
+/// How to wire the two Back Tap gestures.
 ///
-/// Every step here happens OUTSIDE DiPo, which is the whole reason this screen
+/// Everything here happens OUTSIDE DiPo, which is the whole reason this screen
 /// exists. Back Tap is an Accessibility setting and cannot be claimed by an
-/// app; it only offers Shortcuts. So DiPo publishes the action and the user
-/// binds it — and without a guide that chain is three apps deep and invisible.
+/// app; it only offers Shortcuts. So DiPo publishes the actions and the user
+/// binds them — and without a guide that chain is three apps deep and
+/// invisible.
+///
+/// Two gestures, two lists, kept apart because they are independent setups:
+/// someone may well want only one of them.
 struct BackTapGuideView: View {
     @Environment(\.dismiss) private var dismiss
 
@@ -2053,7 +2056,8 @@ struct BackTapGuideView: View {
         let glyph: String
     }
 
-    private var steps: [Step] {
+    /// Double tap → capture the payment screen.
+    private var screenshotSteps: [Step] {
         [
             Step(id: 1, title: loc("backtap.s1_title"), body: loc("backtap.s1_body"),
                  glyph: "plus.square.on.square"),
@@ -2068,108 +2072,46 @@ struct BackTapGuideView: View {
         ]
     }
 
+    /// Triple tap → say it out loud. Shorter because DiPo publishes this action
+    /// ready-made: there is no shortcut to assemble, only one to bind.
+    private var voiceSteps: [Step] {
+        [
+            Step(id: 1, title: loc("backtap.v1_title"), body: loc("backtap.v1_body"),
+                 glyph: "square.and.arrow.down.on.square"),
+            Step(id: 2, title: loc("backtap.v2_title"), body: loc("backtap.v2_body"),
+                 glyph: "hand.tap.fill"),
+            Step(id: 3, title: loc("backtap.v3_title"), body: loc("backtap.v3_body"),
+                 glyph: "waveform"),
+        ]
+    }
+
     var body: some View {
         NavigationStack {
             ZStack {
                 AppTheme.bg.ignoresSafeArea()
                 ScrollView(showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: 22) {
+                    VStack(alignment: .leading, spacing: 20) {
 
-                        // What the finished gesture feels like, before the setup
-                        // that earns it.
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text(loc("backtap.hero_title"))
-                                .font(.system(size: 21, weight: .bold))
-                                .foregroundStyle(AppTheme.textPrimary)
-                            Text(loc("backtap.hero_body"))
-                                .font(.system(size: 14))
-                                .foregroundStyle(AppTheme.textSecondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                        .padding(16)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
-                        .overlay(RoundedRectangle(cornerRadius: 16)
-                            .stroke(AppTheme.orange.opacity(0.25), lineWidth: 1))
+                        hero
 
-                        Text(loc("backtap.setup_heading"))
-                            .font(.system(size: 12, weight: .semibold))
+                        sectionLabel(loc("backtap.setup_heading"), tint: AppTheme.orange)
+                        stepList(screenshotSteps, tint: AppTheme.orange)
+
+                        sectionLabel(loc("backtap.voice_heading"), tint: AppTheme.accent)
+                        Text(loc("backtap.voice_intro"))
+                            .font(.system(size: 13))
                             .foregroundStyle(AppTheme.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        stepList(voiceSteps, tint: AppTheme.accent)
 
-                        VStack(spacing: 0) {
-                            ForEach(steps) { step in
-                                HStack(alignment: .top, spacing: 13) {
-                                    VStack(spacing: 0) {
-                                        ZStack {
-                                            Circle().fill(AppTheme.orange.opacity(0.14))
-                                                .frame(width: 30, height: 30)
-                                            Text("\(step.id)")
-                                                .font(.system(size: 13, weight: .bold))
-                                                .foregroundStyle(AppTheme.orange)
-                                        }
-                                        // The rail makes the order explicit —
-                                        // these steps genuinely must happen in
-                                        // sequence, so the numbering is real
-                                        // information rather than decoration.
-                                        if step.id != steps.count {
-                                            Rectangle()
-                                                .fill(AppTheme.orange.opacity(0.18))
-                                                .frame(width: 2)
-                                                .frame(maxHeight: .infinity)
-                                        }
-                                    }
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        HStack(spacing: 7) {
-                                            Image(systemName: step.glyph)
-                                                .font(.system(size: 12, weight: .semibold))
-                                                .foregroundStyle(AppTheme.orange)
-                                            Text(step.title)
-                                                .font(.system(size: 14, weight: .semibold))
-                                                .foregroundStyle(AppTheme.textPrimary)
-                                        }
-                                        Text(step.body)
-                                            .font(.system(size: 13))
-                                            .foregroundStyle(AppTheme.textSecondary)
-                                            .fixedSize(horizontal: false, vertical: true)
-                                    }
-                                    .padding(.bottom, step.id == steps.count ? 0 : 20)
-                                    Spacer(minLength: 0)
-                                }
-                                .fixedSize(horizontal: false, vertical: true)
-                            }
-                        }
-                        .padding(16)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
-
-                        VStack(alignment: .leading, spacing: 8) {
-                            Label(loc("backtap.using_heading"), systemImage: "sparkles")
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundStyle(AppTheme.accent)
-                            Text(loc("backtap.using_body"))
-                                .font(.system(size: 13))
-                                .foregroundStyle(AppTheme.textSecondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                        .padding(16)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(AppTheme.accent.opacity(0.08), in: RoundedRectangle(cornerRadius: 16))
+                        callout(loc("backtap.using_heading"), body: loc("backtap.using_body"),
+                                icon: "sparkles", tint: AppTheme.accent)
 
                         // Stated plainly rather than buried: the parser is good,
                         // not infallible, and a wrong amount saved silently is
                         // worse than one the user was asked to confirm.
-                        VStack(alignment: .leading, spacing: 8) {
-                            Label(loc("backtap.limits_heading"), systemImage: "exclamationmark.circle")
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundStyle(AppTheme.textSecondary)
-                            Text(loc("backtap.limits_body"))
-                                .font(.system(size: 13))
-                                .foregroundStyle(AppTheme.textSecondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                        .padding(16)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(AppTheme.cardMid.opacity(0.45), in: RoundedRectangle(cornerRadius: 16))
+                        callout(loc("backtap.limits_heading"), body: loc("backtap.limits_body"),
+                                icon: "exclamationmark.circle", tint: AppTheme.textSecondary)
 
                         Button {
                             HapticManager.shared.tap()
@@ -2197,5 +2139,96 @@ struct BackTapGuideView: View {
             .toolbarBackground(AppTheme.bg, for: .navigationBar)
             .doneToolbar { dismiss() }
         }
+    }
+
+    // MARK: Pieces
+
+    /// What the finished gestures feel like, before the setup that earns them.
+    private var hero: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(loc("backtap.hero_title"))
+                .font(.system(size: 21, weight: .bold))
+                .foregroundStyle(AppTheme.textPrimary)
+            Text(loc("backtap.hero_body"))
+                .font(.system(size: 14))
+                .foregroundStyle(AppTheme.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
+        .overlay(RoundedRectangle(cornerRadius: 16)
+            .stroke(AppTheme.orange.opacity(0.25), lineWidth: 1))
+    }
+
+    private func sectionLabel(_ text: String, tint: Color) -> some View {
+        HStack(spacing: 8) {
+            Circle().fill(tint).frame(width: 6, height: 6)
+            Text(text)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(AppTheme.textSecondary)
+        }
+    }
+
+    /// One numbered list with a connecting rail. The rail is real information:
+    /// these steps only work in order.
+    private func stepList(_ items: [Step], tint: Color) -> some View {
+        VStack(spacing: 0) {
+            ForEach(items) { step in
+                HStack(alignment: .top, spacing: 13) {
+                    VStack(spacing: 0) {
+                        ZStack {
+                            Circle().fill(tint.opacity(0.14))
+                                .frame(width: 30, height: 30)
+                            Text("\(step.id)")
+                                .font(.system(size: 13, weight: .bold))
+                                .foregroundStyle(tint)
+                        }
+                        if step.id != items.count {
+                            Rectangle()
+                                .fill(tint.opacity(0.18))
+                                .frame(width: 2)
+                                .frame(maxHeight: .infinity)
+                        }
+                    }
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(spacing: 7) {
+                            Image(systemName: step.glyph)
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(tint)
+                            Text(step.title)
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(AppTheme.textPrimary)
+                        }
+                        Text(step.body)
+                            .font(.system(size: 13))
+                            .foregroundStyle(AppTheme.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(.bottom, step.id == items.count ? 0 : 20)
+                    Spacer(minLength: 0)
+                }
+                .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
+    }
+
+    private func callout(_ title: String, body: String,
+                         icon: String, tint: Color) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label(title, systemImage: icon)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(tint)
+            Text(body)
+                .font(.system(size: 13))
+                .foregroundStyle(AppTheme.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(tint.opacity(0.08), in: RoundedRectangle(cornerRadius: 16))
     }
 }

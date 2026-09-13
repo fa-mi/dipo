@@ -48,6 +48,18 @@ struct AppTheme {
     /// original palette was failing here too, just quietly.
     static let redFill = Color(hex: "#FF5B5B")
     static let orange  = Color(UIColor.adaptive(dark: "#FB923C", light: "#B55304"))  // 7.37 / 4.51
+    /// Decorative glow — the voice orb and the halo under a live mic.
+    ///
+    /// Deliberately outside the contrast rules every token above obeys, and
+    /// allowed to be, because it carries no information on its own: the orb
+    /// says "I can hear you" by MOVING, and the halo by pulsing. Nothing here
+    /// is ever the only cue for anything, so it is free to be as bright as it
+    /// likes — which is the point, since a compliance-safe green rendered at
+    /// 12% opacity reads as a smudge rather than a light.
+    ///
+    /// Never use it for text, an icon, or a control's fill.
+    static let voiceGlow = Color(UIColor.adaptive(dark: "#2BFF9E", light: "#00C86E"))
+
     static let blue    = Color(UIColor.adaptive(dark: "#38BDF8", light: "#0676A8"))  // 7.79 / 4.58
     static let purple  = Color(UIColor.adaptive(dark: "#A78BFA", light: "#784CF7"))  // 6.13 / 4.54
     /// The one slot the Profile feature list had left. Purple, green, orange,

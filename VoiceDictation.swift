@@ -316,10 +316,6 @@ struct VoiceCaptureView: View {
     @State private var voice = VoiceDictation()
     @State private var notice: String? = nil
     @State private var appeared = false
-    /// Drives the ambient rotation. Kept separate from `voice.level` so the orb
-    /// keeps breathing while the room is silent — an orb frozen at rest reads
-    /// as a hung screen rather than a listening one.
-    @State private var phase: Double = 0
 
     private var isListening: Bool { voice.isListening }
 
@@ -333,13 +329,16 @@ struct VoiceCaptureView: View {
                 Text(statusText)
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(AppTheme.textSecondary)
+                    .lineLimit(1)
+                    .frame(height: 18)
+                    .id(statusText)
+                    .transition(.opacity)
+                    .animation(.easeInOut(duration: 0.18), value: statusText)
                     .padding(.top, 6)
-                    .contentTransition(.opacity)
-                    .animation(.easeInOut(duration: 0.2), value: statusText)
 
                 Spacer(minLength: 12)
 
-                VoiceOrb(level: voice.level, active: isListening, phase: phase)
+                VoiceOrb(level: voice.level, active: isListening)
                     .frame(width: 220, height: 220)
                     .opacity(appeared ? 1 : 0)
                     .scaleEffect(appeared ? 1 : 0.9)
@@ -375,9 +374,6 @@ struct VoiceCaptureView: View {
             // Start listening immediately. Reaching this screen — by gesture or
             // by tapping Record — has already said what the user wants.
             await voice.start()
-            withAnimation(.linear(duration: 8).repeatForever(autoreverses: false)) {
-                phase = 1
-            }
         }
         .onChange(of: voice.state) { _, s in
             switch s {
@@ -463,9 +459,10 @@ struct VoiceCaptureView: View {
                     ZStack {
                         if isListening {
                             Circle()
-                                .fill(AppTheme.accentFill.opacity(0.22))
-                                .frame(width: 104 + voice.level * 34,
-                                       height: 104 + voice.level * 34)
+                                .fill(AppTheme.voiceGlow.opacity(0.16))
+                                .frame(width: 108 + voice.level * 46,
+                                       height: 108 + voice.level * 46)
+                                .blur(radius: 6)
                                 .animation(.easeOut(duration: 0.12), value: voice.level)
                         }
                         Circle()
@@ -508,44 +505,107 @@ struct VoiceCaptureView: View {
     }
 }
 
-/// The listening indicator.
+/// The listening indicator — a wireframe sphere that crumples when you speak.
 ///
-/// Concentric rings whose radius is modulated by the live input level, so the
-/// shape answers the one question a dictation screen has to answer at a
-/// glance: is it hearing me? A spinner cannot answer that, and silence that
-/// looks identical to speech is the fastest way to make dictation feel broken.
+/// Depth is what sells it: every point is projected with perspective and then
+/// drawn at an opacity taken from its z, so the far side of the sphere sits
+/// behind the near side instead of tangling with it. Flat concentric rings
+/// read as a target, not an object.
+///
+/// The deformation is driven by the live input level, because that answers the
+/// one question a dictation screen must answer at a glance: is it hearing me?
+/// A spinner cannot, and silence that looks identical to speech is the fastest
+/// way to make dictation feel broken. It keeps turning while the room is quiet
+/// — a frozen orb reads as a hung screen.
+///
+/// Built with Canvas rather than a package: this is perspective projection and
+/// a sine, and a third-party dependency for it would be one more thing to
+/// break on an Xcode update.
 private struct VoiceOrb: View {
     let level: Double
     let active: Bool
-    let phase: Double
+
+    /// Rings of latitude and longitude. Enough to read as a surface, few
+    /// enough to stay cheap at 60fps.
+    private let lats = 9
+    private let longs = 14
+    private let seg = 44
 
     var body: some View {
-        Canvas { ctx, size in
-            let c = CGPoint(x: size.width / 2, y: size.height / 2)
-            let base = min(size.width, size.height) / 2 - 10
-            let rings = 7
-            let boost = active ? level : 0
+        // Drives itself: one continuous clock instead of a repeating
+        // `withAnimation`, which stutters whenever another animation on the
+        // screen retimes it.
+        TimelineView(.animation) { timeline in
+            let t = timeline.date.timeIntervalSinceReferenceDate
+            Canvas { ctx, size in
+                let c = CGPoint(x: size.width / 2, y: size.height / 2)
+                let R = min(size.width, size.height) / 2 - 10
+                let yaw = t * 0.45
+                let amp = active ? min(level * 1.9, 1.0) : 0
+                // Even at rest the surface breathes, so the sphere never looks
+                // like a still image.
+                let idle = 0.055
 
-            for i in 0..<rings {
-                let t = Double(i) / Double(rings - 1)
-                // Outer rings react more, so the orb blooms outward on a loud
-                // syllable instead of pulsing as one solid blob.
-                let r = base * (0.42 + 0.58 * t) * (1 + boost * 0.22 * t)
-                let wobble = sin(phase * 2 * .pi + Double(i) * 0.8) * (2 + boost * 7)
-                var path = Path()
-                let steps = 72
-                for s in 0...steps {
-                    let a = Double(s) / Double(steps) * 2 * .pi
-                    let rr = r + wobble * sin(a * 3 + Double(i))
-                    let p = CGPoint(x: c.x + cos(a) * rr, y: c.y + sin(a) * rr)
-                    if s == 0 { path.move(to: p) } else { path.addLine(to: p) }
+                /// Sphere point → screen, with its depth.
+                func project(_ theta: Double, _ phi: Double) -> (CGPoint, Double) {
+                    // Two travelling waves rather than one: a single sine makes
+                    // the sphere pulse as one blob, which reads as a heartbeat
+                    // instead of a voice.
+                    let wob = sin(phi * 3.0 + t * 1.7) * cos(theta * 2.0 - t * 1.1)
+                           + 0.5 * sin(theta * 4.0 + t * 2.3)
+                    let r = R * (0.84 + (idle + amp * 0.20) * wob)
+
+                    let x0 = r * sin(phi) * cos(theta)
+                    let y0 = r * cos(phi)
+                    let z0 = r * sin(phi) * sin(theta)
+
+                    let x1 = x0 * cos(yaw) - z0 * sin(yaw)
+                    let z1 = x0 * sin(yaw) + z0 * cos(yaw)
+
+                    // A slight tilt shows the poles, which is what stops it
+                    // reading as a flat circle.
+                    let tilt = 0.42
+                    let y2 = y0 * cos(tilt) - z1 * sin(tilt)
+                    let z2 = y0 * sin(tilt) + z1 * cos(tilt)
+
+                    let d = R * 3.4
+                    let k = d / (d + z2)
+                    return (CGPoint(x: c.x + x1 * k, y: c.y + y2 * k), z2 / R)
                 }
-                ctx.stroke(path,
-                           with: .color(AppTheme.accentFill.opacity(active ? 0.16 + 0.5 * t : 0.10 + 0.18 * t)),
-                           lineWidth: 1.2)
+
+                /// Near lines are bright and solid, far lines fade — this is
+                /// the whole illusion.
+                func draw(_ pts: [(CGPoint, Double)]) {
+                    guard pts.count > 1 else { return }
+                    for i in 0..<(pts.count - 1) {
+                        let (p1, z1) = pts[i]
+                        let (p2, z2) = pts[i + 1]
+                        let depth = (z1 + z2) / 2                 // -1 (near) … 1 (far)
+                        let front = (1 - depth) / 2               // 1 near, 0 far
+                        let o = 0.07 + front * (active ? 0.62 : 0.34)
+                        var seg = Path()
+                        seg.move(to: p1)
+                        seg.addLine(to: p2)
+                        ctx.stroke(seg,
+                                   with: .color(AppTheme.voiceGlow.opacity(o)),
+                                   lineWidth: 0.55 + front * 1.15)
+                    }
+                }
+
+                for i in 1..<lats {
+                    let phi = Double(i) / Double(lats) * .pi
+                    draw((0...seg).map { s in
+                        project(Double(s) / Double(seg) * 2 * .pi, phi)
+                    })
+                }
+                for j in 0..<longs {
+                    let theta = Double(j) / Double(longs) * 2 * .pi
+                    draw((0...seg).map { s in
+                        project(theta, Double(s) / Double(seg) * .pi)
+                    })
+                }
             }
         }
-        .drawingGroup()
     }
 }
 
