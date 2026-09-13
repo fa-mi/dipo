@@ -270,7 +270,7 @@ struct WebSyncView: View {
             }
             .foregroundStyle(AppTheme.bg)
             .frame(maxWidth: .infinity).padding(.vertical, 16)
-            .background(AppTheme.accent, in: RoundedRectangle(cornerRadius: 15))
+            .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: 15))
             .shadow(color: AppTheme.accent.opacity(0.28), radius: 12, y: 5)
         }
         .buttonStyle(ScaleButtonStyle())
@@ -387,7 +387,7 @@ private struct SyncProgressOverlay: View {
                         .foregroundStyle(AppTheme.accent)
                         .transition(.scale.combined(with: .opacity))
                 } else if active {
-                    Circle().fill(AppTheme.accent).frame(width: 7, height: 7)
+                    Circle().fill(AppTheme.accentFill).frame(width: 7, height: 7)
                         .scaleEffect(breathe ? 1.25 : 0.8)
                 }
             }

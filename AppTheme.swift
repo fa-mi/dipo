@@ -24,8 +24,12 @@ struct AppTheme {
     // lightness until the ratio clears 4.5:1, so the app reads as the same
     // product in both themes rather than gaining a second identity.
 
-    static let accent  = Color(UIColor.adaptive(dark: "#1DB87A", light: "#00814B"))  // 6.51 / 4.51
-    static let green   = Color(UIColor.adaptive(dark: "#1DB87A", light: "#00814B"))  // 6.51 / 4.51
+    /// Green as TEXT or an icon sitting on the page ground. Light mode has to
+    /// be dark enough to clear 4.5:1 there, which is why it cannot be neon.
+    /// For the vivid one, see `accentFill` — these are two different jobs and
+    /// they were fighting over one value.
+    static let accent  = Color(UIColor.adaptive(dark: "#1DB87A", light: "#008049"))  // 6.51 / 4.54
+    static let green   = Color(UIColor.adaptive(dark: "#1DB87A", light: "#008049"))  // 6.51 / 4.54
     static let red     = Color(UIColor.adaptive(dark: "#FF5B5B", light: "#DC0000"))  // 5.48 / 4.70
     static let orange  = Color(UIColor.adaptive(dark: "#FB923C", light: "#B55304"))  // 7.37 / 4.51
     static let blue    = Color(UIColor.adaptive(dark: "#38BDF8", light: "#0676A8"))  // 7.79 / 4.58
@@ -35,7 +39,36 @@ struct AppTheme {
     /// told apart from its neighbours has nowhere else to go.
     static let teal    = Color(UIColor.adaptive(dark: "#06B6D4", light: "#047A8F"))  // 6.87 / 4.52
 
-    /// Text and icons sitting ON a solid `accent` / `red` / `green` / `orange`
+    /// Green as a solid FILL — buttons, bars, chips — where the contrast that
+    /// matters is the text sitting ON it (`onSolid`, 5.52:1 here), not the
+    /// fill against the page. That frees it to stay vivid: it only owes the
+    /// page the 3:1 a UI component needs to have a discernible boundary, and
+    /// it clears that at 3.04:1.
+    ///
+    /// Light mode looked washed out because one token was doing both jobs, so
+    /// the darkness that text legibility demanded was dragging every button
+    /// and progress bar down with it.
+    static let accentFill = Color(UIColor.adaptive(dark: "#1DB87A", light: "#00AB64"))
+
+    /// The track behind an `accentFill` progress bar.
+    ///
+    /// Light mode runs DARK here on purpose. `accentFill` sits at mid
+    /// luminance, so a pale track leaves it muddy — against the old
+    /// `cardMid` (#E4EAE8) the bright green managed only 2.46:1, and going
+    /// pale the other way tops out at 3.00:1 even at pure white. A dark track
+    /// gives 3.18:1 and is what makes the fill read as lit rather than
+    /// printed. Dark mode already had the separation and is unchanged.
+    static let accentTrack = Color(UIColor.adaptive(dark: "#2A3330", light: "#404744"))
+
+    /// Text and icons sitting on an `accentFill`. Unlike `onSolid` this does
+    /// NOT invert with the theme: `accentFill` is a bright green in BOTH
+    /// modes, so the text on it is dark in both (7.22:1 on the dark-mode fill,
+    /// 5.52:1 on the light one). Using `onSolid` here would put white on light
+    /// green — 3.35:1, which is exactly the failure this token set exists to
+    /// prevent.
+    static let onAccentFill = Color(hex: "#0D1514")
+
+    /// Text and icons sitting ON a solid `red` / `orange`
     /// fill — which is the opposite problem from text on the page ground.
     ///
     /// `.white` was used for this everywhere and never worked: white on the

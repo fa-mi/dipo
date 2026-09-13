@@ -28,6 +28,34 @@ struct CreditCardLiabilityRow: View {
     /// be deleted from anywhere in the app.
     var onDelete: (() -> Void)? = nil
 
+    /// `prominent` marks the one that adds debt — the commoner action, and the
+    /// one worth reaching for first.
+    @ViewBuilder
+    private func cardAction(_ title: String, icon: String,
+                            prominent: Bool, action: @escaping () -> Void) -> some View {
+        Button {
+            HapticManager.shared.tap(); action()
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: icon).font(.system(size: 12, weight: .semibold))
+                Text(title).font(.system(size: 12, weight: .semibold))
+                    .lineLimit(1).minimumScaleFactor(0.8)
+            }
+            .foregroundStyle(prominent ? AppTheme.onAccentFill : AppTheme.purple)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 10)
+            .background {
+                if prominent {
+                    Capsule().fill(AppTheme.accentFill)
+                } else {
+                    Capsule().fill(AppTheme.purple.opacity(0.12))
+                        .overlay(Capsule().stroke(AppTheme.purple.opacity(0.3), lineWidth: 1))
+                }
+            }
+        }
+        .buttonStyle(ScaleButtonStyle())
+    }
+
     private var owed: Double { card.totalOwed(installments) }
     private var util: Double { card.utilisation(installments) }
     private var owedFmt: String {
@@ -68,16 +96,6 @@ struct CreditCardLiabilityRow: View {
                 }
                 Spacer()
                 Menu {
-                    if let onLogSpend {
-                        Button { HapticManager.shared.tap(); onLogSpend() } label: {
-                            Label(loc("cc.log_spend"), systemImage: "cart.badge.plus")
-                        }
-                    }
-                    if let onPay {
-                        Button { HapticManager.shared.tap(); onPay() } label: {
-                            Label(loc("cc.pay_bill"), systemImage: "arrow.left.arrow.right")
-                        }
-                    }
                     Button { HapticManager.shared.tap(); onEdit() } label: {
                         Label(loc("common.edit"), systemImage: "pencil")
                     }
@@ -112,6 +130,20 @@ struct CreditCardLiabilityRow: View {
             CreditLimitBar(used: owed,
                            limit: card.creditLimit,
                            currency: card.resolvedCurrency)
+
+            if onLogSpend != nil || onPay != nil {
+                HStack(spacing: 9) {
+                    if let onLogSpend {
+                        cardAction(loc("cc.log_spend"), icon: "cart.badge.plus",
+                                   prominent: true, action: onLogSpend)
+                    }
+                    if let onPay {
+                        cardAction(loc("cc.pay_bill"), icon: "arrow.left.arrow.right",
+                                   prominent: false, action: onPay)
+                    }
+                }
+                .padding(.top, 2)
+            }
         }
         .padding(14)
         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 18))

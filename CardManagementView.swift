@@ -247,7 +247,7 @@ struct CardListView: View {
                             } label: {
                                 ZStack {
                                     Circle()
-                                        .fill(AppTheme.accent)
+                                        .fill(AppTheme.accentFill)
                                         .frame(width: 42, height: 42)
                                         .shadow(color: AppTheme.accent.opacity(0.4), radius: 10, y: 4)
                                     Image(systemName: "plus")
@@ -357,7 +357,7 @@ struct CardListView: View {
                             .foregroundStyle(AppTheme.bg)
                             .padding(.horizontal, 32)
                             .padding(.vertical, 14)
-                            .background(AppTheme.accent, in: Capsule())
+                            .background(AppTheme.accentFill, in: Capsule())
                     }
                     .buttonStyle(ScaleButtonStyle())
                 }
@@ -565,7 +565,7 @@ struct CardFormSheet: View {
                     }
                     if selected {
                         Image(systemName: "checkmark.circle.fill").font(.system(size: 13))
-                            .foregroundStyle(AppTheme.onSolid).background(AppTheme.accent, in: Circle())
+                            .foregroundStyle(AppTheme.onAccentFill).background(AppTheme.accentFill, in: Circle())
                             .offset(x: 20, y: -13)
                     }
                 }

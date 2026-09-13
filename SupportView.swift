@@ -254,7 +254,7 @@ struct ContactAdminSheet: View {
                         Spacer()
                         if ticket.hasUnreadReply {
                             HStack(spacing: 4) {
-                                Circle().fill(AppTheme.accent).frame(width: 6, height: 6)
+                                Circle().fill(AppTheme.accentFill).frame(width: 6, height: 6)
                                 Text(loc("support.new_reply"))
                                     .font(.system(size: 10, weight: .bold))
                                     .foregroundStyle(AppTheme.accent)
@@ -578,9 +578,9 @@ struct NewTicketForm: View {
                     .multilineTextAlignment(.center).padding(.horizontal, 32)
             }
             Button { onDone() } label: {
-                Text(loc("common.done")).font(.system(size: 16, weight: .semibold)).foregroundStyle(AppTheme.onSolid)
+                Text(loc("common.done")).font(.system(size: 16, weight: .semibold)).foregroundStyle(AppTheme.onAccentFill)
                     .frame(maxWidth: .infinity).padding(.vertical, 16)
-                    .background(AppTheme.accent, in: RoundedRectangle(cornerRadius: 18))
+                    .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: 18))
             }
             .buttonStyle(ScaleButtonStyle()).padding(.horizontal, 32)
             Spacer()
@@ -954,7 +954,7 @@ struct TicketThreadView: View {
                     Text(loc("support.staff")).font(.system(size: 11, weight: .semibold)).foregroundStyle(AppTheme.accent)
                     Text(reply.createdAt.displayDateTimeShort)
                         .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
-                    if !reply.isReadByUser { Circle().fill(AppTheme.accent).frame(width: 6, height: 6) }
+                    if !reply.isReadByUser { Circle().fill(AppTheme.accentFill).frame(width: 6, height: 6) }
                 }
                 Text(reply.message).font(.system(size: 14)).foregroundStyle(AppTheme.textPrimary).lineSpacing(4)
                     .padding(14)
@@ -973,9 +973,9 @@ struct TicketThreadView: View {
             VStack(alignment: .trailing, spacing: 4) {
                 Text(reply.createdAt.formatted(date: .abbreviated, time: .shortened))
                     .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
-                Text(reply.message).font(.system(size: 14)).foregroundStyle(AppTheme.onSolid).lineSpacing(4)
+                Text(reply.message).font(.system(size: 14)).foregroundStyle(AppTheme.onAccentFill).lineSpacing(4)
                     .padding(14)
-                    .background(AppTheme.accent, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
             }
         }
         .padding(.horizontal, 22)

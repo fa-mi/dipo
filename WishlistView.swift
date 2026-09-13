@@ -182,7 +182,7 @@ struct WishlistView: View {
                         } label: {
                             ZStack {
                                 Circle()
-                                    .fill(AppTheme.accent)
+                                    .fill(AppTheme.accentFill)
                                     .frame(width: 42, height: 42)
                                     .shadow(color: AppTheme.accent.opacity(0.4), radius: 10, y: 4)
                                 Image(systemName: "plus")
@@ -692,7 +692,7 @@ struct GoalCard: View {
                     .foregroundStyle(AppTheme.bg)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
-                    .background(AppTheme.accent, in: RoundedRectangle(cornerRadius: 12))
+                    .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: 12))
                     .shadow(color: AppTheme.accent.opacity(0.3), radius: 8, y: 4)
                 }
                 .buttonStyle(ScaleButtonStyle())
@@ -955,7 +955,7 @@ struct GoalCelebration: View {
                         .font(.system(size: 16, weight: .bold))
                         .foregroundStyle(AppTheme.bg)
                         .padding(.horizontal, 48).padding(.vertical, 16)
-                        .background(AppTheme.accent, in: Capsule())
+                        .background(AppTheme.accentFill, in: Capsule())
                         .shadow(color: AppTheme.accent.opacity(0.5), radius: 16, y: 8)
                 }
                 .buttonStyle(ScaleButtonStyle())
@@ -1108,7 +1108,7 @@ struct GoalsEmptyState: View {
                 }
                 .foregroundStyle(AppTheme.bg)
                 .padding(.horizontal, 32).padding(.vertical, 14)
-                .background(AppTheme.accent, in: Capsule())
+                .background(AppTheme.accentFill, in: Capsule())
                 .shadow(color: AppTheme.accent.opacity(0.4), radius: 12, y: 6)
             }.buttonStyle(ScaleButtonStyle())
         }.padding(.horizontal, 40)
@@ -1501,7 +1501,7 @@ struct GoalDetailView: View {
                         VStack(spacing: 0) {
                             HStack {
                                 HStack(spacing: 6) {
-                                    Circle().fill(AppTheme.accent).frame(width: 8, height: 8)
+                                    Circle().fill(AppTheme.accentFill).frame(width: 8, height: 8)
                                     Text(loc("savings.saved")).font(.system(size: 13, weight: .medium)).foregroundStyle(AppTheme.textSecondary)
                                 }
                                 Spacer()
@@ -1654,7 +1654,7 @@ struct GoalDetailView: View {
                                 Text(loc("savings.add")).font(.system(size: 15, weight: .semibold))
                             }
                             .foregroundStyle(AppTheme.bg).frame(maxWidth: .infinity).padding(.vertical, 16)
-                            .background(AppTheme.accent, in: Capsule())
+                            .background(AppTheme.accentFill, in: Capsule())
                             .shadow(color: AppTheme.accent.opacity(0.35), radius: 10, y: 5)
                         }
                         .buttonStyle(ScaleButtonStyle())

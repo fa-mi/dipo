@@ -353,7 +353,7 @@ struct SalaryEmptyState: View {
                 .foregroundStyle(AppTheme.bg)
                 .padding(.horizontal, 32)
                 .padding(.vertical, 14)
-                .background(AppTheme.accent, in: Capsule())
+                .background(AppTheme.accentFill, in: Capsule())
                 .shadow(color: AppTheme.accent.opacity(0.35), radius: 12, y: 6)
             }
             .buttonStyle(ScaleButtonStyle())
@@ -505,7 +505,7 @@ struct SalaryCard: View {
                             .foregroundStyle(AppTheme.bg)
                             .padding(.horizontal, 10)
                             .padding(.vertical, 3)
-                            .background(AppTheme.accent, in: Capsule())
+                            .background(AppTheme.accentFill, in: Capsule())
                     }
                     Spacer()
                 }
@@ -1159,7 +1159,7 @@ struct SalaryDetailView: View {
                             Spacer()
                             if creditedThisMonth {
                                 Text(loc("salary.paid")).font(.system(size: 11, weight: .bold)).foregroundStyle(AppTheme.bg)
-                                    .padding(.horizontal, 10).padding(.vertical, 3).background(AppTheme.accent, in: Capsule())
+                                    .padding(.horizontal, 10).padding(.vertical, 3).background(AppTheme.accentFill, in: Capsule())
                             }
                         }
                         .padding(12)

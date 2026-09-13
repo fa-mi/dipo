@@ -325,8 +325,8 @@ struct ReceivablesView: View {
             if !r.isSettled {
                 GeometryReader { geo in
                     ZStack(alignment: .leading) {
-                        Capsule().fill(AppTheme.cardMid).frame(height: 5)
-                        Capsule().fill(AppTheme.accent).frame(width: geo.size.width * pct, height: 5)
+                        Capsule().fill(AppTheme.accentTrack).frame(height: 5)
+                        Capsule().fill(AppTheme.accentFill).frame(width: geo.size.width * pct, height: 5)
                     }
                 }
                 .frame(height: 5)
@@ -467,9 +467,9 @@ struct ReceivableFormSheet: View {
                             save()
                         } label: {
                             Text(loc("action.save")).font(.system(size: 16, weight: .bold))
-                                .foregroundStyle(AppTheme.onSolid)
+                                .foregroundStyle(AppTheme.onAccentFill)
                                 .frame(maxWidth: .infinity).padding(.vertical, 16)
-                                .background(AppTheme.accent, in: RoundedRectangle(cornerRadius: 16))
+                                .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: 16))
                         }
                         .buttonStyle(ScaleButtonStyle())
                         .padding(.horizontal, 22)

@@ -59,6 +59,17 @@ struct ReceiptScanResult: Equatable {
     /// Saved to TxRecord.notes when present.
     var notes: String
 
+    /// The bank or wallet that moved the money — "BCA", "Mandiri", "GoPay".
+    ///
+    /// Read from the slip BEFORE the merchant, for two reasons. It is the
+    /// thing most likely to be mistaken for the shop (it is often a repeated
+    /// watermark), so knowing it lets the merchant pass exclude this exact
+    /// string instead of guessing from a fixed list of bank names. And it is
+    /// the only clue on the receipt about which of the user's cards paid.
+    ///
+    /// Empty when the receipt is a plain till slip with no payment rails on it.
+    var issuer: String = ""
+
     /// Convenience: human-readable confidence label.
     var confidenceLabel: String {
         switch confidence {
@@ -97,6 +108,11 @@ enum ReceiptScanError: Error, LocalizedError {
     case aiServiceUnavailable(underlying: String)
     /// Royal feature gate — user is not on Royal plan.
     case premiumRequired
+    /// Text was read fine, but nothing about it says "payment". Back Tap fires
+    /// on whatever happens to be on screen, so this catches a home screen or an
+    /// app UI being handed to the parser — which otherwise produced a
+    /// confident-looking transaction assembled out of unrelated digits.
+    case notAReceipt
     /// User has run out of monthly AI credits (worker returned HTTP 402).
     case outOfCredits
     /// Generic catch-all with a debug message.
@@ -111,6 +127,7 @@ enum ReceiptScanError: Error, LocalizedError {
         case .aiServiceUnavailable:  return loc("receipt.error.ai_unavailable")
         case .premiumRequired:       return loc("receipt.error.premium")
         case .outOfCredits:          return loc("receipt.error.out_of_credits")
+        case .notAReceipt:           return loc("receipt.error.not_receipt")
         case .unknown(let msg):      return msg
         }
     }
@@ -118,7 +135,7 @@ enum ReceiptScanError: Error, LocalizedError {
     /// Whether the user should be invited to retake the photo.
     var isRetryable: Bool {
         switch self {
-        case .noTextDetected, .imageQualityTooLow, .aiServiceUnavailable:
+        case .noTextDetected, .imageQualityTooLow, .aiServiceUnavailable, .notAReceipt:
             return true
         default:
             return false

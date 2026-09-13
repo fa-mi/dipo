@@ -109,6 +109,13 @@ final class ReceiptScannerEngine {
             }
         }
 
+        // Checked before the amount test below, because the dangerous case is
+        // not a MISSING amount — it is a confident one assembled out of digits
+        // that were never a price. Back Tap captures whatever is on screen.
+        guard ReceiptParser.looksLikeReceipt(visionResult.rawText) else {
+            throw ReceiptScanError.notAReceipt
+        }
+
         // Only fail with "no amount found" if both amount=0 AND we have no
         // merchant identified. A legitimate Rp 0 receipt will have a merchant
         // name and the user can confirm in the preview.
