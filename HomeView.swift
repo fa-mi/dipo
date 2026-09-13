@@ -52,6 +52,13 @@ struct HomeView: View {
     /// individually reasonable; nothing ranked them, so everything shouted and
     /// nothing was heard. Now only the most urgent gets a card and the rest
     /// collapse behind one quiet row.
+    /// Income and expense for the selected card this month, derived ONCE and
+    /// held. Computing them inside the card's body would re-walk that card's
+    /// whole history on every body pass — the exact pattern that made the
+    /// transaction list stall. Refreshed from the same places the insight
+    /// cache is refreshed.
+    @State private var monthIncome: Double = 0
+    @State private var monthExpense: Double = 0
     @State private var showAllAttention = false
     @State private var showSmartBudget = false
     @State private var showSalarySheet   = false
@@ -260,6 +267,27 @@ struct HomeView: View {
     /// Runs the three Smart-Budget analyses ONCE, off the render path, storing
     /// the results in @State. Called on appear and whenever the inputs change
     /// (selected card, tx count, budget on/off, ratios) — never per render.
+    /// One linear pass over the selected card's transactions, converted into
+    /// that card's currency — the same conversion the card face and the list
+    /// use, so the three figures on this screen cannot contradict each other.
+    private func recomputeMonthFlow() {
+        guard let card = selectedCard else { monthIncome = 0; monthExpense = 0; return }
+        let cal = Calendar.current
+        let monthStart = cal.safeDate(from: cal.dateComponents([.year, .month], from: Date()))
+        let cur = card.resolvedCurrency
+        var income = 0.0
+        var expense = 0.0
+        for tx in card.transactions where tx.date >= monthStart && tx.txSubtype != .transfer {
+            // Transfers are money moving between the user's own accounts. Counting
+            // them would inflate both sides and make the month look twice as busy
+            // as it was.
+            let v = CurrencyManager.shared.convert(tx.amount, from: tx.currency, to: cur)
+            if v >= 0 { income += v } else { expense -= v }
+        }
+        monthIncome = income
+        monthExpense = expense
+    }
+
     private func recomputeHomeInsights() {
         guard SmartBudgetManager.shared.hasActiveBudget else {
             cachedInsights = []; cachedAnomalies = []; cachedRecurring = []
@@ -412,6 +440,20 @@ struct HomeView: View {
                             .scaleEffect(contentAppeared ? 1 : 0.94)
                             .animation(AppMotion.appear, value: contentAppeared)
 
+                        // What came in and what went out this month. The card
+                        // above says where the money stands; this says which
+                        // direction it has been moving to get there.
+                        MonthFlowCard(income: monthIncome,
+                                      expense: monthExpense,
+                                      currency: selectedCard?.resolvedCurrency
+                                                ?? CurrencyManager.shared.preferredCurrency,
+                                      isHidden: selectedCard?.isHidden ?? false)
+                            .padding(.horizontal, 22)
+                            .padding(.top, 14)
+                            .opacity(contentAppeared ? 1 : 0)
+                            .offset(y: contentAppeared ? 0 : 18)
+                            .animation(AppMotion.appear, value: contentAppeared)
+
                         // Net Worth — cash minus liabilities. Only shown when the
                         // user actually has liabilities (credit cards / debts),
                         // otherwise it's just the cash total again.
@@ -467,7 +509,12 @@ struct HomeView: View {
                             onOpenSearch: { HapticManager.shared.tap(); showSearch = true }
                         )
                         .id(vm.selectedCardIndex)
-                        .padding(.top, 28)
+                        // The list reads as one surface now instead of floating
+                        // loose on the page — it is a single thing ("what you
+                        // spent") and its edges should say so.
+                        .padding(16)
+                        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 22))
+                        .padding(.top, 24)
                         .padding(.horizontal, 22)
                                                 .opacity(contentAppeared ? 1 : 0)
                         .offset(y: contentAppeared ? 0 : 24)
@@ -488,10 +535,16 @@ struct HomeView: View {
         .onChange(of: vm.selectedCardIndex) { _, _ in
             withAnimation(.spring(response: 0.3)) { categoryFilter = nil }
             recomputeHomeInsights()
+            recomputeMonthFlow()
         }
         // Recompute memoized insights only when their inputs actually change —
         // not on every render. Keeps Home smooth as transactions pile up.
-        .onChange(of: totalTxCount)            { _, _ in recomputeHomeInsights() }
+        .onChange(of: totalTxCount)            { _, _ in recomputeHomeInsights(); recomputeMonthFlow() }
+        // Editing an existing amount changes no COUNT, so the tx-count trigger
+        // above misses it — the card face would move while income/expense sat
+        // on a stale figure. The balance is already computed each body pass, so
+        // watching it costs nothing and catches every edit that moves money.
+        .onChange(of: selectedCardBalance)     { _, _ in recomputeMonthFlow() }
         .onChange(of: budgetManager.isEnabled) { _, _ in recomputeHomeInsights() }
         .onChange(of: budgetManager.dailyRatio)     { _, _ in recomputeHomeInsights() }
         .onChange(of: budgetManager.lifestyleRatio) { _, _ in recomputeHomeInsights() }
@@ -511,6 +564,7 @@ struct HomeView: View {
                 vm.selectedCardIndex = idx
             }
             recomputeHomeInsights()
+            recomputeMonthFlow()
         }
         // A main card chosen in Wallet moves Home with it, rather than leaving
         // the two disagreeing until the next launch.
@@ -1365,44 +1419,67 @@ struct HomeHeader: View {
     @Binding var showNotifications: Bool
     private var notifMgr: NotificationManager { NotificationManager.shared }
 
-    private var profileImage: UIImage? {
-        guard let data = UserDefaults.standard.data(forKey: "profile_photo") else { return nil }
-        return UIImage(data: data)
-    }
+    /// Decoded once and held — not re-decoded on every body pass.
+    ///
+    /// This was a computed property that pulled the JPEG out of UserDefaults and
+    /// ran `UIImage(data:)` *every* time Home re-rendered: every transaction
+    /// added, every card swipe, every filter tap. The avatar changes roughly
+    /// never, so that work was pure cost on the one screen that must stay smooth.
+    @State private var avatar: UIImage? = nil
+    @State private var name: String = ""
 
     var body: some View {
         HStack(spacing: 12) {
-            ZStack {
-                Circle()
-                    .fill(LinearGradient(colors: [AppTheme.cardMid, AppTheme.cardDark],
-                                        startPoint: .topLeading, endPoint: .bottomTrailing))
-                    .frame(width: 46, height: 46)
-                    .overlay(Circle().stroke(AppTheme.accent.opacity(0.25), lineWidth: 1))
-                if let img = profileImage {
-                    Image(uiImage: img)
-                        .resizable()
-                        .scaledToFill()
-                        .frame(width: 46, height: 46)
-                        .clipShape(Circle())
-                } else {
-                    Image("DiPoMascot")
-                        .resizable()
-                        .scaledToFill()
-                        .frame(width: 50, height: 50)
-                        .clipShape(Circle())
-//                    DiPoLogo(size: 46, showBackground: true)
-//                        .clipShape(Circle())
+            // Face and name are ONE control, not a decoration beside a label.
+            // The name earns its line back by being the title of a button that
+            // opens the place where you change the name.
+            Button {
+                HapticManager.shared.tap()
+                vm.selectTab(.profile)
+            } label: {
+                HStack(spacing: 12) {
+                    ZStack {
+                        Circle()
+                            .fill(LinearGradient(colors: [AppTheme.cardMid, AppTheme.cardDark],
+                                                startPoint: .topLeading, endPoint: .bottomTrailing))
+                            .frame(width: 46, height: 46)
+                            .overlay(Circle().stroke(AppTheme.accent.opacity(0.25), lineWidth: 1))
+                        if let avatar {
+                            Image(uiImage: avatar)
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: 46, height: 46)
+                                .clipShape(Circle())
+                        } else {
+                            Image("DiPoMascot")
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: 50, height: 50)
+                                .clipShape(Circle())
+                        }
+                    }
+                    .shadow(color: AppTheme.accent.opacity(0.2), radius: 8)
+
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(loc("home.greeting") + ",")
+                            .font(.system(size: 12))
+                            .foregroundStyle(AppTheme.textSecondary)
+                        HStack(spacing: 4) {
+                            Text(name)
+                                .font(.system(size: 16, weight: .bold))
+                                .foregroundStyle(AppTheme.textPrimary)
+                                .lineLimit(1)
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundStyle(AppTheme.textSecondary)
+                        }
+                    }
                 }
             }
-            .shadow(color: AppTheme.accent.opacity(0.2), radius: 8)
+            .buttonStyle(ScaleButtonStyle())
 
-            // Name removed: the avatar identifies the account already, and the
-            // line it occupied was competing with the attention slot below.
-            // It still lives on the profile sheet, where identity is the point.
-            Text(loc("home.greeting"))
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(AppTheme.textPrimary)
-            Spacer()
+            Spacer(minLength: 8)
+
             HStack(spacing: 14) {
                 Button { HapticManager.shared.tap(); showSearch = true } label: {
                     ZStack {
@@ -1433,9 +1510,24 @@ struct HomeHeader: View {
                 .buttonStyle(ScaleButtonStyle())
             }
         }
+        .onAppear(perform: loadIdentity)
+        // Every tab stays mounted, so `onAppear` fires once per launch. Editing
+        // the name or photo over on Profile has to say so explicitly, or Home
+        // would keep greeting the user by their old name until the next launch.
+        .onReceive(NotificationCenter.default.publisher(for: .profilePhotoDidChange)) { _ in
+            loadIdentity()
+        }
+    }
+
+    private func loadIdentity() {
+        name = Keychain.load(key: "user_name") ?? "User"
+        if let data = UserDefaults.standard.data(forKey: "profile_photo") {
+            avatar = UIImage(data: data)
+        } else {
+            avatar = nil
+        }
     }
 }
-
 
 // MARK: - Card Carousel
 
@@ -1533,18 +1625,30 @@ struct BankCardView: View {
             }
             .clipShape(RoundedRectangle(cornerRadius: 22))
 
-            SparklineView().frame(width: 100, height: 28).offset(x: 18, y: 72).opacity(0.45)
+            // Sits in the gap the reordered face opened between the balance
+            // and the identity line — at y: 72 it now ran straight through the
+            // balance digits.
+            SparklineView().frame(width: 100, height: 28).offset(x: 18, y: 98).opacity(0.45)
 
+            // Mockup order, and the right order: the balance is the reason
+            // anyone looks at this card, so it sits at the top where the eye
+            // lands. Identity (whose card, which number, when it expires) is
+            // what you check second, so it moves to the bottom.
             VStack(alignment: .leading, spacing: 0) {
-                HStack {
-                    if card.isDigitalWallet {
-                        Image(systemName: "apps.iphone")
-                            .font(.system(size: 16))
-                            .foregroundStyle(.white.opacity(0.6))
-                    } else {
-                        Image(systemName: "wave.3.right")
-                            .font(.system(size: 18))
-                            .foregroundStyle(.white.opacity(0.6))
+                HStack(alignment: .top) {
+                    HStack(spacing: 8) {
+                        Text(card.isCreditCard ? loc("cc.owed") : loc("home.balance_total"))
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.75))
+                        Button {
+                            HapticManager.shared.tap()
+                            card.isHidden.toggle()
+                        } label: {
+                            Image(systemName: card.isHidden ? "eye.slash" : "eye")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(.white.opacity(0.7))
+                        }
+                        .buttonStyle(ScaleButtonStyle())
                     }
                     Spacer()
                     if card.isDigitalWallet, let wp = WalletProvider(rawValue: card.walletProvider) {
@@ -1560,79 +1664,62 @@ struct BankCardView: View {
                         CardNetworkLogo(network: network)
                     }
                 }
-                Spacer()
-                Text(card.holderName).font(.system(size: 13, weight: .medium)).foregroundStyle(.white)
-                // Phone or card number — inline eye toggle on the right
-                HStack(spacing: 6) {
-                    if card.isDigitalWallet {
-                        Text(card.displayPhone)
-                            .font(.system(size: 11))
-                            .foregroundStyle(.white.opacity(0.65))
+
+                // Hidden → static dots. Visible → CountUpText that rolls the
+                // number up on appear and re-counts whenever it changes.
+                Group {
+                    if card.isHidden {
+                        Text("••••••")
                     } else {
-                        Text(card.displayNumber)
+                        CountUpText(value: animatedBalance, currency: cardCurrency)
+                    }
+                }
+                .font(.system(size: 30, weight: .bold))
+                .foregroundStyle(totalBalance < 0 ? AppTheme.red : .white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+                .padding(.top, 8)
+                .onAppear {
+                    withAnimation(.easeOut(duration: 0.9)) { animatedBalance = totalBalance }
+                }
+                .onChange(of: totalBalance) { _, newValue in
+                    withAnimation(.easeOut(duration: 0.55)) { animatedBalance = newValue }
+                }
+
+                if totalBalance < 0 && !card.isHidden {
+                    Text(loc("home.negative"))
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(AppTheme.red.opacity(0.9))
+                        .padding(.top, 2)
+                }
+
+                Spacer(minLength: 8)
+
+                HStack(alignment: .bottom) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(card.holderName)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.92))
+                            .lineLimit(1)
+                        // Currency joins the number. On a single-currency
+                        // wallet it is redundant; the moment a second currency
+                        // exists it is the difference between two cards whose
+                        // digits look alike.
+                        Text("\(cardCurrency) · \(card.isDigitalWallet ? card.displayPhone : card.displayNumber)")
                             .font(.system(size: 11))
                             .foregroundStyle(.white.opacity(0.65))
+                            .lineLimit(1)
                     }
-                    Spacer()
-                    Button {
-                        HapticManager.shared.tap()
-                        card.isHidden.toggle()
-                    } label: {
-                        Image(systemName: card.isHidden ? "eye.slash" : "eye")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(.white.opacity(0.6))
-                    }
-                    .buttonStyle(ScaleButtonStyle())
-                }
-                .padding(.top, 2)
-                HStack(alignment: .bottom) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        // Total balance (matches the Cards tab). No month
-                        // suffix — this is the card's running balance, not a
-                        // periodic figure.
-                        Text(card.isCreditCard ? loc("cc.owed") : loc("home.balance_total"))
-                            .font(.system(size: 9, weight: .medium))
-                            .foregroundStyle(.white.opacity(0.65))
-                        // Hidden → static dots. Visible → CountUpText that
-                        // rolls the number up on appear and re-counts on
-                        // change. `.id(card.id)` resets the count-up when
-                        // the carousel swaps to a different card so each
-                        // card animates its own balance in.
-                        Group {
-                            if card.isHidden {
-                                Text("••••••")
-                            } else {
-                                CountUpText(value: animatedBalance, currency: cardCurrency)
-                            }
-                        }
-                        .font(.system(size: 26, weight: .bold))
-                        .foregroundStyle(totalBalance < 0 ? AppTheme.red : .white)
-                        .onAppear {
-                            // Count up from 0 → balance on first display.
-                            withAnimation(.easeOut(duration: 0.9)) {
-                                animatedBalance = totalBalance
-                            }
-                        }
-                        .onChange(of: totalBalance) { _, newValue in
-                            // Re-count when a tx changes the balance.
-                            withAnimation(.easeOut(duration: 0.55)) {
-                                animatedBalance = newValue
-                            }
-                        }
-                        if totalBalance < 0 && !card.isHidden {
-                            Text(loc("home.negative")).font(.system(size: 9, weight: .semibold))
-                                .foregroundStyle(AppTheme.red.opacity(0.9))
-                        }
-                    }
-                    Spacer()
+                    Spacer(minLength: 10)
                     if !card.isDigitalWallet {
                         VStack(alignment: .trailing, spacing: 2) {
-                            Text(loc("cards.expires")).font(.system(size: 10)).foregroundStyle(.white.opacity(0.6))
-                            Text(card.expireDate).font(.system(size: 13, weight: .semibold)).foregroundStyle(.white)
+                            Text(loc("cards.expires"))
+                                .font(.system(size: 10)).foregroundStyle(.white.opacity(0.6))
+                            Text(card.expireDate)
+                                .font(.system(size: 13, weight: .semibold)).foregroundStyle(.white)
                         }
                     }
                 }
-                .padding(.top, 10)
             }
             .padding(20)
         }
@@ -1723,11 +1810,15 @@ struct CategoryFilterBar: View {
         } label: {
             VStack(spacing: 8) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 16)
+                    RoundedRectangle(cornerRadius: 18)
                         .fill(isActive ? cat.color.opacity(0.18) : AppTheme.cardDark)
                         .frame(width: 58, height: 58)
-                        .overlay(RoundedRectangle(cornerRadius: 16)
+                        .overlay(RoundedRectangle(cornerRadius: 18)
                             .stroke(isActive ? cat.color.opacity(0.6) : Color.clear, lineWidth: 1.5))
+                        // A tile that sits ON the page rather than being cut
+                        // out of it. Kept faint — in dark mode a heavy shadow
+                        // reads as grime, not elevation.
+                        .shadow(color: .black.opacity(0.10), radius: 6, y: 3)
                     Image(systemName: cat.icon)
                         .font(.system(size: 22))
                         .foregroundStyle(isActive ? cat.color : AppTheme.textPrimary)
@@ -1886,6 +1977,22 @@ struct TransactionSection: View {
                             Text(showAll ? loc("home.window_3days") : loc("home.window_week"))
                                 .font(.system(size: 13, weight: .medium)).foregroundStyle(AppTheme.textSecondary)
                         }
+                    }
+                    // Anything older than this window lives in Search — which is
+                    // deliberate, since the month-wide list here is what used to
+                    // stall scrolling. "See all" now says where it went instead
+                    // of leaving the user to guess.
+                    if let onOpenSearch {
+                        Button(action: onOpenSearch) {
+                            HStack(spacing: 3) {
+                                Text(loc("home.see_all"))
+                                    .font(.system(size: 13, weight: .semibold))
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 10, weight: .semibold))
+                            }
+                            .foregroundStyle(AppTheme.accent)
+                        }
+                        .buttonStyle(ScaleButtonStyle())
                     }
                 }
             }
@@ -2195,7 +2302,7 @@ struct TxRow: View {
     var body: some View {
         HStack(spacing: 14) {
             ZStack {
-                RoundedRectangle(cornerRadius: 13)
+                Circle()
                     .fill(Color(hex: tx.iconBgHex)).frame(width: 44, height: 44)
                 Text(tx.icon)
                     .font(.system(size: tx.icon.count == 1 ? 16 : 18)).foregroundStyle(.white)

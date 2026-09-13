@@ -83,6 +83,7 @@
 		9BEA100A2F00000A0000C5B4 /* NotificationPreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BEA100A2F00000A0000F5E4 /* NotificationPreferences.swift */; };
 		9BEA100A2F00000A0000C6B4 /* NotificationSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BEA100A2F00000A0000F6E4 /* NotificationSettingsView.swift */; };
 		9BEA100B2F00000B0000C3B4 /* VoiceDictation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BEA100B2F00000B0000F3E4 /* VoiceDictation.swift */; };
+		9BEA10A12F0000A10000C3B4 /* HomeSummary.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BEA10A12F0000A10000F3E4 /* HomeSummary.swift */; };
 		9BEA100C2F00000C0000C3B4 /* AskDiPoIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BEA100C2F00000C0000F3E4 /* AskDiPoIntent.swift */; };
 		9BEA100F2F00000F0000C3B4 /* LocalTxParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BEA100F2F00000F0000F3E4 /* LocalTxParser.swift */; };
 		9BEA10102F0000100000C3B4 /* Receivables.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BEA10102F0000100000F3E4 /* Receivables.swift */; };
@@ -207,6 +208,7 @@
 		9BEA100A2F00000A0000F5E4 /* NotificationPreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationPreferences.swift; sourceTree = "<group>"; };
 		9BEA100A2F00000A0000F6E4 /* NotificationSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationSettingsView.swift; sourceTree = "<group>"; };
 		9BEA100B2F00000B0000F3E4 /* VoiceDictation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceDictation.swift; sourceTree = "<group>"; };
+		9BEA10A12F0000A10000F3E4 /* HomeSummary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeSummary.swift; sourceTree = "<group>"; };
 		9BEA100C2F00000C0000F3E4 /* AskDiPoIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AskDiPoIntent.swift; sourceTree = "<group>"; };
 		9BEA100F2F00000F0000F3E4 /* LocalTxParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalTxParser.swift; sourceTree = "<group>"; };
 		9BEA10102F0000100000F3E4 /* Receivables.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Receivables.swift; sourceTree = "<group>"; };
@@ -375,6 +377,7 @@
 				9BEA100F2F00000F0000F3E4 /* LocalTxParser.swift */,
 				9BEA100C2F00000C0000F3E4 /* AskDiPoIntent.swift */,
 				9BEA100B2F00000B0000F3E4 /* VoiceDictation.swift */,
+				9BEA10A12F0000A10000F3E4 /* HomeSummary.swift */,
 				9BEA100A2F00000A0000F2E4 /* BackgroundRefresh.swift */,
 				9BEA100A2F00000A0000E6E4 /* CycleIntentView.swift */,
 				9BEA100A2F00000A0000E5E4 /* CycleIntent.swift */,
@@ -653,6 +656,7 @@
 				9BEA100F2F00000F0000C3B4 /* LocalTxParser.swift in Sources */,
 				9BEA100C2F00000C0000C3B4 /* AskDiPoIntent.swift in Sources */,
 				9BEA100B2F00000B0000C3B4 /* VoiceDictation.swift in Sources */,
+				9BEA10A12F0000A10000C3B4 /* HomeSummary.swift in Sources */,
 				9BEA100A2F00000A0000C2B4 /* BackgroundRefresh.swift in Sources */,
 				9BEA100A2F00000A0000B6B4 /* CycleIntentView.swift in Sources */,
 				9BEA100A2F00000A0000B5B4 /* CycleIntent.swift in Sources */,

@@ -171,6 +171,8 @@ final class LanguageManager {
         "home.quiet_window_hint": "Widen the range above, or search for older activity",
         "home.window_week":   "Last 7 days",
         "home.window_3days":  "Last 3 days",
+        "home.this_month":    "This month",
+        "home.see_all":       "See all",
         "home.income":        "Income",
         "home.expense":       "Expense",
         "home.balance":       "Balance",
@@ -617,6 +619,8 @@ final class LanguageManager {
 
         // Transactions
         "tx.new":               "New Transaction",
+        "tx.date_time":         "Date & Time",
+        "common.optional":      "(Optional)",
         "tx.delete":            "Delete Transaction",
         "tx.insufficient":      "Insufficient balance — cannot add expense",
         "tx.credit_no_income":  "Credit cards can't receive income. To record a bill payment, use Pay the bill on the card.",
@@ -2300,6 +2304,8 @@ final class LanguageManager {
         "home.quiet_window_hint": "Perlebar rentang di atas, atau cari aktivitas lama",
         "home.window_week":   "7 hari terakhir",
         "home.window_3days":  "3 hari terakhir",
+        "home.this_month":    "Bulan ini",
+        "home.see_all":       "Lihat semua",
         "home.income":        "Pemasukan",
         "home.expense":       "Pengeluaran",
         "home.balance":       "Saldo",
@@ -2737,6 +2743,8 @@ final class LanguageManager {
 
         // Transactions
         "tx.new":               "Transaksi Baru",
+        "tx.date_time":         "Tanggal & Waktu",
+        "common.optional":      "(Opsional)",
         "tx.delete":            "Hapus Transaksi",
         "tx.insufficient":      "Saldo tidak cukup — tidak bisa menambah pengeluaran",
         "tx.credit_no_income":  "Kartu kredit tidak menerima pemasukan. Untuk mencatat pembayaran tagihan, pakai Bayar tagihan di kartunya.",

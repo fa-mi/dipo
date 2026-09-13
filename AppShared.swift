@@ -99,6 +99,74 @@ struct SheetField: View {
     }
 }
 
+// MARK: - Icon Field
+
+/// A labelled text field with a glyph inside it.
+///
+/// `SheetField` puts a bare box under a label. The glyph is not decoration: on
+/// a form where six boxes stack vertically and all of them look alike, it is
+/// what lets someone find "the notes one" without reading every label on the
+/// way down.
+struct IconField: View {
+    let label: String
+    let icon: String
+    let placeholder: String
+    @Binding var text: String
+    var keyboard: UIKeyboardType = .default
+    /// Appended to the label in lighter type — for fields that are safe to skip.
+    var optionalHint: String? = nil
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 5) {
+                Text(label)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(AppTheme.textPrimary)
+                if let optionalHint {
+                    Text(optionalHint)
+                        .font(.system(size: 12))
+                        .foregroundStyle(AppTheme.textSecondary)
+                }
+            }
+            HStack(spacing: 10) {
+                Image(systemName: icon)
+                    .font(.system(size: 15))
+                    .foregroundStyle(focused ? AppTheme.accent : AppTheme.textSecondary)
+                    .frame(width: 20)
+                TextField(placeholder, text: $text)
+                    .keyboardType(keyboard)
+                    .font(.system(size: 15))
+                    .foregroundStyle(AppTheme.textPrimary)
+                    .focused($focused)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 15)
+            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .stroke(focused ? AppTheme.accent.opacity(0.6) : Color.clear, lineWidth: 1.5)
+            )
+            .animation(.easeOut(duration: 0.15), value: focused)
+        }
+    }
+}
+
+// MARK: - Form Section Label
+
+/// The heading above a form section. One definition so every section on the
+/// add-transaction form sits on the same baseline and weight — they had drifted
+/// between 13pt secondary and 15pt primary depending on when each was written.
+struct FormSectionLabel: View {
+    let text: String
+    var body: some View {
+        Text(text)
+            .font(.system(size: 14, weight: .semibold))
+            .foregroundStyle(AppTheme.textPrimary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
 // MARK: - Animated Appearance Wrapper
 // Eliminates the repeated @State var appeared + onAppear pattern across views.
 //

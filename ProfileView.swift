@@ -1337,6 +1337,8 @@ struct ProfileView: View {
         let trimmed = editNameText.trimmingCharacters(in: .whitespaces)
         guard trimmed.count >= 2 else { return }
         Keychain.save(trimmed, key: "user_name")
+        // Home greets the user by name and caches it; tell it the name moved.
+        NotificationCenter.default.post(name: .profilePhotoDidChange, object: nil)
         HapticManager.shared.success()
         withAnimation(.spring(response: 0.35)) { isEditingName = false }
     }

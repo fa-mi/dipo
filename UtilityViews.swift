@@ -1192,9 +1192,11 @@ struct AddTransactionSheet: View {
                 .font(.system(size: 10))
                 .foregroundStyle(AppTheme.textSecondary)
         }
-        .padding(.horizontal, 14).padding(.vertical, 14)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(AppTheme.accent.opacity(0.3), lineWidth: 1))
+        // `cardMid`, not `cardDark`: this pill now sits INSIDE the amount card,
+        // and cardDark on cardDark is white on white in light mode.
+        .padding(.horizontal, 13).padding(.vertical, 12)
+        .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: 13))
+        .overlay(RoundedRectangle(cornerRadius: 13).stroke(AppTheme.accent.opacity(0.3), lineWidth: 1))
     }
 
     var convertedPreview: String {
@@ -1203,6 +1205,525 @@ struct AddTransactionSheet: View {
         let conv = CurrencyManager.shared.convert(amount, from: currency, to: pref)
         return String(format: loc("tx.converted_in"),
                       CurrencyManager.shared.formatted(conv, currency: pref), pref)
+    }
+
+    // MARK: - Form sections
+    //
+    // `body` used to be one ~560-line expression, and Swift's type checker had
+    // started refusing it outright ("unable to type-check this expression in
+    // reasonable time") whenever anything else was added. Naming each section
+    // fixes that, and it means the order of the form — what the user meets
+    // first, second, third — is readable in ten lines instead of six hundred.
+
+    /// Scanning fills the whole form in one shot, so it belongs above the form,
+    /// before anyone starts typing a thing they would then have to undo.
+    @ViewBuilder
+    private var scanEntrySection: some View {
+        if !vm.cards.isEmpty && txType == .expense {
+            Button {
+                HapticManager.shared.tap()
+                if PremiumManager.shared.canAccess(.scanReceipt) {
+                    showScanFlow = true
+                } else {
+                    showScanPaywall = true
+                }
+            } label: {
+                HStack(spacing: 12) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 11)
+                            .fill(AppTheme.accent.opacity(0.14))
+                            .frame(width: 38, height: 38)
+                        Image(systemName: "doc.text.viewfinder")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(AppTheme.accent)
+                    }
+                    VStack(alignment: .leading, spacing: 1) {
+                        HStack(spacing: 6) {
+                            Text(loc("receipt.entry.title"))
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundStyle(AppTheme.textPrimary)
+                            if !PremiumManager.shared.canAccess(.scanReceipt) {
+                                Image(systemName: "crown.fill")
+                                    .font(.system(size: 9, weight: .bold))
+                                    .foregroundStyle(.white)
+                                    .padding(3)
+                                    .background(PremiumPlan.royal.color, in: Circle())
+                            }
+                        }
+                        Text(loc("receipt.entry.subtitle"))
+                            .font(.system(size: 11))
+                            .foregroundStyle(AppTheme.textSecondary)
+                            .lineLimit(1)
+                    }
+                    Spacer(minLength: 4)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(AppTheme.textSecondary)
+                }
+                .padding(12)
+                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
+                .overlay(RoundedRectangle(cornerRadius: 16)
+                    .stroke(AppTheme.accent.opacity(0.22), lineWidth: 1))
+            }
+            .buttonStyle(ScaleButtonStyle())
+            .padding(.horizontal, 22)
+        }
+    }
+
+    private var typeSection: some View {
+        HStack(spacing: 0) {
+            ForEach(AddTxType.allCases, id: \.self) { type in
+                let blocked = (type == .income && selectedIsCredit)
+                Button {
+                    HapticManager.shared.select()
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) { txType = type }
+                    if !availableCategories.contains(selectedCategory) {
+                        selectedCategory = type == .expense ? .shopping : .salary
+                    }
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: type.icon).font(.system(size: 15))
+                        Text(type.title).font(.system(size: 15, weight: .semibold))
+                    }
+                    .foregroundStyle(txType == type ? AppTheme.onVividFill
+                                     : AppTheme.textSecondary.opacity(blocked ? 0.35 : 1))
+                    .frame(maxWidth: .infinity).padding(.vertical, 13)
+                    .background {
+                        if txType == type {
+                            Capsule().fill(type.color)
+                                .shadow(color: type.color.opacity(0.4), radius: 8, y: 4)
+                        }
+                    }
+                }
+                .disabled(blocked)
+                .animation(.spring(response: 0.3, dampingFraction: 0.7), value: txType)
+            }
+        }
+        .padding(4)
+        .background(AppTheme.cardDark, in: Capsule())
+        .padding(.horizontal, 22)
+    }
+
+    /// The amount is the reason this screen exists, so it gets the largest type
+    /// on it and shares a single surface with the currency it is denominated in
+    /// — the two were previously separate boxes, which read as two questions.
+    @ViewBuilder
+    private var amountSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 12) {
+                if PremiumManager.shared.canAccess(.smartConversion) {
+                    Menu {
+                        ForEach(CurrencyManager.supportedCurrencies, id: \.code) { c in
+                            Button {
+                                HapticManager.shared.tap()
+                                currency = c.code
+                            } label: {
+                                Label("\(c.flag) \(c.code) — \(c.name)",
+                                      systemImage: currency == c.code ? "checkmark" : "")
+                            }
+                        }
+                    } label: {
+                        currencyButtonLabel
+                    }
+                } else {
+                    Button { HapticManager.shared.tap(); showConversionPaywall = true } label: {
+                        currencyButtonLabel
+                            .overlay(alignment: .topTrailing) {
+                                Image(systemName: "lock.fill")
+                                    .font(.system(size: 8, weight: .bold))
+                                    .foregroundStyle(.white)
+                                    .padding(3)
+                                    .background(PremiumPlan.royal.color, in: Circle())
+                                    .offset(x: 4, y: -4)
+                            }
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                TextField("0", text: $amountText)
+                    .font(.system(size: 34, weight: .bold))
+                    .foregroundStyle(AppTheme.textPrimary)
+                    .keyboardType(.decimalPad)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(14)
+            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 20))
+
+            // One quiet line under the field, not three. Whichever of these is
+            // true is the one worth reading: a cross-currency result beats a
+            // formatting echo, and both beat the bare rate.
+            Group {
+                if !convertedPreview.isEmpty {
+                    Text(convertedPreview)
+                        .font(.system(size: 12))
+                        .foregroundStyle(AppTheme.textSecondary)
+                } else if let p = AmountInputHelper.preview(amountText, currency: currency) {
+                    // Echo "5000000" back as "Rp 5.000.000" so a digit-count
+                    // typo is caught before it is saved, not after.
+                    Text(p)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(AppTheme.textSecondary)
+                } else {
+                    Text(CurrencyManager.shared.rateLabel)
+                        .font(.system(size: 11))
+                        .foregroundStyle(AppTheme.textSecondary.opacity(0.7))
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            if amount > 0 && isForeignCurrency {
+                conversionPanel
+            }
+        }
+        .padding(.horizontal, 22)
+    }
+
+    private var conversionPanel: some View {
+        VStack(spacing: 10) {
+            HStack(spacing: 10) {
+                ZStack {
+                    Circle().fill(AppTheme.accent.opacity(0.12)).frame(width: 36, height: 36)
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(AppTheme.accent)
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(loc("tx.smart_convert"))
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(AppTheme.textPrimary)
+                    Text(String(format: loc("tx.save_in_currency"), selectedCardCurrency))
+                        .font(.system(size: 11))
+                        .foregroundStyle(AppTheme.textSecondary)
+                }
+                Spacer()
+                // Locked ON: a transaction in a currency the card does not hold
+                // MUST be converted, or the balance stops meaning anything.
+                Text(loc("tx.required"))
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(AppTheme.accent)
+                    .padding(.horizontal, 8).padding(.vertical, 4)
+                    .background(AppTheme.accent.opacity(0.12), in: Capsule())
+            }
+
+            if saveInPreferred {
+                Divider().background(AppTheme.cardMid)
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(loc("tx.you_entered"))
+                            .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                        Text(CurrencyManager.shared.formatted(amount, currency: currency))
+                            .font(.system(size: 14, weight: .semibold)).foregroundStyle(AppTheme.textSecondary)
+                    }
+                    Image(systemName: "arrow.right")
+                        .font(.system(size: 12)).foregroundStyle(AppTheme.accent)
+                        .padding(.horizontal, 8)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(loc("tx.saved_as"))
+                            .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                        Text(CurrencyManager.shared.formatted(convertedAmount, currency: selectedCardCurrency))
+                            .font(.system(size: 14, weight: .bold)).foregroundStyle(AppTheme.accent)
+                    }
+                    Spacer()
+                }
+                Text(CurrencyManager.shared.rateLabel)
+                    .font(.system(size: 10)).foregroundStyle(AppTheme.textSecondary.opacity(0.6))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+        .padding(14)
+        .background(AppTheme.accent.opacity(0.06), in: RoundedRectangle(cornerRadius: 16))
+        .overlay(RoundedRectangle(cornerRadius: 16)
+            .stroke(AppTheme.accent.opacity(saveInPreferred ? 0.4 : 0.15), lineWidth: 1))
+        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: saveInPreferred)
+    }
+
+    @ViewBuilder
+    private var nameSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            IconField(label: loc("tx.name_label"),
+                      icon: "textformat",
+                      placeholder: selectedCategory == .debtPayment
+                          ? loc("tx.debt_placeholder")
+                          : loc("tx.name_placeholder"),
+                      text: $name)
+                .onChange(of: name) { _, newName in
+                    // The user's own history first, the shipped keyword map
+                    // second — what this person actually does beats a guess.
+                    if txType == .expense,
+                       let suggested = SmartBudgetManager.suggestCategory(
+                            for: newName, txType: "Expense", transactions: allTransactions),
+                       availableCategories.contains(suggested) {
+                        withAnimation(.spring(response: 0.3)) { selectedCategory = suggested }
+                    }
+                }
+
+            if txType == .expense,
+               let suggested = SmartBudgetManager.suggestCategory(
+                    for: name, txType: "Expense", transactions: allTransactions),
+               suggested != selectedCategory {
+                let learned = SmartBudgetManager.learnedCategory(
+                    for: name, transactions: allTransactions)
+                HStack(spacing: 8) {
+                    Image(systemName: suggested.icon).font(.system(size: 12)).foregroundStyle(suggested.color)
+                    // Cite the evidence when it came from the user's own
+                    // history. "Because you did this 5 times" is trustworthy in
+                    // a way a bare "detected" never is.
+                    Text(learned.map {
+                            String(format: loc("tx.learned_from"), $0.count, $0.matchedTerm)
+                         } ?? String(format: loc("tx.auto_detected"), suggested.displayLabel))
+                        .font(.system(size: 12, weight: .medium)).foregroundStyle(AppTheme.textSecondary)
+                    Spacer()
+                    Button {
+                        HapticManager.shared.tap()
+                        withAnimation { selectedCategory = suggested }
+                    } label: {
+                        // `onSolid`, not `onVividFill`: category colours are a
+                        // mix of fixed bright hexes and adaptive tokens that go
+                        // DARK in light mode, so the label has to invert with
+                        // the scheme. onVividFill never inverts.
+                        Text(loc("tx.apply")).font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(AppTheme.onSolid)
+                            .padding(.horizontal, 10).padding(.vertical, 4)
+                            .background(suggested.color, in: Capsule())
+                    }
+                }
+                .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .padding(.horizontal, 22)
+    }
+
+    /// Icon above label, two lines, in a tile. The old single-line pills put the
+    /// glyph and the word on one baseline, which meant the longest category name
+    /// set the width of everything and a row of ten was mostly whitespace.
+    private var categorySection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            FormSectionLabel(text: loc("common.category"))
+                .padding(.horizontal, 22)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    ForEach(availableCategories, id: \.self) { cat in
+                        let on = selectedCategory == cat
+                        Button {
+                            HapticManager.shared.tap()
+                            withAnimation(.spring(response: 0.3)) { selectedCategory = cat }
+                        } label: {
+                            VStack(spacing: 7) {
+                                // Neither glyph nor label is tinted with
+                                // cat.color, and that is deliberate. Ten of the
+                                // sixteen category colours are bright hexes
+                                // picked for dark mode — measured against their
+                                // own pale tint on a white card they land
+                                // between 1.55:1 (bonus #FBBF24) and 2.96:1
+                                // (health #EC4899), i.e. under the 3:1 floor for
+                                // a graphic that carries meaning. So selection
+                                // is said four ways that do not depend on the
+                                // hue at all — tinted fill, coloured border,
+                                // darker glyph, heavier label — and the hue is
+                                // left to the fill, which only has to be
+                                // TELLABLE APART, not readable.
+                                Image(systemName: cat.icon)
+                                    .font(.system(size: 19, weight: .medium))
+                                    .foregroundStyle(on ? AppTheme.textPrimary : AppTheme.textSecondary)
+                                Text(cat.displayLabel)
+                                    .foregroundStyle(on ? AppTheme.textPrimary : AppTheme.textSecondary)
+                                    .font(.system(size: 11, weight: on ? .semibold : .regular))
+                                    .multilineTextAlignment(.center)
+                                    .lineLimit(2)
+                                    .minimumScaleFactor(0.8)
+                            }
+                            .frame(width: 84, height: 78)
+                            .background(on ? cat.color.opacity(0.16) : AppTheme.cardDark,
+                                        in: RoundedRectangle(cornerRadius: 18))
+                            .overlay(RoundedRectangle(cornerRadius: 18)
+                                .stroke(on ? cat.color.opacity(0.65) : Color.clear, lineWidth: 1.5))
+                        }
+                        .buttonStyle(ScaleButtonStyle())
+                    }
+                }
+                .padding(.horizontal, 22)
+                .padding(.vertical, 2)
+            }
+        }
+    }
+
+    /// Always visible, even with one card — "which account does this land on"
+    /// is a question worth answering before saving, not only when there is a
+    /// choice to make.
+    @ViewBuilder
+    private var cardSection: some View {
+        if !vm.cards.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                FormSectionLabel(text: loc("debt.card"))
+                if vm.cards.count > 1 {
+                    Menu {
+                        ForEach(vm.cards) { c in
+                            Button {
+                                HapticManager.shared.tap()
+                                if let i = vm.cards.firstIndex(where: { $0.id == c.id }) {
+                                    selectedCardIndex = i
+                                }
+                            } label: {
+                                Label("\(CardLabel.title(c)) \(CardLabel.subtitle(c))",
+                                      systemImage: vm.cards[min(selectedCardIndex, vm.cards.count - 1)].id == c.id
+                                                   ? "checkmark" : "creditcard")
+                            }
+                        }
+                    } label: {
+                        cardRowLabel(interactive: true)
+                    }
+                } else {
+                    cardRowLabel(interactive: false)
+                }
+            }
+            .padding(.horizontal, 22)
+        }
+    }
+
+    @ViewBuilder
+    private func cardRowLabel(interactive: Bool) -> some View {
+        let card = selectedCardOrNil
+        HStack(spacing: 12) {
+            if let card {
+                LinearGradient(colors: [Color(hex: card.gradientStart), Color(hex: card.gradientEnd)],
+                               startPoint: .top, endPoint: .bottom)
+                    .frame(width: 34, height: 34)
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .overlay {
+                        Image(systemName: "creditcard.fill")
+                            .font(.system(size: 14))
+                            .foregroundStyle(.white.opacity(0.9))
+                    }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(CardLabel.title(card))
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(AppTheme.textPrimary)
+                        .lineLimit(1)
+                    Text(CardLabel.subtitle(card))
+                        .font(.system(size: 11))
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .lineLimit(1)
+                }
+            }
+            Spacer(minLength: 4)
+            if interactive {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(AppTheme.textSecondary)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
+    }
+
+    /// Date and time as two separate controls. One combined `.compact` picker
+    /// made changing only the time a two-step detour through a calendar.
+    private var dateSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            FormSectionLabel(text: loc("tx.date_time"))
+            HStack(spacing: 12) {
+                dateBox(icon: "calendar") {
+                    DatePicker("", selection: $selectedDate, displayedComponents: .date)
+                        .datePickerStyle(.compact).labelsHidden().tint(AppTheme.accent)
+                }
+                dateBox(icon: "clock") {
+                    DatePicker("", selection: $selectedDate, displayedComponents: .hourAndMinute)
+                        .datePickerStyle(.compact).labelsHidden().tint(AppTheme.accent)
+                }
+            }
+        }
+        .padding(.horizontal, 22)
+    }
+
+    @ViewBuilder
+    private func dateBox<Content: View>(icon: String, @ViewBuilder content: () -> Content) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.system(size: 14))
+                .foregroundStyle(AppTheme.textSecondary)
+            content()
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        // Expand BEFORE painting: with `.frame` after `.background` the fill
+        // hugged its own text and the two boxes came out different widths.
+        .frame(maxWidth: .infinity)
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
+    }
+
+    private var notesSection: some View {
+        IconField(label: loc("tx.notes"),
+                  icon: "text.alignleft",
+                  placeholder: loc("tx.notes_placeholder"),
+                  text: $notes,
+                  optionalHint: loc("common.optional"))
+            .padding(.horizontal, 22)
+    }
+
+    @ViewBuilder
+    private var warningSection: some View {
+        let negative = wouldGoNegative && !vm.cards.isEmpty && txType == .expense
+        // Guarded as a whole. An empty VStack still counts as a child, so the
+        // parent's 20pt spacing landed on both sides of nothing.
+        if selectedIsCredit || vm.cards.isEmpty || negative || showError {
+        VStack(spacing: 10) {
+            // A disabled control with no explanation reads as a bug. Name the
+            // reason, and point at the flow that does handle money arriving on
+            // a credit card.
+            if selectedIsCredit {
+                InlineBanner(tone: .info, message: loc("tx.credit_no_income"))
+            }
+            if vm.cards.isEmpty {
+                InlineBanner(tone: .warning, message: loc("common.add_card_tx"))
+            }
+            if wouldGoNegative && !vm.cards.isEmpty && txType == .expense {
+                let msg = loc("tx.insufficient") + "\n"
+                    + String(format: loc("tx.available_balance"),
+                             CurrencyManager.shared.formatted(Swift.abs(selectedCardBalance),
+                                                              currency: selectedCardCurrency))
+                InlineBanner(tone: .error, message: msg)
+            }
+            if showError {
+                InlineBanner(tone: .error, message: loc("tx.valid_error"))
+            }
+        }
+        .padding(.horizontal, 22)
+        }
+    }
+
+    private var submitSection: some View {
+        VStack(spacing: 6) {
+            Button { saveTransaction() } label: {
+                // Computed once for both fill and label: the old code styled the
+                // label `AppTheme.bg` unconditionally, so a disabled button was
+                // light text on a light grey fill — effectively invisible.
+                let canSubmit = isValid && !(wouldGoNegative && txType == .expense)
+                HStack(spacing: 10) {
+                    Image(systemName: "checkmark.circle.fill").font(.system(size: 17))
+                    Text(String(format: loc("tx.add_type"), txType.title))
+                        .font(.system(size: 16, weight: .bold))
+                }
+                .foregroundStyle(canSubmit ? AppTheme.onVividFill : AppTheme.textSecondary)
+                .frame(maxWidth: .infinity).padding(.vertical, 17)
+                .background(canSubmit ? txType.color : AppTheme.textSecondary.opacity(0.25),
+                            in: RoundedRectangle(cornerRadius: 20))
+                .shadow(color: canSubmit ? txType.color.opacity(0.35) : .clear, radius: 12, y: 6)
+            }
+            .buttonStyle(ScaleButtonStyle())
+            .disabled(!isValid || vm.cards.isEmpty || (wouldGoNegative && txType == .expense))
+
+            Button { HapticManager.shared.tap(); dismiss() } label: {
+                Text(loc("common.cancel"))
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(AppTheme.textSecondary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+            }
+        }
+        .padding(.horizontal, 22)
+        .padding(.top, 4)
     }
 
     var body: some View {
@@ -1215,456 +1736,55 @@ struct AddTransactionSheet: View {
             ZStack {
                 AppTheme.bg.ignoresSafeArea()
                 ScrollView(showsIndicators: false) {
-                    VStack(spacing: 22) {
-
-                        // Scan Receipt entry — opens the redesigned 3-screen scan
-                        // flow inline. Only meaningful for expenses (you can't
-                        // scan a salary), and only when the user has at least
-                        // one card to save the resulting tx to.
-                        if !vm.cards.isEmpty && txType == .expense {
-                            Button {
-                                HapticManager.shared.tap()
-                                if PremiumManager.shared.canAccess(.scanReceipt) {
-                                    showScanFlow = true
-                                } else {
-                                    showScanPaywall = true
-                                }
-                            } label: {
-                                HStack(spacing: 12) {
-                                    ZStack {
-                                        RoundedRectangle(cornerRadius: 12)
-                                            .fill(AppTheme.accent.opacity(0.15))
-                                            .frame(width: 44, height: 44)
-                                        Image(systemName: "doc.text.viewfinder")
-                                            .font(.system(size: 20, weight: .semibold))
-                                            .foregroundStyle(AppTheme.accent)
-                                    }
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        HStack(spacing: 6) {
-                                            Text(loc("receipt.entry.title"))
-                                                .font(.system(size: 15, weight: .bold))
-                                                .foregroundStyle(AppTheme.textPrimary)
-                                            if !PremiumManager.shared.canAccess(.scanReceipt) {
-                                                Image(systemName: "crown.fill")
-                                                    .font(.system(size: 9, weight: .bold))
-                                                    .foregroundStyle(.white)
-                                                    .padding(3)
-                                                    // Royal purple — must match PremiumPlan.royal.color
-                                                    // (#A78BFA) so the crown is consistent app-wide.
-                                                    .background(PremiumPlan.royal.color, in: Circle())
-                                            }
-                                        }
-                                        Text(loc("receipt.entry.subtitle"))
-                                            .font(.system(size: 12))
-                                            .foregroundStyle(AppTheme.textSecondary)
-                                    }
-                                    Spacer()
-                                    Image(systemName: "chevron.right")
-                                        .font(.system(size: 13, weight: .semibold))
-                                        .foregroundStyle(AppTheme.textSecondary)
-                                }
-                                .padding(14)
-                                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 14)
-                                        .stroke(AppTheme.accent.opacity(0.25), lineWidth: 1)
-                                )
-                            }
-                            .buttonStyle(ScaleButtonStyle())
-                            .padding(.horizontal, 22)
-                            .padding(.top, 8)
-                            .opacity(appeared ? 1 : 0)
-                            .offset(y: appeared ? 0 : 20)
-                            .animation(AppMotion.appear, value: appeared)
-                        }
-
-                        // Type
-                        HStack(spacing: 0) {
-                            ForEach(AddTxType.allCases, id: \.self) { type in
-                                let blocked = (type == .income && selectedIsCredit)
-                                Button {
-                                    HapticManager.shared.select()
-                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) { txType = type }
-                                    // Reset category if current one not valid for new type
-                                    if !availableCategories.contains(selectedCategory) {
-                                        selectedCategory = type == .expense ? .shopping : .salary
-                                    }
-                                } label: {
-                                    HStack(spacing: 8) {
-                                        Image(systemName: type.icon).font(.system(size: 15))
-                                        Text(type.title).font(.system(size: 15, weight: .semibold))
-                                    }
-                                    .foregroundStyle(txType == type ? AppTheme.onVividFill
-                                                     : AppTheme.textSecondary.opacity(blocked ? 0.35 : 1))
-                                    .frame(maxWidth: .infinity).padding(.vertical, 13)
-                                    .background { if txType == type { Capsule().fill(type.color).shadow(color: type.color.opacity(0.4), radius: 8, y: 4) } }
-                                }
-                                .disabled(blocked)
-                                .animation(.spring(response: 0.3, dampingFraction: 0.7), value: txType)
-                            }
-                        }
-                        .padding(4).background(AppTheme.cardDark, in: Capsule()).padding(.horizontal, 22).padding(.top, 8)
-                        .opacity(appeared ? 1 : 0).offset(y: appeared ? 0 : 20)
-
-                        // Amount + currency toggle
-                        VStack(spacing: 8) {
-                            Text(loc("common.amount")).font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
-                                .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 22)
-                            HStack(spacing: 10) {
-                                Group {
-                                    if PremiumManager.shared.canAccess(.smartConversion) {
-                                        // Premium: full currency menu
-                                        Menu {
-                                            ForEach(CurrencyManager.supportedCurrencies, id: \.code) { c in
-                                                Button {
-                                                    HapticManager.shared.tap()
-                                                    currency = c.code
-                                                    // .onChange(of: currency) menangani auto-enable/disable
-                                                    // saveInPreferred berdasarkan selectedCardCurrency
-                                                } label: {
-                                                    Label("\(c.flag) \(c.code) — \(c.name)", systemImage: currency == c.code ? "checkmark" : "")
-                                                }
-                                            }
-                                        } label: {
-                                            currencyButtonLabel
-                                        }
-                                    } else {
-                                        // Free: locked — tapping shows paywall
-                                        Button { HapticManager.shared.tap(); showConversionPaywall = true } label: {
-                                            currencyButtonLabel
-                                                .overlay(alignment: .topTrailing) {
-                                                    Image(systemName: "lock.fill")
-                                                        .font(.system(size: 8, weight: .bold))
-                                                        .foregroundStyle(.white)
-                                                        .padding(3)
-                                                        // Padlock badge uses Royal's purple now —
-                                                        // Premium tier (and its amber color) was
-                                                        // removed. Consistent with other paid-gate
-                                                        // affordances across the app.
-                                                        .background(PremiumPlan.royal.color, in: Circle())
-                                                        .offset(x: 4, y: -4)
-                                                }
-                                        }
-                                        .buttonStyle(.plain)
-                                    }
-                                }
-
-                                TextField("0.00", text: $amountText)
-                                    .font(.system(size: 32, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
-                                    .keyboardType(.decimalPad).padding(.horizontal, 16).padding(.vertical, 12)
-                                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14)).frame(maxWidth: .infinity)
-                            }
-                            .padding(.horizontal, 22)
-
-                            if !convertedPreview.isEmpty {
-                                Text(convertedPreview).font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
-                                    .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 22)
-                            } else if let p = AmountInputHelper.preview(amountText, currency: currency) {
-                                // Show formatted preview ("Rp 5.000.000") under
-                                // the raw input ("5000000") so users catch
-                                // digit-count typos before saving. Only when
-                                // there's no smart-conversion preview already
-                                // — keeps the UI from getting noisy.
-                                Text(p)
-                                    .font(.system(size: 12, weight: .medium))
-                                    .foregroundStyle(AppTheme.textSecondary)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .padding(.horizontal, 22)
-                            }
-                            Text(CurrencyManager.shared.rateLabel).font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary.opacity(0.6))
-                                .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 22)
-
-                            // ── Smart auto-convert card ──────────────────────────
-                            if amount > 0 && isForeignCurrency {
-                                VStack(spacing: 10) {
-                                    HStack(spacing: 10) {
-                                        ZStack {
-                                            Circle()
-                                                .fill(AppTheme.accent.opacity(0.12))
-                                                .frame(width: 36, height: 36)
-                                            Image(systemName: "arrow.triangle.2.circlepath")
-                                                .font(.system(size: 15, weight: .semibold))
-                                                .foregroundStyle(AppTheme.accent)
-                                        }
-                                        VStack(alignment: .leading, spacing: 2) {
-                                            Text(loc("tx.smart_convert"))
-                                                .font(.system(size: 13, weight: .semibold))
-                                                .foregroundStyle(AppTheme.textPrimary)
-                                            Text(String(format: loc("tx.save_in_currency"), selectedCardCurrency))
-                                                .font(.system(size: 11))
-                                                .foregroundStyle(AppTheme.textSecondary)
-                                        }
-                                        Spacer()
-                                        if isForeignCurrency {
-                                            // Toggle dikunci ON — wajib konversi ketika
-                                            // mata uang transaksi ≠ mata uang kartu.
-                                            // User tidak bisa mematikannya.
-                                            Text(loc("tx.required"))
-                                                .font(.system(size: 10, weight: .semibold))
-                                                .foregroundStyle(AppTheme.accent)
-                                                .padding(.horizontal, 8)
-                                                .padding(.vertical, 4)
-                                                .background(AppTheme.accent.opacity(0.12), in: Capsule())
-                                        } else {
-                                            Toggle("", isOn: $saveInPreferred)
-                                                .tint(AppTheme.accent)
-                                                .labelsHidden()
-                                                .onChange(of: saveInPreferred) { _, _ in HapticManager.shared.tap() }
-                                        }
-                                    }
-
-                                    if saveInPreferred {
-                                        Divider().background(AppTheme.cardMid)
-                                        HStack {
-                                            VStack(alignment: .leading, spacing: 2) {
-                                                Text(loc("tx.you_entered"))
-                                                    .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
-                                                Text(CurrencyManager.shared.formatted(amount, currency: currency))
-                                                    .font(.system(size: 14, weight: .semibold)).foregroundStyle(AppTheme.textSecondary)
-                                            }
-                                            Image(systemName: "arrow.right")
-                                                .font(.system(size: 12)).foregroundStyle(AppTheme.accent)
-                                                .padding(.horizontal, 8)
-                                            VStack(alignment: .leading, spacing: 2) {
-                                                Text(loc("tx.saved_as"))
-                                                    .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
-                                                Text(CurrencyManager.shared.formatted(convertedAmount, currency: selectedCardCurrency))
-                                                    .font(.system(size: 14, weight: .bold)).foregroundStyle(AppTheme.accent)
-                                            }
-                                            Spacer()
-                                        }
-                                        Text(CurrencyManager.shared.rateLabel)
-                                            .font(.system(size: 10)).foregroundStyle(AppTheme.textSecondary.opacity(0.6))
-                                            .frame(maxWidth: .infinity, alignment: .leading)
-                                    }
-                                }
-                                .padding(14)
-                                .background(AppTheme.accent.opacity(0.06), in: RoundedRectangle(cornerRadius: 14))
-                                .overlay(RoundedRectangle(cornerRadius: 14).stroke(AppTheme.accent.opacity(saveInPreferred ? 0.4 : 0.15), lineWidth: 1))
-                                .padding(.horizontal, 22)
-                                .animation(.spring(response: 0.35, dampingFraction: 0.8), value: saveInPreferred)
-                                .animation(.spring(response: 0.35), value: amount)
-                            }
-                        }
-                        .opacity(appeared ? 1 : 0).offset(y: appeared ? 0 : 20)
-                        .animation(AppMotion.appear, value: appeared)
-
-                        SheetField(label: loc("tx.name_label"),
-                                   placeholder: selectedCategory == .debtPayment
-                                       ? loc("tx.debt_placeholder")
-                                       : loc("tx.name_placeholder"),
-                                   text: $name)
-                            .opacity(appeared ? 1 : 0).offset(y: appeared ? 0 : 20)
-                            .animation(AppMotion.appear, value: appeared)
-                            .onChange(of: name) { _, newName in
-                                // History first, keyword map second — what this
-                                // user actually does beats a shipped guess.
-                                if txType == .expense,
-                                   let suggested = SmartBudgetManager.suggestCategory(
-                                        for: newName, txType: "Expense", transactions: allTransactions),
-                                   availableCategories.contains(suggested) {
-                                    withAnimation(.spring(response: 0.3)) { selectedCategory = suggested }
-                                }
-                            }
-
-                        // Auto-categorize hint
-                        if txType == .expense,
-                           let suggested = SmartBudgetManager.suggestCategory(
-                                for: name, txType: "Expense", transactions: allTransactions),
-                           suggested != selectedCategory {
-                            let learned = SmartBudgetManager.learnedCategory(
-                                for: name, transactions: allTransactions)
-                            HStack(spacing: 8) {
-                                Image(systemName: suggested.icon).font(.system(size: 12)).foregroundStyle(suggested.color)
-                                // Cite the evidence when it comes from the
-                                // user's own history — "because you did this 5
-                                // times" is trustworthy in a way that a bare
-                                // "detected" never is.
-                                Text(learned.map {
-                                        String(format: loc("tx.learned_from"), $0.count, $0.matchedTerm)
-                                     } ?? String(format: loc("tx.auto_detected"), suggested.displayLabel))
-                                    .font(.system(size: 12, weight: .medium)).foregroundStyle(AppTheme.textSecondary)
-                                Spacer()
-                                Button {
-                                    HapticManager.shared.tap()
-                                    withAnimation { selectedCategory = suggested }
-                                } label: {
-                                    Text(loc("tx.apply")).font(.system(size: 11, weight: .semibold))
-                                        .foregroundStyle(AppTheme.bg)
-                                        .padding(.horizontal, 10).padding(.vertical, 4)
-                                        .background(suggested.color, in: Capsule())
-                                }
-                            }
-                            .padding(.horizontal, 22)
-                            .transition(.move(edge: .top).combined(with: .opacity))
-                        }
-
-                        // Category
-                        VStack(spacing: 8) {
-                            Text(loc("common.category")).font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
-                                .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 22)
-                            ScrollView(.horizontal, showsIndicators: false) {
-                                HStack(spacing: 10) {
-                                    ForEach(availableCategories, id: \.self) { cat in
-                                        Button {
-                                            HapticManager.shared.tap()
-                                            withAnimation(.spring(response: 0.3)) { selectedCategory = cat }
-                                        } label: {
-                                            HStack(spacing: 6) {
-                                                Image(systemName: cat.icon).font(.system(size: 13))
-                                                Text(cat.displayLabel).font(.system(size: 13, weight: .medium))
-                                            }
-                                            .foregroundStyle(selectedCategory == cat ? AppTheme.bg : AppTheme.textSecondary)
-                                            .padding(.horizontal, 16).padding(.vertical, 10)
-                                            .background(selectedCategory == cat ? cat.color : AppTheme.cardDark, in: Capsule())
-                                        }
-                                        .buttonStyle(ScaleButtonStyle())
-                                    }
-                                }
-                                .padding(.horizontal, 22)
-                            }
-                        }
-                        .opacity(appeared ? 1 : 0)
-                        .animation(AppMotion.appear, value: appeared)
-
-                        if vm.cards.count > 1 {
-                            VStack(spacing: 8) {
-                                Text(loc("debt.card")).font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
-                                    .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 22)
-                                // Chips, not miniature cards.
-                                //
-                                // Each entry carried a holder name, a masked
-                                // number, a currency and sometimes two badges —
-                                // and the holder name is the SAME on every card
-                                // a person owns, so the row repeated "Fahmi
-                                // Aquinas" three times while the thing that
-                                // actually distinguishes them sat underneath in
-                                // small grey text. Currency was printed on all
-                                // of them when all of them were IDR.
-                                //
-                                // What identifies a card here is its colour and
-                                // its four digits, so that is what a chip is: a
-                                // gradient spine borrowed from the Wallet face,
-                                // the bank or provider, and the digits. Anything
-                                // that is true of every card — a currency they
-                                // all share — is not shown, because a label
-                                // repeated on every option distinguishes none.
-                                CardChipPicker(
-                                    cards: vm.cards,
-                                    isSelected: { c in
-                                        vm.cards.firstIndex(where: { $0.id == c.id }) == selectedCardIndex
-                                    },
-                                    onSelect: { c in
-                                        if let i = vm.cards.firstIndex(where: { $0.id == c.id }) {
-                                            selectedCardIndex = i
-                                        }
-                                    },
-                                    currencyContext: currency)
-                            }
-                            .opacity(appeared ? 1 : 0)
-                            .animation(AppMotion.appear, value: appeared)
-                            .onChange(of: selectedCardIndex) { _, i in
-                                guard i < vm.cards.count else { return }
-                                let card = vm.cards[i]
-                                let cardCur = card.currency.isEmpty
-                                    ? CurrencyManager.shared.preferredCurrency
-                                    : card.currency
-                                currency = cardCur
-                                saveInPreferred = false  // reset, kartu baru pasti sama currency-nya
-                                // Switching to a credit card while Income is
-                                // selected would leave the form on a type its
-                                // own picker now refuses to select.
-                                if card.isCreditCard, txType == .income {
-                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
-                                        txType = .expense
-                                    }
-                                    if !availableCategories.contains(selectedCategory) {
-                                        selectedCategory = .shopping
-                                    }
-                                }
-                            }
-                            // Bug 1 fix: auto-enable konversi saat user pilih mata uang
-                            // berbeda dari kartu. Tanpa ini user bisa simpan transaksi USD
-                            // ke kartu IDR tanpa konversi — balance jadi kacau.
-                            .onChange(of: currency) { _, newCur in
-                                withAnimation(.spring(response: 0.3)) {
-                                    saveInPreferred = newCur != selectedCardCurrency
-                                }
-                            }
-                        }
-
-                        VStack(spacing: 8) {
-                            Text(loc("common.date")).font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
-                                .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 22)
-                            DatePicker("", selection: $selectedDate, displayedComponents: [.date, .hourAndMinute])
-                                .datePickerStyle(.compact).labelsHidden().tint(AppTheme.accent)
-                                .padding(.horizontal, 22).frame(maxWidth: .infinity, alignment: .leading)
-                        }
-                        .opacity(appeared ? 1 : 0)
-                        .animation(AppMotion.appear, value: appeared)
-
-                        SheetField(label: loc("tx.notes"), placeholder: loc("tx.notes_placeholder"), text: $notes)
-                            .padding(.horizontal, 22)
-                            .opacity(appeared ? 1 : 0)
-                            .animation(AppMotion.appear, value: appeared)
-
-                        // A disabled control with no explanation reads as a
-                        // bug. Name the reason and point at the flow that does
-                        // handle money arriving on a credit card.
-                        if selectedIsCredit {
-                            InlineBanner(tone: .info, message: loc("tx.credit_no_income"))
-                                .padding(.horizontal, 22)
-                        }
-
-                        // No card warning — uses warning tone (orange) since
-                        // the user can resolve this by adding a card; not
-                        // an error state in itself.
-                        if vm.cards.isEmpty {
-                            InlineBanner(tone: .warning, message: loc("common.add_card_tx"))
-                                .padding(.horizontal, 22)
-                        }
-
-                        // Negative balance — HARD BLOCK. Uses the standard
-                        // error InlineBanner. The original two-line content
-                        // (label + available-balance subtitle) is concatenated
-                        // into one message — InlineBanner supports multi-line
-                        // text via fixedSize(vertical:).
-                        if wouldGoNegative && !vm.cards.isEmpty && txType == .expense {
-                            let msg = loc("tx.insufficient") + "\n"
-                                + String(format: loc("tx.available_balance"),
-                                         CurrencyManager.shared.formatted(Swift.abs(selectedCardBalance),
-                                                                          currency: selectedCardCurrency))
-                            InlineBanner(tone: .error, message: msg)
-                                .padding(.horizontal, 22)
-                        }
-
-                        if showError {
-                            InlineBanner(tone: .error, message: loc("tx.valid_error"))
-                                .padding(.horizontal, 22)
-                        }
-
-                        Button { saveTransaction() } label: {
-                            // `canSubmit` precomputed once for both background
-                            // and foreground styling — avoids the previous
-                            // bug where the foreground was always
-                            // `AppTheme.bg` (light text) over a 0.3-opacity
-                            // gray background, producing near-invisible label
-                            // when disabled.
-                            let canSubmit = isValid && !(wouldGoNegative && txType == .expense)
-                            HStack(spacing: 10) {
-                                Image(systemName: txType.icon).font(.system(size: 16))
-                                Text(String(format: loc("tx.add_type"), txType.title)).font(.system(size: 16, weight: .bold))
-                            }
-                            .foregroundStyle(canSubmit ? AppTheme.onVividFill : AppTheme.textSecondary)
-                            .frame(maxWidth: .infinity).padding(.vertical, 16)
-                            .background(canSubmit ? txType.color : AppTheme.textSecondary.opacity(0.3), in: Capsule())
-                            .shadow(color: canSubmit ? txType.color.opacity(0.4) : .clear, radius: 12, y: 6)
-                        }
-                        .buttonStyle(ScaleButtonStyle()).disabled(!isValid || vm.cards.isEmpty || (wouldGoNegative && txType == .expense)).padding(.horizontal, 22).padding(.top, 6)
-                        .opacity(appeared ? 1 : 0)
-                        .animation(AppMotion.appear, value: appeared)
+                    VStack(spacing: 20) {
+                        scanEntrySection
+                        typeSection
+                        amountSection
+                        nameSection
+                        categorySection
+                        cardSection
+                        dateSection
+                        notesSection
+                        warningSection
+                        submitSection
 
                         Spacer(minLength: 40)
+                    }
+                    .padding(.top, 6)
+                    // One entrance for the whole form. Each section used to
+                    // carry its own `.opacity(appeared)` + `.animation`, which
+                    // is eight animations driven by one boolean.
+                    .opacity(appeared ? 1 : 0)
+                    .offset(y: appeared ? 0 : 16)
+                    .animation(AppMotion.appear, value: appeared)
+                    // These two were previously attached to the card picker and
+                    // so only ran when the user owned more than one card. The
+                    // currency rule is not about how many cards exist.
+                    .onChange(of: selectedCardIndex) { _, i in
+                        guard i < vm.cards.count else { return }
+                        let card = vm.cards[i]
+                        currency = card.currency.isEmpty
+                            ? CurrencyManager.shared.preferredCurrency
+                            : card.currency
+                        saveInPreferred = false   // a newly picked card matches its own currency
+                        // Switching to a credit card while Income is selected
+                        // would leave the form on a type its own picker now
+                        // refuses to let you select.
+                        if card.isCreditCard, txType == .income {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
+                                txType = .expense
+                            }
+                            if !availableCategories.contains(selectedCategory) {
+                                selectedCategory = .shopping
+                            }
+                        }
+                    }
+                    .onChange(of: currency) { _, newCur in
+                        // Without this a USD amount could be saved onto an IDR
+                        // card unconverted, and the balance stops adding up.
+                        withAnimation(.spring(response: 0.3)) {
+                            saveInPreferred = newCur != selectedCardCurrency
+                        }
                     }
                 }
             }
