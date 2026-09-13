@@ -101,6 +101,8 @@ enum ReceiptParser {
         "payment to", "paid to", "pay to", "payee", "recipient",
         "merchant name", "merchant", "nama merchant",
         "pembayaran ke", "bayar ke", "penerima", "kepada", "tujuan",
+        "rekening tujuan", "transfer ke", "kirim ke", "ke rekening",
+        "tujuan transfer", "destination", "beneficiary",
     ]
 
     /// Labels whose value is about the RAILS, never the shop.
@@ -108,6 +110,8 @@ enum ReceiptParser {
         "acquirer", "issuer", "rrn", "ref", "reference", "trace", "terminal",
         "merchant pan", "approval", "batch", "no. kartu", "card number",
         "sumber dana", "source of fund", "metode", "payment method",
+        "detail transaksi", "transaction detail", "rincian transaksi",
+        "sumber rekening", "rekening sumber", "dari rekening", "nomor referensi",
     ]
 
     /// Banks and wallets. These appear on every payment slip — often as a
@@ -115,15 +119,70 @@ enum ReceiptParser {
     /// mistaken for the shop. `LAUNDRY EXPERT` lost to a `BCA` watermark
     /// because the heuristic below simply took the first wordy line.
     private static let paymentBrands = [
+        // Banks
         "bca", "bri", "bni", "mandiri", "cimb", "niaga", "permata", "danamon",
         "ocbc", "panin", "btn", "bsi", "maybank", "jago", "seabank", "blu",
+        "bjb", "muamalat", "sinarmas", "btpn", "mega", "bukopin", "superbank",
+        "krom", "neobank", "allo", "hana", "line bank",
+        // Schemes
         "qris", "gpn", "visa", "mastercard", "prima", "alto", "artajasa",
+        // Mobile banking APP names. These are branded separately from the bank
+        // and change often — "Qita by BRI" launched after this parser was
+        // written and was read as the merchant on a BRI transfer slip. The app
+        // name is splashed across its own receipt screen exactly the way a
+        // bank watermark is.
+        "brimo", "qita", "qita by bri",
+        "livin", "livin by mandiri", "kopra",
+        "wondr", "wondr by bni",
+        "mybca", "bca mobile", "blu by bca digital",
+        "bale", "balé", "bale by btn", "btn mobile",
+        "byond", "byond by bsi", "bsi mobile",
+        "octo", "octo mobile", "octo clicks",
+        "permatamobile", "permata mobile", "d-bank", "dbank", "d-bank pro",
+        "one mobile", "paninmobile", "m2u", "m2u id", "jenius",
+        "simobiplus", "bjb digi", "mdin",
+        // Wallets that appear as the rail on a payment slip
+        "gopay", "ovo", "dana", "shopeepay", "linkaja", "sakuku", "flip",
     ]
 
     /// True when the line is nothing but a payment brand — "BCA", "QRIS",
     /// "Bank BCA". A shop whose name merely CONTAINS one of these (say
     /// "Toko Mandiri Jaya") is left alone, since only near-exact matches are
     /// rejected.
+    /// Status banners. Every banking app leads with one, and with the app
+    /// name, the bank and the user all excluded it becomes the first wordy
+    /// line left standing — "Transaksi Berhasil" would have been filed as the
+    /// shop.
+    private static let statusWords = [
+        "berhasil", "sukses", "successful", "success", "completed", "selesai",
+        "gagal", "failed", "pending", "diproses", "in process",
+        "menunggu", "waiting", "dibatalkan", "cancelled",
+    ]
+
+    private static func isStatusLine(_ line: String) -> Bool {
+        let l = line.lowercased()
+        return statusWords.contains { l.contains($0) }
+    }
+
+    /// The account holder's own name.
+    ///
+    /// A transfer slip shows sender and recipient as two blocks, and the
+    /// sender is the user. With the app name and the bank excluded, that block
+    /// is the next thing the heuristic reaches — which would file the user as
+    /// their own merchant. Nobody pays themselves.
+    private static var accountHolderName: String {
+        (Keychain.load(key: "user_name") ?? "")
+            .lowercased()
+            .trimmingCharacters(in: .whitespaces)
+    }
+
+    private static func isAccountHolder(_ line: String) -> Bool {
+        let holder = accountHolderName
+        guard holder.count >= 4 else { return false }   // too short to match safely
+        let l = line.lowercased().trimmingCharacters(in: .whitespaces)
+        return l == holder || l.contains(holder)
+    }
+
     private static func isPaymentBrandOnly(_ line: String) -> Bool {
         let cleaned = line.lowercased()
             .replacingOccurrences(of: "bank", with: " ")
@@ -212,6 +271,7 @@ enum ReceiptParser {
                 if payeeLabels.contains(where: { candLower.contains($0) }) { break }
                 if railLabels.contains(where: { candLower.contains($0) }) { break }
                 if isPaymentBrandOnly(candidate) || isIssuer(candidate) { break }
+                if isAccountHolder(candidate) || isStatusLine(candidate) { break }
                 // Stop at the next label/amount row rather than swallowing it.
                 if candidate.filter({ $0.isNumber }).count > candidate.filter({ $0.isLetter }).count { break }
                 value += (value.isEmpty ? "" : " ") + candidate
@@ -219,7 +279,7 @@ enum ReceiptParser {
             if value.count >= 3 { return value }
         }
 
-        let topLines = Array(lines.prefix(6))
+        let topLines = Array(lines.prefix(10))
 
         // Pass 1: known merchants. This catches Indomaret/Alfamart/etc. even if
         // they appear lower than line 1 (sometimes there's a logo region first).
@@ -252,6 +312,7 @@ enum ReceiptParser {
             }
             // A bare bank or scheme name is the payment rail, not the shop.
             if isPaymentBrandOnly(line) || isIssuer(line) { continue }
+            if isAccountHolder(line) || isStatusLine(line) { continue }
             // Nor is the label of a rail field.
             if railLabels.contains(where: { lower.contains($0) }) { continue }
             return line
