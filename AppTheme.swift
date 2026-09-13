@@ -30,7 +30,23 @@ struct AppTheme {
     /// they were fighting over one value.
     static let accent  = Color(UIColor.adaptive(dark: "#1DB87A", light: "#008049"))  // 6.51 / 4.54
     static let green   = Color(UIColor.adaptive(dark: "#1DB87A", light: "#008049"))  // 6.51 / 4.54
+    /// Red as TEXT or an icon on the page ground. Light mode has to be dark
+    /// enough to clear 4.5:1 there. For a red FILL see `redFill` — same split
+    /// as `accent` / `accentFill`, and for the same reason.
     static let red     = Color(UIColor.adaptive(dark: "#FF5B5B", light: "#DC0000"))  // 5.48 / 4.70
+
+    /// Red as a solid FILL — the Record button, delete chips, over-budget bars.
+    ///
+    /// Unchanged from the original palette in BOTH modes, because darkening it
+    /// for light mode was never the fill's problem: what matters on a fill is
+    /// the text sitting ON it. Left alone, the `red` darkening leaked into
+    /// every red button and turned a soft salmon into an alarm colour that no
+    /// longer matched the category chips beside it, which carry their own
+    /// fixed hex.
+    ///
+    /// Paired with `onVividFill`: near-white text on this was 2.76:1 — the
+    /// original palette was failing here too, just quietly.
+    static let redFill = Color(hex: "#FF5B5B")
     static let orange  = Color(UIColor.adaptive(dark: "#FB923C", light: "#B55304"))  // 7.37 / 4.51
     static let blue    = Color(UIColor.adaptive(dark: "#38BDF8", light: "#0676A8"))  // 7.79 / 4.58
     static let purple  = Color(UIColor.adaptive(dark: "#A78BFA", light: "#784CF7"))  // 6.13 / 4.54
@@ -60,13 +76,15 @@ struct AppTheme {
     /// printed. Dark mode already had the separation and is unchanged.
     static let accentTrack = Color(UIColor.adaptive(dark: "#2A3330", light: "#404744"))
 
-    /// Text and icons sitting on an `accentFill`. Unlike `onSolid` this does
-    /// NOT invert with the theme: `accentFill` is a bright green in BOTH
-    /// modes, so the text on it is dark in both (7.22:1 on the dark-mode fill,
-    /// 5.52:1 on the light one). Using `onSolid` here would put white on light
-    /// green — 3.35:1, which is exactly the failure this token set exists to
-    /// prevent.
-    static let onAccentFill = Color(hex: "#0D1514")
+    /// Text and icons sitting on a VIVID fill — `accentFill` or `redFill`.
+    ///
+    /// Unlike `onSolid` this does NOT invert with the theme, because both of
+    /// those fills are bright in BOTH modes, so the text on them is dark in
+    /// both: 7.22:1 on dark-mode green, 5.52:1 on light-mode green, 6.08:1 on
+    /// red. Using `onSolid` here would put white on a light fill — 3.35:1 on
+    /// green, 2.76:1 on red — which is exactly the failure this token set
+    /// exists to prevent.
+    static let onVividFill = Color(hex: "#0D1514")
 
     /// Text and icons sitting ON a solid `red` / `orange`
     /// fill — which is the opposite problem from text on the page ground.

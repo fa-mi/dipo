@@ -433,7 +433,7 @@ struct SmartBudgetSettingsSheet: View {
                         Image(systemName: "slider.horizontal.3").font(.system(size: 14))
                         Text(loc("budget.go_settings")).font(.system(size: 15, weight: .semibold))
                     }
-                    .foregroundStyle(AppTheme.onAccentFill)
+                    .foregroundStyle(AppTheme.onVividFill)
                     .padding(.horizontal, 28).padding(.vertical, 14)
                     .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: 14))
                     .shadow(color: AppTheme.accent.opacity(0.35), radius: 10, y: 4)

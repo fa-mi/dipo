@@ -41,7 +41,7 @@ struct CreditCardLiabilityRow: View {
                 Text(title).font(.system(size: 12, weight: .semibold))
                     .lineLimit(1).minimumScaleFactor(0.8)
             }
-            .foregroundStyle(prominent ? AppTheme.onAccentFill : AppTheme.purple)
+            .foregroundStyle(prominent ? AppTheme.onVividFill : AppTheme.purple)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 10)
             .background {

@@ -484,7 +484,7 @@ struct AIChatView: View {
                 Spacer(minLength: 50)
                 Text(msg.text)
                     .font(.system(size: 14))
-                    .foregroundStyle(AppTheme.onAccentFill)
+                    .foregroundStyle(AppTheme.onVividFill)
                     .padding(.horizontal, 14).padding(.vertical, 10)
                     .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: 16))
             }
@@ -629,7 +629,7 @@ struct AIChatView: View {
                 } label: {
                     Image(systemName: "arrow.up")
                         .font(.system(size: 16, weight: .bold))
-                        .foregroundStyle(AppTheme.onAccentFill)
+                        .foregroundStyle(AppTheme.onVividFill)
                         .frame(width: 38, height: 38)
                         .background(AppTheme.accentFill, in: Circle())
                 }

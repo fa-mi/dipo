@@ -1422,9 +1422,9 @@ struct HomeHeader: View {
                         }
                         if notifMgr.unreadCount > 0 {
                             ZStack {
-                                Circle().fill(AppTheme.red).frame(width: 18, height: 18)
+                                Circle().fill(AppTheme.redFill).frame(width: 18, height: 18)
                                 Text(notifMgr.unreadCount > 9 ? "9+" : "\(notifMgr.unreadCount)")
-                                    .font(.system(size: 9, weight: .bold)).foregroundStyle(AppTheme.onSolid)
+                                    .font(.system(size: 9, weight: .bold)).foregroundStyle(AppTheme.onVividFill)
                             }
                             .offset(x: 4, y: -4)
                         }
@@ -2096,12 +2096,12 @@ struct SwipeToDeleteRow<Content: View>: View {
                     VStack(spacing: 5) {
                         ZStack {
                             Circle()
-                                .fill(AppTheme.red)
+                                .fill(AppTheme.redFill)
                                 .frame(width: 44, height: 44)
                                 .shadow(color: AppTheme.red.opacity(0.22), radius: 4, y: 2)
                             Image(systemName: "trash.fill")
                                 .font(.system(size: 16, weight: .semibold))
-                                .foregroundStyle(AppTheme.onSolid)
+                                .foregroundStyle(AppTheme.onVividFill)
                         }
                         Text(loc("common.delete"))
                             .font(.system(size: 11, weight: .semibold))

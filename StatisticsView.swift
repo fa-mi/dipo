@@ -1554,7 +1554,7 @@ struct NetBalanceSummary: View {
             GeometryReader { g in
                 ZStack(alignment: .leading) {
                     RoundedRectangle(cornerRadius: 4).fill(AppTheme.accent.opacity(0.2)).frame(height: 6)
-                    RoundedRectangle(cornerRadius: 4).fill(AppTheme.red)
+                    RoundedRectangle(cornerRadius: 4).fill(AppTheme.redFill)
                         .frame(width: g.size.width * CGFloat(spentPct / 100), height: 6)
                         .animation(.spring(response: 0.8, dampingFraction: 0.8), value: spentPct)
                     // Where TIME is. Spending bar behind this line = ahead of

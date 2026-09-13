@@ -550,7 +550,11 @@ struct TransactionDetailSheet: View {
     enum EditType: String, CaseIterable {
         case expense = "Expense"
         case income  = "Income"
-        var color: Color { self == .expense ? AppTheme.red : AppTheme.accent }
+        /// Used only as a solid fill (the type capsule, the Record button), so
+        /// it takes the fill tokens. Reading `AppTheme.red` here is what
+        /// dragged the light-mode button from salmon to a hard red when `red`
+        /// was darkened for TEXT legibility — a change the fill never needed.
+        var color: Color { self == .expense ? AppTheme.redFill : AppTheme.accentFill }
 
         /// Localized label for the segmented picker. The rawValue stays English
         /// since it's used purely internally (Hashable for ForEach); it never
@@ -837,7 +841,7 @@ struct TransactionDetailSheet: View {
                     } label: {
                         Text(type.localizedLabel)
                             .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(editType == type ? AppTheme.bg : AppTheme.textSecondary)
+                            .foregroundStyle(editType == type ? AppTheme.onVividFill : AppTheme.textSecondary)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 12)
                             .background { if editType == type { Capsule().fill(type.color) } }
@@ -1164,7 +1168,11 @@ struct AddTransactionSheet: View {
                 }
             }
 
-        var color: Color { self == .expense ? AppTheme.red : AppTheme.accent }
+        /// Used only as a solid fill (the type capsule, the Record button), so
+        /// it takes the fill tokens. Reading `AppTheme.red` here is what
+        /// dragged the light-mode button from salmon to a hard red when `red`
+        /// was darkened for TEXT legibility — a change the fill never needed.
+        var color: Color { self == .expense ? AppTheme.redFill : AppTheme.accentFill }
         var icon: String { self == .expense ? "arrow.up.circle.fill" : "arrow.down.circle.fill" }
     }
 
@@ -1286,7 +1294,7 @@ struct AddTransactionSheet: View {
                                         Image(systemName: type.icon).font(.system(size: 15))
                                         Text(type.title).font(.system(size: 15, weight: .semibold))
                                     }
-                                    .foregroundStyle(txType == type ? AppTheme.bg
+                                    .foregroundStyle(txType == type ? AppTheme.onVividFill
                                                      : AppTheme.textSecondary.opacity(blocked ? 0.35 : 1))
                                     .frame(maxWidth: .infinity).padding(.vertical, 13)
                                     .background { if txType == type { Capsule().fill(type.color).shadow(color: type.color.opacity(0.4), radius: 8, y: 4) } }
@@ -1647,7 +1655,7 @@ struct AddTransactionSheet: View {
                                 Image(systemName: txType.icon).font(.system(size: 16))
                                 Text(String(format: loc("tx.add_type"), txType.title)).font(.system(size: 16, weight: .bold))
                             }
-                            .foregroundStyle(canSubmit ? AppTheme.bg : AppTheme.textSecondary)
+                            .foregroundStyle(canSubmit ? AppTheme.onVividFill : AppTheme.textSecondary)
                             .frame(maxWidth: .infinity).padding(.vertical, 16)
                             .background(canSubmit ? txType.color : AppTheme.textSecondary.opacity(0.3), in: Capsule())
                             .shadow(color: canSubmit ? txType.color.opacity(0.4) : .clear, radius: 12, y: 6)

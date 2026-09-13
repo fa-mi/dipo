@@ -565,7 +565,7 @@ struct CardFormSheet: View {
                     }
                     if selected {
                         Image(systemName: "checkmark.circle.fill").font(.system(size: 13))
-                            .foregroundStyle(AppTheme.onAccentFill).background(AppTheme.accentFill, in: Circle())
+                            .foregroundStyle(AppTheme.onVividFill).background(AppTheme.accentFill, in: Circle())
                             .offset(x: 20, y: -13)
                     }
                 }

@@ -578,7 +578,7 @@ struct NewTicketForm: View {
                     .multilineTextAlignment(.center).padding(.horizontal, 32)
             }
             Button { onDone() } label: {
-                Text(loc("common.done")).font(.system(size: 16, weight: .semibold)).foregroundStyle(AppTheme.onAccentFill)
+                Text(loc("common.done")).font(.system(size: 16, weight: .semibold)).foregroundStyle(AppTheme.onVividFill)
                     .frame(maxWidth: .infinity).padding(.vertical, 16)
                     .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: 18))
             }
@@ -973,7 +973,7 @@ struct TicketThreadView: View {
             VStack(alignment: .trailing, spacing: 4) {
                 Text(reply.createdAt.formatted(date: .abbreviated, time: .shortened))
                     .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
-                Text(reply.message).font(.system(size: 14)).foregroundStyle(AppTheme.onAccentFill).lineSpacing(4)
+                Text(reply.message).font(.system(size: 14)).foregroundStyle(AppTheme.onVividFill).lineSpacing(4)
                     .padding(14)
                     .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
             }

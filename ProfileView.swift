@@ -1970,7 +1970,7 @@ struct BackupPreviewSheet: View {
                 } label: {
                     Text(loc("backup.preview.continue"))
                         .font(.system(size: 15, weight: .bold))
-                        .foregroundStyle(AppTheme.onAccentFill)
+                        .foregroundStyle(AppTheme.onVividFill)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 14)
                         .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: 14))
@@ -2181,7 +2181,7 @@ struct BackTapGuideView: View {
                                 Image(systemName: "arrow.up.forward.app.fill").font(.system(size: 14))
                                 Text(loc("backtap.open_shortcuts")).font(.system(size: 15, weight: .semibold))
                             }
-                            .foregroundStyle(AppTheme.onAccentFill)
+                            .foregroundStyle(AppTheme.onVividFill)
                             .frame(maxWidth: .infinity).padding(.vertical, 14)
                             .background(AppTheme.accentFill, in: Capsule())
                         }

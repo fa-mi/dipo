@@ -182,7 +182,7 @@ struct ReconnectedToast: View {
                     Text(loc("network.back_online"))
                         .font(.system(size: 13, weight: .semibold))
                 }
-                .foregroundStyle(AppTheme.onAccentFill)
+                .foregroundStyle(AppTheme.onVividFill)
                 .padding(.horizontal, 16).padding(.vertical, 9)
                 .background(
                     Capsule().fill(AppTheme.accentFill)

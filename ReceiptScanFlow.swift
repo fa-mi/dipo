@@ -363,7 +363,7 @@ private struct LandingView: View {
                                  : loc("receipt.landing.upload_now"))
                                 .font(.system(size: 16, weight: .bold))
                         }
-                        .foregroundStyle(AppTheme.onAccentFill)
+                        .foregroundStyle(AppTheme.onVividFill)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 17)
                         .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: 16))
@@ -398,7 +398,7 @@ private struct ReceiptIllustration: View {
                 .overlay(
                     Image(systemName: "dollarsign")
                         .font(.system(size: 18, weight: .heavy))
-                        .foregroundStyle(AppTheme.onAccentFill)
+                        .foregroundStyle(AppTheme.onVividFill)
                 )
                 .offset(x: -78, y: -82)
                 .shadow(color: AppTheme.accent.opacity(0.3), radius: 8, y: 4)
@@ -908,7 +908,7 @@ private struct ScanningProgressView: View {
                         Text(String(format: loc("receipt.scanning.progress"), Int(progress * 100)))
                             .font(.system(size: 12, weight: .semibold))
                     }
-                    .foregroundStyle(AppTheme.onAccentFill)
+                    .foregroundStyle(AppTheme.onVividFill)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
                     .background(AppTheme.accentFill, in: Capsule())
@@ -1002,7 +1002,7 @@ private struct ScanErrorView: View {
                     } label: {
                         Text(loc("receipt.error.retry"))
                             .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(AppTheme.onAccentFill)
+                            .foregroundStyle(AppTheme.onVividFill)
                             .padding(.horizontal, 22).padding(.vertical, 11)
                             .background(AppTheme.accentFill, in: Capsule())
                     }

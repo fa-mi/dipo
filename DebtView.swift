@@ -577,7 +577,7 @@ struct SalarySetupCTA: View {
                     Image(systemName: "plus.circle.fill").font(.system(size: 15))
                     Text(loc("salary.cta.button")).font(.system(size: 15, weight: .bold))
                 }
-                .foregroundStyle(AppTheme.onAccentFill)
+                .foregroundStyle(AppTheme.onVividFill)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 14)
                 .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: 14))
