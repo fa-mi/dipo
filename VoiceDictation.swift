@@ -505,106 +505,81 @@ struct VoiceCaptureView: View {
     }
 }
 
-/// The listening indicator — a wireframe sphere that crumples when you speak.
+/// The listening indicator.
 ///
-/// Depth is what sells it: every point is projected with perspective and then
-/// drawn at an opacity taken from its z, so the far side of the sphere sits
-/// behind the near side instead of tangling with it. Flat concentric rings
-/// read as a target, not an object.
+/// Two conic gradients turning at different speeds and in opposite directions,
+/// heavily blurred and then clipped to a circle. Blur first, clip second: that
+/// order is what gives a soft, liquid interior behind a crisp edge — blurring
+/// after the clip would fray the silhouette into a smudge.
 ///
-/// The deformation is driven by the live input level, because that answers the
-/// one question a dictation screen must answer at a glance: is it hearing me?
-/// A spinner cannot, and silence that looks identical to speech is the fastest
-/// way to make dictation feel broken. It keeps turning while the room is quiet
-/// — a frozen orb reads as a hung screen.
+/// The counter-rotation is the whole trick. One turning gradient just spins;
+/// two crossing each other at different rates never repeat the same way twice,
+/// so the surface reads as moving rather than rotating.
 ///
-/// Built with Canvas rather than a package: this is perspective projection and
-/// a sine, and a third-party dependency for it would be one more thing to
-/// break on an Xcode update.
+/// Voice drives scale, blur and the weight of the second layer together — a
+/// single one of those on its own reads as a pulse, which is a heartbeat, not
+/// a voice. It keeps breathing while the room is quiet, because an orb frozen
+/// at rest reads as a hung screen.
+///
+/// Hues stay inside DiPo's palette — green through teal to sky — rather than
+/// the blue-to-pink of the reference. They are analogous, so they blend into
+/// iridescence instead of mud.
 private struct VoiceOrb: View {
     let level: Double
     let active: Bool
 
-    /// Rings of latitude and longitude. Enough to read as a surface, few
-    /// enough to stay cheap at 60fps.
-    private let lats = 9
-    private let longs = 14
-    private let seg = 44
+    /// Gradient stops. First and last match so the conic seam is invisible.
+    private var warm: [Color] {
+        [AppTheme.voiceGlow, AppTheme.accentFill, AppTheme.teal,
+         AppTheme.voiceGlow.opacity(0.85), AppTheme.voiceGlow]
+    }
+    private var cool: [Color] {
+        [AppTheme.blue, AppTheme.voiceGlow.opacity(0.9), AppTheme.teal,
+         AppTheme.accentFill.opacity(0.8), AppTheme.blue]
+    }
 
     var body: some View {
-        // Drives itself: one continuous clock instead of a repeating
-        // `withAnimation`, which stutters whenever another animation on the
-        // screen retimes it.
         TimelineView(.animation) { timeline in
             let t = timeline.date.timeIntervalSinceReferenceDate
-            Canvas { ctx, size in
-                let c = CGPoint(x: size.width / 2, y: size.height / 2)
-                let R = min(size.width, size.height) / 2 - 10
-                let yaw = t * 0.45
-                let amp = active ? min(level * 1.9, 1.0) : 0
-                // Even at rest the surface breathes, so the sphere never looks
-                // like a still image.
-                let idle = 0.055
+            let amp = active ? min(level * 1.8, 1.0) : 0
+            // Never fully still.
+            let breathe = 1 + sin(t * 0.9) * 0.012
 
-                /// Sphere point → screen, with its depth.
-                func project(_ theta: Double, _ phi: Double) -> (CGPoint, Double) {
-                    // Two travelling waves rather than one: a single sine makes
-                    // the sphere pulse as one blob, which reads as a heartbeat
-                    // instead of a voice.
-                    let wob = sin(phi * 3.0 + t * 1.7) * cos(theta * 2.0 - t * 1.1)
-                           + 0.5 * sin(theta * 4.0 + t * 2.3)
-                    let r = R * (0.84 + (idle + amp * 0.20) * wob)
+            ZStack {
+                // Bloom escaping the silhouette, so the orb sits IN the screen
+                // rather than on top of it.
+                Circle()
+                    .fill(AppTheme.voiceGlow.opacity(active ? 0.20 + amp * 0.18 : 0.10))
+                    .blur(radius: 34)
+                    .scaleEffect(1.06 + amp * 0.10)
 
-                    let x0 = r * sin(phi) * cos(theta)
-                    let y0 = r * cos(phi)
-                    let z0 = r * sin(phi) * sin(theta)
+                ZStack {
+                    Circle()
+                        .fill(AngularGradient(colors: warm, center: .center,
+                                              angle: .degrees(t * 17)))
+                    Circle()
+                        .fill(AngularGradient(colors: cool, center: .center,
+                                              angle: .degrees(-t * 26 + 140)))
+                        .blendMode(.screen)
+                        .opacity(0.52 + amp * 0.30)
 
-                    let x1 = x0 * cos(yaw) - z0 * sin(yaw)
-                    let z1 = x0 * sin(yaw) + z0 * cos(yaw)
-
-                    // A slight tilt shows the poles, which is what stops it
-                    // reading as a flat circle.
-                    let tilt = 0.42
-                    let y2 = y0 * cos(tilt) - z1 * sin(tilt)
-                    let z2 = y0 * sin(tilt) + z1 * cos(tilt)
-
-                    let d = R * 3.4
-                    let k = d / (d + z2)
-                    return (CGPoint(x: c.x + x1 * k, y: c.y + y2 * k), z2 / R)
+                    // Off-centre highlight. Without it the disc is evenly lit
+                    // and reads flat; a light source gives it a near side.
+                    RadialGradient(colors: [.white.opacity(0.55), .clear],
+                                   center: UnitPoint(x: 0.34, y: 0.28),
+                                   startRadius: 2, endRadius: 150)
+                        .blendMode(.softLight)
                 }
-
-                /// Near lines are bright and solid, far lines fade — this is
-                /// the whole illusion.
-                func draw(_ pts: [(CGPoint, Double)]) {
-                    guard pts.count > 1 else { return }
-                    for i in 0..<(pts.count - 1) {
-                        let (p1, z1) = pts[i]
-                        let (p2, z2) = pts[i + 1]
-                        let depth = (z1 + z2) / 2                 // -1 (near) … 1 (far)
-                        let front = (1 - depth) / 2               // 1 near, 0 far
-                        let o = 0.07 + front * (active ? 0.62 : 0.34)
-                        var seg = Path()
-                        seg.move(to: p1)
-                        seg.addLine(to: p2)
-                        ctx.stroke(seg,
-                                   with: .color(AppTheme.voiceGlow.opacity(o)),
-                                   lineWidth: 0.55 + front * 1.15)
-                    }
-                }
-
-                for i in 1..<lats {
-                    let phi = Double(i) / Double(lats) * .pi
-                    draw((0...seg).map { s in
-                        project(Double(s) / Double(seg) * 2 * .pi, phi)
-                    })
-                }
-                for j in 0..<longs {
-                    let theta = Double(j) / Double(longs) * 2 * .pi
-                    draw((0...seg).map { s in
-                        project(theta, Double(s) / Double(seg) * .pi)
-                    })
-                }
+                // Oversized before the blur so the soft edge falls OUTSIDE the
+                // clip. Blurring at the exact clip size pulls transparency
+                // inward and frays the silhouette into a smudge.
+                .scaleEffect(1.34)
+                .blur(radius: 26 - amp * 7)     // tightens as the voice rises
+                .clipShape(Circle())
+                .scaleEffect(breathe * (1 + amp * 0.055))
+                .shadow(color: AppTheme.voiceGlow.opacity(0.30), radius: 22)
             }
+            .animation(.easeOut(duration: 0.14), value: amp)
         }
     }
 }
