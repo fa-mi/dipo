@@ -195,7 +195,7 @@ struct SocialLoginView: View {
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
-                        .background(Color(.label), in: RoundedRectangle(cornerRadius: 16))
+                        .background(Color(.label), in: RoundedRectangle(cornerRadius: AppRadius.md))
                     }
                     .buttonStyle(ScaleButtonStyle())
                     .disabled(isLoading)
@@ -240,8 +240,8 @@ struct SocialLoginView: View {
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
-                        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
-                        .overlay(RoundedRectangle(cornerRadius: 16).stroke(AppTheme.cardMid, lineWidth: 1.5))
+                        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+                        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.cardMid, lineWidth: 1.5))
                     }
                     .buttonStyle(ScaleButtonStyle())
                     .disabled(isLoading)
@@ -355,8 +355,8 @@ struct NameEntryView: View {
                         .multilineTextAlignment(.center)
                         .padding(.vertical, 16)
                         .padding(.horizontal, 20)
-                        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
-                        .overlay(RoundedRectangle(cornerRadius: 16)
+                        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+                        .overlay(RoundedRectangle(cornerRadius: AppRadius.md)
                             .stroke(focused ? AppTheme.accent.opacity(0.6) : Color.clear, lineWidth: 1.5))
                         .focused($focused)
                         .onSubmit { authVM.submitName() }
@@ -385,12 +385,12 @@ struct NameEntryView: View {
                     Image(systemName: "arrow.right")
                         .font(.system(.subheadline, weight: .semibold))
                 }
-                .foregroundStyle(AppTheme.bg)
+                .foregroundStyle(authVM.userName.count >= 2 ? AppTheme.onVividFill : AppTheme.textSecondary)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 16)
                 .background(
-                    authVM.userName.count >= 2 ? AppTheme.accent : AppTheme.textSecondary.opacity(0.3),
-                    in: Capsule()
+                    authVM.userName.count >= 2 ? AppTheme.accent : AppTheme.textSecondary.opacity(0.25),
+                    in: RoundedRectangle(cornerRadius: AppRadius.lg)
                 )
             }
             .buttonStyle(ScaleButtonStyle())
@@ -464,7 +464,6 @@ struct BiometricGateView: View {
                                 .padding(.horizontal, 28)
                                 .padding(.vertical, 14)
                                 .background(AppTheme.accentFill, in: Capsule())
-                                .shadow(color: AppTheme.accent.opacity(0.35), radius: 12, y: 6)
                             }
                             .buttonStyle(ScaleButtonStyle())
                         }
@@ -520,7 +519,6 @@ struct BiometricPulseIcon: View {
                     .fill(AppTheme.cardDark)
                     .frame(width: 72, height: 72)
                     .overlay(Circle().stroke(AppTheme.accent.opacity(0.3), lineWidth: 1.5))
-                    .shadow(color: AppTheme.accent.opacity(0.2), radius: 16)
 
                 if authVM.isLoading {
                     ProgressView()

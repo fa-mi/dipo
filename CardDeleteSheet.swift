@@ -80,7 +80,7 @@ struct CardDeleteSheet: View {
             Spacer(minLength: 0)
         }
         .padding(14)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
     }
 
     // MARK: What goes with it
@@ -109,7 +109,7 @@ struct CardDeleteSheet: View {
             }
         }
         .padding(14)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
     }
 
     private var divider: some View {
@@ -142,7 +142,7 @@ struct CardDeleteSheet: View {
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(13)
-            .background(AppTheme.orange.opacity(0.10), in: RoundedRectangle(cornerRadius: 14))
+            .background(AppTheme.orange.opacity(0.10), in: RoundedRectangle(cornerRadius: AppRadius.md))
     }
 
     // MARK: Arm
@@ -182,7 +182,7 @@ struct CardDeleteSheet: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
                     .background(canDelete ? AppTheme.red : AppTheme.cardMid,
-                                in: RoundedRectangle(cornerRadius: 16))
+                                in: RoundedRectangle(cornerRadius: AppRadius.md))
             }
             .buttonStyle(ScaleButtonStyle())
             .disabled(!canDelete)

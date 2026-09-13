@@ -397,8 +397,8 @@ struct RecurringExpensesView: View {
                                     Image(systemName: "chevron.right").font(.system(.caption2, weight: .semibold)).foregroundStyle(AppTheme.textSecondary)
                                 }
                                 .padding(14)
-                                .background(AppTheme.orange.opacity(0.10), in: RoundedRectangle(cornerRadius: 14))
-                                .overlay(RoundedRectangle(cornerRadius: 14).stroke(AppTheme.orange.opacity(0.25), lineWidth: 1))
+                                .background(AppTheme.orange.opacity(0.10), in: RoundedRectangle(cornerRadius: AppRadius.md))
+                                .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.orange.opacity(0.25), lineWidth: 1))
                             }
                             .buttonStyle(ScaleButtonStyle())
                             .padding(.horizontal, 22).padding(.top, 14)
@@ -425,8 +425,8 @@ struct RecurringExpensesView: View {
                                     Image(systemName: "chevron.right").font(.system(.caption2, weight: .semibold)).foregroundStyle(AppTheme.textSecondary)
                                 }
                                 .padding(14)
-                                .background(AppTheme.red.opacity(0.10), in: RoundedRectangle(cornerRadius: 14))
-                                .overlay(RoundedRectangle(cornerRadius: 14).stroke(AppTheme.red.opacity(0.25), lineWidth: 1))
+                                .background(AppTheme.red.opacity(0.10), in: RoundedRectangle(cornerRadius: AppRadius.md))
+                                .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.red.opacity(0.25), lineWidth: 1))
                             }
                             .buttonStyle(ScaleButtonStyle())
                             .padding(.horizontal, 22).padding(.top, 14)
@@ -502,7 +502,6 @@ struct RecurringExpensesView: View {
                 ZStack {
                     Circle().fill(cards.isEmpty ? AppTheme.cardMid : AppTheme.accent)
                         .frame(width: 42, height: 42)
-                        .shadow(color: cards.isEmpty ? .clear : AppTheme.accent.opacity(0.4), radius: 10, y: 4)
                     Image(systemName: "plus").font(.system(.body, weight: .semibold))
                         .foregroundStyle(cards.isEmpty ? AppTheme.textSecondary : AppTheme.bg)
                 }
@@ -523,7 +522,7 @@ struct RecurringExpensesView: View {
                 }
                 Spacer()
                 ZStack {
-                    RoundedRectangle(cornerRadius: 14).fill(AppTheme.accent.opacity(0.12)).frame(width: 52, height: 52)
+                    RoundedRectangle(cornerRadius: AppRadius.md).fill(AppTheme.accent.opacity(0.12)).frame(width: 52, height: 52)
                     Image(systemName: "arrow.triangle.2.circlepath").font(.system(.title2)).foregroundStyle(AppTheme.accent)
                 }
             }
@@ -541,8 +540,8 @@ struct RecurringExpensesView: View {
                 .padding(.horizontal, 18).padding(.vertical, 13)
             }
         }
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 20))
-        .overlay(RoundedRectangle(cornerRadius: 20).stroke(AppTheme.accent.opacity(0.18), lineWidth: 1))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.lg).stroke(AppTheme.accent.opacity(0.18), lineWidth: 1))
     }
 
     private var emptyState: some View {
@@ -568,7 +567,6 @@ struct RecurringExpensesView: View {
                     }
                     .foregroundStyle(AppTheme.bg).padding(.horizontal, 32).padding(.vertical, 14)
                     .background(AppTheme.accentFill, in: Capsule())
-                    .shadow(color: AppTheme.accent.opacity(0.35), radius: 12, y: 6)
                 }
                 .buttonStyle(ScaleButtonStyle())
             }
@@ -607,7 +605,7 @@ struct RecurringExpenseRow: View {
         } label: {
             HStack(spacing: 14) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 13).fill(expense.category.color.opacity(0.14)).frame(width: 46, height: 46)
+                    RoundedRectangle(cornerRadius: AppRadius.md).fill(expense.category.color.opacity(0.14)).frame(width: 46, height: 46)
                     Image(systemName: expense.category.icon).font(.system(.title3)).foregroundStyle(expense.category.color)
                 }
                 VStack(alignment: .leading, spacing: 5) {
@@ -663,8 +661,8 @@ struct RecurringExpenseRow: View {
                 }
             }
             .padding(14)
-            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 18))
-            .overlay(RoundedRectangle(cornerRadius: 18).stroke(AppTheme.cardMid.opacity(0.5), lineWidth: 1))
+            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+            .overlay(RoundedRectangle(cornerRadius: AppRadius.lg).stroke(AppTheme.cardMid.opacity(0.5), lineWidth: 1))
             .opacity(expense.isActive ? 1 : 0.7)
         }
         .buttonStyle(ScaleButtonStyle())
@@ -753,13 +751,13 @@ struct RecurringFormSheet: View {
                                         Image(systemName: "chevron.up.chevron.down").font(.system(.caption2)).imageScale(.small).foregroundStyle(AppTheme.textSecondary)
                                     }
                                     .padding(.horizontal, 14).padding(.vertical, 14)
-                                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
+                                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
                                 }
                                 TextField("0", text: $vm.formAmount)
                                     .font(.system(.title2, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
                                     .keyboardType(.decimalPad)
                                     .padding(.horizontal, 16).padding(.vertical, 14)
-                                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
+                                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
                                     .frame(maxWidth: .infinity)
                             }
                             .padding(.horizontal, 22)
@@ -838,10 +836,10 @@ struct RecurringFormSheet: View {
                                     }
 .accessibilityLabel(loc("a11y.later_day"))
                                 }
-                                .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: 12))
+                                .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: AppRadius.sm))
                             }
                             .padding(16)
-                            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
+                            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
                             .padding(.horizontal, 22)
                         }
 
@@ -861,7 +859,7 @@ struct RecurringFormSheet: View {
                         // Auto-record toggle
                         HStack(spacing: 12) {
                             Image(systemName: "wand.and.stars").font(.system(.callout)).foregroundStyle(AppTheme.accent)
-                                .frame(width: 36, height: 36).background(AppTheme.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
+                                .frame(width: 36, height: 36).background(AppTheme.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: AppRadius.sm))
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(loc("recurring.autorecord_label")).font(.system(.subheadline, weight: .medium)).foregroundStyle(AppTheme.textPrimary)
                                 Text(loc("recurring.autorecord_sub")).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
@@ -870,7 +868,7 @@ struct RecurringFormSheet: View {
                             Toggle("", isOn: $vm.formAutoRecord).labelsHidden().tint(AppTheme.accent)
                         }
                         .padding(14)
-                        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
+                        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
                         .padding(.horizontal, 22)
 
                         if let err = vm.formError {
@@ -907,7 +905,7 @@ struct RecurringFormSheet: View {
         } label: {
             Text(loc("recurring.save")).font(.system(.callout, weight: .bold))
                 .foregroundStyle(AppTheme.bg).frame(maxWidth: .infinity).padding(.vertical, 17)
-                .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: 16))
+                .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: AppRadius.md))
         }
         .buttonStyle(ScaleButtonStyle())
         .padding(.horizontal, 22)
@@ -1045,7 +1043,7 @@ struct OrphanedAutoChargesView: View {
                     .font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
             }
             .padding(12)
-            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
+            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
         }
         .buttonStyle(.plain)
     }
@@ -1061,7 +1059,7 @@ struct OrphanedAutoChargesView: View {
                         CurrencyManager.shared.formatted(chosenTotal, currency: CurrencyManager.shared.preferredCurrency)))
                 .font(.system(.callout, weight: .bold)).foregroundStyle(.white)
                 .frame(maxWidth: .infinity).padding(.vertical, 16)
-                .background(chosen.isEmpty ? AppTheme.cardMid : AppTheme.red, in: RoundedRectangle(cornerRadius: 16))
+                .background(chosen.isEmpty ? AppTheme.cardMid : AppTheme.red, in: RoundedRectangle(cornerRadius: AppRadius.md))
         }
         .buttonStyle(ScaleButtonStyle())
         .disabled(chosen.isEmpty)
@@ -1249,7 +1247,7 @@ struct PhantomAutoChargesView: View {
                     .foregroundStyle(p.isIncome ? AppTheme.accent : AppTheme.textPrimary)
             }
             .padding(12)
-            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
+            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
         }
         .buttonStyle(.plain)
     }
@@ -1273,7 +1271,7 @@ struct PhantomAutoChargesView: View {
                 Text(String(format: loc("recurring.phantom_delete"), chosen.count))
                     .font(.system(.callout, weight: .bold)).foregroundStyle(.white)
                     .frame(maxWidth: .infinity).padding(.vertical, 16)
-                    .background(chosen.isEmpty ? AppTheme.cardMid : AppTheme.red, in: RoundedRectangle(cornerRadius: 16))
+                    .background(chosen.isEmpty ? AppTheme.cardMid : AppTheme.red, in: RoundedRectangle(cornerRadius: AppRadius.md))
             }
             .buttonStyle(ScaleButtonStyle())
             .disabled(chosen.isEmpty)

@@ -171,7 +171,7 @@ struct ReceiptPreviewSheet: View {
                     .frame(maxWidth: .infinity)
                     .frame(height: 180)
                     .clipped()
-                    .clipShape(RoundedRectangle(cornerRadius: 14))
+                    .clipShape(RoundedRectangle(cornerRadius: AppRadius.md))
 
                 HStack(spacing: 4) {
                     Image(systemName: "magnifyingglass").font(.system(.caption2)).imageScale(.small)
@@ -209,7 +209,7 @@ struct ReceiptPreviewSheet: View {
         .padding(.horizontal, 13).padding(.vertical, 10)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background((low ? AppTheme.orange : AppTheme.accent).opacity(0.09),
-                    in: RoundedRectangle(cornerRadius: 12))
+                    in: RoundedRectangle(cornerRadius: AppRadius.sm))
     }
 
     private var infoCard: some View {
@@ -313,9 +313,9 @@ struct ReceiptPreviewSheet: View {
             }
         }
         .padding(.vertical, 4)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
         .overlay(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: AppRadius.md)
                 .stroke(AppTheme.cardMid.opacity(0.4), lineWidth: 1)
         )
     }
@@ -363,8 +363,8 @@ struct ReceiptPreviewSheet: View {
                                 .foregroundStyle(isSel ? AppTheme.onVividFill : AppTheme.textPrimary)
                                 .padding(.horizontal, 14).padding(.vertical, 10)
                                 .background(isSel ? AppTheme.accentFill : AppTheme.cardDark,
-                                            in: RoundedRectangle(cornerRadius: 12))
-                                .overlay(RoundedRectangle(cornerRadius: 12)
+                                            in: RoundedRectangle(cornerRadius: AppRadius.sm))
+                                .overlay(RoundedRectangle(cornerRadius: AppRadius.sm)
                                     .stroke(isSel ? Color.clear : AppTheme.cardMid.opacity(0.5), lineWidth: 1))
                             }
                             .buttonStyle(ScaleButtonStyle())
@@ -389,7 +389,7 @@ struct ReceiptPreviewSheet: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
-        .background(AppTheme.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 12))
+        .background(AppTheme.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: AppRadius.sm))
     }
 
     private var actionButtons: some View {
@@ -409,9 +409,9 @@ struct ReceiptPreviewSheet: View {
                 .foregroundStyle(AppTheme.textPrimary)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 14)
-                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
+                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 14)
+                    RoundedRectangle(cornerRadius: AppRadius.md)
                         .stroke(AppTheme.cardMid, lineWidth: 1)
                 )
             }
@@ -430,8 +430,7 @@ struct ReceiptPreviewSheet: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 14)
                 .background(canSave ? AppTheme.accent : AppTheme.textSecondary.opacity(0.3),
-                            in: RoundedRectangle(cornerRadius: 14))
-                .shadow(color: canSave ? AppTheme.accent.opacity(0.35) : .clear, radius: 12, y: 6)
+                            in: RoundedRectangle(cornerRadius: AppRadius.md))
             }
             .buttonStyle(ScaleButtonStyle())
             .disabled(!canSave)
@@ -450,7 +449,7 @@ struct ReceiptPreviewSheet: View {
             Spacer()
         }
         .padding(12)
-        .background(AppTheme.red.opacity(0.1), in: RoundedRectangle(cornerRadius: 10))
+        .background(AppTheme.red.opacity(0.1), in: RoundedRectangle(cornerRadius: AppRadius.sm))
     }
 
     // MARK: - Row helpers

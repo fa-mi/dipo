@@ -141,8 +141,8 @@ struct WebSyncView: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).stroke(AppTheme.accent.opacity(0.22), lineWidth: 1))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.accent.opacity(0.22), lineWidth: 1))
     }
 
     // MARK: Steps
@@ -156,7 +156,7 @@ struct WebSyncView: View {
             stepRow(3, "arrow.up.circle.fill",   AppTheme.accent, "websync.step3t", "websync.step3d")
         }
         .padding(.vertical, 4)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
     }
 
     private var stepDivider: some View {
@@ -167,7 +167,7 @@ struct WebSyncView: View {
                          _ titleKey: String, _ bodyKey: String) -> some View {
         HStack(alignment: .top, spacing: 13) {
             ZStack {
-                RoundedRectangle(cornerRadius: 11).fill(tint.opacity(0.14))
+                RoundedRectangle(cornerRadius: AppRadius.sm).fill(tint.opacity(0.14))
                     .frame(width: 36, height: 36)
                 Image(systemName: icon)
                     .font(.system(.callout, weight: .semibold))
@@ -244,8 +244,8 @@ struct WebSyncView: View {
         }
         .padding(13)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(tint.opacity(0.08), in: RoundedRectangle(cornerRadius: 13))
-        .overlay(RoundedRectangle(cornerRadius: 13).stroke(tint.opacity(0.2), lineWidth: 1))
+        .background(tint.opacity(0.08), in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(tint.opacity(0.2), lineWidth: 1))
         .transition(.opacity.combined(with: .move(edge: .top)))
     }
 
@@ -270,8 +270,7 @@ struct WebSyncView: View {
             }
             .foregroundStyle(AppTheme.bg)
             .frame(maxWidth: .infinity).padding(.vertical, 16)
-            .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: 15))
-            .shadow(color: AppTheme.accent.opacity(0.28), radius: 12, y: 5)
+            .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: AppRadius.md))
         }
         .buttonStyle(ScaleButtonStyle())
         .disabled(isUploading)

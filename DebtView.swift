@@ -269,7 +269,6 @@ struct DebtView: View {
                         Button { HapticManager.shared.tap(); vm.resetForm(); vm.showAddSheet = true } label: {
                             ZStack {
                                 Circle().fill(AppTheme.red.opacity(0.9)).frame(width: 42, height: 42)
-                                    .shadow(color: AppTheme.red.opacity(0.4), radius: 10, y: 4)
                                 Image(systemName: "plus").font(.system(.body, weight: .semibold)).foregroundStyle(.white)
                             }
                         }
@@ -581,14 +580,14 @@ struct SalarySetupCTA: View {
                 .foregroundStyle(AppTheme.onVividFill)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 14)
-                .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: 14))
+                .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: AppRadius.md))
             }
             .buttonStyle(ScaleButtonStyle())
         }
         .padding(20)
         .frame(maxWidth: .infinity)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 20))
-        .overlay(RoundedRectangle(cornerRadius: 20).stroke(AppTheme.accent.opacity(0.2), lineWidth: 1))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.lg).stroke(AppTheme.accent.opacity(0.2), lineWidth: 1))
     }
 }
 
@@ -646,12 +645,12 @@ struct HealthScoreCard: View {
                 Text(engine.primaryAdvice).font(.system(.footnote)).foregroundStyle(AppTheme.textSecondary).lineSpacing(2)
             }
             .padding(12)
-            .background(AppTheme.orange.opacity(0.07), in: RoundedRectangle(cornerRadius: 12))
-            .overlay(RoundedRectangle(cornerRadius: 12).stroke(AppTheme.orange.opacity(0.2), lineWidth: 1))
+            .background(AppTheme.orange.opacity(0.07), in: RoundedRectangle(cornerRadius: AppRadius.sm))
+            .overlay(RoundedRectangle(cornerRadius: AppRadius.sm).stroke(AppTheme.orange.opacity(0.2), lineWidth: 1))
         }
         .padding(18)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 20))
-        .overlay(RoundedRectangle(cornerRadius: 20).stroke(engine.healthColor.opacity(0.2), lineWidth: 1))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.lg).stroke(engine.healthColor.opacity(0.2), lineWidth: 1))
         .onAppear {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
                 animScore = engine.healthScore
@@ -778,7 +777,7 @@ struct AllocationCard: View {
             }
         }
         .padding(16)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 18))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
     }
 }
 
@@ -816,8 +815,8 @@ struct OverspendingWarning: View {
             Spacer()
         }
         .padding(14)
-        .background(AppTheme.red.opacity(0.08), in: RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).stroke(AppTheme.red.opacity(0.3), lineWidth: 1))
+        .background(AppTheme.red.opacity(0.08), in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.red.opacity(0.3), lineWidth: 1))
     }
 }
 
@@ -846,12 +845,12 @@ struct UrgentPaymentsCard: View {
                     Text(String(format: loc("debt.due_short"), debt.dueDayOfMonth)).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                 }
                 .padding(10)
-                .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: 10))
+                .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: AppRadius.sm))
             }
         }
         .padding(14)
-        .background(AppTheme.orange.opacity(0.07), in: RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).stroke(AppTheme.orange.opacity(0.25), lineWidth: 1))
+        .background(AppTheme.orange.opacity(0.07), in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.orange.opacity(0.25), lineWidth: 1))
     }
 }
 
@@ -873,7 +872,7 @@ struct DebtCard: View {
                 HStack(alignment: .top) {
                     // Priority badge + icon
                     ZStack {
-                        RoundedRectangle(cornerRadius: 12)
+                        RoundedRectangle(cornerRadius: AppRadius.sm)
                             .fill(debt.debtType.color.opacity(0.15))
                             .frame(width: 44, height: 44)
                         Image(systemName: debt.debtType.icon)
@@ -970,16 +969,15 @@ struct DebtCard: View {
                     .background(
                         LinearGradient(colors: [debt.debtType.color, debt.debtType.color.opacity(0.7)],
                                        startPoint: .leading, endPoint: .trailing),
-                        in: RoundedRectangle(cornerRadius: 12)
+                        in: RoundedRectangle(cornerRadius: AppRadius.sm)
                     )
-                    .shadow(color: debt.debtType.color.opacity(0.3), radius: 8, y: 4)
                 }
                 .buttonStyle(ScaleButtonStyle())
             }
             .padding(16)
         }
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 18))
-        .overlay(RoundedRectangle(cornerRadius: 18)
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.lg)
             .stroke(priority == 1 ? AppTheme.red.opacity(0.3) : Color.clear, lineWidth: 1))
         .confirmationDialog(debt.name, isPresented: $showActions, titleVisibility: .visible) {
             Button(loc("debt.make_payment")) { showPaymentSheet = true }
@@ -1135,7 +1133,6 @@ struct DebtPayoffCelebration: View {
                         .foregroundStyle(AppTheme.bg)
                         .padding(.horizontal, 44).padding(.vertical, 15)
                         .background(AppTheme.accentFill, in: Capsule())
-                        .shadow(color: AppTheme.accent.opacity(0.5), radius: 16, y: 8)
                 }
                 .buttonStyle(ScaleButtonStyle())
                 .scaleEffect(scale)
@@ -1205,12 +1202,12 @@ struct PayoffStrategyCard: View {
                              : CurrencyManager.shared.formatted(debt.currentBalance, currency: debt.currency))
                             .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                     }
-                    .padding(10).background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: 10))
+                    .padding(10).background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: AppRadius.sm))
                 }
             }
         }
         .padding(16)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 18))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
     }
 }
 
@@ -1239,7 +1236,6 @@ struct DebtEmptyState: View {
                 }
                 .foregroundStyle(.white).padding(.horizontal, 32).padding(.vertical, 14)
                 .background(AppTheme.red.opacity(0.9), in: Capsule())
-                .shadow(color: AppTheme.red.opacity(0.35), radius: 12, y: 6)
             }.buttonStyle(ScaleButtonStyle())
         }.padding(.horizontal, 40)
     }
@@ -1290,7 +1286,7 @@ struct DebtFormSheet: View {
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                 TextField("0", text: $vm.formBalance).font(.system(.body, weight: .bold))
                                     .foregroundStyle(AppTheme.red).keyboardType(.decimalPad)
-                                    .padding(14).background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
+                                    .padding(14).background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
                                     .onChange(of: vm.formBalance) { _, v in
                                         let n = v.replacingOccurrences(of: ",", with: ".")
                                         let f = n.filter { $0.isNumber || $0 == "." }
@@ -1310,7 +1306,7 @@ struct DebtFormSheet: View {
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                 TextField("0", text: $vm.formMinPayment).font(.system(.body, weight: .bold))
                                     .foregroundStyle(AppTheme.textPrimary).keyboardType(.decimalPad)
-                                    .padding(14).background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
+                                    .padding(14).background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
                                     .onChange(of: vm.formMinPayment) { _, v in
                                         let n = v.replacingOccurrences(of: ",", with: ".")
                                         let f = n.filter { $0.isNumber || $0 == "." }
@@ -1334,7 +1330,7 @@ struct DebtFormSheet: View {
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                 TextField("0.0", text: $vm.formInterestRate).font(.system(.body, weight: .bold))
                                     .foregroundStyle(AppTheme.orange).keyboardType(.decimalPad)
-                                    .padding(14).background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
+                                    .padding(14).background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
                                     .onChange(of: vm.formInterestRate) { _, v in
                                         // Normalize comma → dot for locales that use comma as decimal
                                         let normalized = v.replacingOccurrences(of: ",", with: ".")
@@ -1376,7 +1372,7 @@ struct DebtFormSheet: View {
                                     }
 .accessibilityLabel(loc("a11y.later_day"))
                                 }
-                                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
+                                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
                             }
                         }
                         .padding(.horizontal, 22)
@@ -1423,7 +1419,7 @@ struct DebtFormSheet: View {
                                     }
                                 }
                             }
-                            .padding(14).background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
+                            .padding(14).background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
                             .padding(.horizontal, 22)
                             .opacity(appeared ? 1 : 0)
                         }
@@ -1455,8 +1451,7 @@ struct DebtFormSheet: View {
                                 .font(.system(.callout, weight: .bold))
                                 .foregroundStyle(canSave ? .white : AppTheme.textSecondary)
                                 .frame(maxWidth: .infinity).padding(.vertical, 16)
-                                .background(canSave ? AppTheme.red.opacity(0.9) : AppTheme.textSecondary.opacity(0.3), in: Capsule())
-                                .shadow(color: canSave ? AppTheme.red.opacity(0.35) : .clear, radius: 12, y: 6)
+                                .background(canSave ? AppTheme.red.opacity(0.9) : AppTheme.textSecondary.opacity(0.3), in: RoundedRectangle(cornerRadius: AppRadius.lg))
                         }
                         .buttonStyle(ScaleButtonStyle())
                         .disabled(!canSave)
@@ -1576,7 +1571,7 @@ struct DebtPaymentSheet: View {
             // Debt summary
             HStack(spacing: 14) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 12)
+                    RoundedRectangle(cornerRadius: AppRadius.sm)
                         .fill(debt.debtType.color.opacity(0.15)).frame(width: 48, height: 48)
                     Image(systemName: debt.debtType.icon)
                         .font(.system(.title2)).foregroundStyle(debt.debtType.color)
@@ -1653,8 +1648,8 @@ struct DebtPaymentSheet: View {
                         .keyboardType(.decimalPad)
                 }
                 .padding(16)
-                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
-                .overlay(RoundedRectangle(cornerRadius: 14)
+                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+                .overlay(RoundedRectangle(cornerRadius: AppRadius.md)
                     .stroke(amount > 0 ? debt.debtType.color.opacity(0.4) : Color.clear, lineWidth: 1.5))
                 .padding(.horizontal, 22)
 
@@ -1721,12 +1716,12 @@ struct DebtPaymentSheet: View {
                                 Button { HapticManager.shared.tap(); selectedCardIndex = i } label: {
                                     VStack(spacing: 4) {
                                         ZStack {
-                                            RoundedRectangle(cornerRadius: 8)
+                                            RoundedRectangle(cornerRadius: AppRadius.xs)
                                                 .fill(LinearGradient(
                                                     colors: [Color(hex: card.gradientStart), Color(hex: card.gradientEnd)],
                                                     startPoint: .leading, endPoint: .trailing))
                                                 .frame(width: 80, height: 48)
-                                                .overlay(RoundedRectangle(cornerRadius: 8)
+                                                .overlay(RoundedRectangle(cornerRadius: AppRadius.xs)
                                                     .stroke(selectedCardIndex == i ? AppTheme.accent : Color.clear, lineWidth: 2))
                                             VStack(spacing: 2) {
                                                 Text(card.isDigitalWallet
@@ -1775,9 +1770,8 @@ struct DebtPaymentSheet: View {
                     ? AnyShapeStyle(LinearGradient(colors: [debt.debtType.color, debt.debtType.color.opacity(0.7)],
                                                    startPoint: .leading, endPoint: .trailing))
                     : AnyShapeStyle(AppTheme.cardMid),
-                    in: Capsule()
+                    in: RoundedRectangle(cornerRadius: AppRadius.lg)
                 )
-                .shadow(color: isValid ? debt.debtType.color.opacity(0.4) : .clear, radius: 12, y: 6)
             }
             .buttonStyle(ScaleButtonStyle()).disabled(!isValid).padding(.horizontal, 22)
             .padding(.top, 8)
@@ -2021,8 +2015,8 @@ struct PayoffSimulatorSheet: View {
                             }
                         }
                         .padding(16)
-                        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
-                        .overlay(RoundedRectangle(cornerRadius: 16).stroke(AppTheme.red.opacity(0.2), lineWidth: 1))
+                        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+                        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.red.opacity(0.2), lineWidth: 1))
                         .padding(.horizontal, 22)
 
                         // Extra payment input
@@ -2043,7 +2037,7 @@ struct PayoffSimulatorSheet: View {
                                     }
                             }
                             .padding(16)
-                            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
+                            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
 
                             // Quick add buttons.
                             // Amounts are scaled to the debt's currency so the
@@ -2140,8 +2134,8 @@ struct PayoffSimulatorSheet: View {
                                 }
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .padding(14)
-                                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
-                                .overlay(RoundedRectangle(cornerRadius: 14).stroke(AppTheme.red.opacity(0.2), lineWidth: 1))
+                                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+                                .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.red.opacity(0.2), lineWidth: 1))
 
                                 // With extra
                                 VStack(alignment: .leading, spacing: 8) {
@@ -2168,8 +2162,8 @@ struct PayoffSimulatorSheet: View {
                                 }
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .padding(14)
-                                .background(AppTheme.accent.opacity(0.06), in: RoundedRectangle(cornerRadius: 14))
-                                .overlay(RoundedRectangle(cornerRadius: 14).stroke(AppTheme.accent.opacity(0.3), lineWidth: 1))
+                                .background(AppTheme.accent.opacity(0.06), in: RoundedRectangle(cornerRadius: AppRadius.md))
+                                .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.accent.opacity(0.3), lineWidth: 1))
                             }
 
                             // Interest saved banner
@@ -2188,8 +2182,8 @@ struct PayoffSimulatorSheet: View {
                                     Spacer()
                                 }
                                 .padding(14)
-                                .background(AppTheme.accent.opacity(0.08), in: RoundedRectangle(cornerRadius: 14))
-                                .overlay(RoundedRectangle(cornerRadius: 14).stroke(AppTheme.accent.opacity(0.25), lineWidth: 1))
+                                .background(AppTheme.accent.opacity(0.08), in: RoundedRectangle(cornerRadius: AppRadius.md))
+                                .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.accent.opacity(0.25), lineWidth: 1))
                             }
                         }
                         .padding(.horizontal, 22)

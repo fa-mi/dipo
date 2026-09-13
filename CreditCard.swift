@@ -76,7 +76,7 @@ struct CreditCardLiabilityRow: View {
         VStack(spacing: 12) {
             HStack(alignment: .top, spacing: 12) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 12)
+                    RoundedRectangle(cornerRadius: AppRadius.sm)
                         .fill(LinearGradient(colors: [Color(hex: card.gradientStart), Color(hex: card.gradientEnd)],
                                              startPoint: .topLeading, endPoint: .bottomTrailing))
                         .frame(width: 46, height: 46)
@@ -146,8 +146,8 @@ struct CreditCardLiabilityRow: View {
             }
         }
         .padding(14)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 18))
-        .overlay(RoundedRectangle(cornerRadius: 18).stroke(AppTheme.purple.opacity(0.18), lineWidth: 1))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.lg).stroke(AppTheme.purple.opacity(0.18), lineWidth: 1))
     }
 }
 
@@ -291,7 +291,7 @@ struct CreditCardFormSheet: View {
                                     displayNumber = digits.enumerated().map { $0.offset > 0 && $0.offset % 4 == 0 ? " \($0.element)" : String($0.element) }.joined()
                                 }
                                 .font(.system(.subheadline)).padding(14)
-                                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
+                                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
                                 .padding(.horizontal, 22)
                         }
 
@@ -304,7 +304,7 @@ struct CreditCardFormSheet: View {
                             Text(loc("cc.explainer")).font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
-                        .padding(14).background(AppTheme.purple.opacity(0.08), in: RoundedRectangle(cornerRadius: 14))
+                        .padding(14).background(AppTheme.purple.opacity(0.08), in: RoundedRectangle(cornerRadius: AppRadius.md))
                         .padding(.horizontal, 22)
 
                         saveButton
@@ -341,11 +341,11 @@ struct CreditCardFormSheet: View {
                 .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 22)
             HStack(spacing: 10) {
                 Text(currency).font(.system(.subheadline, weight: .bold)).foregroundStyle(AppTheme.purple)
-                    .frame(width: 54, height: 52).background(AppTheme.purple.opacity(0.10), in: RoundedRectangle(cornerRadius: 12))
+                    .frame(width: 54, height: 52).background(AppTheme.purple.opacity(0.10), in: RoundedRectangle(cornerRadius: AppRadius.sm))
                 TextField("0", text: text)
                     .font(.system(.title3, weight: .bold)).keyboardType(.decimalPad)
                     .padding(.horizontal, 14).frame(height: 52)
-                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 12))
+                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.sm))
             }.padding(.horizontal, 22)
         }
     }
@@ -357,7 +357,7 @@ struct CreditCardFormSheet: View {
         } label: {
             Text(loc("cc.save")).font(.system(.callout, weight: .bold)).foregroundStyle(AppTheme.onVividFill)
                 .frame(maxWidth: .infinity).padding(.vertical, 16)
-                .background(isValid ? AppTheme.purple : AppTheme.cardMid, in: RoundedRectangle(cornerRadius: 16))
+                .background(isValid ? AppTheme.purple : AppTheme.cardMid, in: RoundedRectangle(cornerRadius: AppRadius.md))
         }
         .buttonStyle(ScaleButtonStyle()).disabled(!isValid).padding(.horizontal, 22)
     }
@@ -442,7 +442,7 @@ struct CreditCardPaymentSheet: View {
                             .font(.system(.title2, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
                             .keyboardType(.decimalPad).multilineTextAlignment(.center)
                             .padding(.vertical, 14)
-                            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
+                            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
                             .padding(.horizontal, 22)
 
                         Button { amountText = String(format: "%.0f", owed) } label: {
@@ -469,7 +469,7 @@ struct CreditCardPaymentSheet: View {
                                 .foregroundStyle(canSave ? AppTheme.onVividFill : AppTheme.textSecondary)
                                 .frame(maxWidth: .infinity).padding(.vertical, 15)
                                 .background(canSave ? AppTheme.accentFill : AppTheme.cardMid,
-                                            in: RoundedRectangle(cornerRadius: 16))
+                                            in: RoundedRectangle(cornerRadius: AppRadius.md))
                         }
                         .buttonStyle(ScaleButtonStyle())
                         .disabled(!canSave)

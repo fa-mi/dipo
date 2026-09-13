@@ -257,8 +257,8 @@ struct PlannerView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 20).padding(.horizontal, 10)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 18))
-        .overlay(RoundedRectangle(cornerRadius: 18).stroke(tool.tint.opacity(0.18), lineWidth: 1))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.lg).stroke(tool.tint.opacity(0.18), lineWidth: 1))
     }
 }
 
@@ -325,7 +325,7 @@ struct CalculatorSheet: View {
                 }
             }
             .padding(.horizontal, 14).padding(.vertical, 12)
-            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 12))
+            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.sm))
         }
         .padding(.horizontal, 22)
     }
@@ -396,7 +396,7 @@ struct CalculatorSheet: View {
             }
         }
         .padding(16)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 18))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
         .padding(.horizontal, 22)
     }
 
@@ -457,7 +457,7 @@ struct CalculatorSheet: View {
                 Spacer(minLength: 0)
             }
             .padding(12)
-            .background(AppTheme.orange.opacity(0.10), in: RoundedRectangle(cornerRadius: 12))
+            .background(AppTheme.orange.opacity(0.10), in: RoundedRectangle(cornerRadius: AppRadius.sm))
             .padding(.horizontal, 22)
         }
     }

@@ -255,7 +255,7 @@ struct CommitmentPriorityCard: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(12)
             .background((margin <= 0 ? AppTheme.red : tight ? AppTheme.orange : AppTheme.accent)
-                        .opacity(0.10), in: RoundedRectangle(cornerRadius: 14))
+                        .opacity(0.10), in: RoundedRectangle(cornerRadius: AppRadius.md))
         }
     }
 
@@ -328,7 +328,7 @@ struct CommitmentPriorityCard: View {
                     }
                 }
                 .padding(11)
-                .background(AppTheme.accent.opacity(0.10), in: RoundedRectangle(cornerRadius: 12))
+                .background(AppTheme.accent.opacity(0.10), in: RoundedRectangle(cornerRadius: AppRadius.sm))
             }
 
             Button {
@@ -353,7 +353,7 @@ struct CommitmentPriorityCard: View {
                                 .font(.system(.caption2)).foregroundStyle(line.category.color)
                                 .frame(width: 26, height: 26)
                                 .background(line.category.color.opacity(0.12),
-                                            in: RoundedRectangle(cornerRadius: 8))
+                                            in: RoundedRectangle(cornerRadius: AppRadius.xs))
                             VStack(alignment: .leading, spacing: 1) {
                                 Text(line.label)
                                     .font(.system(.caption, weight: .medium))
@@ -376,7 +376,7 @@ struct CommitmentPriorityCard: View {
                             }
                         }
                         .padding(10)
-                        .background(AppTheme.cardMid.opacity(0.45), in: RoundedRectangle(cornerRadius: 11))
+                        .background(AppTheme.cardMid.opacity(0.45), in: RoundedRectangle(cornerRadius: AppRadius.sm))
                     }
                     Text(loc("commit.note"))
                         .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
@@ -387,6 +387,6 @@ struct CommitmentPriorityCard: View {
             }
         }
         .padding(16)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 18))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
     }
 }

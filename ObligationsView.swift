@@ -222,8 +222,8 @@ struct ObligationLoadCard: View {
             }
         }
         .padding(16)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 18))
-        .overlay(RoundedRectangle(cornerRadius: 18).stroke(shown.verdict.tint.opacity(0.22), lineWidth: 1))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.lg).stroke(shown.verdict.tint.opacity(0.22), lineWidth: 1))
     }
 
     /// Obligations against the Smart Budget allocation, drawn to the same

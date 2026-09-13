@@ -290,7 +290,7 @@ private struct LandingView: View {
                             .padding(.vertical, 12)
                             .background {
                                 if selectedTab == tab {
-                                    RoundedRectangle(cornerRadius: 12)
+                                    RoundedRectangle(cornerRadius: AppRadius.sm)
                                         .fill(AppTheme.cardDark)
                                         .shadow(color: .black.opacity(0.05), radius: 6, y: 2)
                                 }
@@ -299,7 +299,7 @@ private struct LandingView: View {
                 }
             }
             .padding(4)
-            .background(AppTheme.cardMid.opacity(0.5), in: RoundedRectangle(cornerRadius: 14))
+            .background(AppTheme.cardMid.opacity(0.5), in: RoundedRectangle(cornerRadius: AppRadius.md))
             .padding(.horizontal, 22)
             .padding(.top, 4)
 
@@ -307,7 +307,7 @@ private struct LandingView: View {
                 VStack(spacing: 22) {
                     // Illustration card
                     ZStack {
-                        RoundedRectangle(cornerRadius: 22)
+                        RoundedRectangle(cornerRadius: AppRadius.xl)
                             .fill(LinearGradient(
                                 colors: [
                                     Color(hex: "#E8E4FF"),
@@ -351,7 +351,7 @@ private struct LandingView: View {
                     }
                     .padding(.horizontal, 14)
                     .padding(.vertical, 12)
-                    .background(AppTheme.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 12))
+                    .background(AppTheme.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: AppRadius.sm))
                     .padding(.horizontal, 22)
 
                     // CTA
@@ -367,8 +367,7 @@ private struct LandingView: View {
                         .foregroundStyle(AppTheme.onVividFill)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 17)
-                        .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: 16))
-                        .shadow(color: AppTheme.accent.opacity(0.35), radius: 14, y: 8)
+                        .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: AppRadius.md))
                     }
                     .buttonStyle(ScaleButtonStyle())
                     .padding(.horizontal, 22)
@@ -402,7 +401,6 @@ private struct ReceiptIllustration: View {
                         .foregroundStyle(AppTheme.onVividFill)
                 )
                 .offset(x: -78, y: -82)
-                .shadow(color: AppTheme.accent.opacity(0.3), radius: 8, y: 4)
 
             Circle()
                 .fill(AppTheme.orange)
@@ -436,7 +434,7 @@ private struct ReceiptIllustration: View {
 
             // Phone body
             ZStack {
-                RoundedRectangle(cornerRadius: 22)
+                RoundedRectangle(cornerRadius: AppRadius.xl)
                     .fill(Color(hex: "#5B6BE8"))
                     .frame(width: 130, height: 200)
                     .shadow(color: .black.opacity(0.1), radius: 10, y: 6)
@@ -456,7 +454,7 @@ private struct ReceiptIllustration: View {
                         .frame(width: 50, height: 5)
                 }
                 .padding(.vertical, 18).padding(.horizontal, 14)
-                .background(Color.white.opacity(0.9), in: RoundedRectangle(cornerRadius: 8))
+                .background(Color.white.opacity(0.9), in: RoundedRectangle(cornerRadius: AppRadius.xs))
                 .frame(width: 92, height: 132)
             }
         }

@@ -74,6 +74,26 @@ struct AppTheme {
     static let onSolid     = onVividFill
 }
 
+// MARK: - Radius
+
+/// Corner radii. The app had 20 different values; 14 and 16 were each used
+/// ~145 times for the same kind of surface. Five steps, each for a size of
+/// thing, so nesting reads right (an inner element is always one step smaller).
+/// Radii of 6pt and below are left as literals: thin progress bars and tick
+/// marks, where the radius is geometry, not style.
+enum AppRadius {
+    /// Small chips, tags, tiny tiles.
+    static let xs: CGFloat = 8
+    /// Icon tiles, pills inside cards, text-field accessories.
+    static let sm: CGFloat = 12
+    /// Text fields, list rows, inner cards.
+    static let md: CGFloat = 16
+    /// Cards, primary buttons, form sections.
+    static let lg: CGFloat = 20
+    /// Hero cards, card faces, large surfaces.
+    static let xl: CGFloat = 24
+}
+
 // MARK: - Layout
 
 /// Width-driven layout rules.

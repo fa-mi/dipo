@@ -532,7 +532,7 @@ struct AIChatView: View {
                     .font(.system(.subheadline))
                     .foregroundStyle(AppTheme.onVividFill)
                     .padding(.horizontal, 14).padding(.vertical, 10)
-                    .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: 16))
+                    .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: AppRadius.md))
             }
             .padding(.horizontal, 18)
         } else {
@@ -541,7 +541,7 @@ struct AIChatView: View {
                     .font(.system(.subheadline))
                     .foregroundStyle(msg.isError ? AppTheme.red : AppTheme.textPrimary)
                     .padding(.horizontal, 14).padding(.vertical, 10)
-                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
+                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
                     .frame(maxWidth: .infinity, alignment: .leading)
                 ForEach(msg.transactions) { tx in
                     txCard(tx, in: msg.id)
@@ -558,7 +558,7 @@ struct AIChatView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 10) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 10)
+                    RoundedRectangle(cornerRadius: AppRadius.sm)
                         .fill(tx.category.color.opacity(0.18))
                         .frame(width: 38, height: 38)
                     Image(systemName: tx.category.icon)
@@ -592,14 +592,14 @@ struct AIChatView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 9)
                 .background(tx.added ? AppTheme.accent.opacity(0.12) : AppTheme.accent,
-                            in: RoundedRectangle(cornerRadius: 10))
+                            in: RoundedRectangle(cornerRadius: AppRadius.sm))
             }
             .buttonStyle(.plain)
             .disabled(tx.added)
         }
         .padding(12)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
-        .overlay(RoundedRectangle(cornerRadius: 14).stroke(AppTheme.cardMid, lineWidth: 1))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.cardMid, lineWidth: 1))
     }
 
     // MARK: Input bar
@@ -667,7 +667,7 @@ struct AIChatView: View {
                     .lineLimit(1...4)
                     .focused($inputFocused)
                     .padding(.horizontal, 14).padding(.vertical, 10)
-                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 18))
+                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
                 Button {
                     inputFocused = false
                     let snapshot = buildFinancialContext()

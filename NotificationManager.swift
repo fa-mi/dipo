@@ -966,11 +966,11 @@ struct NotificationCenterView: View {
                     case .success(let image):
                         image.resizable().scaledToFill()
                             .frame(maxWidth: .infinity).frame(height: 160)
-                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                            .clipShape(RoundedRectangle(cornerRadius: AppRadius.sm))
                     case .failure:
                         EmptyView()
                     default:
-                        RoundedRectangle(cornerRadius: 10)
+                        RoundedRectangle(cornerRadius: AppRadius.sm)
                             .fill(AppTheme.cardDark)
                             .frame(maxWidth: .infinity).frame(height: 160)
                             .overlay(ProgressView())
@@ -982,8 +982,8 @@ struct NotificationCenterView: View {
         .padding(14)
         .background(
             item.isUrgent && !item.isRead ? item.iconColor.opacity(0.06) : AppTheme.cardDark,
-            in: RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16)
+            in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.md)
             .stroke(item.isUrgent && !item.isRead ? item.iconColor.opacity(0.2) : Color.clear, lineWidth: 1))
     }
 
@@ -1063,11 +1063,11 @@ struct NotificationDetailView: View {
                                 switch phase {
                                 case .success(let image):
                                     image.resizable().scaledToFit()
-                                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                                        .clipShape(RoundedRectangle(cornerRadius: AppRadius.md))
                                 case .failure:
                                     // Broken URL / offline — show a tappable
                                     // retry-ish placeholder instead of a blank.
-                                    RoundedRectangle(cornerRadius: 14)
+                                    RoundedRectangle(cornerRadius: AppRadius.md)
                                         .fill(AppTheme.cardDark)
                                         .frame(height: 180)
                                         .overlay(
@@ -1080,7 +1080,7 @@ struct NotificationDetailView: View {
                                             .foregroundStyle(AppTheme.textSecondary)
                                         )
                                 default:
-                                    RoundedRectangle(cornerRadius: 14)
+                                    RoundedRectangle(cornerRadius: AppRadius.md)
                                         .fill(AppTheme.cardDark)
                                         .frame(height: 180)
                                         .overlay(ProgressView())
@@ -1142,7 +1142,7 @@ struct NotificationDetailView: View {
                                         .foregroundStyle(AppTheme.onVividFill)
                                         .frame(maxWidth: .infinity)
                                         .padding(.vertical, 13)
-                                        .background(AppTheme.purple, in: Capsule())
+                                        .background(AppTheme.purple, in: RoundedRectangle(cornerRadius: AppRadius.lg))
                                     }
                                     .buttonStyle(ScaleButtonStyle())
                                     .padding(.top, 4)
@@ -1151,7 +1151,7 @@ struct NotificationDetailView: View {
                             .padding(14)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .background(AppTheme.orange.opacity(0.08),
-                                        in: RoundedRectangle(cornerRadius: 16))
+                                        in: RoundedRectangle(cornerRadius: AppRadius.md))
                         }
 
                         // "Learn more" link button — only when a valid URL
@@ -1178,7 +1178,7 @@ struct NotificationDetailView: View {
                                         colors: [item.iconColor, item.iconColor.opacity(0.78)],
                                         startPoint: .leading, endPoint: .trailing
                                     ),
-                                    in: RoundedRectangle(cornerRadius: 14)
+                                    in: RoundedRectangle(cornerRadius: AppRadius.md)
                                 )
                             }
                             .buttonStyle(ScaleButtonStyle())

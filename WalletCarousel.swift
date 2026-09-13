@@ -183,7 +183,7 @@ struct WalletCard: View {
 
     /// The wallet's brand mark, shaped like an app icon rather than a chip.
     private var providerTile: some View {
-        RoundedRectangle(cornerRadius: 8, style: .continuous)
+        RoundedRectangle(cornerRadius: AppRadius.xs, style: .continuous)
             .fill(.white.opacity(0.22))
             .frame(width: 30, height: 30)
             .overlay(
@@ -191,7 +191,7 @@ struct WalletCard: View {
                     .font(.system(.subheadline, design: .rounded, weight: .heavy))
                     .foregroundStyle(.white)
             )
-            .overlay(RoundedRectangle(cornerRadius: 8).stroke(.white.opacity(0.3), lineWidth: 0.7))
+            .overlay(RoundedRectangle(cornerRadius: AppRadius.xs).stroke(.white.opacity(0.3), lineWidth: 0.7))
     }
 
     private var chip: some View {
@@ -391,7 +391,7 @@ struct WalletCardActions: View {
             .buttonStyle(ScaleButtonStyle())
         }
         .padding(.horizontal, 14).padding(.vertical, 12)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
 
     }
 

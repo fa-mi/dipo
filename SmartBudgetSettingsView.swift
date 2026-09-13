@@ -205,7 +205,7 @@ struct SmartBudgetSettingsSheet: View {
                     // Master toggle
                     HStack(spacing: 14) {
                         ZStack {
-                            RoundedRectangle(cornerRadius: 12).fill(AppTheme.purple.opacity(0.15)).frame(width: 46, height: 46)
+                            RoundedRectangle(cornerRadius: AppRadius.sm).fill(AppTheme.purple.opacity(0.15)).frame(width: 46, height: 46)
                             Image(systemName: "brain.fill").font(.system(.title3)).foregroundStyle(AppTheme.purple)
                         }
                         VStack(alignment: .leading, spacing: 2) {
@@ -225,8 +225,8 @@ struct SmartBudgetSettingsSheet: View {
                             }
                     }
                     .padding(16)
-                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
-                    .overlay(RoundedRectangle(cornerRadius: 16).stroke(isEnabled ? AppTheme.purple.opacity(0.35) : Color.clear, lineWidth: 1.5))
+                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+                    .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(isEnabled ? AppTheme.purple.opacity(0.35) : Color.clear, lineWidth: 1.5))
                     .padding(.horizontal, 22).padding(.top, 16)
 
                     // Over-budget alerts
@@ -250,8 +250,8 @@ struct SmartBudgetSettingsSheet: View {
                                     Spacer()
                                 }
                                 .padding(12)
-                                .background(AppTheme.red.opacity(0.07), in: RoundedRectangle(cornerRadius: 12))
-                                .overlay(RoundedRectangle(cornerRadius: 12).stroke(AppTheme.red.opacity(0.22), lineWidth: 1))
+                                .background(AppTheme.red.opacity(0.07), in: RoundedRectangle(cornerRadius: AppRadius.sm))
+                                .overlay(RoundedRectangle(cornerRadius: AppRadius.sm).stroke(AppTheme.red.opacity(0.22), lineWidth: 1))
                             }
                         }
                         .padding(.horizontal, 22).padding(.top, 12)
@@ -435,8 +435,7 @@ struct SmartBudgetSettingsSheet: View {
                     }
                     .foregroundStyle(AppTheme.onVividFill)
                     .padding(.horizontal, 28).padding(.vertical, 14)
-                    .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: 14))
-                    .shadow(color: AppTheme.accent.opacity(0.35), radius: 10, y: 4)
+                    .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: AppRadius.md))
                 }
                 .buttonStyle(ScaleButtonStyle())
             }
@@ -495,7 +494,7 @@ struct SmartBudgetSettingsSheet: View {
         } label: {
             HStack(spacing: 12) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 12).fill(.white.opacity(0.18)).frame(width: 42, height: 42)
+                    RoundedRectangle(cornerRadius: AppRadius.sm).fill(.white.opacity(0.18)).frame(width: 42, height: 42)
                     Image(systemName: "sparkles").font(.system(.title3, weight: .semibold)).foregroundStyle(.white)
                 }
                 VStack(alignment: .leading, spacing: 2) {
@@ -510,8 +509,7 @@ struct SmartBudgetSettingsSheet: View {
             .background(
                 LinearGradient(colors: [AppTheme.purple, AppTheme.purple.opacity(0.72)],
                                startPoint: .topLeading, endPoint: .bottomTrailing),
-                in: RoundedRectangle(cornerRadius: 16))
-            .shadow(color: AppTheme.purple.opacity(0.3), radius: 10, y: 5)
+                in: RoundedRectangle(cornerRadius: AppRadius.md))
         }
         .buttonStyle(ScaleButtonStyle())
         .padding(.horizontal, 22)
@@ -591,7 +589,7 @@ struct SmartBudgetSettingsSheet: View {
                     .background(AppTheme.accent.opacity(0.15), in: Capsule())
             }
             .padding(.horizontal, 14).padding(.vertical, 11)
-            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
+            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
             .padding(.horizontal, 22)
             .padding(.bottom, 4)
         }
@@ -655,8 +653,8 @@ struct SmartBudgetSettingsSheet: View {
                 .foregroundStyle(AppTheme.red)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 12)
-                .background(AppTheme.red.opacity(0.1), in: RoundedRectangle(cornerRadius: 12))
-                .overlay(RoundedRectangle(cornerRadius: 12).stroke(AppTheme.red.opacity(0.25), lineWidth: 1))
+                .background(AppTheme.red.opacity(0.1), in: RoundedRectangle(cornerRadius: AppRadius.sm))
+                .overlay(RoundedRectangle(cornerRadius: AppRadius.sm).stroke(AppTheme.red.opacity(0.25), lineWidth: 1))
             }
             .buttonStyle(ScaleButtonStyle())
             .padding(.horizontal, 22)
@@ -752,13 +750,12 @@ struct BudgetPresetCard: View {
             }
             .padding(12)
             .frame(width: 160, height: 120, alignment: .topLeading)
-            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
+            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
             .overlay(
-                RoundedRectangle(cornerRadius: 14)
+                RoundedRectangle(cornerRadius: AppRadius.md)
                     .stroke(isSelected ? preset.color : AppTheme.cardMid.opacity(0.4),
                             lineWidth: isSelected ? 2 : 1)
             )
-            .shadow(color: isSelected ? preset.color.opacity(0.2) : .clear, radius: 6, y: 2)
         }
         .buttonStyle(ScaleButtonStyle())
     }
@@ -793,7 +790,7 @@ struct BudgetRatioCard: View {
                             .font(.system(.caption, weight: .bold))
                             .foregroundStyle(AppTheme.textPrimary)
                             .frame(width: 32, height: 32)
-                            .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: 8))
+                            .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: AppRadius.xs))
                     }
 .accessibilityLabel(loc("a11y.decrease"))
                     Text("\(pct)%")
@@ -808,7 +805,7 @@ struct BudgetRatioCard: View {
                             .font(.system(.caption, weight: .bold))
                             .foregroundStyle(AppTheme.textPrimary)
                             .frame(width: 32, height: 32)
-                            .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: 8))
+                            .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: AppRadius.xs))
                     }
 .accessibilityLabel(loc("a11y.increase"))
                 }
@@ -827,8 +824,8 @@ struct BudgetRatioCard: View {
             .frame(height: 8)
         }
         .padding(14)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
-        .overlay(RoundedRectangle(cornerRadius: 14).stroke(group.color.opacity(0.2), lineWidth: 1))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(group.color.opacity(0.2), lineWidth: 1))
     }
 }
 
@@ -906,7 +903,7 @@ struct BudgetGroupCard: View {
                         ForEach(groupTx.prefix(2)) { tx in
                             HStack(spacing: 10) {
                                 ZStack {
-                                    RoundedRectangle(cornerRadius: 9).fill(tx.displayIconBg).frame(width: 30, height: 30)
+                                    RoundedRectangle(cornerRadius: AppRadius.sm).fill(tx.displayIconBg).frame(width: 30, height: 30)
                                     Text(tx.icon).font(.system(size: tx.icon.count == 1 ? 12 : 15)).foregroundStyle(.white)
                                 }
                                 Text(tx.name).font(.system(.caption, weight: .medium)).foregroundStyle(AppTheme.textPrimary).lineLimit(1)
@@ -925,8 +922,8 @@ struct BudgetGroupCard: View {
                 }
             }
             .padding(14)
-            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
-            .overlay(RoundedRectangle(cornerRadius: 16).stroke(isOver ? AppTheme.red.opacity(0.35) : group.color.opacity(0.15), lineWidth: isOver ? 1.5 : 1))
+            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+            .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(isOver ? AppTheme.red.opacity(0.35) : group.color.opacity(0.15), lineWidth: isOver ? 1.5 : 1))
         }
         .buttonStyle(.plain)
         .onAppear { withAnimation(.easeInOut(duration: 1.0).delay(0.15)) { animatedProgress = progress } }
@@ -1092,7 +1089,7 @@ struct BudgetGroupDetailView: View {
                     VStack(spacing: 0) {
                         HStack(spacing: 14) {
                             ZStack {
-                                RoundedRectangle(cornerRadius: 14).fill(isOver ? AppTheme.red.opacity(0.12) : group.color.opacity(0.12)).frame(width: 52, height: 52)
+                                RoundedRectangle(cornerRadius: AppRadius.md).fill(isOver ? AppTheme.red.opacity(0.12) : group.color.opacity(0.12)).frame(width: 52, height: 52)
                                 Image(systemName: group.icon).font(.system(.title2)).foregroundStyle(isOver ? AppTheme.red : group.color)
                             }
                             VStack(alignment: .leading, spacing: 4) {
@@ -1106,7 +1103,7 @@ struct BudgetGroupDetailView: View {
                                     Text(loc("debt.over")).font(.system(.caption2, weight: .bold)).foregroundStyle(AppTheme.red)
                                 }
                                 .padding(.horizontal, 10).padding(.vertical, 6)
-                                .background(AppTheme.red.opacity(0.1), in: RoundedRectangle(cornerRadius: 10))
+                                .background(AppTheme.red.opacity(0.1), in: RoundedRectangle(cornerRadius: AppRadius.sm))
                             }
                         }
                         .padding(.horizontal, 18).padding(.top, 18).padding(.bottom, 14)
@@ -1176,8 +1173,8 @@ struct BudgetGroupDetailView: View {
                             }.padding(.horizontal, 18).padding(.vertical, 12)
                         }
                     }
-                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 20))
-                    .overlay(RoundedRectangle(cornerRadius: 20).stroke(isOver ? AppTheme.red.opacity(0.3) : group.color.opacity(0.18), lineWidth: isOver ? 1.5 : 1))
+                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+                    .overlay(RoundedRectangle(cornerRadius: AppRadius.lg).stroke(isOver ? AppTheme.red.opacity(0.3) : group.color.opacity(0.18), lineWidth: isOver ? 1.5 : 1))
                     .padding(.horizontal, 22)
                     .opacity(appeared ? 1 : 0).offset(y: appeared ? 0 : 20)
                     .animation(AppMotion.appear, value: appeared)
@@ -1195,7 +1192,7 @@ struct BudgetGroupDetailView: View {
                                     let share = item.amount / max(spent, 1)
                                     HStack(spacing: 12) {
                                         ZStack {
-                                            RoundedRectangle(cornerRadius: 9).fill(item.cat.color.opacity(0.14)).frame(width: 36, height: 36)
+                                            RoundedRectangle(cornerRadius: AppRadius.sm).fill(item.cat.color.opacity(0.14)).frame(width: 36, height: 36)
                                             Image(systemName: item.cat.icon).font(.system(.subheadline)).foregroundStyle(item.cat.color)
                                         }
                                         VStack(alignment: .leading, spacing: 6) {
@@ -1247,7 +1244,7 @@ struct BudgetGroupDetailView: View {
                                                 let converted = CurrencyManager.shared.convert(abs(tx.amount), from: tx.currency, to: currency)
                                                 HStack(spacing: 14) {
                                                     ZStack {
-                                                        RoundedRectangle(cornerRadius: 12).fill(tx.displayIconBg).frame(width: 44, height: 44)
+                                                        RoundedRectangle(cornerRadius: AppRadius.sm).fill(tx.displayIconBg).frame(width: 44, height: 44)
                                                         Text(tx.icon).font(.system(size: tx.icon.count == 1 ? 16 : 20)).foregroundStyle(.white)
                                                     }
                                                     VStack(alignment: .leading, spacing: 3) {
@@ -1274,7 +1271,7 @@ struct BudgetGroupDetailView: View {
                                                 if tx.id != grp.txs.last?.id { Divider().background(AppTheme.cardMid).padding(.horizontal, 16) }
                                             }
                                         }
-                                        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16)).padding(.horizontal, 22)
+                                        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md)).padding(.horizontal, 22)
                                     }
                                 }
                             }

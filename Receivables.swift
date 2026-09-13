@@ -247,7 +247,7 @@ struct ReceivablesView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 20)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 18))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
         .padding(.horizontal, 22)
         .opacity(appeared ? 1 : 0)
     }
@@ -265,7 +265,7 @@ struct ReceivablesView: View {
             }
             .foregroundStyle(AppTheme.accent)
             .frame(maxWidth: .infinity).padding(.vertical, 13)
-            .background(AppTheme.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 14))
+            .background(AppTheme.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: AppRadius.md))
         }
         .buttonStyle(ScaleButtonStyle())
         .padding(.horizontal, 22)
@@ -338,7 +338,7 @@ struct ReceivablesView: View {
                         Text(loc("receivable.record_repayment"))
                             .font(.system(.caption, weight: .semibold)).foregroundStyle(AppTheme.accent)
                             .frame(maxWidth: .infinity).padding(.vertical, 8)
-                            .background(AppTheme.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
+                            .background(AppTheme.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: AppRadius.sm))
                     }
                     .buttonStyle(.plain)
                     Button {
@@ -349,14 +349,14 @@ struct ReceivablesView: View {
                         Text(loc("receivable.mark_settled"))
                             .font(.system(.caption, weight: .semibold)).foregroundStyle(AppTheme.textSecondary)
                             .frame(maxWidth: .infinity).padding(.vertical, 8)
-                            .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: 10))
+                            .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: AppRadius.sm))
                     }
                     .buttonStyle(.plain)
                 }
             }
         }
         .padding(14)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
         .contextMenu {
             Button { vm.loadForEdit(r) } label: { Label(loc("action.edit"), systemImage: "pencil") }
             if r.isSettled {
@@ -408,13 +408,13 @@ struct ReceivableFormSheet: View {
                                             .foregroundStyle(AppTheme.textSecondary)
                                     }
                                     .padding(.horizontal, 14).padding(.vertical, 14)
-                                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
+                                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
                                 }
                                 TextField("0", text: $vm.formAmount)
                                     .font(.system(.title2, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
                                     .keyboardType(.decimalPad)
                                     .padding(.horizontal, 16).padding(.vertical, 14)
-                                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
+                                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
                             }
                             .padding(.horizontal, 22)
                         }
@@ -469,7 +469,7 @@ struct ReceivableFormSheet: View {
                             Text(loc("action.save")).font(.system(.callout, weight: .bold))
                                 .foregroundStyle(AppTheme.onVividFill)
                                 .frame(maxWidth: .infinity).padding(.vertical, 16)
-                                .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: 16))
+                                .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: AppRadius.md))
                         }
                         .buttonStyle(ScaleButtonStyle())
                         .padding(.horizontal, 22)
@@ -560,7 +560,7 @@ struct RepaymentSheet: View {
                             .font(.system(.title2, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
                             .keyboardType(.decimalPad).multilineTextAlignment(.center)
                             .padding(.vertical, 14)
-                            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
+                            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
                             .padding(.horizontal, 22)
 
                         Button {
@@ -581,7 +581,7 @@ struct RepaymentSheet: View {
                                 .font(.system(.callout, weight: .bold)).foregroundStyle(canSave ? AppTheme.onVividFill : AppTheme.textSecondary)
                                 .frame(maxWidth: .infinity).padding(.vertical, 15)
                                 .background(canSave ? AppTheme.accentFill : AppTheme.cardMid,
-                                            in: RoundedRectangle(cornerRadius: 16))
+                                            in: RoundedRectangle(cornerRadius: AppRadius.md))
                         }
                         .buttonStyle(ScaleButtonStyle())
                         .disabled(!canSave)

@@ -184,7 +184,6 @@ struct WishlistView: View {
                                 Circle()
                                     .fill(AppTheme.accentFill)
                                     .frame(width: 42, height: 42)
-                                    .shadow(color: AppTheme.accent.opacity(0.4), radius: 10, y: 4)
                                 Image(systemName: "plus")
                                     .font(.system(.body, weight: .semibold))
                                     .foregroundStyle(AppTheme.bg)
@@ -519,8 +518,8 @@ struct GoalsSummaryCard: View {
             Spacer()
         }
         .padding(16)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 18))
-        .overlay(RoundedRectangle(cornerRadius: 18).stroke(AppTheme.accent.opacity(0.15), lineWidth: 1))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.lg).stroke(AppTheme.accent.opacity(0.15), lineWidth: 1))
     }
 }
 
@@ -554,7 +553,7 @@ struct GoalCard: View {
                     Text(goal.emoji)
                         .font(.system(.largeTitle))
                         .frame(width: 52, height: 52)
-                        .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: 14))
+                        .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: AppRadius.md))
 
                     VStack(alignment: .leading, spacing: 3) {
                         Text(goal.name)
@@ -663,7 +662,7 @@ struct GoalCard: View {
                         Spacer()
                     }
                     .padding(10)
-                    .background(AppTheme.purple.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
+                    .background(AppTheme.purple.opacity(0.08), in: RoundedRectangle(cornerRadius: AppRadius.sm))
                 }
 
                 // Details navigation
@@ -693,15 +692,14 @@ struct GoalCard: View {
                     .foregroundStyle(AppTheme.bg)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
-                    .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: 12))
-                    .shadow(color: AppTheme.accent.opacity(0.3), radius: 8, y: 4)
+                    .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: AppRadius.sm))
                 }
                 .buttonStyle(ScaleButtonStyle())
             }
             .padding(16)
         }
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 20))
-        .overlay(RoundedRectangle(cornerRadius: 20)
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.lg)
             .stroke(goal.progress >= 1.0 ? AppTheme.accent.opacity(0.5) : Color.clear, lineWidth: 1.5))
         .confirmationDialog(goal.name, isPresented: $showActions, titleVisibility: .visible) {
             Button(goal.isPinned ? loc("savings.unpin") : loc("savings.pin")) { onPin() }
@@ -791,7 +789,7 @@ struct DepositSheet: View {
                     .keyboardType(.decimalPad)
             }
             .padding(18)
-            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
+            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
             .padding(.horizontal, 22)
 
             // Quick amounts — a fixed 2×2 grid instead of a horizontal
@@ -820,8 +818,8 @@ struct DepositSheet: View {
                                     .foregroundStyle(AppTheme.textPrimary)
                                     .lineLimit(1).minimumScaleFactor(0.8)
                                     .frame(maxWidth: .infinity).padding(.vertical, 11)
-                                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 12))
-                                    .overlay(RoundedRectangle(cornerRadius: 12)
+                                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.sm))
+                                    .overlay(RoundedRectangle(cornerRadius: AppRadius.sm)
                                         .stroke(AppTheme.accent.opacity(0.18), lineWidth: 1))
                             }
                             .buttonStyle(ScaleButtonStyle())
@@ -844,8 +842,8 @@ struct DepositSheet: View {
                         }
                         .foregroundStyle(AppTheme.purple)
                         .frame(maxWidth: .infinity).padding(.vertical, 11)
-                        .background(AppTheme.purple.opacity(0.1), in: RoundedRectangle(cornerRadius: 12))
-                        .overlay(RoundedRectangle(cornerRadius: 12)
+                        .background(AppTheme.purple.opacity(0.1), in: RoundedRectangle(cornerRadius: AppRadius.sm))
+                        .overlay(RoundedRectangle(cornerRadius: AppRadius.sm)
                             .stroke(AppTheme.purple.opacity(0.3), lineWidth: 1))
                     }
                     .buttonStyle(ScaleButtonStyle())
@@ -878,7 +876,7 @@ struct DepositSheet: View {
                 }
             }
             .padding(14)
-            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
+            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
             .padding(.horizontal, 22)
             .padding(.bottom, 8)
         }
@@ -897,8 +895,7 @@ struct DepositSheet: View {
                     .foregroundStyle(canDeposit ? AppTheme.onVividFill : AppTheme.textSecondary)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
-                    .background(canDeposit ? AppTheme.accentFill : AppTheme.cardMid, in: Capsule())
-                    .shadow(color: canDeposit ? AppTheme.accent.opacity(0.35) : .clear, radius: 12, y: 6)
+                    .background(canDeposit ? AppTheme.accentFill : AppTheme.cardMid, in: RoundedRectangle(cornerRadius: AppRadius.lg))
             }
             .buttonStyle(ScaleButtonStyle())
             .disabled(!canDeposit)
@@ -957,7 +954,6 @@ struct GoalCelebration: View {
                         .foregroundStyle(AppTheme.bg)
                         .padding(.horizontal, 48).padding(.vertical, 16)
                         .background(AppTheme.accentFill, in: Capsule())
-                        .shadow(color: AppTheme.accent.opacity(0.5), radius: 16, y: 8)
                 }
                 .buttonStyle(ScaleButtonStyle())
                 .scaleEffect(scale)
@@ -1063,8 +1059,8 @@ struct CompletedGoalRow: View {
         HStack(spacing: 14) {
             Text(goal.emoji).font(.system(.title2))
                 .frame(width: 44, height: 44)
-                .background(AppTheme.accent.opacity(0.1), in: RoundedRectangle(cornerRadius: 12))
-                .overlay(RoundedRectangle(cornerRadius: 12).stroke(AppTheme.accent.opacity(0.3), lineWidth: 1))
+                .background(AppTheme.accent.opacity(0.1), in: RoundedRectangle(cornerRadius: AppRadius.sm))
+                .overlay(RoundedRectangle(cornerRadius: AppRadius.sm).stroke(AppTheme.accent.opacity(0.3), lineWidth: 1))
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(goal.name)
@@ -1080,7 +1076,7 @@ struct CompletedGoalRow: View {
                 .foregroundStyle(AppTheme.accent)
         }
         .padding(14)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
         .swipeActions(edge: .trailing) {
             Button(role: .destructive) { onDelete() } label: {
                 Label(loc("common.delete"), systemImage: "trash")
@@ -1110,7 +1106,6 @@ struct GoalsEmptyState: View {
                 .foregroundStyle(AppTheme.bg)
                 .padding(.horizontal, 32).padding(.vertical, 14)
                 .background(AppTheme.accentFill, in: Capsule())
-                .shadow(color: AppTheme.accent.opacity(0.4), radius: 12, y: 6)
             }.buttonStyle(ScaleButtonStyle())
         }.padding(.horizontal, 40)
     }
@@ -1178,8 +1173,8 @@ struct GoalFormSheet: View {
                                             Text(e).font(.system(.title))
                                                 .frame(width: 52, height: 52)
                                                 .background(emoji == e ? AppTheme.accent.opacity(0.2) : AppTheme.cardDark,
-                                                            in: RoundedRectangle(cornerRadius: 14))
-                                                .overlay(RoundedRectangle(cornerRadius: 14)
+                                                            in: RoundedRectangle(cornerRadius: AppRadius.md))
+                                                .overlay(RoundedRectangle(cornerRadius: AppRadius.md)
                                                     .stroke(emoji == e ? AppTheme.accent.opacity(0.6) : Color.clear, lineWidth: 1.5))
                                         }.buttonStyle(ScaleButtonStyle())
                                     }
@@ -1198,7 +1193,7 @@ struct GoalFormSheet: View {
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                 TextField("0", text: $targetAmount).font(.system(.body, weight: .bold))
                                     .foregroundStyle(AppTheme.textPrimary).keyboardType(.decimalPad)
-                                    .padding(14).background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
+                                    .padding(14).background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
                                 if let p = AmountInputHelper.preview(targetAmount, currency: currency) {
                                     Text(p).font(.system(.caption2, weight: .medium))
                                         .foregroundStyle(AppTheme.textSecondary)
@@ -1210,7 +1205,7 @@ struct GoalFormSheet: View {
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                 TextField("0", text: $savedAmount).font(.system(.body, weight: .bold))
                                     .foregroundStyle(AppTheme.accent).keyboardType(.decimalPad)
-                                    .padding(14).background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
+                                    .padding(14).background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
                                 if let p = AmountInputHelper.preview(savedAmount, currency: currency) {
                                     Text(p).font(.system(.caption2, weight: .medium))
                                         .foregroundStyle(AppTheme.textSecondary)
@@ -1228,7 +1223,7 @@ struct GoalFormSheet: View {
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                 TextField("0", text: $monthly).font(.system(.body, weight: .bold))
                                     .foregroundStyle(AppTheme.purple).keyboardType(.decimalPad)
-                                    .padding(14).background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
+                                    .padding(14).background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
                             }
                             VStack(spacing: 8) {
                                 Text(loc("common.currency")).font(.system(.footnote)).foregroundStyle(AppTheme.textSecondary)
@@ -1243,7 +1238,7 @@ struct GoalFormSheet: View {
                                         Image(systemName: "chevron.up.chevron.down").font(.system(.caption2)).imageScale(.small).foregroundStyle(AppTheme.textSecondary)
                                     }
                                     .padding(14).frame(maxWidth: .infinity)
-                                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
+                                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
                                 }
                             }
                         }
@@ -1282,8 +1277,8 @@ struct GoalFormSheet: View {
                                 Spacer()
                             }
                             .padding(14)
-                            .background(AppTheme.purple.opacity(0.08), in: RoundedRectangle(cornerRadius: 14))
-                            .overlay(RoundedRectangle(cornerRadius: 14).stroke(AppTheme.purple.opacity(0.2), lineWidth: 1))
+                            .background(AppTheme.purple.opacity(0.08), in: RoundedRectangle(cornerRadius: AppRadius.md))
+                            .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.purple.opacity(0.2), lineWidth: 1))
                             .padding(.horizontal, 22)
                             .animation(.spring(response: 0.4), value: monthsPreview)
                         }
@@ -1305,8 +1300,7 @@ struct GoalFormSheet: View {
                                 .font(.system(.callout, weight: .bold))
                                 .foregroundStyle(canSave ? AppTheme.bg : AppTheme.textSecondary)
                                 .frame(maxWidth: .infinity).padding(.vertical, 16)
-                                .background(canSave ? AppTheme.accent : AppTheme.textSecondary.opacity(0.3), in: Capsule())
-                                .shadow(color: canSave ? AppTheme.accent.opacity(0.35) : .clear, radius: 12, y: 6)
+                                .background(canSave ? AppTheme.accent : AppTheme.textSecondary.opacity(0.3), in: RoundedRectangle(cornerRadius: AppRadius.lg))
                         }
                         .buttonStyle(ScaleButtonStyle())
                         .disabled(!canSave)
@@ -1449,7 +1443,7 @@ struct GoalDetailView: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(AppTheme.cardDark.opacity(0.5), in: RoundedRectangle(cornerRadius: 14))
+        .background(AppTheme.cardDark.opacity(0.5), in: RoundedRectangle(cornerRadius: AppRadius.md))
     }
 
     var body: some View {
@@ -1538,7 +1532,7 @@ struct GoalDetailView: View {
                             }
                             .padding(.horizontal, 16).padding(.vertical, 14)
                         }
-                        .background(AppTheme.cardDark.opacity(0.5), in: RoundedRectangle(cornerRadius: 14))
+                        .background(AppTheme.cardDark.opacity(0.5), in: RoundedRectangle(cornerRadius: AppRadius.md))
 
                         // Money saved before deposits were recorded has no
                         // transaction proving it left an account. Ask once,
@@ -1565,8 +1559,8 @@ struct GoalDetailView: View {
                     }
                     .padding(.horizontal, 20)
                     .padding(.vertical, 20)
-                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 18))
-                    .overlay(RoundedRectangle(cornerRadius: 18).stroke(AppTheme.accent.opacity(0.15), lineWidth: 1))
+                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+                    .overlay(RoundedRectangle(cornerRadius: AppRadius.lg).stroke(AppTheme.accent.opacity(0.15), lineWidth: 1))
                     .padding(.horizontal, 22)
 
                     // Smart Projection
@@ -1625,8 +1619,8 @@ struct GoalDetailView: View {
                         }
                         .padding(.horizontal, 18)
                         .padding(.vertical, 18)
-                        .background(AppTheme.purple.opacity(0.08), in: RoundedRectangle(cornerRadius: 16))
-                        .overlay(RoundedRectangle(cornerRadius: 16).stroke(AppTheme.purple.opacity(0.2), lineWidth: 1))
+                        .background(AppTheme.purple.opacity(0.08), in: RoundedRectangle(cornerRadius: AppRadius.md))
+                        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.purple.opacity(0.2), lineWidth: 1))
                         .padding(.horizontal, 22)
                     }
 
@@ -1640,7 +1634,7 @@ struct GoalDetailView: View {
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(16)
-                        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
+                        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
                         .padding(.horizontal, 22)
                     }
 
@@ -1655,8 +1649,7 @@ struct GoalDetailView: View {
                                 Text(loc("savings.add")).font(.system(.subheadline, weight: .semibold))
                             }
                             .foregroundStyle(AppTheme.bg).frame(maxWidth: .infinity).padding(.vertical, 16)
-                            .background(AppTheme.accentFill, in: Capsule())
-                            .shadow(color: AppTheme.accent.opacity(0.35), radius: 10, y: 5)
+                            .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: AppRadius.lg))
                         }
                         .buttonStyle(ScaleButtonStyle())
 
@@ -1671,8 +1664,8 @@ struct GoalDetailView: View {
                                     Text(goal.isPinned ? loc("savings.unpin") : loc("savings.pin")).font(.system(.footnote, weight: .medium))
                                 }
                                 .foregroundStyle(AppTheme.accent).frame(maxWidth: .infinity).padding(.vertical, 13)
-                                .background(AppTheme.accent.opacity(0.1), in: Capsule())
-                                .overlay(Capsule().stroke(AppTheme.accent.opacity(0.3), lineWidth: 1))
+                                .background(AppTheme.accent.opacity(0.1), in: RoundedRectangle(cornerRadius: AppRadius.lg))
+                                .overlay(RoundedRectangle(cornerRadius: AppRadius.lg).stroke(AppTheme.accent.opacity(0.3), lineWidth: 1))
                             }
                             .buttonStyle(ScaleButtonStyle())
 
@@ -1685,8 +1678,8 @@ struct GoalDetailView: View {
                                     Text(loc("action.delete")).font(.system(.footnote, weight: .medium))
                                 }
                                 .foregroundStyle(AppTheme.red).frame(maxWidth: .infinity).padding(.vertical, 13)
-                                .background(AppTheme.red.opacity(0.1), in: Capsule())
-                                .overlay(Capsule().stroke(AppTheme.red.opacity(0.3), lineWidth: 1))
+                                .background(AppTheme.red.opacity(0.1), in: RoundedRectangle(cornerRadius: AppRadius.lg))
+                                .overlay(RoundedRectangle(cornerRadius: AppRadius.lg).stroke(AppTheme.red.opacity(0.3), lineWidth: 1))
                             }
                             .buttonStyle(ScaleButtonStyle())
                         }
@@ -1804,7 +1797,7 @@ struct RecordPastDepositSheet: View {
                                     .keyboardType(.decimalPad)
                             }
                             .padding(16)
-                            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
+                            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
                         }
 
                         // Source account
@@ -1847,7 +1840,7 @@ struct RecordPastDepositSheet: View {
                                 .font(.system(.callout, weight: .bold)).foregroundStyle(AppTheme.onVividFill)
                                 .frame(maxWidth: .infinity).padding(.vertical, 15)
                                 .background(canSave ? AppTheme.purple : AppTheme.cardMid,
-                                            in: RoundedRectangle(cornerRadius: 14))
+                                            in: RoundedRectangle(cornerRadius: AppRadius.md))
                         }
                         .buttonStyle(ScaleButtonStyle())
                         .disabled(!canSave)

@@ -88,9 +88,9 @@ struct SheetField: View {
                 .font(.system(.subheadline))
                 .foregroundStyle(AppTheme.textPrimary)
                 .padding(14)
-                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
+                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 14)
+                    RoundedRectangle(cornerRadius: AppRadius.md)
                         .stroke(focused ? AppTheme.accent.opacity(0.6) : Color.clear, lineWidth: 1.5)
                 )
                 .focused($focused)
@@ -157,9 +157,9 @@ struct IconField: View {
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 15)
-            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
+            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
             .overlay(
-                RoundedRectangle(cornerRadius: 16)
+                RoundedRectangle(cornerRadius: AppRadius.md)
                     .stroke(focused ? AppTheme.accent.opacity(0.6) : Color.clear, lineWidth: 1.5)
             )
             .animation(.easeOut(duration: 0.15), value: focused)
@@ -220,8 +220,8 @@ struct CategoryTilePicker: View {
                         .foregroundStyle(on ? AppTheme.textPrimary : AppTheme.textSecondary)
                         .frame(width: 84, height: 78)
                         .background(on ? cat.color.opacity(0.16) : AppTheme.cardDark,
-                                    in: RoundedRectangle(cornerRadius: 18))
-                        .overlay(RoundedRectangle(cornerRadius: 18)
+                                    in: RoundedRectangle(cornerRadius: AppRadius.lg))
+                        .overlay(RoundedRectangle(cornerRadius: AppRadius.lg)
                             .stroke(on ? cat.color.opacity(0.65) : Color.clear, lineWidth: 1.5))
                     }
                     .buttonStyle(ScaleButtonStyle())
@@ -267,7 +267,7 @@ struct DateTimeFields: View {
         // Expand BEFORE painting: with `.frame` after `.background` the fill
         // hugged its own text and the two boxes came out different widths.
         .frame(maxWidth: .infinity)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
     }
 }
 
@@ -367,7 +367,7 @@ struct CardFaceView: View {
         .background(
             LinearGradient(colors: [Color(hex: card.gradientStart), Color(hex: card.gradientEnd)],
                            startPoint: .topLeading, endPoint: .bottomTrailing),
-            in: RoundedRectangle(cornerRadius: 18))
+            in: RoundedRectangle(cornerRadius: AppRadius.lg))
     }
 }
 
@@ -483,9 +483,9 @@ struct InlineBanner: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
-        .background(tone.color.opacity(0.1), in: RoundedRectangle(cornerRadius: 10))
+        .background(tone.color.opacity(0.1), in: RoundedRectangle(cornerRadius: AppRadius.sm))
         .overlay(
-            RoundedRectangle(cornerRadius: 10)
+            RoundedRectangle(cornerRadius: AppRadius.sm)
                 .stroke(tone.color.opacity(0.25), lineWidth: 1)
         )
         .transition(.opacity)

@@ -281,7 +281,7 @@ struct StatisticsView: View {
     /// card opens the Royal paywall.
     private var lockedInsightsOverlay: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 18)
+            RoundedRectangle(cornerRadius: AppRadius.lg)
                 .fill(AppTheme.bg.opacity(0.35))
             VStack(spacing: 8) {
                 ZStack {
@@ -1097,7 +1097,7 @@ struct StatisticsView: View {
                             Spacer(minLength: 0)
                         }
                         .padding(.horizontal, 14).padding(.vertical, 10)
-                        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
+                        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
                         .padding(.horizontal, 22)
                         .padding(.top, 10)
                     }
@@ -1116,8 +1116,8 @@ struct StatisticsView: View {
                             }
                             .foregroundStyle(AppTheme.purple)
                             .padding(.horizontal, 14).padding(.vertical, 12)
-                            .background(AppTheme.purple.opacity(0.10), in: RoundedRectangle(cornerRadius: 14))
-                            .overlay(RoundedRectangle(cornerRadius: 14).stroke(AppTheme.purple.opacity(0.25), lineWidth: 1))
+                            .background(AppTheme.purple.opacity(0.10), in: RoundedRectangle(cornerRadius: AppRadius.md))
+                            .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.purple.opacity(0.25), lineWidth: 1))
                         }
                         .buttonStyle(ScaleButtonStyle())
                         .padding(.horizontal, 22).padding(.top, 16)
@@ -1292,7 +1292,7 @@ struct StatisticsView: View {
                                 }
                             }
                             .padding(.horizontal, 16)
-                            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 18))
+                            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
                         }
                         .padding(.horizontal, 22)
                         .padding(.top, 24)
@@ -1458,7 +1458,7 @@ struct CashflowCard: View {
         }
         .padding(.vertical, 16).padding(.horizontal, 18)
         .frame(maxWidth: .infinity)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 18))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
     }
 
     private func column(_ title: String, _ amount: Double, _ change: Double?,
@@ -1643,7 +1643,7 @@ struct NetBalanceSummary: View {
             }
         }
         .padding(.vertical, 16).padding(.horizontal, 18)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 18))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
     }
 
     private func reconRow(_ label: String, _ value: Double, signed: Bool = false) -> some View {
@@ -1677,7 +1677,6 @@ struct StatSegmentPicker: View {
                             if vm.selectedStatTab == tab {
                                 Capsule()
                                     .fill(tab.tint)
-                                    .shadow(color: tab.tint.opacity(0.35), radius: 8, y: 3)
                             }
                         }
                 }
@@ -1724,8 +1723,6 @@ struct NetWorthTrendCard: View {
         RoundedRectangle(cornerRadius: 5)
             .fill(fill)
             .frame(width: w, height: h)
-            .shadow(color: (glow ?? .clear).opacity(glow == nil ? 0 : 0.45),
-                    radius: glow == nil ? 0 : 5, y: 2)
     }
 
     var body: some View {
@@ -1856,8 +1853,8 @@ struct NetWorthTrendCard: View {
             }
         }
         .padding(16)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).stroke(AppTheme.accent.opacity(0.12), lineWidth: 1))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.accent.opacity(0.12), lineWidth: 1))
         .onAppear { appeared = true }
     }
 }
@@ -1982,12 +1979,12 @@ struct SmartInsightsCard: View {
                     colors: [AppTheme.purple.opacity(0.18), AppTheme.purple.opacity(0.05)],
                     startPoint: .topLeading, endPoint: .bottomTrailing
                 ),
-                in: RoundedRectangle(cornerRadius: 14)
+                in: RoundedRectangle(cornerRadius: AppRadius.md)
             )
             
         }
         .padding(.vertical, 16).padding(.horizontal, 18)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 18))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
         .onAppear {
             withAnimation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.1)) {
                 appeared = true
@@ -2146,9 +2143,8 @@ struct StatsExportSheet: View {
                             colors: [AppTheme.accent, AppTheme.accent.opacity(0.85)],
                             startPoint: .topLeading, endPoint: .bottomTrailing
                         ),
-                        in: RoundedRectangle(cornerRadius: 14)
+                        in: RoundedRectangle(cornerRadius: AppRadius.md)
                     )
-                    .shadow(color: AppTheme.accent.opacity(0.4), radius: 8, y: 3)
                 }
                 .buttonStyle(ScaleButtonStyle())
                 .disabled(isGenerating)
@@ -2303,7 +2299,7 @@ struct StatsReportCard: View {
                     ],
                     startPoint: .topLeading, endPoint: .bottomTrailing
                 ),
-                in: RoundedRectangle(cornerRadius: 16)
+                in: RoundedRectangle(cornerRadius: AppRadius.md)
             )
             
             // Income / Expenses split
@@ -2360,7 +2356,7 @@ struct StatsReportCard: View {
                     }
                 }
                 .padding(14)
-                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
+                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
             }
             
             // Budget Allocation — premium-gated. Use `hasActiveBudget` (not the
@@ -2390,8 +2386,8 @@ struct StatsReportCard: View {
         }
         .padding(16)
         .background(AppTheme.bg)
-        .overlay(RoundedRectangle(cornerRadius: 18).stroke(AppTheme.cardMid, lineWidth: 1))
-        .clipShape(RoundedRectangle(cornerRadius: 18))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.lg).stroke(AppTheme.cardMid, lineWidth: 1))
+        .clipShape(RoundedRectangle(cornerRadius: AppRadius.lg))
     }
     
     /// Budget allocation breakdown — shown only when Smart Budget is enabled.
@@ -2437,7 +2433,7 @@ struct StatsReportCard: View {
             }
         }
         .padding(12)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 12))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.sm))
     }
     
     /// Smart recommendation — single source of truth shared with the Home
@@ -2508,8 +2504,8 @@ struct StatsReportCard: View {
             Spacer(minLength: 0)
         }
         .padding(12)
-        .background(tint.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(tint.opacity(0.25), lineWidth: 1))
+        .background(tint.opacity(0.08), in: RoundedRectangle(cornerRadius: AppRadius.sm))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.sm).stroke(tint.opacity(0.25), lineWidth: 1))
     }
 }
 
@@ -2567,7 +2563,7 @@ struct ReportMetricBox: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(12)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
     }
 }
 
@@ -2727,7 +2723,7 @@ struct CategoryDonutChart: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 18).padding(.horizontal, 18)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 18))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
     }
 }
 
@@ -2847,7 +2843,7 @@ struct CycleTrendBreakdown: View {
                                     AppTheme.textSecondary)
                             }
                             .padding(14)
-                            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
+                            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
                             .padding(.horizontal, 22)
                         }
 

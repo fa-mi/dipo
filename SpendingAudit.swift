@@ -170,7 +170,7 @@ struct SpendingAuditSheet: View {
                  tint: AppTheme.textSecondary)
         }
         .padding(14)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 18))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
     }
 
     private var divider: some View {
@@ -275,7 +275,7 @@ struct SpendingAuditSheet: View {
                 .foregroundStyle(showingExcluded ? AppTheme.textSecondary : AppTheme.textPrimary)
         }
         .padding(.horizontal, 13).padding(.vertical, 11)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 13))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
     }
 
     private var hint: some View {

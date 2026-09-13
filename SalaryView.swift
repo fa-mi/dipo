@@ -344,7 +344,7 @@ struct PaydayTile: View {
         .frame(maxWidth: .infinity)
         .padding(.vertical, 10)
         .background(isToday ? AppTheme.accentFill : AppTheme.cardMid.opacity(0.55),
-                    in: RoundedRectangle(cornerRadius: 14))
+                    in: RoundedRectangle(cornerRadius: AppRadius.md))
         .overlay(alignment: .topTrailing) {
             if moved {
                 Circle().fill(AppTheme.orange).frame(width: 7, height: 7).padding(7)
@@ -539,8 +539,8 @@ struct PaydayHeroCard: View {
         .background(
             LinearGradient(colors: [AppTheme.accent.opacity(0.20), AppTheme.cardDark],
                            startPoint: .topLeading, endPoint: .bottomTrailing),
-            in: RoundedRectangle(cornerRadius: 24))
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 24))
+            in: RoundedRectangle(cornerRadius: AppRadius.xl))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.xl))
     }
 }
 
@@ -585,7 +585,7 @@ struct SalaryEmptyState: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 16)
                 .background(hasCards ? AppTheme.accentFill : AppTheme.cardMid,
-                            in: RoundedRectangle(cornerRadius: 20))
+                            in: RoundedRectangle(cornerRadius: AppRadius.lg))
             }
             .buttonStyle(ScaleButtonStyle())
             .disabled(!hasCards)
@@ -737,7 +737,7 @@ struct SalaryCard: View {
             }
         }
         .padding(18)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 24))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.xl))
     }
 
     private func chip(_ text: String, icon: String, tint: Color) -> some View {
@@ -834,7 +834,7 @@ struct SalaryActionsSheet: View {
                 }
                 .padding(.horizontal, 14).padding(.vertical, 12)
             }
-            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 20))
+            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
 
             Button(action: onDelete) {
                 HStack(spacing: 12) {
@@ -851,7 +851,7 @@ struct SalaryActionsSheet: View {
                     Spacer(minLength: 0)
                 }
                 .padding(.horizontal, 14).padding(.vertical, 12)
-                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 20))
+                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
             }
             .buttonStyle(ScaleButtonStyle())
         }
@@ -879,7 +879,7 @@ struct SalaryActionsSheet: View {
             .font(.system(.subheadline, weight: .semibold))
             .foregroundStyle(solid ? AppTheme.onVividFill : tint)
             .frame(width: 36, height: 36)
-            .background(solid ? tint : tint.opacity(0.14), in: RoundedRectangle(cornerRadius: 11))
+            .background(solid ? tint : tint.opacity(0.14), in: RoundedRectangle(cornerRadius: AppRadius.sm))
     }
 
     private func row(icon: String, tint: Color, title: String, detail: String,
@@ -947,7 +947,7 @@ struct SalaryDeleteSheet: View {
             }
             .padding(14)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 18))
+            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
 
             VStack(spacing: 10) {
                 Button(action: onConfirm) {
@@ -955,7 +955,7 @@ struct SalaryDeleteSheet: View {
                         .font(.system(.callout, weight: .bold))
                         .foregroundStyle(AppTheme.onVividFill)
                         .frame(maxWidth: .infinity).padding(.vertical, 16)
-                        .background(AppTheme.flowOut, in: RoundedRectangle(cornerRadius: 18))
+                        .background(AppTheme.flowOut, in: RoundedRectangle(cornerRadius: AppRadius.lg))
                 }
                 .buttonStyle(ScaleButtonStyle())
                 Button {
@@ -965,7 +965,7 @@ struct SalaryDeleteSheet: View {
                         .font(.system(.callout, weight: .semibold))
                         .foregroundStyle(AppTheme.textPrimary)
                         .frame(maxWidth: .infinity).padding(.vertical, 16)
-                        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 18))
+                        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
                 }
                 .buttonStyle(ScaleButtonStyle())
             }
@@ -1126,7 +1126,7 @@ struct SalaryFormSheet: View {
                     }
                 }
                 .padding(.horizontal, 13).padding(.vertical, 12)
-                .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: 13))
+                .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: AppRadius.md))
 
                 TextField("0", text: $vm.formAmount)
                     .font(.system(.largeTitle, weight: .bold))
@@ -1135,7 +1135,7 @@ struct SalaryFormSheet: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             .padding(14)
-            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 20))
+            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
 
             if let p = AmountInputHelper.preview(vm.formAmount, currency: vm.formCurrency) {
                 Text(p)
@@ -1185,7 +1185,7 @@ struct SalaryFormSheet: View {
                 }
             }
             .padding(14)
-            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 20))
+            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
         }
         .padding(.horizontal, 22)
     }
@@ -1222,7 +1222,7 @@ struct SalaryFormSheet: View {
                 .font(.system(.subheadline, weight: .semibold))
                 .foregroundStyle(AppTheme.onVividFill)
                 .frame(width: 36, height: 36)
-                .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: 11))
+                .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: AppRadius.sm))
             VStack(alignment: .leading, spacing: 2) {
                 Text(loc("salary.autorecord_label"))
                     .font(.system(.subheadline, weight: .semibold))
@@ -1238,7 +1238,7 @@ struct SalaryFormSheet: View {
                 .tint(AppTheme.accentFill)
         }
         .padding(14)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 20))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
         .padding(.horizontal, 22)
     }
 
@@ -1253,7 +1253,7 @@ struct SalaryFormSheet: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 17)
             .background(cards.isEmpty ? AppTheme.textSecondary.opacity(0.25) : AppTheme.accentFill,
-                        in: RoundedRectangle(cornerRadius: 20))
+                        in: RoundedRectangle(cornerRadius: AppRadius.lg))
         }
         .buttonStyle(ScaleButtonStyle())
         .disabled(cards.isEmpty)
@@ -1334,7 +1334,7 @@ struct CardPickerSection: View {
                         .font(.system(.footnote)).foregroundStyle(AppTheme.textSecondary)
                 }
                 .padding(14)
-                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
+                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
                 .padding(.horizontal, 22)
             } else {
                 CardChipPicker(cards: cards,
@@ -1400,8 +1400,8 @@ struct SalaryDetailView: View {
                     .background(
                         LinearGradient(colors: [AppTheme.accent.opacity(0.20), AppTheme.cardDark],
                                        startPoint: .topLeading, endPoint: .bottomTrailing),
-                        in: RoundedRectangle(cornerRadius: 24))
-                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 24))
+                        in: RoundedRectangle(cornerRadius: AppRadius.xl))
+                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.xl))
                     .padding(.horizontal, 22)
 
                     if let card = linkedCard {
@@ -1429,7 +1429,7 @@ struct SalaryDetailView: View {
                         }
                     }
                     .padding(16)
-                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 24))
+                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.xl))
                     .padding(.horizontal, 22)
 
                     Spacer(minLength: 40)

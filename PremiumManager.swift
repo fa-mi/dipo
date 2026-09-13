@@ -613,9 +613,8 @@ struct LockedFeaturePlaceholder: View {
                             colors: [feature.requiredPlan.color, feature.requiredPlan.color.opacity(0.7)],
                             startPoint: .leading, endPoint: .trailing
                         ),
-                        in: RoundedRectangle(cornerRadius: 18)
+                        in: RoundedRectangle(cornerRadius: AppRadius.lg)
                     )
-                    .shadow(color: feature.requiredPlan.color.opacity(0.4), radius: 16, y: 6)
                 }
                 .buttonStyle(ScaleButtonStyle())
                 .padding(.horizontal, 32)
@@ -736,7 +735,7 @@ struct PaywallView: View {
                         ForEach(royalAllFeatures, id: \.rawValue) { feature in
                             HStack(spacing: 12) {
                                 ZStack {
-                                    RoundedRectangle(cornerRadius: 10)
+                                    RoundedRectangle(cornerRadius: AppRadius.sm)
                                         .fill(feature.color.opacity(0.12))
                                         .frame(width: 38, height: 38)
                                     Image(systemName: feature.icon)
@@ -760,8 +759,8 @@ struct PaywallView: View {
                         }
                     }
                     .padding(16)
-                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 18))
-                    .overlay(RoundedRectangle(cornerRadius: 18).stroke(selectedPlan.color.opacity(0.25), lineWidth: 1))
+                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+                    .overlay(RoundedRectangle(cornerRadius: AppRadius.lg).stroke(selectedPlan.color.opacity(0.25), lineWidth: 1))
                     .padding(.horizontal, 22)
                     .opacity(appeared ? 1 : 0)
                     .animation(AppMotion.appear, value: appeared)
@@ -779,8 +778,8 @@ struct PaywallView: View {
                                 }
                                 .frame(maxWidth: .infinity)
                                 .padding(12)
-                                .background(AppTheme.orange.opacity(0.1), in: RoundedRectangle(cornerRadius: 12))
-                                .overlay(RoundedRectangle(cornerRadius: 12).stroke(AppTheme.orange.opacity(0.3), lineWidth: 1))
+                                .background(AppTheme.orange.opacity(0.1), in: RoundedRectangle(cornerRadius: AppRadius.sm))
+                                .overlay(RoundedRectangle(cornerRadius: AppRadius.sm).stroke(AppTheme.orange.opacity(0.3), lineWidth: 1))
 
                                 Text(loc("auth.sub_linked"))
                                     .font(.system(.caption2))
@@ -795,7 +794,7 @@ struct PaywallView: View {
                                 .foregroundStyle(.white)
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 18)
-                                .background(AppTheme.textSecondary.opacity(0.3), in: RoundedRectangle(cornerRadius: 18))
+                                .background(AppTheme.textSecondary.opacity(0.3), in: RoundedRectangle(cornerRadius: AppRadius.lg))
                             }
                         } else if mgr.plan != selectedPlan {
                             // Previous deferred-billing notices for the
@@ -850,9 +849,8 @@ struct PaywallView: View {
                                         colors: [selectedPlan.color, selectedPlan.color.opacity(0.75)],
                                         startPoint: .leading, endPoint: .trailing
                                     ),
-                                    in: RoundedRectangle(cornerRadius: 18)
+                                    in: RoundedRectangle(cornerRadius: AppRadius.lg)
                                 )
-                                .shadow(color: selectedPlan.color.opacity(0.45), radius: 16, y: 6)
                             }
                             .buttonStyle(ScaleButtonStyle())
                             .disabled(mgr.isLoading)
@@ -876,8 +874,8 @@ struct PaywallView: View {
                             }
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 18)
-                            .background(selectedPlan.color.opacity(0.1), in: RoundedRectangle(cornerRadius: 18))
-                            .overlay(RoundedRectangle(cornerRadius: 18).stroke(selectedPlan.color.opacity(0.3), lineWidth: 1))
+                            .background(selectedPlan.color.opacity(0.1), in: RoundedRectangle(cornerRadius: AppRadius.lg))
+                            .overlay(RoundedRectangle(cornerRadius: AppRadius.lg).stroke(selectedPlan.color.opacity(0.3), lineWidth: 1))
                         }
 
                         if mgr.plan != .free {
@@ -1062,7 +1060,7 @@ struct PaywallView: View {
         }
         .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(plan.color.opacity(0.08), in: RoundedRectangle(cornerRadius: 18))
-        .overlay(RoundedRectangle(cornerRadius: 18).stroke(plan.color.opacity(0.4), lineWidth: 1.5))
+        .background(plan.color.opacity(0.08), in: RoundedRectangle(cornerRadius: AppRadius.lg))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.lg).stroke(plan.color.opacity(0.4), lineWidth: 1.5))
     }
 }

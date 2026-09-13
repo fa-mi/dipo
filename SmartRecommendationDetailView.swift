@@ -120,8 +120,8 @@ struct SmartRecommendationDetailView: View {
         // deepened for legibility, the headline on it fell to ~3:1. The card
         // now sits on the theme's own surface, tinted with the verdict's colour.
         .background((positive ? AppTheme.accent : AppTheme.red).opacity(0.10),
-                    in: RoundedRectangle(cornerRadius: 18))
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 18))
+                    in: RoundedRectangle(cornerRadius: AppRadius.lg))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
     }
 
     /// 2. What to do, in order. Same items as the main screen but numbered, so
@@ -150,7 +150,7 @@ struct SmartRecommendationDetailView: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
     }
 
     /// 3. Only the outcomes that actually have a value. A grid half-full of
@@ -192,7 +192,7 @@ struct SmartRecommendationDetailView: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
     }
 
     private var summaryTab: some View {
@@ -218,7 +218,7 @@ struct SmartRecommendationDetailView: View {
                     }
                 }
                 .padding(14).frame(maxWidth: .infinity, alignment: .leading)
-                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
+                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
             }
         }
     }
@@ -339,7 +339,7 @@ struct SmartRecommendationDetailView: View {
         }
         .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(AppTheme.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
+        .background(AppTheme.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: AppRadius.sm))
     }
 
     // MARK: Investment
@@ -410,7 +410,7 @@ struct SmartRecommendationDetailView: View {
                     Spacer(minLength: 0)
                 }
                 .padding(12)
-                .background(AppTheme.orange.opacity(0.10), in: RoundedRectangle(cornerRadius: 14))
+                .background(AppTheme.orange.opacity(0.10), in: RoundedRectangle(cornerRadius: AppRadius.md))
             }
         }
     }
@@ -422,8 +422,8 @@ struct SmartRecommendationDetailView: View {
         VStack(alignment: .leading, spacing: 10) { content() }
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
-            .overlay(RoundedRectangle(cornerRadius: 16).stroke(AppTheme.cardMid.opacity(0.4), lineWidth: 1))
+            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+            .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.cardMid.opacity(0.4), lineWidth: 1))
     }
 }
 

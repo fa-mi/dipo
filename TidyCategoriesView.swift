@@ -94,7 +94,7 @@ struct TidyCategoriesView: View {
     private func row(_ s: Binding<TidySuggestion>) -> some View {
         HStack(spacing: 12) {
             ZStack {
-                RoundedRectangle(cornerRadius: 11).fill(s.wrappedValue.category.color.opacity(0.14)).frame(width: 40, height: 40)
+                RoundedRectangle(cornerRadius: AppRadius.sm).fill(s.wrappedValue.category.color.opacity(0.14)).frame(width: 40, height: 40)
                 Image(systemName: s.wrappedValue.category.icon).font(.system(.callout)).foregroundStyle(s.wrappedValue.category.color)
             }
             VStack(alignment: .leading, spacing: 3) {
@@ -120,7 +120,7 @@ struct TidyCategoriesView: View {
             }
         }
         .padding(12)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
     }
 
     private var applyButton: some View {
@@ -137,7 +137,7 @@ struct TidyCategoriesView: View {
             Text(String(format: loc("tidy.apply"), suggestions.count))
                 .font(.system(.callout, weight: .bold)).foregroundStyle(AppTheme.bg)
                 .frame(maxWidth: .infinity).padding(.vertical, 16)
-                .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: 16))
+                .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: AppRadius.md))
         }
         .buttonStyle(ScaleButtonStyle())
         .padding(.horizontal, 22).padding(.bottom, 20)

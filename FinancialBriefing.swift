@@ -588,7 +588,7 @@ struct FinancialBriefingView: View {
                                     }
                                 }
                                 .padding(.horizontal, 16)
-                                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
+                                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
                                 .padding(.horizontal, 22)
                             }
 
@@ -607,7 +607,7 @@ struct FinancialBriefingView: View {
                                     }
                                 }
                                 .padding(14).frame(maxWidth: .infinity, alignment: .leading)
-                                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
+                                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
                                 .padding(.horizontal, 22)
                             }
 
@@ -632,8 +632,8 @@ struct FinancialBriefingView: View {
                                 }
                                 .padding(14)
                                 .frame(maxWidth: .infinity, alignment: .leading)
-                                .background(f.severity.color.opacity(0.07), in: RoundedRectangle(cornerRadius: 16))
-                                .overlay(RoundedRectangle(cornerRadius: 16).stroke(f.severity.color.opacity(0.2), lineWidth: 1))
+                                .background(f.severity.color.opacity(0.07), in: RoundedRectangle(cornerRadius: AppRadius.md))
+                                .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(f.severity.color.opacity(0.2), lineWidth: 1))
                                 .padding(.horizontal, 22)
                             }
 
@@ -652,7 +652,7 @@ struct FinancialBriefingView: View {
                                     }
                                 }
                                 .padding(14).frame(maxWidth: .infinity, alignment: .leading)
-                                .background(AppTheme.purple.opacity(0.07), in: RoundedRectangle(cornerRadius: 16))
+                                .background(AppTheme.purple.opacity(0.07), in: RoundedRectangle(cornerRadius: AppRadius.md))
                                 .padding(.horizontal, 22)
                             }
 

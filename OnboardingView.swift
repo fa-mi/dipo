@@ -84,8 +84,7 @@ struct OnboardingView: View {
                         .foregroundStyle(AppTheme.bg)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 18)
-                        .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: 18))
-                        .shadow(color: AppTheme.accent.opacity(0.4), radius: 16, y: 6)
+                        .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: AppRadius.lg))
                     }
                     .buttonStyle(ScaleButtonStyle())
                     .padding(.horizontal, 28)

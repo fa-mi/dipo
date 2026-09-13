@@ -226,8 +226,8 @@ struct ContactAdminSheet: View {
             }
         }
         .padding(14)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).stroke(AppTheme.accent.opacity(0.15), lineWidth: 1))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.accent.opacity(0.15), lineWidth: 1))
     }
 
     @ViewBuilder
@@ -285,8 +285,8 @@ struct ContactAdminSheet: View {
             ticketProgressBar(status: status)
                 .padding(.horizontal, 14).padding(.vertical, 10)
         }
-        .background(bg, in: RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).stroke(border, lineWidth: 1))
+        .background(bg, in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(border, lineWidth: 1))
     }
 
     @ViewBuilder
@@ -408,8 +408,8 @@ struct NewTicketForm: View {
             Spacer()
         }
         .padding(16)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).stroke(AppTheme.accent.opacity(0.2), lineWidth: 1))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.accent.opacity(0.2), lineWidth: 1))
         .padding(.horizontal, 22)
         .opacity(appeared ? 1 : 0).animation(AppMotion.appear, value: appeared)
     }
@@ -452,7 +452,7 @@ struct NewTicketForm: View {
                 .font(.system(.footnote, weight: .semibold)).foregroundStyle(AppTheme.textSecondary)
             TextField(loc("support.subject_placeholder"), text: $subject)
                 .font(.system(.subheadline)).foregroundStyle(AppTheme.textPrimary)
-                .padding(14).background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
+                .padding(14).background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
         }
         .padding(.horizontal, 22)
         .opacity(appeared ? 1 : 0).animation(AppMotion.appear, value: appeared)
@@ -466,7 +466,7 @@ struct NewTicketForm: View {
                 TextEditor(text: $message)
                     .font(.system(.subheadline)).foregroundStyle(AppTheme.textPrimary)
                     .frame(minHeight: 120).padding(10)
-                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
+                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
                 if message.isEmpty {
                     Text(loc("support.message_placeholder"))
                         .font(.system(.subheadline)).foregroundStyle(AppTheme.textSecondary.opacity(0.5))
@@ -512,7 +512,7 @@ struct NewTicketForm: View {
     private func thumbnailItem(image img: UIImage, index i: Int) -> some View {
         ZStack(alignment: .topTrailing) {
             Image(uiImage: img).resizable().scaledToFill()
-                .frame(width: 80, height: 80).clipShape(RoundedRectangle(cornerRadius: 10))
+                .frame(width: 80, height: 80).clipShape(RoundedRectangle(cornerRadius: AppRadius.sm))
             Button {
                 withAnimation(.spring(response: 0.3)) {
                     if selectedImages.indices.contains(i) { selectedImages.remove(at: i) }
@@ -536,8 +536,8 @@ struct NewTicketForm: View {
                 Text(loc("support.add_photo")).font(.system(.caption2, weight: .medium)).foregroundStyle(AppTheme.accent)
             }
             .frame(width: 80, height: 80)
-            .background(AppTheme.accent.opacity(0.06), in: RoundedRectangle(cornerRadius: 10))
-            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(AppTheme.accent.opacity(0.35),
+            .background(AppTheme.accent.opacity(0.06), in: RoundedRectangle(cornerRadius: AppRadius.sm))
+            .overlay(RoundedRectangle(cornerRadius: AppRadius.sm).strokeBorder(AppTheme.accent.opacity(0.35),
                 style: StrokeStyle(lineWidth: 1.5, dash: dashPattern)))
         }
         .onChange(of: pickerItems) { _, items in loadImages(from: items) }
@@ -546,7 +546,7 @@ struct NewTicketForm: View {
     private var formSendButton: some View {
         let buttonColor: Color = canSend ? AppTheme.accent : AppTheme.textSecondary.opacity(0.3)
         return Button { Task { await submit() } } label: {
-            sendButtonLabel.background(buttonColor, in: RoundedRectangle(cornerRadius: 18))
+            sendButtonLabel.background(buttonColor, in: RoundedRectangle(cornerRadius: AppRadius.lg))
         }
         .buttonStyle(ScaleButtonStyle())
         .disabled(!canSend)
@@ -581,7 +581,7 @@ struct NewTicketForm: View {
             Button { onDone() } label: {
                 Text(loc("common.done")).font(.system(.callout, weight: .semibold)).foregroundStyle(AppTheme.onVividFill)
                     .frame(maxWidth: .infinity).padding(.vertical, 16)
-                    .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: 18))
+                    .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: AppRadius.lg))
             }
             .buttonStyle(ScaleButtonStyle()).padding(.horizontal, 32)
             Spacer()
@@ -730,8 +730,8 @@ struct TicketThreadView: View {
                             .padding(.horizontal, 10)
                             .padding(.vertical, 6)
                     }
-                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 18))
-                    .overlay(RoundedRectangle(cornerRadius: 18).stroke(AppTheme.cardMid, lineWidth: 1))
+                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+                    .overlay(RoundedRectangle(cornerRadius: AppRadius.lg).stroke(AppTheme.cardMid, lineWidth: 1))
 
                     // Send button
                     Button {
@@ -822,8 +822,8 @@ struct TicketThreadView: View {
             progressTrack(step: TicketStatusConfig.from(currentStatus).step)
         }
         .padding(14)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).stroke(AppTheme.cardMid, lineWidth: 1))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.cardMid, lineWidth: 1))
         .padding(.horizontal, 22)
     }
 
@@ -916,7 +916,7 @@ struct TicketThreadView: View {
                     }
                     Text(text).font(.system(.subheadline)).foregroundStyle(AppTheme.onVividFill).lineSpacing(4)
                         .padding(14)
-                        .background(category.color, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        .background(category.color, in: RoundedRectangle(cornerRadius: AppRadius.md, style: .continuous))
                     if !mediaBase64.isEmpty {
                         HStack(spacing: 8) {
                             ForEach(Array(mediaBase64.enumerated()), id: \.offset) { _, b64 in
@@ -936,10 +936,10 @@ struct TicketThreadView: View {
            let uiImg = UIImage(data: data) {
             Image(uiImage: uiImg).resizable().scaledToFill()
                 .frame(width: 80, height: 80)
-                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .clipShape(RoundedRectangle(cornerRadius: AppRadius.sm))
                 .onTapGesture { fullscreenBase64 = IdentifiableString(value: base64) }
         } else {
-            RoundedRectangle(cornerRadius: 10).fill(AppTheme.cardMid).frame(width: 80, height: 80)
+            RoundedRectangle(cornerRadius: AppRadius.sm).fill(AppTheme.cardMid).frame(width: 80, height: 80)
                 .overlay(Image(systemName: "photo.badge.exclamationmark").font(.system(.title2)).foregroundStyle(AppTheme.textSecondary))
         }
     }
@@ -960,8 +960,8 @@ struct TicketThreadView: View {
                 }
                 Text(reply.message).font(.system(.subheadline)).foregroundStyle(AppTheme.textPrimary).lineSpacing(4)
                     .padding(14)
-                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 16).stroke(AppTheme.accent.opacity(0.2), lineWidth: 1))
+                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.accent.opacity(0.2), lineWidth: 1))
             }
             Spacer(minLength: 50)
         }
@@ -977,7 +977,7 @@ struct TicketThreadView: View {
                     .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                 Text(reply.message).font(.system(.subheadline)).foregroundStyle(AppTheme.onVividFill).lineSpacing(4)
                     .padding(14)
-                    .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: AppRadius.md, style: .continuous))
             }
         }
         .padding(.horizontal, 22)

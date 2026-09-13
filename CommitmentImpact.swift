@@ -169,7 +169,7 @@ struct CommitmentImpactPreview: View {
             }
         }
         .padding(13)
-        .background(tint.opacity(0.08), in: RoundedRectangle(cornerRadius: 14))
-        .overlay(RoundedRectangle(cornerRadius: 14).stroke(tint.opacity(0.25), lineWidth: 1))
+        .background(tint.opacity(0.08), in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(tint.opacity(0.25), lineWidth: 1))
     }
 }

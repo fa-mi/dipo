@@ -250,7 +250,6 @@ struct CardListView: View {
                                     Circle()
                                         .fill(AppTheme.accentFill)
                                         .frame(width: 42, height: 42)
-                                        .shadow(color: AppTheme.accent.opacity(0.4), radius: 10, y: 4)
                                     Image(systemName: "plus")
                                         .font(.system(.body, weight: .semibold))
                                         .foregroundStyle(AppTheme.bg)
@@ -327,8 +326,8 @@ struct CardListView: View {
                             }
                         }
                         .padding(18)
-                        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
-                        .overlay(RoundedRectangle(cornerRadius: 16).stroke(AppTheme.accent.opacity(0.2), lineWidth: 1))
+                        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+                        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.accent.opacity(0.2), lineWidth: 1))
                         .padding(.horizontal, 22)
                         .padding(.top, 24)
                         .opacity(appeared ? 1 : 0)
@@ -555,11 +554,11 @@ struct CardFormSheet: View {
         } label: {
             VStack(spacing: 6) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 10)
+                    RoundedRectangle(cornerRadius: AppRadius.sm)
                         .fill(LinearGradient(colors: [Color(hex: start), Color(hex: end)],
                                              startPoint: .topLeading, endPoint: .bottomTrailing))
                         .frame(width: 54, height: 36)
-                        .overlay(RoundedRectangle(cornerRadius: 10)
+                        .overlay(RoundedRectangle(cornerRadius: AppRadius.sm)
                             .stroke(selected ? AppTheme.accent : .clear, lineWidth: 2.5))
                     if let systemIcon {
                         Image(systemName: systemIcon).font(.system(.subheadline, weight: .semibold))
@@ -626,13 +625,13 @@ struct CardFormSheet: View {
                                         .frame(maxWidth: .infinity)
                                         .padding(.vertical, 11)
                                         .background(isWallet == walletMode ? AppTheme.accentFill : Color.clear,
-                                                    in: RoundedRectangle(cornerRadius: 12))
+                                                    in: RoundedRectangle(cornerRadius: AppRadius.sm))
                                     }
                                     .buttonStyle(ScaleButtonStyle())
                                 }
                             }
                             .padding(4)
-                            .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: 16))
+                            .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: AppRadius.md))
                             .padding(.horizontal, 22)
                             .padding(.top, 8)
                             .opacity(appeared ? 1 : 0)
@@ -762,7 +761,7 @@ struct CardFormSheet: View {
                             }
                             .padding(.horizontal, 16)
                             .padding(.vertical, 14)
-                            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
+                            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
                             .padding(.horizontal, 22)
 
                             HStack {
@@ -825,8 +824,8 @@ struct CardFormSheet: View {
                                         }
                                 }
                                 .padding(14)
-                                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
-                                .overlay(RoundedRectangle(cornerRadius: 14)
+                                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+                                .overlay(RoundedRectangle(cornerRadius: AppRadius.md)
                                     .stroke(AppTheme.cardMid.opacity(0.5), lineWidth: 1))
                                 .padding(.horizontal, 22)
 
@@ -869,7 +868,7 @@ struct CardFormSheet: View {
                                     .focused($focusedField, equals: .month)
                                     .multilineTextAlignment(.center)
                                     .padding(.vertical, 14)
-                                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
+                                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
                                     .frame(maxWidth: .infinity)
                                     .onChange(of: expireMonth) { _, v in
                                         var clean = v.filter { $0.isNumber }
@@ -902,7 +901,7 @@ struct CardFormSheet: View {
                                     .focused($focusedField, equals: .year)
                                     .multilineTextAlignment(.center)
                                     .padding(.vertical, 14)
-                                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
+                                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
                                     .frame(maxWidth: .infinity)
                                     .onChange(of: expireYear) { _, v in
                                         var clean = v.filter { $0.isNumber }
@@ -933,7 +932,7 @@ struct CardFormSheet: View {
                                 } label: {
                                     HStack(spacing: 10) {
                                         ZStack {
-                                            RoundedRectangle(cornerRadius: 10)
+                                            RoundedRectangle(cornerRadius: AppRadius.sm)
                                                 .fill(AppTheme.green.opacity(0.12))
                                                 .frame(width: 38, height: 38)
                                             Image(systemName: "dollarsign.circle.fill")
@@ -957,11 +956,11 @@ struct CardFormSheet: View {
                                                 .foregroundStyle(AppTheme.textSecondary)
                                         }
                                         .padding(.horizontal, 12).padding(.vertical, 8)
-                                        .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: 10))
+                                        .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: AppRadius.sm))
                                     }
                                     .padding(14)
-                                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
-                                    .overlay(RoundedRectangle(cornerRadius: 16)
+                                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+                                    .overlay(RoundedRectangle(cornerRadius: AppRadius.md)
                                         .stroke(AppTheme.cardMid.opacity(0.5), lineWidth: 1))
                                     .padding(.horizontal, 22)
                                 }
@@ -973,7 +972,7 @@ struct CardFormSheet: View {
                             // Locked currency display when editing
                             HStack(spacing: 10) {
                                 ZStack {
-                                    RoundedRectangle(cornerRadius: 10)
+                                    RoundedRectangle(cornerRadius: AppRadius.sm)
                                         .fill(AppTheme.textSecondary.opacity(0.08))
                                         .frame(width: 38, height: 38)
                                     Image(systemName: "lock.fill")
@@ -995,11 +994,11 @@ struct CardFormSheet: View {
                                         .foregroundStyle(AppTheme.textSecondary)
                                 }
                                 .padding(.horizontal, 12).padding(.vertical, 8)
-                                .background(AppTheme.cardMid.opacity(0.5), in: RoundedRectangle(cornerRadius: 10))
+                                .background(AppTheme.cardMid.opacity(0.5), in: RoundedRectangle(cornerRadius: AppRadius.sm))
                             }
                             .padding(14)
-                            .background(AppTheme.cardDark.opacity(0.5), in: RoundedRectangle(cornerRadius: 16))
-                            .overlay(RoundedRectangle(cornerRadius: 16)
+                            .background(AppTheme.cardDark.opacity(0.5), in: RoundedRectangle(cornerRadius: AppRadius.md))
+                            .overlay(RoundedRectangle(cornerRadius: AppRadius.md)
                                 .stroke(AppTheme.cardMid.opacity(0.3), lineWidth: 1))
                             .padding(.horizontal, 22)
                             .opacity(appeared ? 1 : 0)
@@ -1018,8 +1017,7 @@ struct CardFormSheet: View {
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 16)
                                 .background(isWallet ? walletProvider.color : effectiveNetwork.accentColor,
-                                            in: Capsule())
-                                .shadow(color: (isWallet ? walletProvider.color : effectiveNetwork.accentColor).opacity(0.35), radius: 12, y: 6)
+                                            in: RoundedRectangle(cornerRadius: AppRadius.lg))
                         }
                         .buttonStyle(ScaleButtonStyle())
                         .padding(.horizontal, 22)
@@ -1183,7 +1181,7 @@ struct CardPreviewMini: View {
 
     var body: some View {
         ZStack(alignment: .topLeading) {
-            RoundedRectangle(cornerRadius: 20)
+            RoundedRectangle(cornerRadius: AppRadius.lg)
                 .fill(LinearGradient(
                     colors: [Color(hex: gStart), Color(hex: gEnd)],
                     startPoint: .topLeading, endPoint: .bottomTrailing
@@ -1205,7 +1203,7 @@ struct CardPreviewMini: View {
                     startPoint: .top, endPoint: .bottom
                 ))
             }
-            .clipShape(RoundedRectangle(cornerRadius: 20))
+            .clipShape(RoundedRectangle(cornerRadius: AppRadius.lg))
 
             VStack(alignment: .leading, spacing: 0) {
                 HStack {
@@ -1402,7 +1400,7 @@ struct CardTransferSheet: View {
                         .foregroundStyle(AppTheme.textPrimary)
                         .lineLimit(1).minimumScaleFactor(0.7)
                 } else {
-                    RoundedRectangle(cornerRadius: 14)
+                    RoundedRectangle(cornerRadius: AppRadius.md)
                         .fill(AppTheme.cardDark)
                         .frame(width: 96, height: 96 / WalletCard.aspect)
                 }
@@ -1485,15 +1483,15 @@ struct CardTransferSheet: View {
                 Text(sourceCard?.resolvedCurrency ?? "")
                     .font(.system(.subheadline, weight: .bold)).foregroundStyle(AppTheme.accent)
                     .frame(width: 58, height: 56)
-                    .background(AppTheme.accent.opacity(0.10), in: RoundedRectangle(cornerRadius: 14))
+                    .background(AppTheme.accent.opacity(0.10), in: RoundedRectangle(cornerRadius: AppRadius.md))
                 TextField("0", text: $amountText)
                     .font(.system(.title, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
                     .keyboardType(.decimalPad)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 16)
                     .frame(height: 56)
-                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
-                    .overlay(RoundedRectangle(cornerRadius: 14).stroke(insufficient ? AppTheme.red.opacity(0.5) : AppTheme.cardMid.opacity(0.5), lineWidth: 1))
+                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+                    .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(insufficient ? AppTheme.red.opacity(0.5) : AppTheme.cardMid.opacity(0.5), lineWidth: 1))
             }
             // Quick-fill chips (percentage of the source balance).
             HStack(spacing: 8) {
@@ -1542,7 +1540,7 @@ struct CardTransferSheet: View {
             }
             .foregroundStyle(canTransfer ? AppTheme.onVividFill : AppTheme.textSecondary)
             .frame(maxWidth: .infinity).padding(.vertical, 17)
-            .background(canTransfer ? AppTheme.accentFill : AppTheme.cardMid, in: RoundedRectangle(cornerRadius: 16))
+            .background(canTransfer ? AppTheme.accentFill : AppTheme.cardMid, in: RoundedRectangle(cornerRadius: AppRadius.md))
         }
         .buttonStyle(ScaleButtonStyle())
         .disabled(!canTransfer)
@@ -1591,7 +1589,7 @@ private struct TransferCardTile: View {
 
     var body: some View {
         ZStack(alignment: .topLeading) {
-            RoundedRectangle(cornerRadius: 22)
+            RoundedRectangle(cornerRadius: AppRadius.xl)
                 .fill(LinearGradient(
                     colors: [Color(hex: gStart), Color(hex: gEnd)],
                     startPoint: .topLeading, endPoint: .bottomTrailing))
@@ -1611,7 +1609,7 @@ private struct TransferCardTile: View {
                     colors: [Color.white.opacity(0.12), Color.white.opacity(0.02)],
                     startPoint: .top, endPoint: .bottom))
             }
-            .clipShape(RoundedRectangle(cornerRadius: 22))
+            .clipShape(RoundedRectangle(cornerRadius: AppRadius.xl))
 
             VStack(alignment: .leading, spacing: 0) {
                 HStack(alignment: .top) {

@@ -111,8 +111,8 @@ struct MainTabView: View {
                 }
                 .padding(.horizontal, 18)
                 .padding(.vertical, 12)
-                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
-                .overlay(RoundedRectangle(cornerRadius: 14).stroke(AppTheme.accent.opacity(0.3), lineWidth: 1))
+                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+                .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.accent.opacity(0.3), lineWidth: 1))
                 .shadow(color: .black.opacity(0.25), radius: 12, y: 4)
                 .padding(.bottom, 100)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -355,7 +355,7 @@ struct CustomTabBar: View {
                         VStack(spacing: 4) {
                             ZStack {
                                 if vm.activeTab == tab {
-                                    RoundedRectangle(cornerRadius: 12)
+                                    RoundedRectangle(cornerRadius: AppRadius.sm)
                                         .fill(AppTheme.accent.opacity(0.15))
                                         .frame(width: 44, height: 36)
                                         .matchedGeometryEffect(id: "tab_bg", in: namespace)
@@ -388,7 +388,7 @@ struct CustomTabBar: View {
         .padding(.top, 12)
         .padding(.bottom, 28)
         .background {
-            RoundedRectangle(cornerRadius: 28)
+            RoundedRectangle(cornerRadius: AppRadius.xl)
                 .fill(AppTheme.cardDark)
                 .shadow(color: .black.opacity(0.3), radius: 20, y: -4)
         }

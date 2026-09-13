@@ -36,7 +36,7 @@ struct PremiumLockedFeatureLink: View {
                     .frame(width: 36, height: 36)
                     .background(
                         (isLocked ? AppTheme.textSecondary : feature.color).opacity(0.12),
-                        in: RoundedRectangle(cornerRadius: 10)
+                        in: RoundedRectangle(cornerRadius: AppRadius.sm)
                     )
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 6) {
@@ -66,8 +66,8 @@ struct PremiumLockedFeatureLink: View {
                     .foregroundStyle(isLocked ? AppTheme.textSecondary.opacity(0.5) : AppTheme.textSecondary)
             }
             .padding(14)
-            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
-            .overlay(RoundedRectangle(cornerRadius: 14)
+            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+            .overlay(RoundedRectangle(cornerRadius: AppRadius.md)
                 .stroke(isLocked ? AppTheme.cardMid.opacity(0.5) : feature.color.opacity(0.15), lineWidth: 1))
         }
         .buttonStyle(ScaleButtonStyle())
@@ -90,7 +90,7 @@ struct ProfileFeatureLink: View {
                     .font(.system(.body))
                     .foregroundStyle(color)
                     .frame(width: 36, height: 36)
-                    .background(color.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
+                    .background(color.opacity(0.12), in: RoundedRectangle(cornerRadius: AppRadius.sm))
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
                         .font(.system(.subheadline, weight: .medium))
@@ -105,8 +105,8 @@ struct ProfileFeatureLink: View {
                     .foregroundStyle(AppTheme.textSecondary)
             }
             .padding(14)
-            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
-            .overlay(RoundedRectangle(cornerRadius: 14)
+            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+            .overlay(RoundedRectangle(cornerRadius: AppRadius.md)
                 .stroke(color.opacity(0.15), lineWidth: 1))
         }
         .buttonStyle(ScaleButtonStyle())
@@ -362,7 +362,7 @@ struct ProfileView: View {
                             .font(.system(.subheadline, weight: .medium)).foregroundStyle(.white)
                     }
                     .padding(28)
-                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20))
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: AppRadius.lg))
                 }
                 .transition(.opacity)
             }
@@ -533,7 +533,6 @@ struct ProfileView: View {
                 .frame(width: 118, height: 118)
             ZStack {
                 Circle().fill(AppTheme.cardDark).frame(width: 110, height: 110)
-                    .shadow(color: AppTheme.accent.opacity(0.35), radius: 18, y: 6)
                 if let img = profileImage {
                     Image(uiImage: img).resizable().scaledToFill()
                         .frame(width: 110, height: 110).clipShape(Circle())
@@ -546,7 +545,6 @@ struct ProfileView: View {
             Button { showPhotoOptions = true } label: {
                 ZStack {
                     Circle().fill(AppTheme.accentFill).frame(width: 32, height: 32)
-                        .shadow(color: AppTheme.accent.opacity(0.55), radius: 8, y: 3)
                     Image(systemName: "camera.fill")
                         .font(.system(.footnote, weight: .semibold)).foregroundStyle(AppTheme.onVividFill)
                 }
@@ -580,8 +578,8 @@ struct ProfileView: View {
                         .foregroundStyle(AppTheme.textPrimary)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 16).padding(.vertical, 10)
-                        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
-                        .overlay(RoundedRectangle(cornerRadius: 14).stroke(AppTheme.accent.opacity(0.5), lineWidth: 1.5))
+                        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+                        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.accent.opacity(0.5), lineWidth: 1.5))
                         .submitLabel(.done).onSubmit { saveName() }
                     Button { saveName() } label: {
                         Image(systemName: "checkmark.circle.fill").font(.system(.title)).foregroundStyle(AppTheme.accent)
@@ -635,7 +633,7 @@ struct ProfileView: View {
             Image(systemName: hasEmail ? "envelope.fill" : "envelope.badge")
                 .font(.system(.body)).foregroundStyle(c)
                 .frame(width: 36, height: 36)
-                .background(c.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
+                .background(c.opacity(0.12), in: RoundedRectangle(cornerRadius: AppRadius.sm))
             VStack(alignment: .leading, spacing: 2) {
                 Text(loc("profile.email_title"))
                     .font(.system(.subheadline, weight: .medium)).foregroundStyle(AppTheme.textPrimary)
@@ -660,8 +658,8 @@ struct ProfileView: View {
             .buttonStyle(ScaleButtonStyle())
         }
         .padding(16)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16)
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.md)
             .stroke((hasEmail ? AppTheme.accent : AppTheme.orange).opacity(0.18), lineWidth: 1))
         .padding(.horizontal, 22)
         .opacity(appeared ? 1 : 0)
@@ -692,8 +690,7 @@ struct ProfileView: View {
             Image(systemName: "person.text.rectangle.fill")
                 .font(.system(.body)).foregroundStyle(.white)
                 .frame(width: 36, height: 36)
-                .background(grad, in: RoundedRectangle(cornerRadius: 10))
-                .shadow(color: brandB.opacity(0.35), radius: 5, y: 2)
+                .background(grad, in: RoundedRectangle(cornerRadius: AppRadius.sm))
             VStack(alignment: .leading, spacing: 2) {
                 Text(loc("profile.dipo_id_title"))
                     .font(.system(.subheadline, weight: .medium)).foregroundStyle(AppTheme.textPrimary)
@@ -727,8 +724,8 @@ struct ProfileView: View {
         .background(
             LinearGradient(colors: [brandA.opacity(0.10), brandB.opacity(0.10)],
                            startPoint: .topLeading, endPoint: .bottomTrailing),
-            in: RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).stroke(brandB.opacity(0.30), lineWidth: 1))
+            in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(brandB.opacity(0.30), lineWidth: 1))
         .padding(.horizontal, 22)
         .opacity(appeared ? 1 : 0)
     }
@@ -739,7 +736,7 @@ struct ProfileView: View {
             let bioColor = authVM.isBiometricAvailable ? AppTheme.accent : AppTheme.textSecondary
             Image(systemName: authVM.biometricIcon).font(.system(.body)).foregroundStyle(bioColor)
                 .frame(width: 36, height: 36)
-                .background(bioColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
+                .background(bioColor.opacity(0.12), in: RoundedRectangle(cornerRadius: AppRadius.sm))
             VStack(alignment: .leading, spacing: 2) {
                 Text(authVM.biometricLabel).font(.system(.subheadline, weight: .medium)).foregroundStyle(AppTheme.textPrimary)
                 Text(
@@ -761,8 +758,8 @@ struct ProfileView: View {
             }
         }
         .padding(16)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).stroke(AppTheme.accent.opacity(0.18), lineWidth: 1))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.accent.opacity(0.18), lineWidth: 1))
         .padding(.horizontal, 22)
         .opacity(appeared ? 1 : 0)
     }
@@ -772,12 +769,12 @@ struct ProfileView: View {
         HStack(spacing: 14) {
             ZStack {
                 let isApple = session.provider == .apple
-                RoundedRectangle(cornerRadius: 12)
+                RoundedRectangle(cornerRadius: AppRadius.sm)
                     .fill(isApple
                         ? LinearGradient(colors: [Color(hex: "#1C1C1E"), Color(hex: "#3A3A3C")], startPoint: .topLeading, endPoint: .bottomTrailing)
                         : LinearGradient(colors: [Color(hex: "#4285F4").opacity(0.2), Color(hex: "#34A853").opacity(0.15)], startPoint: .topLeading, endPoint: .bottomTrailing))
                     .frame(width: 44, height: 44)
-                    .overlay(RoundedRectangle(cornerRadius: 12)
+                    .overlay(RoundedRectangle(cornerRadius: AppRadius.sm)
                         .stroke(isApple ? Color.white.opacity(0.08) : Color(hex: "#4285F4").opacity(0.3), lineWidth: 1))
                 if session.provider == .apple {
                     Image(systemName: "apple.logo").font(.system(.body, weight: .medium)).foregroundStyle(.white)
@@ -812,8 +809,8 @@ struct ProfileView: View {
         .background(
             LinearGradient(colors: [AppTheme.cardDark, AppTheme.cardDark.opacity(0.8)],
                            startPoint: .topLeading, endPoint: .bottomTrailing),
-            in: RoundedRectangle(cornerRadius: 18))
-        .overlay(RoundedRectangle(cornerRadius: 18).stroke(AppTheme.cardMid.opacity(0.6), lineWidth: 1))
+            in: RoundedRectangle(cornerRadius: AppRadius.lg))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.lg).stroke(AppTheme.cardMid.opacity(0.6), lineWidth: 1))
         .padding(.horizontal, 22)
         .opacity(appeared ? 1 : 0)
         .animation(AppMotion.appear, value: appeared)
@@ -824,8 +821,8 @@ struct ProfileView: View {
         Button { HapticManager.shared.tap(); showPaywall = true } label: {
             HStack(spacing: 14) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 12).fill(planIconFill).frame(width: 44, height: 44)
-                        .overlay(RoundedRectangle(cornerRadius: 12)
+                    RoundedRectangle(cornerRadius: AppRadius.sm).fill(planIconFill).frame(width: 44, height: 44)
+                        .overlay(RoundedRectangle(cornerRadius: AppRadius.sm)
                             .stroke(premiumMgr.plan == .free ? Color.clear : premiumMgr.plan.color.opacity(0.4), lineWidth: 1))
                     Image(systemName: premiumMgr.plan.icon).font(.system(.body, weight: .medium))
                         .foregroundStyle(premiumMgr.plan == .free ? AppTheme.textSecondary : premiumMgr.plan.color)
@@ -852,15 +849,14 @@ struct ProfileView: View {
                         .background(
                             LinearGradient(colors: [PremiumPlan.royal.color, PremiumPlan.royal.color.opacity(0.75)],
                                            startPoint: .topLeading, endPoint: .bottomTrailing), in: Capsule())
-                        .shadow(color: PremiumPlan.royal.color.opacity(0.4), radius: 6, y: 3)
                 } else {
                     Image(systemName: "chevron.right").font(.system(.footnote, weight: .semibold))
                         .foregroundStyle(premiumMgr.plan.color.opacity(0.7))
                 }
             }
             .padding(16)
-            .background(planCardFill, in: RoundedRectangle(cornerRadius: 18))
-            .overlay(RoundedRectangle(cornerRadius: 18)
+            .background(planCardFill, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+            .overlay(RoundedRectangle(cornerRadius: AppRadius.lg)
                 .stroke(premiumMgr.plan == .free ? AppTheme.cardMid.opacity(0.5) : premiumMgr.plan.color.opacity(0.4),
                         lineWidth: premiumMgr.plan == .free ? 1 : 1.5))
         }
@@ -936,8 +932,8 @@ struct ProfileView: View {
                 showPaywall: $showPaywall) { showBackTapGuide = true }
         }
         .padding(16)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).stroke(AppTheme.green.opacity(0.18), lineWidth: 1))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.green.opacity(0.18), lineWidth: 1))
         .padding(.horizontal, 22)
         .opacity(appeared ? 1 : 0)
         .offset(y: appeared ? 0 : 20)
@@ -950,7 +946,7 @@ struct ProfileView: View {
             HStack(spacing: 12) {
                 Image(systemName: "circle.lefthalf.filled").font(.system(.body)).foregroundStyle(AppTheme.textPrimary)
                     .frame(width: 36, height: 36)
-                    .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: 10))
+                    .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: AppRadius.sm))
                 VStack(alignment: .leading, spacing: 2) {
                     Text(loc("profile.appearance")).font(.system(.subheadline, weight: .medium)).foregroundStyle(AppTheme.textPrimary)
                     Text(appearanceMode == "system" ? loc("appearance.following_system") : appearanceMode == "dark" ? loc("appearance.dark_mode") : loc("appearance.light_mode"))
@@ -981,17 +977,17 @@ struct ProfileView: View {
                         }
                         .frame(maxWidth: .infinity).padding(.vertical, 10)
                         .background(appearanceMode == item.mode ? AppTheme.accentFill : Color.clear,
-                                    in: RoundedRectangle(cornerRadius: 10))
+                                    in: RoundedRectangle(cornerRadius: AppRadius.sm))
                     }
                     .buttonStyle(ScaleButtonStyle())
                 }
             }
             .padding(4)
-            .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: 14))
+            .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: AppRadius.md))
         }
         .padding(16)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).stroke(AppTheme.textSecondary.opacity(0.12), lineWidth: 1))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.textSecondary.opacity(0.12), lineWidth: 1))
         .padding(.horizontal, 22)
         .opacity(appeared ? 1 : 0)
         .offset(y: appeared ? 0 : 20)
@@ -1014,7 +1010,7 @@ struct ProfileView: View {
                 Text("🌐")
                     .font(.system(.body))
                     .frame(width: 36, height: 36)
-                    .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: 10))
+                    .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: AppRadius.sm))
                 VStack(alignment: .leading, spacing: 2) {
                     Text(loc("profile.language"))
                         .font(.system(.subheadline, weight: .medium)).foregroundStyle(AppTheme.textPrimary)
@@ -1043,17 +1039,17 @@ struct ProfileView: View {
                         }
                         .frame(maxWidth: .infinity).padding(.vertical, 10)
                         .background(language == lang.current ? AppTheme.accentFill : Color.clear,
-                                    in: RoundedRectangle(cornerRadius: 10))
+                                    in: RoundedRectangle(cornerRadius: AppRadius.sm))
                     }
                     .buttonStyle(ScaleButtonStyle())
                 }
             }
             .padding(4)
-            .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: 14))
+            .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: AppRadius.md))
         }
         .padding(16)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).stroke(AppTheme.textSecondary.opacity(0.12), lineWidth: 1))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.textSecondary.opacity(0.12), lineWidth: 1))
     }   // ← closing brace was missing, causing all subsequent vars to fall inside
 
     @ViewBuilder
@@ -1079,8 +1075,8 @@ struct ProfileView: View {
                     .foregroundStyle(loggedIn ? AppTheme.red : AppTheme.accent)
                     .frame(maxWidth: .infinity).padding(.vertical, 16)
                     .background((loggedIn ? AppTheme.red : AppTheme.accent).opacity(0.08),
-                                in: RoundedRectangle(cornerRadius: 16))
-                    .overlay(RoundedRectangle(cornerRadius: 16)
+                                in: RoundedRectangle(cornerRadius: AppRadius.md))
+                    .overlay(RoundedRectangle(cornerRadius: AppRadius.md)
                         .stroke((loggedIn ? AppTheme.red : AppTheme.accent).opacity(0.25), lineWidth: 1))
                 }
                 .buttonStyle(ScaleButtonStyle())
@@ -1169,8 +1165,8 @@ struct ProfileView: View {
                             .foregroundStyle(AppTheme.textSecondary)
                     }
                     .padding(12)
-                    .background(AppTheme.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
-                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(AppTheme.orange.opacity(0.3), lineWidth: 1))
+                    .background(AppTheme.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: AppRadius.sm))
+                    .overlay(RoundedRectangle(cornerRadius: AppRadius.sm).stroke(AppTheme.orange.opacity(0.3), lineWidth: 1))
                 }
                 .buttonStyle(ScaleButtonStyle())
             }
@@ -1204,8 +1200,8 @@ struct ProfileView: View {
                     }
                     .foregroundStyle(AppTheme.accent)
                     .frame(maxWidth: .infinity).padding(.vertical, 14)
-                    .background(AppTheme.accent.opacity(0.1), in: RoundedRectangle(cornerRadius: 14))
-                    .overlay(RoundedRectangle(cornerRadius: 14).stroke(AppTheme.accent.opacity(0.25), lineWidth: 1))
+                    .background(AppTheme.accent.opacity(0.1), in: RoundedRectangle(cornerRadius: AppRadius.md))
+                    .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.accent.opacity(0.25), lineWidth: 1))
                     .opacity(isDisabled ? 0.5 : 1)
                 }
                 .buttonStyle(ScaleButtonStyle())
@@ -1222,8 +1218,8 @@ struct ProfileView: View {
                     }
                     .foregroundStyle(AppTheme.blue)
                     .frame(maxWidth: .infinity).padding(.vertical, 14)
-                    .background(AppTheme.blue.opacity(0.1), in: RoundedRectangle(cornerRadius: 14))
-                    .overlay(RoundedRectangle(cornerRadius: 14).stroke(AppTheme.blue.opacity(0.25), lineWidth: 1))
+                    .background(AppTheme.blue.opacity(0.1), in: RoundedRectangle(cornerRadius: AppRadius.md))
+                    .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.blue.opacity(0.25), lineWidth: 1))
                     .opacity(isDisabled ? 0.5 : 1)
                 }
                 .buttonStyle(ScaleButtonStyle())
@@ -1276,8 +1272,8 @@ struct ProfileView: View {
                 Text(loc("profile.reset_all")).font(.system(.subheadline, weight: .medium))
             }
             .foregroundStyle(AppTheme.red).frame(maxWidth: .infinity).padding(.vertical, 16)
-            .background(AppTheme.red.opacity(0.08), in: RoundedRectangle(cornerRadius: 16))
-            .overlay(RoundedRectangle(cornerRadius: 16).stroke(AppTheme.red.opacity(0.25), lineWidth: 1))
+            .background(AppTheme.red.opacity(0.08), in: RoundedRectangle(cornerRadius: AppRadius.md))
+            .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.red.opacity(0.25), lineWidth: 1))
         }
         .buttonStyle(ScaleButtonStyle()).padding(.horizontal, 22).opacity(appeared ? 1 : 0)
     }
@@ -1299,7 +1295,7 @@ struct ProfileView: View {
                         Image(systemName: "headphones.circle.fill")
                             .font(.system(.body)).foregroundStyle(AppTheme.textSecondary)
                             .frame(width: 36, height: 36)
-                            .background(AppTheme.textSecondary.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
+                            .background(AppTheme.textSecondary.opacity(0.12), in: RoundedRectangle(cornerRadius: AppRadius.sm))
                         VStack(alignment: .leading, spacing: 2) {
                             Text(loc("profile.support"))
                                 .font(.system(.subheadline, weight: .medium)).foregroundStyle(AppTheme.textSecondary)
@@ -1310,8 +1306,8 @@ struct ProfileView: View {
                         Image(systemName: "lock.fill").font(.system(.footnote)).foregroundStyle(AppTheme.textSecondary)
                     }
                     .padding(14)
-                    .background(AppTheme.cardDark.opacity(0.6), in: RoundedRectangle(cornerRadius: 14))
-                    .overlay(RoundedRectangle(cornerRadius: 14).stroke(AppTheme.orange.opacity(0.2), lineWidth: 1))
+                    .background(AppTheme.cardDark.opacity(0.6), in: RoundedRectangle(cornerRadius: AppRadius.md))
+                    .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.orange.opacity(0.2), lineWidth: 1))
                 }
                 .buttonStyle(ScaleButtonStyle())
             } else {
@@ -1451,7 +1447,7 @@ struct ProfileView: View {
                 }
                 .padding(.horizontal, 32)
                 .padding(.vertical, 26)
-                .background(.black.opacity(0.6), in: RoundedRectangle(cornerRadius: 18))
+                .background(.black.opacity(0.6), in: RoundedRectangle(cornerRadius: AppRadius.lg))
             }
             .transition(.opacity)
         }
@@ -1620,7 +1616,6 @@ struct ProfileSignInSheet: View {
                             )
                         )
                         .frame(width: 76, height: 76)
-                        .shadow(color: .black.opacity(0.25), radius: 12, y: 6)
 
                     // 🧊 Highlight (fake light reflection)
                     Circle()
@@ -1677,8 +1672,8 @@ struct ProfileSignInSheet: View {
                     // consistency between the two sign-in options.
                     .foregroundStyle(AppTheme.textPrimary)
                     .frame(maxWidth: .infinity).padding(.vertical, 15)
-                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 15))
-                    .overlay(RoundedRectangle(cornerRadius: 15).stroke(AppTheme.cardMid, lineWidth: 1.5))
+                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+                    .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.cardMid, lineWidth: 1.5))
                 }
                 .buttonStyle(ScaleButtonStyle())
 
@@ -1695,8 +1690,8 @@ struct ProfileSignInSheet: View {
                             .foregroundStyle(AppTheme.textPrimary)
                     }
                     .frame(maxWidth: .infinity).padding(.vertical, 15)
-                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 15))
-                    .overlay(RoundedRectangle(cornerRadius: 15).stroke(AppTheme.cardMid, lineWidth: 1.5))
+                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+                    .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.cardMid, lineWidth: 1.5))
                 }
                 .buttonStyle(ScaleButtonStyle())
 
@@ -1838,9 +1833,9 @@ struct DangerConfirmSheet: View {
                         .foregroundStyle(AppTheme.textPrimary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 15)
-                        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
+                        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
                         .overlay(
-                            RoundedRectangle(cornerRadius: 14)
+                            RoundedRectangle(cornerRadius: AppRadius.md)
                                 .stroke(AppTheme.cardMid, lineWidth: 1)
                         )
                 }
@@ -1861,8 +1856,7 @@ struct DangerConfirmSheet: View {
                         .foregroundStyle(AppTheme.onVividFill)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 15)
-                        .background(tone.color, in: RoundedRectangle(cornerRadius: 14))
-                        .shadow(color: tone.color.opacity(0.35), radius: 12, y: 6)
+                        .background(tone.color, in: RoundedRectangle(cornerRadius: AppRadius.md))
                 }
                 .buttonStyle(ScaleButtonStyle())
             }
@@ -1926,8 +1920,8 @@ struct BackupPreviewSheet: View {
                     value: "v\(preview.appVersion)"
                 )
             }
-            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
-            .overlay(RoundedRectangle(cornerRadius: 14).stroke(AppTheme.cardMid, lineWidth: 1))
+            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+            .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.cardMid, lineWidth: 1))
             .padding(.horizontal, 22)
             .padding(.top, 18)
 
@@ -1968,8 +1962,8 @@ struct BackupPreviewSheet: View {
                         .foregroundStyle(AppTheme.textPrimary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 14)
-                        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
-                        .overlay(RoundedRectangle(cornerRadius: 14).stroke(AppTheme.cardMid, lineWidth: 1))
+                        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+                        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.cardMid, lineWidth: 1))
                 }
                 .buttonStyle(ScaleButtonStyle())
 
@@ -1982,7 +1976,7 @@ struct BackupPreviewSheet: View {
                         .foregroundStyle(AppTheme.onVividFill)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 14)
-                        .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: 14))
+                        .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: AppRadius.md))
                 }
                 .buttonStyle(ScaleButtonStyle())
             }
@@ -2038,8 +2032,8 @@ struct BackupPreviewSheet: View {
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 10).padding(.vertical, 8)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(AppTheme.cardMid.opacity(0.4), lineWidth: 1))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.sm))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.sm).stroke(AppTheme.cardMid.opacity(0.4), lineWidth: 1))
     }
 }
 
@@ -2134,7 +2128,7 @@ struct BackTapGuideView: View {
                             }
                             .foregroundStyle(AppTheme.onVividFill)
                             .frame(maxWidth: .infinity).padding(.vertical, 14)
-                            .background(AppTheme.accentFill, in: Capsule())
+                            .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: AppRadius.lg))
                         }
                         .buttonStyle(ScaleButtonStyle())
                     }
@@ -2165,8 +2159,8 @@ struct BackTapGuideView: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16)
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.md)
             .stroke(AppTheme.orange.opacity(0.25), lineWidth: 1))
     }
 
@@ -2222,7 +2216,7 @@ struct BackTapGuideView: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
     }
 
     private func callout(_ title: String, body: String,
@@ -2238,6 +2232,6 @@ struct BackTapGuideView: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(tint.opacity(0.08), in: RoundedRectangle(cornerRadius: 16))
+        .background(tint.opacity(0.08), in: RoundedRectangle(cornerRadius: AppRadius.md))
     }
 }

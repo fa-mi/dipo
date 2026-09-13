@@ -258,8 +258,8 @@ struct DataIntegrityCard: View {
             }
         }
         .padding(16)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 18))
-        .overlay(RoundedRectangle(cornerRadius: 18).stroke(AppTheme.orange.opacity(0.22), lineWidth: 1))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.lg).stroke(AppTheme.orange.opacity(0.22), lineWidth: 1))
     }
 
     private func row(_ f: IntegrityFinding) -> some View {
@@ -273,7 +273,7 @@ struct DataIntegrityCard: View {
                     Image(systemName: f.icon)
                         .font(.system(.footnote)).foregroundStyle(f.tint)
                         .frame(width: 28, height: 28)
-                        .background(f.tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
+                        .background(f.tint.opacity(0.12), in: RoundedRectangle(cornerRadius: AppRadius.xs))
                     VStack(alignment: .leading, spacing: 2) {
                         Text(headline(f))
                             .font(.system(.caption, weight: .semibold))
@@ -296,7 +296,7 @@ struct DataIntegrityCard: View {
                 }
             }
             .padding(11)
-            .background(AppTheme.cardMid.opacity(0.45), in: RoundedRectangle(cornerRadius: 12))
+            .background(AppTheme.cardMid.opacity(0.45), in: RoundedRectangle(cornerRadius: AppRadius.sm))
         }
         .buttonStyle(.plain)
     }
@@ -458,8 +458,8 @@ struct WindfallCard: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(16)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 18))
-        .overlay(RoundedRectangle(cornerRadius: 18)
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.lg)
             .stroke(review.verdict.tint.opacity(0.22), lineWidth: 1))
     }
 

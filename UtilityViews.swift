@@ -205,8 +205,8 @@ struct SearchView: View {
                             }
                         }
                         .padding(.horizontal, 14).padding(.vertical, 12)
-                        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
-                        .overlay(RoundedRectangle(cornerRadius: 14)
+                        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+                        .overlay(RoundedRectangle(cornerRadius: AppRadius.md)
                             .stroke(focused ? AppTheme.accent.opacity(0.5) : Color.clear, lineWidth: 1.5))
 
                         Button(loc("common.cancel")) { HapticManager.shared.tap(); dismiss() }
@@ -366,7 +366,7 @@ struct SearchView: View {
                                                     }
                                                 }
                                             }
-                                            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
+                                            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
                                             .padding(.horizontal, 22)
                                         }
                                     }
@@ -438,7 +438,7 @@ struct SearchTxRow: View {
     var body: some View {
         HStack(spacing: 14) {
             ZStack {
-                RoundedRectangle(cornerRadius: 12)
+                RoundedRectangle(cornerRadius: AppRadius.sm)
                     .fill(tx.displayIconBg)
                     .frame(width: 42, height: 42)
                 Text(tx.icon)
@@ -681,7 +681,7 @@ struct TransactionDetailSheet: View {
             // Amount hero
             VStack(spacing: 8) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 18)
+                    RoundedRectangle(cornerRadius: AppRadius.lg)
                         .fill(tx.displayIconBg)
                         .frame(width: 64, height: 64)
                     Text(tx.icon)
@@ -766,7 +766,7 @@ struct TransactionDetailSheet: View {
                     DetailRow(label: loc("common.notes"), value: tx.displayNotes)
                 }
             }
-            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 18))
+            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
             .padding(.horizontal, 22)
 
             // The engine's call on whether this is day-to-day spending, and a
@@ -803,7 +803,7 @@ struct TransactionDetailSheet: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(14)
-                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
+                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
                 .padding(.horizontal, 22)
             }
 
@@ -825,8 +825,8 @@ struct TransactionDetailSheet: View {
                 .foregroundStyle(AppTheme.red)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 16)
-                .background(AppTheme.red.opacity(0.1), in: RoundedRectangle(cornerRadius: 16))
-                .overlay(RoundedRectangle(cornerRadius: 16).stroke(AppTheme.red.opacity(0.3), lineWidth: 1))
+                .background(AppTheme.red.opacity(0.1), in: RoundedRectangle(cornerRadius: AppRadius.md))
+                .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.red.opacity(0.3), lineWidth: 1))
             }
             .buttonStyle(ScaleButtonStyle())
             .padding(.horizontal, 22)
@@ -863,7 +863,6 @@ struct TransactionDetailSheet: View {
                         .background {
                             if editType == type {
                                 Capsule().fill(type.color)
-                                    .shadow(color: type.color.opacity(0.4), radius: 8, y: 4)
                             }
                         }
                     }
@@ -889,7 +888,7 @@ struct TransactionDetailSheet: View {
                     }
                     .foregroundStyle(AppTheme.textSecondary)
                     .padding(.horizontal, 13).padding(.vertical, 12)
-                    .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: 13))
+                    .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: AppRadius.md))
 
                     TextField("0", text: $editAmount)
                         .font(.system(.largeTitle, weight: .bold))
@@ -898,7 +897,7 @@ struct TransactionDetailSheet: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .padding(14)
-                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 20))
+                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
 
                 // Same single helper line as the create form: echo the typed
                 // digits back formatted, so a missing zero is caught here.
@@ -944,8 +943,7 @@ struct TransactionDetailSheet: View {
                 .foregroundStyle(canSave ? AppTheme.onVividFill : AppTheme.textSecondary)
                 .frame(maxWidth: .infinity).padding(.vertical, 17)
                 .background(canSave ? editType.color : AppTheme.textSecondary.opacity(0.25),
-                            in: RoundedRectangle(cornerRadius: 20))
-                .shadow(color: canSave ? editType.color.opacity(0.35) : .clear, radius: 12, y: 6)
+                            in: RoundedRectangle(cornerRadius: AppRadius.lg))
             }
             .buttonStyle(ScaleButtonStyle())
             .disabled((Double(editAmount) ?? 0) <= 0)
@@ -1216,8 +1214,8 @@ struct AddTransactionSheet: View {
         // `cardMid`, not `cardDark`: this pill now sits INSIDE the amount card,
         // and cardDark on cardDark is white on white in light mode.
         .padding(.horizontal, 13).padding(.vertical, 12)
-        .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: 13))
-        .overlay(RoundedRectangle(cornerRadius: 13).stroke(AppTheme.accent.opacity(0.3), lineWidth: 1))
+        .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.accent.opacity(0.3), lineWidth: 1))
     }
 
     var convertedPreview: String {
@@ -1251,7 +1249,7 @@ struct AddTransactionSheet: View {
             } label: {
                 HStack(spacing: 12) {
                     ZStack {
-                        RoundedRectangle(cornerRadius: 11)
+                        RoundedRectangle(cornerRadius: AppRadius.sm)
                             .fill(AppTheme.accent.opacity(0.14))
                             .frame(width: 38, height: 38)
                         Image(systemName: "doc.text.viewfinder")
@@ -1282,8 +1280,8 @@ struct AddTransactionSheet: View {
                         .foregroundStyle(AppTheme.textSecondary)
                 }
                 .padding(12)
-                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
-                .overlay(RoundedRectangle(cornerRadius: 16)
+                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+                .overlay(RoundedRectangle(cornerRadius: AppRadius.md)
                     .stroke(AppTheme.accent.opacity(0.22), lineWidth: 1))
             }
             .buttonStyle(ScaleButtonStyle())
@@ -1312,7 +1310,6 @@ struct AddTransactionSheet: View {
                     .background {
                         if txType == type {
                             Capsule().fill(type.color)
-                                .shadow(color: type.color.opacity(0.4), radius: 8, y: 4)
                         }
                     }
                 }
@@ -1368,7 +1365,7 @@ struct AddTransactionSheet: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             .padding(14)
-            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 20))
+            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
 
             // One quiet line under the field, not three. Whichever of these is
             // true is the one worth reading: a cross-currency result beats a
@@ -1452,8 +1449,8 @@ struct AddTransactionSheet: View {
             }
         }
         .padding(14)
-        .background(AppTheme.accent.opacity(0.06), in: RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16)
+        .background(AppTheme.accent.opacity(0.06), in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.md)
             .stroke(AppTheme.accent.opacity(saveInPreferred ? 0.4 : 0.15), lineWidth: 1))
         .animation(.spring(response: 0.35, dampingFraction: 0.8), value: saveInPreferred)
     }
@@ -1610,8 +1607,7 @@ struct AddTransactionSheet: View {
                 .foregroundStyle(canSubmit ? AppTheme.onVividFill : AppTheme.textSecondary)
                 .frame(maxWidth: .infinity).padding(.vertical, 17)
                 .background(canSubmit ? txType.color : AppTheme.textSecondary.opacity(0.25),
-                            in: RoundedRectangle(cornerRadius: 20))
-                .shadow(color: canSubmit ? txType.color.opacity(0.35) : .clear, radius: 12, y: 6)
+                            in: RoundedRectangle(cornerRadius: AppRadius.lg))
             }
             .buttonStyle(ScaleButtonStyle())
             .disabled(!isValid || vm.cards.isEmpty || (wouldGoNegative && txType == .expense))
@@ -1946,7 +1942,7 @@ struct CustomDateRangeSheet: View {
                     Spacer()
                 }
                 .padding(12)
-                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 12))
+                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.sm))
             }
             .padding(.horizontal, 22).padding(.top, 20)
 
@@ -1963,8 +1959,7 @@ struct CustomDateRangeSheet: View {
                 Text(loc("tx.apply_range"))
                     .font(.system(.callout, weight: .bold)).foregroundStyle(AppTheme.bg)
                     .frame(maxWidth: .infinity).padding(.vertical, 16)
-                    .background(AppTheme.accentFill, in: Capsule())
-                    .shadow(color: AppTheme.accent.opacity(0.35), radius: 12, y: 6)
+                    .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: AppRadius.lg))
             }
             .buttonStyle(ScaleButtonStyle())
             .padding(.horizontal, 22).padding(.bottom, 32)

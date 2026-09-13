@@ -28,7 +28,7 @@ struct NotificationSettingsView: View {
                                 }
                             }
                         }
-                        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
+                        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
                         footer
                         Spacer(minLength: 24)
                     }
@@ -65,7 +65,7 @@ struct NotificationSettingsView: View {
         )
         return HStack(alignment: .top, spacing: 13) {
             ZStack {
-                RoundedRectangle(cornerRadius: 11).fill(kind.tint.opacity(0.14))
+                RoundedRectangle(cornerRadius: AppRadius.sm).fill(kind.tint.opacity(0.14))
                     .frame(width: 36, height: 36)
                 Image(systemName: kind.icon)
                     .font(.system(.callout, weight: .semibold))
@@ -98,6 +98,6 @@ struct NotificationSettingsView: View {
         }
         .padding(13)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(AppTheme.cardDark.opacity(0.6), in: RoundedRectangle(cornerRadius: 13))
+        .background(AppTheme.cardDark.opacity(0.6), in: RoundedRectangle(cornerRadius: AppRadius.md))
     }
 }

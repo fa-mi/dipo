@@ -114,7 +114,7 @@ struct MainCardGate: View {
             }
         }
         .padding(14)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 18))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
     }
 
     // MARK: Choose
@@ -147,7 +147,7 @@ struct MainCardGate: View {
                 .foregroundStyle(AppTheme.accent)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 13)
-                .background(AppTheme.accent.opacity(0.10), in: RoundedRectangle(cornerRadius: 14))
+                .background(AppTheme.accent.opacity(0.10), in: RoundedRectangle(cornerRadius: AppRadius.md))
             }
             .buttonStyle(ScaleButtonStyle())
 
@@ -173,7 +173,7 @@ struct MainCardGate: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 16)
                 .background(picked == nil ? AppTheme.cardMid : AppTheme.accent,
-                            in: RoundedRectangle(cornerRadius: 16))
+                            in: RoundedRectangle(cornerRadius: AppRadius.md))
         }
         .buttonStyle(ScaleButtonStyle())
         .disabled(picked == nil)

@@ -258,11 +258,11 @@ struct ActionFeedbackOverlay: View {
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 14).padding(.vertical, 12)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.md)
             .stroke(toast.tint.opacity(0.22), lineWidth: 1))
         .shadow(color: .black.opacity(0.18), radius: 14, y: 6)
-        .contentShape(RoundedRectangle(cornerRadius: 16))
+        .contentShape(RoundedRectangle(cornerRadius: AppRadius.md))
         .onTapGesture { center.dismiss() }
         .padding(.top, 8)
     }

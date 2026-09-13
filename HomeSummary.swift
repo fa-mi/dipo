@@ -41,7 +41,7 @@ struct MonthFlowCard: View {
                  tint: AppTheme.flowOut)
         }
         .padding(.vertical, 14)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 20))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
     }
 
     @ViewBuilder
@@ -138,7 +138,7 @@ struct DeleteTransactionSheet: View {
             // The row itself, exactly as it looked in the list.
             TxRow(tx: tx, sourceCard: card, showCard: false, animateEntrance: false)
                 .padding(14)
-                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 18))
+                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
 
             if let card {
                 impactRow(card)
@@ -166,7 +166,7 @@ struct DeleteTransactionSheet: View {
                         .foregroundStyle(AppTheme.onVividFill)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
-                        .background(AppTheme.flowOut, in: RoundedRectangle(cornerRadius: 18))
+                        .background(AppTheme.flowOut, in: RoundedRectangle(cornerRadius: AppRadius.lg))
                 }
                 .buttonStyle(ScaleButtonStyle())
 
@@ -181,7 +181,7 @@ struct DeleteTransactionSheet: View {
                         .foregroundStyle(AppTheme.textPrimary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
-                        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 18))
+                        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
                 }
                 .buttonStyle(ScaleButtonStyle())
             }
@@ -221,7 +221,7 @@ struct DeleteTransactionSheet: View {
             LinearGradient(colors: [Color(hex: card.gradientStart), Color(hex: card.gradientEnd)],
                            startPoint: .topLeading, endPoint: .bottomTrailing)
                 .frame(width: 30, height: 30)
-                .clipShape(RoundedRectangle(cornerRadius: 9))
+                .clipShape(RoundedRectangle(cornerRadius: AppRadius.sm))
 
             if card.isCreditCard {
                 let counts = tx.date >= (card.creditSince ?? .distantPast)
@@ -263,6 +263,6 @@ struct DeleteTransactionSheet: View {
             Spacer(minLength: 0)
         }
         .padding(14)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 18))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
     }
 }

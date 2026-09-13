@@ -125,7 +125,7 @@ struct CycleIntentView: View {
                 }
                 .padding(11)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(AppTheme.bg.opacity(0.6), in: RoundedRectangle(cornerRadius: 11))
+                .background(AppTheme.bg.opacity(0.6), in: RoundedRectangle(cornerRadius: AppRadius.sm))
 
                 TextField(loc("intent.note_placeholder"),
                           text: Binding(
@@ -133,7 +133,7 @@ struct CycleIntentView: View {
                             set: { noteDrafts[kind.rawValue] = $0 }))
                     .font(.system(.caption))
                     .padding(.horizontal, 12).padding(.vertical, 9)
-                    .background(AppTheme.bg.opacity(0.6), in: RoundedRectangle(cornerRadius: 10))
+                    .background(AppTheme.bg.opacity(0.6), in: RoundedRectangle(cornerRadius: AppRadius.sm))
 
                 HStack(spacing: 8) {
                     Button {
@@ -175,8 +175,8 @@ struct CycleIntentView: View {
         }
         .padding(13)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16)
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.md)
             .stroke(on ? kind.tint.opacity(0.45) : AppTheme.cardMid.opacity(0.4), lineWidth: 1))
     }
 

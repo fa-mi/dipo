@@ -159,7 +159,7 @@ struct NoInternetOverlay: View {
                 monitor.isChecking
                     ? AppTheme.textSecondary.opacity(0.25)
                     : AppTheme.red,
-                in: RoundedRectangle(cornerRadius: 18)
+                in: RoundedRectangle(cornerRadius: AppRadius.lg)
             )
         }
         .buttonStyle(ScaleButtonStyle())

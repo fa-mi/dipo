@@ -103,9 +103,9 @@ struct CardChip: View {
         .foregroundStyle(selected ? AppTheme.onVividFill : AppTheme.textPrimary)
         .padding(.horizontal, 13).padding(.vertical, 9)
         .background(selected ? AppTheme.accentFill : AppTheme.cardDark,
-                    in: RoundedRectangle(cornerRadius: 13))
+                    in: RoundedRectangle(cornerRadius: AppRadius.md))
         .overlay {
-            RoundedRectangle(cornerRadius: 13)
+            RoundedRectangle(cornerRadius: AppRadius.md)
                 .stroke(selected ? .clear : AppTheme.cardMid, lineWidth: 1)
         }
     }
@@ -203,9 +203,9 @@ struct CardListRow: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
         .background(selected ? AppTheme.accent.opacity(0.10) : AppTheme.cardDark,
-                    in: RoundedRectangle(cornerRadius: 14))
+                    in: RoundedRectangle(cornerRadius: AppRadius.md))
         .overlay {
-            RoundedRectangle(cornerRadius: 14)
+            RoundedRectangle(cornerRadius: AppRadius.md)
                 .stroke(selected ? AppTheme.accent.opacity(0.55) : .clear, lineWidth: 1.2)
         }
     }

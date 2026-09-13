@@ -330,7 +330,7 @@ struct InstallmentSection: View {
                 }
             }
             .padding(11)
-            .background(AppTheme.cardMid.opacity(0.5), in: RoundedRectangle(cornerRadius: 12))
+            .background(AppTheme.cardMid.opacity(0.5), in: RoundedRectangle(cornerRadius: AppRadius.sm))
             .contentShape(Rectangle())
             .onTapGesture { HapticManager.shared.tap(); simulating = inst }
     }
@@ -410,7 +410,7 @@ struct InstallmentFormSheet: View {
                                 .foregroundStyle(.white)
                                 .frame(maxWidth: .infinity).padding(.vertical, 16)
                                 .background(preview == nil ? AppTheme.cardMid : AppTheme.accent,
-                                            in: RoundedRectangle(cornerRadius: 16))
+                                            in: RoundedRectangle(cornerRadius: AppRadius.md))
                         }
                         .buttonStyle(ScaleButtonStyle())
                         .disabled(preview == nil)
@@ -459,7 +459,7 @@ struct InstallmentFormSheet: View {
                 .padding(.top, 2)
         }
         .padding(14)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
         .padding(.horizontal, 22)
     }
 
@@ -578,7 +578,7 @@ struct InstallmentSimulatorSheet: View {
             }
         }
         .padding(16)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 18))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
         .padding(.horizontal, 22)
     }
 
@@ -617,7 +617,7 @@ struct InstallmentSimulatorSheet: View {
             }
         }
         .padding(16)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 18))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
         .padding(.horizontal, 22)
     }
 
@@ -633,7 +633,7 @@ struct InstallmentSimulatorSheet: View {
                 .font(.system(.body, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
                 .keyboardType(.decimalPad).multilineTextAlignment(.center)
                 .padding(.vertical, 11)
-                .background(AppTheme.cardMid.opacity(0.6), in: RoundedRectangle(cornerRadius: 12))
+                .background(AppTheme.cardMid.opacity(0.6), in: RoundedRectangle(cornerRadius: AppRadius.sm))
 
             if paying > statement {
                 row(loc("inst.surplus"), money(extra.surplus))
@@ -658,7 +658,7 @@ struct InstallmentSimulatorSheet: View {
             }
         }
         .padding(16)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 18))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
         .padding(.horizontal, 22)
     }
 

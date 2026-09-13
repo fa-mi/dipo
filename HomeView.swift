@@ -506,8 +506,8 @@ struct HomeView: View {
                                     .fixedSize(horizontal: false, vertical: true)
                             }
                             .padding(.horizontal, 16).padding(.vertical, 11)
-                            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
-                            .overlay(RoundedRectangle(cornerRadius: 14).stroke(AppTheme.purple.opacity(0.15), lineWidth: 1))
+                            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+                            .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.purple.opacity(0.15), lineWidth: 1))
                             .padding(.horizontal, 22).padding(.top, 12)
                             .opacity(contentAppeared ? 1 : 0)
                         }
@@ -532,7 +532,7 @@ struct HomeView: View {
                         // loose on the page — it is a single thing ("what you
                         // spent") and its edges should say so.
                         .padding(16)
-                        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 22))
+                        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.xl))
                         .padding(.top, 24)
                         .padding(.horizontal, 22)
                                                 .opacity(contentAppeared ? 1 : 0)
@@ -749,10 +749,9 @@ struct NoCardState: View {
                     Image(systemName: "plus.circle.fill").font(.system(.body))
                     Text(loc("home.add_first_card")).font(.system(.callout, weight: .bold))
                 }
-                .foregroundStyle(AppTheme.bg)
+                .foregroundStyle(AppTheme.onVividFill)
                 .padding(.horizontal, 36).padding(.vertical, 16)
                 .background(AppTheme.accentFill, in: Capsule())
-                .shadow(color: AppTheme.accent.opacity(0.65), radius: 18, y: 6)
             }
             .buttonStyle(ScaleButtonStyle())
         }
@@ -804,8 +803,8 @@ struct TappableSetupStep: View {
             }
         }
         .padding(14)
-        .background(isActive ? AppTheme.accent.opacity(0.07) : AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
-        .overlay(RoundedRectangle(cornerRadius: 14).stroke(isActive ? AppTheme.accent.opacity(0.25) : Color.clear, lineWidth: 1))
+        .background(isActive ? AppTheme.accent.opacity(0.07) : AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(isActive ? AppTheme.accent.opacity(0.25) : Color.clear, lineWidth: 1))
     }
 }
 
@@ -907,8 +906,8 @@ struct SmartInsightBanner: View {
                     Spacer(minLength: 0)
                 }
                 .padding(8)
-                .background(AppTheme.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
-                .overlay(RoundedRectangle(cornerRadius: 10).stroke(AppTheme.orange.opacity(0.2), lineWidth: 1))
+                .background(AppTheme.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: AppRadius.sm))
+                .overlay(RoundedRectangle(cornerRadius: AppRadius.sm).stroke(AppTheme.orange.opacity(0.2), lineWidth: 1))
             }
 
             // Action CTA — drives the user toward a concrete next step
@@ -936,8 +935,8 @@ struct SmartInsightBanner: View {
             }
         }
         .padding(12)
-        .background(insight.color.opacity(0.06), in: RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).stroke(insight.color.opacity(0.2), lineWidth: 1))
+        .background(insight.color.opacity(0.06), in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(insight.color.opacity(0.2), lineWidth: 1))
         .opacity(isDismissed ? 0 : (appeared ? 1 : 0))
         .frame(maxHeight: isDismissed ? 0 : nil)
         .onAppear {
@@ -1011,8 +1010,8 @@ struct DeclaredRecurringBanner: View {
             Spacer()
         }
         .padding(12)
-        .background(expense.category.color.opacity(0.06), in: RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).stroke(expense.category.color.opacity(0.2), lineWidth: 1))
+        .background(expense.category.color.opacity(0.06), in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(expense.category.color.opacity(0.2), lineWidth: 1))
         .opacity(appeared ? 1 : 0)
         .onAppear { withAnimation(.spring(response: 0.5)) { appeared = true } }
     }
@@ -1113,8 +1112,8 @@ struct RecurringReminderBanner: View {
             }
         }
         .padding(12)
-        .background(tint.opacity(0.06), in: RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).stroke(tint.opacity(0.2), lineWidth: 1))
+        .background(tint.opacity(0.06), in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(tint.opacity(0.2), lineWidth: 1))
         .opacity(appeared ? 1 : 0)
         .onAppear { withAnimation(.spring(response: 0.5)) { appeared = true } }
     }
@@ -1172,8 +1171,8 @@ struct SetupSalaryBanner: View {
             .buttonStyle(ScaleButtonStyle())
         }
         .padding(14)
-        .background(AppTheme.blue.opacity(0.06), in: RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).stroke(AppTheme.blue.opacity(0.2), lineWidth: 1))
+        .background(AppTheme.blue.opacity(0.06), in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.blue.opacity(0.2), lineWidth: 1))
     }
 }
 
@@ -1247,8 +1246,8 @@ struct PinnedGoalBanner: View {
             .frame(height: 5)
         }
         .padding(14)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16)
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.md)
             .stroke(AppTheme.accent.opacity(0.2), lineWidth: 1))
         .onAppear { appeared = true }
     }
@@ -1282,8 +1281,8 @@ struct NegativeBalanceBanner: View {
             Spacer()
         }
         .padding(14)
-        .background(AppTheme.red.opacity(0.06), in: RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).stroke(AppTheme.red.opacity(0.25), lineWidth: 1))
+        .background(AppTheme.red.opacity(0.06), in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.red.opacity(0.25), lineWidth: 1))
     }
 }
 
@@ -1391,8 +1390,8 @@ struct SalaryReminderBanner: View {
             }
         }
         .padding(14)
-        .background(urgency.color.opacity(0.06), in: RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).stroke(urgency.color.opacity(0.2), lineWidth: 1))
+        .background(urgency.color.opacity(0.06), in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(urgency.color.opacity(0.2), lineWidth: 1))
         .onAppear { pulsing = true }
     }
 }
@@ -1431,7 +1430,7 @@ struct MoreAttentionRow: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .background(AppTheme.cardDark.opacity(0.6), in: RoundedRectangle(cornerRadius: 12))
+        .background(AppTheme.cardDark.opacity(0.6), in: RoundedRectangle(cornerRadius: AppRadius.sm))
     }
 }
 
@@ -1480,7 +1479,6 @@ struct HomeHeader: View {
                                 .clipShape(Circle())
                         }
                     }
-                    .shadow(color: AppTheme.accent.opacity(0.2), radius: 8)
 
                     VStack(alignment: .leading, spacing: 1) {
                         Text(loc("home.greeting") + ",")
@@ -1629,7 +1627,7 @@ struct BankCardView: View {
 
     var body: some View {
         ZStack(alignment: .topLeading) {
-            RoundedRectangle(cornerRadius: 22)
+            RoundedRectangle(cornerRadius: AppRadius.xl)
                 .fill(LinearGradient(
                     colors: [Color(hex: card.gradientStart), Color(hex: card.gradientEnd)],
                     startPoint: .topLeading, endPoint: .bottomTrailing
@@ -1651,7 +1649,7 @@ struct BankCardView: View {
                     startPoint: .top, endPoint: .bottom
                 ))
             }
-            .clipShape(RoundedRectangle(cornerRadius: 22))
+            .clipShape(RoundedRectangle(cornerRadius: AppRadius.xl))
 
             // Sits in the gap the reordered face opened between the balance
             // and the identity line — at y: 72 it now ran straight through the
@@ -1839,15 +1837,11 @@ struct CategoryFilterBar: View {
         } label: {
             VStack(spacing: 8) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 18)
+                    RoundedRectangle(cornerRadius: AppRadius.lg)
                         .fill(isActive ? cat.color.opacity(0.18) : AppTheme.cardDark)
                         .frame(width: 58, height: 58)
-                        .overlay(RoundedRectangle(cornerRadius: 18)
+                        .overlay(RoundedRectangle(cornerRadius: AppRadius.lg)
                             .stroke(isActive ? cat.color.opacity(0.6) : Color.clear, lineWidth: 1.5))
-                        // A tile that sits ON the page rather than being cut
-                        // out of it. Kept faint — in dark mode a heavy shadow
-                        // reads as grime, not elevation.
-                        .shadow(color: .black.opacity(0.10), radius: 6, y: 3)
                     Image(systemName: cat.icon)
                         .font(.system(.title2))
                         .foregroundStyle(isActive ? cat.color : AppTheme.textPrimary)
@@ -2022,8 +2016,8 @@ struct TransactionSection: View {
 .accessibilityLabel(loc("a11y.clear_filter"))
                 }
                 .padding(.horizontal, 12).padding(.vertical, 8)
-                .background(filter.color.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
-                .overlay(RoundedRectangle(cornerRadius: 10).stroke(filter.color.opacity(0.2), lineWidth: 1))
+                .background(filter.color.opacity(0.08), in: RoundedRectangle(cornerRadius: AppRadius.sm))
+                .overlay(RoundedRectangle(cornerRadius: AppRadius.sm).stroke(filter.color.opacity(0.2), lineWidth: 1))
                 .padding(.bottom, 10)
                 .transition(.opacity)
             }
@@ -2217,7 +2211,6 @@ struct SwipeToDeleteRow<Content: View>: View {
                             Circle()
                                 .fill(AppTheme.redFill)
                                 .frame(width: 44, height: 44)
-                                .shadow(color: AppTheme.red.opacity(0.22), radius: 4, y: 2)
                             Image(systemName: "trash.fill")
                                 .font(.system(.callout, weight: .semibold))
                                 .foregroundStyle(AppTheme.onVividFill)

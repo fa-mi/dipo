@@ -47,8 +47,8 @@ struct SmartRecommendationView: View {
                 Image(systemName: "chevron.right").font(.system(.caption, weight: .semibold)).foregroundStyle(AppTheme.textSecondary)
             }
             .padding(14)
-            .background(AppTheme.purple.opacity(0.08), in: RoundedRectangle(cornerRadius: 16))
-            .overlay(RoundedRectangle(cornerRadius: 16).stroke(AppTheme.purple.opacity(0.22), lineWidth: 1))
+            .background(AppTheme.purple.opacity(0.08), in: RoundedRectangle(cornerRadius: AppRadius.md))
+            .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.purple.opacity(0.22), lineWidth: 1))
         }
         .buttonStyle(ScaleButtonStyle())
     }
@@ -78,8 +78,8 @@ struct SmartRecommendationView: View {
             }
             .padding(14)
             .background((r.declaredIntents.isEmpty ? AppTheme.blue : AppTheme.accent).opacity(0.08),
-                        in: RoundedRectangle(cornerRadius: 16))
-            .overlay(RoundedRectangle(cornerRadius: 16)
+                        in: RoundedRectangle(cornerRadius: AppRadius.md))
+            .overlay(RoundedRectangle(cornerRadius: AppRadius.md)
                 .stroke((r.declaredIntents.isEmpty ? AppTheme.blue : AppTheme.accent).opacity(0.22), lineWidth: 1))
         }
         .buttonStyle(ScaleButtonStyle())
@@ -517,9 +517,9 @@ struct SmartRecommendationView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(18)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 20))
-        .overlay(RoundedRectangle(cornerRadius: 20).stroke(AppTheme.cardMid.opacity(0.5), lineWidth: 1))
-        .contentShape(RoundedRectangle(cornerRadius: 20))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.lg).stroke(AppTheme.cardMid.opacity(0.5), lineWidth: 1))
+        .contentShape(RoundedRectangle(cornerRadius: AppRadius.lg))
         .onTapGesture {
             HapticManager.shared.tap()
             scoreDetail = r
@@ -580,7 +580,7 @@ struct SmartRecommendationView: View {
                 .font(.system(.title)).foregroundStyle(AppTheme.purple)
         }
         .padding(14)
-        .background(AppTheme.purple.opacity(0.10), in: RoundedRectangle(cornerRadius: 16))
+        .background(AppTheme.purple.opacity(0.10), in: RoundedRectangle(cornerRadius: AppRadius.md))
     }
 
     // MARK: Recommendations
@@ -604,7 +604,7 @@ struct SmartRecommendationView: View {
             ForEach(r.topItems) { item in
                 HStack(spacing: 12) {
                     ZStack {
-                        RoundedRectangle(cornerRadius: 11).fill(item.tint.opacity(0.15)).frame(width: 40, height: 40)
+                        RoundedRectangle(cornerRadius: AppRadius.sm).fill(item.tint.opacity(0.15)).frame(width: 40, height: 40)
                         Image(systemName: item.icon).font(.system(.callout)).foregroundStyle(item.tint)
                     }
                     VStack(alignment: .leading, spacing: 3) {
@@ -620,8 +620,8 @@ struct SmartRecommendationView: View {
                         .background(item.badgeTint.opacity(0.12), in: Capsule())
                 }
                 .padding(12)
-                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
-                .overlay(RoundedRectangle(cornerRadius: 14).stroke(AppTheme.cardMid.opacity(0.4), lineWidth: 1))
+                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+                .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.cardMid.opacity(0.4), lineWidth: 1))
             }
 
             // What "Apply" will actually set — the recommended split, visible
@@ -639,8 +639,7 @@ struct SmartRecommendationView: View {
                     .background(
                         LinearGradient(colors: [AppTheme.purple, AppTheme.purple.opacity(0.75)],
                                        startPoint: .leading, endPoint: .trailing),
-                        in: RoundedRectangle(cornerRadius: 16))
-                    .shadow(color: AppTheme.purple.opacity(0.35), radius: 12, y: 6)
+                        in: RoundedRectangle(cornerRadius: AppRadius.md))
             }
             .buttonStyle(ScaleButtonStyle())
             .padding(.top, 4)
@@ -696,8 +695,8 @@ struct SmartRecommendationView: View {
             }
         }
         .padding(14)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
-        .overlay(RoundedRectangle(cornerRadius: 14).stroke(AppTheme.cardMid.opacity(0.4), lineWidth: 1))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.cardMid.opacity(0.4), lineWidth: 1))
         .padding(.top, 4)
     }
 
@@ -715,7 +714,7 @@ struct SmartRecommendationView: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
     }
 
     private var privacyNote: some View {
@@ -729,7 +728,7 @@ struct SmartRecommendationView: View {
             Spacer(minLength: 0)
         }
         .padding(12)
-        .background(AppTheme.accent.opacity(0.08), in: RoundedRectangle(cornerRadius: 14))
+        .background(AppTheme.accent.opacity(0.08), in: RoundedRectangle(cornerRadius: AppRadius.md))
     }
 
     // MARK: Apply
@@ -901,8 +900,8 @@ struct ScoreDetailSheet: View {
                     }
                     .padding(16)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 18))
-                    .overlay(RoundedRectangle(cornerRadius: 18)
+                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+                    .overlay(RoundedRectangle(cornerRadius: AppRadius.lg)
                         .stroke(m.rating.color.opacity(0.22), lineWidth: 1))
                 }
 
