@@ -387,7 +387,7 @@ private struct SyncProgressOverlay: View {
                         .foregroundStyle(AppTheme.accent)
                         .transition(.scale.combined(with: .opacity))
                 } else if active {
-                    Circle().fill(AppTheme.accentFill).frame(width: 7, height: 7)
+                    Circle().fill(AppTheme.accent).frame(width: 7, height: 7)
                         .scaleEffect(breathe ? 1.25 : 0.8)
                 }
             }

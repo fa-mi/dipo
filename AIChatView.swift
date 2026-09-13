@@ -111,12 +111,31 @@ final class AIChatViewModel {
         }
     }
 
+    /// Did DiPo's last turn ask for something?
+    ///
+    /// A question mark is crude but it holds in both languages, and the cost of
+    /// being wrong is asymmetric: a false positive spends one credit on an
+    /// entry the parser could have handled, while a false negative files a
+    /// transaction under the wrong name.
+    ///
+    /// Messages carrying transactions are excluded — those already recorded
+    /// something, so whatever follows starts fresh.
+    private var lastAssistantAskedSomething: Bool {
+        guard let last = messages.last(where: { $0.role == .assistant }) else { return false }
+        guard last.transactions.isEmpty else { return false }
+        return last.text.contains("?")
+    }
+
     // ── Send a message ────────────────────────────────────────────────────
 
     func send(context: String = "") async {
         let text = input.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty, !isLoading else { return }
         guard let userId = UserSession.shared.userID else { return }
+
+        // Read BEFORE the new message is appended, so "the last thing DiPo
+        // said" is not the message we are about to answer.
+        let isFollowUp = lastAssistantAskedSomething
 
         messages.append(AIChatMessage(role: .user, text: text))
         input = ""
@@ -126,7 +145,14 @@ final class AIChatViewModel {
         // credit, a round trip, and a working connection for no added judgement.
         // The parser returns nil unless it is confident, so anything ambiguous
         // still reaches the model.
-        if let local = LocalTxParser.parse(text) {
+        //
+        // Except when the user is ANSWERING a question. The parser sees one
+        // message at a time, so "Harganya 25.000" — the reply to "berapa
+        // harganya?" — looked like a complete entry and was filed under the
+        // name "Harganya", losing the nasi goreng it was the price of. A reply
+        // only means anything alongside the question, and the model is the
+        // only part of this that can see both.
+        if !isFollowUp, let local = LocalTxParser.parse(text) {
             let parsed = local.items.map { item in
                 AIParsedTx(name: item.name, amount: item.amount,
                            isExpense: item.isExpense, category: item.category,

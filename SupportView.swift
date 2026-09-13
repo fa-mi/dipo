@@ -254,7 +254,7 @@ struct ContactAdminSheet: View {
                         Spacer()
                         if ticket.hasUnreadReply {
                             HStack(spacing: 4) {
-                                Circle().fill(AppTheme.accentFill).frame(width: 6, height: 6)
+                                Circle().fill(AppTheme.accent).frame(width: 6, height: 6)
                                 Text(loc("support.new_reply"))
                                     .font(.system(size: 10, weight: .bold))
                                     .foregroundStyle(AppTheme.accent)
@@ -954,7 +954,7 @@ struct TicketThreadView: View {
                     Text(loc("support.staff")).font(.system(size: 11, weight: .semibold)).foregroundStyle(AppTheme.accent)
                     Text(reply.createdAt.displayDateTimeShort)
                         .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
-                    if !reply.isReadByUser { Circle().fill(AppTheme.accentFill).frame(width: 6, height: 6) }
+                    if !reply.isReadByUser { Circle().fill(AppTheme.accent).frame(width: 6, height: 6) }
                 }
                 Text(reply.message).font(.system(size: 14)).foregroundStyle(AppTheme.textPrimary).lineSpacing(4)
                     .padding(14)

@@ -1501,7 +1501,7 @@ struct GoalDetailView: View {
                         VStack(spacing: 0) {
                             HStack {
                                 HStack(spacing: 6) {
-                                    Circle().fill(AppTheme.accentFill).frame(width: 8, height: 8)
+                                    Circle().fill(AppTheme.accent).frame(width: 8, height: 8)
                                     Text(loc("savings.saved")).font(.system(size: 13, weight: .medium)).foregroundStyle(AppTheme.textSecondary)
                                 }
                                 Spacer()

@@ -206,8 +206,18 @@ final class VoiceDictation {
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 if let result {
-                    self.transcript = result.bestTranscription.formattedString
-                    self.armSilenceTimer()          // reset the quiet countdown
+                    let text = result.bestTranscription.formattedString
+                    // Restart the quiet countdown only when NEW WORDS arrived.
+                    // Speech keeps firing this callback while audio flows, and
+                    // re-arming on every one of them meant the timer could
+                    // never expire: the screen listened forever with a finished
+                    // sentence sitting on it. Harmless in the chat, where the
+                    // user reads the field and taps send — fatal on a screen
+                    // whose whole contract is to submit by itself.
+                    if text != self.transcript {
+                        self.transcript = text
+                        self.armSilenceTimer()
+                    }
                     if result.isFinal { self.stop() }
                 } else if let error {
                     // A recognition error after speech has been captured still

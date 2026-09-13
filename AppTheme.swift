@@ -76,7 +76,15 @@ struct AppTheme {
     /// Light mode looked washed out because one token was doing both jobs, so
     /// the darkness that text legibility demanded was dragging every button
     /// and progress bar down with it.
-    static let accentFill = Color(UIColor.adaptive(dark: "#1DB87A", light: "#00AB64"))
+    /// Light mode runs NEON here, and deliberately below the 3:1 a UI
+    /// component owes the page. That threshold protects a control whose
+    /// boundary is the only thing identifying it — which is not this. Every
+    /// accentFill surface is a large shape carrying a glyph or a label, and
+    /// the contrast that matters on those is the text sitting on it: 9.08:1.
+    ///
+    /// The four 6–8pt indicator dots that DID rely on the boundary were moved
+    /// to `accent`, where they read better than they ever did here.
+    static let accentFill = Color(UIColor.adaptive(dark: "#1DB87A", light: "#00D07A"))
 
     /// The track behind an `accentFill` progress bar.
     ///
