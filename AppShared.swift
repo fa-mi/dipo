@@ -99,6 +99,123 @@ struct SheetField: View {
     }
 }
 
+// MARK: - Action List Sheet
+
+/// One row in an `ActionListSheet`.
+struct ActionItem: Identifiable {
+    let id = UUID()
+    let icon: String
+    let title: String
+    var detail: String? = nil
+    var tint: Color = AppTheme.blue
+    var destructive: Bool = false
+    let action: () -> Void
+}
+
+/// What a ⋯ button opens, everywhere: the thing being acted on at the top,
+/// then its actions as rows with an icon and — where the verb alone does not
+/// say it — what the action does. Destructive actions sit in their own group
+/// at the bottom, away from the thumb's path to the everyday ones.
+///
+/// Replaces system action sheets (bare verbs, no icons, a style from outside
+/// the app). The action runs after the sheet has left, because most actions
+/// open another sheet and iOS drops one presented mid-dismissal.
+struct ActionListSheet: View {
+    let icon: String
+    var iconTint: Color = AppTheme.accent
+    let title: String
+    var subtitle: String? = nil
+    let items: [ActionItem]
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var contentHeight: CGFloat = 420
+
+    var body: some View {
+        VStack(spacing: 16) {
+            HStack(spacing: 12) {
+                Image(systemName: icon)
+                    .font(.system(.body, weight: .semibold))
+                    .foregroundStyle(AppTheme.onVividFill)
+                    .frame(width: 46, height: 46)
+                    .background(iconTint, in: Circle())
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.system(.body, weight: .bold))
+                        .foregroundStyle(AppTheme.textPrimary)
+                        .lineLimit(2)
+                    if let subtitle {
+                        Text(subtitle)
+                            .font(.system(.footnote))
+                            .foregroundStyle(AppTheme.textSecondary)
+                            .lineLimit(2)
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.top, 6)
+
+            group(items.filter { !$0.destructive })
+            let danger = items.filter(\.destructive)
+            if !danger.isEmpty { group(danger) }
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 14)
+        .padding(.bottom, 8)
+        .fixedSize(horizontal: false, vertical: true)
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { contentHeight = $0 + 24 }
+        .presentationDetents([.height(contentHeight)])
+        .presentationDragIndicator(.visible)
+        .presentationBackground(AppTheme.bg)
+        .presentationCornerRadius(28)
+    }
+
+    private func group(_ rows: [ActionItem]) -> some View {
+        VStack(spacing: 0) {
+            ForEach(Array(rows.enumerated()), id: \.element.id) { i, item in
+                if i > 0 {
+                    Rectangle().fill(AppTheme.cardMid.opacity(0.7)).frame(height: 1).padding(.leading, 62)
+                }
+                Button {
+                    HapticManager.shared.tap()
+                    dismiss()
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { item.action() }
+                } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: item.icon)
+                            .font(.system(.subheadline, weight: .semibold))
+                            .foregroundStyle(item.destructive ? AppTheme.onVividFill : item.tint)
+                            .frame(width: 36, height: 36)
+                            .background(item.destructive ? AppTheme.red : item.tint.opacity(0.14),
+                                        in: RoundedRectangle(cornerRadius: AppRadius.sm))
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(item.title)
+                                .font(.system(.subheadline, weight: .semibold))
+                                .foregroundStyle(item.destructive ? AppTheme.red : AppTheme.textPrimary)
+                            if let detail = item.detail {
+                                Text(detail)
+                                    .font(.system(.caption))
+                                    .foregroundStyle(AppTheme.textSecondary)
+                                    .multilineTextAlignment(.leading)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                        Spacer(minLength: 6)
+                        if !item.destructive {
+                            Image(systemName: "chevron.right")
+                                .font(.system(.caption, weight: .semibold))
+                                .foregroundStyle(AppTheme.textSecondary)
+                        }
+                    }
+                    .padding(.horizontal, 14).padding(.vertical, 12)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+    }
+}
+
 // MARK: - Hit Target
 
 extension View {

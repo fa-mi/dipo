@@ -435,23 +435,16 @@ struct DebtView: View {
                 .presentationDetents([.large]).presentationDragIndicator(.visible)
                 .presentationBackground(AppTheme.bg).preferredColorScheme(appColorScheme())
         }
-        .alert(loc("cc.delete_title"), isPresented: Binding(
-            get: { deletingCard != nil },
-            set: { if !$0 { deletingCard = nil } })) {
-            Button(loc("common.cancel"), role: .cancel) { deletingCard = nil }
-            Button(loc("action.delete"), role: .destructive) {
-                if let c = deletingCard {
-                    // Installments belong to the card; orphaning them would
-                    // leave phantom principal locking a limit that no longer
-                    // exists.
-                    for inst in installments where inst.cardID == c.id { context.delete(inst) }
-                    context.delete(c)
-                    try? context.save()
-                }
-                deletingCard = nil
-            }
-        } message: {
-            Text(loc("cc.delete_msg"))
+        .confirmSheet(item: $deletingCard,
+                      icon: "creditcard.fill",
+                      title: { _ in loc("cc.delete_title") },
+                      message: { _ in loc("cc.delete_msg") },
+                      confirmLabel: loc("action.delete")) { c in
+            // Installments belong to the card; orphaning them would leave
+            // phantom principal locking a limit that no longer exists.
+            for inst in installments where inst.cardID == c.id { context.delete(inst) }
+            context.delete(c)
+            try? context.save()
         }
         .sheet(item: $logSpendCard) { card in
             // Cross-link: log a purchase with this credit card pre-selected.
@@ -979,15 +972,34 @@ struct DebtCard: View {
         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
         .overlay(RoundedRectangle(cornerRadius: AppRadius.lg)
             .stroke(priority == 1 ? AppTheme.red.opacity(0.3) : Color.clear, lineWidth: 1))
-        .confirmationDialog(debt.name, isPresented: $showActions, titleVisibility: .visible) {
-            Button(loc("debt.make_payment")) { showPaymentSheet = true }
-            Button(loc("common.edit")) { vm.loadForEdit(debt) }
-            Button(loc("debt.mark_paid"), role: .none) { markPaid() }
-            // Migration path: a debt that's really a credit card can become a
-            // proper CC account (spendable + owed tracking) in one tap.
-            Button(loc("cc.convert_action")) { convertToCreditCard() }
-            Button(loc("common.delete"), role: .destructive) { showDelete = true }
-            Button(loc("common.cancel"), role: .cancel) {}
+        .sheet(isPresented: $showActions) {
+            ActionListSheet(
+                icon: debt.debtType.icon,
+                iconTint: debt.debtType.color,
+                title: debt.name,
+                subtitle: CurrencyManager.shared.formatted(debt.currentBalance, currency: debt.currency),
+                items: [
+                    ActionItem(icon: "banknote.fill", title: loc("debt.make_payment"), tint: AppTheme.accent) {
+                        showPaymentSheet = true
+                    },
+                    ActionItem(icon: "pencil", title: loc("common.edit"), tint: AppTheme.blue) {
+                        vm.loadForEdit(debt)
+                    },
+                    ActionItem(icon: "checkmark.seal.fill", title: loc("debt.mark_paid"),
+                               detail: loc("debt.action.mark_paid_sub"), tint: AppTheme.teal) {
+                        markPaid()
+                    },
+                    // Migration path: a debt that is really a credit card becomes
+                    // a proper card account (spendable + owed tracking).
+                    ActionItem(icon: "creditcard.fill", title: loc("cc.convert_action"),
+                               detail: loc("cc.convert_action_sub"), tint: AppTheme.purple) {
+                        convertToCreditCard()
+                    },
+                    ActionItem(icon: "trash.fill", title: loc("common.delete"), destructive: true) {
+                        showDelete = true
+                    },
+                ])
+            .preferredColorScheme(appColorScheme())
         }
         .onAppear {
             withAnimation(.easeInOut(duration: 1.0).delay(0.2)) {
@@ -1000,11 +1012,11 @@ struct DebtCard: View {
                 .presentationDragIndicator(.visible)
                 .presentationBackground(AppTheme.bg)
         }
-        .confirmationDialog(String(format: loc("debt.delete_title"), debt.name), isPresented: $showDelete, titleVisibility: .visible) {
-            Button(loc("common.delete"), role: .destructive) {
-                modelContext.delete(debt); try? modelContext.save()
-            }
-            Button(loc("common.cancel"), role: .cancel) {}
+        .confirmSheet(isPresented: $showDelete,
+                      title: String(format: loc("debt.delete_title"), debt.name),
+                      message: loc("debt.delete_confirm"),
+                      confirmLabel: loc("common.delete")) {
+            modelContext.delete(debt); try? modelContext.save()
         }
     }
 

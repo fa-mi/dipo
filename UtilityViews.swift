@@ -1738,41 +1738,44 @@ struct AddTransactionSheet: View {
                 .presentationBackground(AppTheme.bg)
                 .preferredColorScheme(appColorScheme())
         }
-        .confirmationDialog(
-            pendingBudgetAlert?.isExceeded == true
-                ? loc("tx.budget_exceed")
-                : loc("tx.approach_limit"),
-            isPresented: $showBudgetAlert,
-            titleVisibility: .visible
-        ) {
-            Button(loc("tx.add_anyway"), role: .destructive) { commitTransaction() }
-            Button(loc("common.cancel"), role: .cancel) { pendingBudgetAlert = nil }
-        } message: {
-            if let alert = pendingBudgetAlert {
-                if alert.isExceeded {
-                    Text(String(format: loc("tx.budget_over_msg"),
-                                alert.displayLabel.lowercased(),
-                                CurrencyManager.shared.formatted(alert.over, currency: CurrencyManager.shared.preferredCurrency),
-                                CurrencyManager.shared.formatted(alert.limit, currency: CurrencyManager.shared.preferredCurrency)))
-                } else {
-                    Text(String(format: loc("tx.budget_approach_msg"),
-                                alert.displayLabel.lowercased(),
-                                CurrencyManager.shared.formatted(alert.limit, currency: CurrencyManager.shared.preferredCurrency),
-                                CurrencyManager.shared.formatted(alert.limit - alert.spent, currency: CurrencyManager.shared.preferredCurrency)))
-                }
-            }
+        .confirmSheet(isPresented: $showBudgetAlert,
+                      icon: pendingBudgetAlert?.isExceeded == true
+                          ? "exclamationmark.triangle.fill" : "gauge.with.dots.needle.67percent",
+                      tone: .warning,
+                      title: pendingBudgetAlert?.isExceeded == true
+                          ? loc("tx.budget_exceed") : loc("tx.approach_limit"),
+                      message: budgetAlertMessage,
+                      confirmLabel: loc("tx.add_anyway")) { commitTransaction() }
+        .confirmSheet(isPresented: $showCreditLimitAlert,
+                      icon: "creditcard.trianglebadge.exclamationmark",
+                      tone: .warning,
+                      title: loc("cc.over_limit_title"),
+                      message: creditOverMessage,
+                      confirmLabel: loc("tx.add_anyway")) {
+            creditOverConfirmed = true
+            saveTransaction()
         }
-        .alert(loc("cc.over_limit_title"), isPresented: $showCreditLimitAlert) {
-            Button(loc("tx.add_anyway"), role: .destructive) { creditOverConfirmed = true; saveTransaction() }
-            Button(loc("common.cancel"), role: .cancel) { }
-        } message: {
-            if vm.cards.indices.contains(selectedCardIndex) {
-                let card = vm.cards[selectedCardIndex]
-                Text(String(format: loc("cc.over_limit_msg"),
-                            CurrencyManager.shared.formatted(card.availableCredit(allInstallments),
-                                                             currency: card.resolvedCurrency)))
-            }
+    }
+
+    private var budgetAlertMessage: String {
+        guard let alert = pendingBudgetAlert else { return "" }
+        let pref = CurrencyManager.shared.preferredCurrency
+        if alert.isExceeded {
+            return String(format: loc("tx.budget_over_msg"), alert.displayLabel.lowercased(),
+                          CurrencyManager.shared.formatted(alert.over, currency: pref),
+                          CurrencyManager.shared.formatted(alert.limit, currency: pref))
         }
+        return String(format: loc("tx.budget_approach_msg"), alert.displayLabel.lowercased(),
+                      CurrencyManager.shared.formatted(alert.limit, currency: pref),
+                      CurrencyManager.shared.formatted(alert.limit - alert.spent, currency: pref))
+    }
+
+    private var creditOverMessage: String {
+        guard vm.cards.indices.contains(selectedCardIndex) else { return "" }
+        let card = vm.cards[selectedCardIndex]
+        return String(format: loc("cc.over_limit_msg"),
+                      CurrencyManager.shared.formatted(card.availableCredit(allInstallments),
+                                                       currency: card.resolvedCurrency))
     }
 
     private func saveTransaction() {

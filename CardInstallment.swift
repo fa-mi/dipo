@@ -264,17 +264,12 @@ struct InstallmentSection: View {
                 .presentationDetents([.large]).presentationDragIndicator(.visible)
                 .presentationBackground(AppTheme.bg).preferredColorScheme(appColorScheme())
         }
-        .confirmationDialog(loc("inst.delete_prompt"),
-                            isPresented: Binding(get: { deleting != nil },
-                                                 set: { if !$0 { deleting = nil } }),
-                            titleVisibility: .visible) {
-            Button(loc("common.delete"), role: .destructive) {
-                if let d = deleting { context.delete(d); try? context.save() }
-                deleting = nil
-            }
-            Button(loc("common.cancel"), role: .cancel) { deleting = nil }
-        } message: {
-            Text(loc("inst.delete_confirm"))
+        .confirmSheet(item: $deleting,
+                      title: { _ in loc("inst.delete_prompt") },
+                      message: { _ in loc("inst.delete_confirm") },
+                      confirmLabel: loc("common.delete")) { inst in
+            context.delete(inst)
+            try? context.save()
         }
         .sheet(item: $simulating) { inst in
             InstallmentSimulatorSheet(installment: inst, card: card, installments: installments)

@@ -536,6 +536,9 @@ struct GoalCard: View {
 
     @State private var showDepositSheet = false
     @State private var showActions      = false
+    /// Deleting from the ⋯ menu used to delete on the spot — no confirmation,
+    /// just a toast after the saved progress was already gone.
+    @State private var showDeleteConfirm = false
     @State private var depositAmount    = ""
 
     private var suggestedMonthly: Double {
@@ -701,13 +704,26 @@ struct GoalCard: View {
         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
         .overlay(RoundedRectangle(cornerRadius: AppRadius.lg)
             .stroke(goal.progress >= 1.0 ? AppTheme.accent.opacity(0.5) : Color.clear, lineWidth: 1.5))
-        .confirmationDialog(goal.name, isPresented: $showActions, titleVisibility: .visible) {
-            Button(goal.isPinned ? loc("savings.unpin") : loc("savings.pin")) { onPin() }
-            Button(loc("common.edit")) { onEdit() }
-            Button(loc("savings.complete")) { onComplete() }
-            Button(loc("common.delete"), role: .destructive) { onDelete() }
-            Button(loc("common.cancel"), role: .cancel) {}
+        .sheet(isPresented: $showActions) {
+            ActionListSheet(
+                icon: "target",
+                title: goal.name,
+                items: [
+                    ActionItem(icon: goal.isPinned ? "pin.slash.fill" : "pin.fill",
+                               title: goal.isPinned ? loc("savings.unpin") : loc("savings.pin"),
+                               tint: AppTheme.purple) { onPin() },
+                    ActionItem(icon: "pencil", title: loc("common.edit"), tint: AppTheme.blue) { onEdit() },
+                    ActionItem(icon: "flag.checkered", title: loc("savings.complete"), tint: AppTheme.accent) { onComplete() },
+                    ActionItem(icon: "trash.fill", title: loc("common.delete"), destructive: true) {
+                        showDeleteConfirm = true
+                    },
+                ])
+            .preferredColorScheme(appColorScheme())
         }
+        .confirmSheet(isPresented: $showDeleteConfirm,
+                      title: String(format: loc("savings.delete_title"), goal.name),
+                      message: loc("savings.delete_confirm"),
+                      confirmLabel: loc("common.delete")) { onDelete() }
         .sheet(isPresented: $showDepositSheet) {
             DepositSheet(goal: goal, onDeposit: { amount, card in
                 showDepositSheet = false
@@ -1737,15 +1753,19 @@ struct GoalDetailView: View {
             .presentationDragIndicator(.visible)
             .presentationBackground(AppTheme.bg)
         }
-        .confirmationDialog(String(format: loc("savings.delete_title"), goal.name), isPresented: $showDelete, titleVisibility: .visible) {
-            Button(loc("common.delete"), role: .destructive) {
+        .confirmSheet(isPresented: $showDelete,
+                      title: String(format: loc("savings.delete_title"), goal.name),
+                      message: loc("savings.delete_confirm"),
+                      confirmLabel: loc("common.delete")) {
+            // Close this screen first, then delete: the goal is still on screen
+            // and SwiftData traps on a view reading a deleted model.
+            dismiss()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
                 context.delete(goal)
                 try? context.save()
                 HapticManager.shared.warning()
-                dismiss()
             }
-            Button(loc("common.cancel"), role: .cancel) {}
-        } message: { Text(loc("savings.delete_confirm")) }
+        }
     }
 }
 

@@ -1109,21 +1109,27 @@ struct SharedGoalDetailView: View {
                     .presentationDetents([.medium]).presentationDragIndicator(.visible).presentationBackground(AppTheme.bg)
             }
             // Centered alerts (not action-sheet popovers) for destructive confirms.
-            .alert(loc("unity.delete_goal"), isPresented: $confirmDelete) {
-                Button(loc("common.delete"), role: .destructive) { Task { if await unity.deleteGoal(goal) { dismiss() } } }
-                Button(loc("common.cancel"), role: .cancel) {}
-            } message: { Text(loc("unity.delete_goal_confirm")) }
-            .alert(loc("unity.leave_goal"), isPresented: $confirmLeave) {
-                Button(loc("unity.leave_goal"), role: .destructive) { Task { if await unity.leaveGoal(goal) { dismiss() } } }
-                Button(loc("common.cancel"), role: .cancel) {}
-            } message: { Text(loc("unity.leave_goal_confirm")) }
-            .alert(loc("unity.remove_member"),
-                   isPresented: Binding(get: { memberToRemove != nil }, set: { if !$0 { memberToRemove = nil } })) {
-                Button(loc("unity.remove_member"), role: .destructive) {
-                    if let m = memberToRemove { Task { _ = await unity.removeMember(goal, memberUid: m.id); await load() } }
-                }
-                Button(loc("common.cancel"), role: .cancel) {}
-            } message: { Text(memberToRemove.map { String(format: loc("unity.remove_confirm"), $0.displayName) } ?? "") }
+            .confirmSheet(isPresented: $confirmDelete,
+                          title: loc("unity.delete_goal"),
+                          message: loc("unity.delete_goal_confirm"),
+                          confirmLabel: loc("common.delete")) {
+                Task { if await unity.deleteGoal(goal) { dismiss() } }
+            }
+            .confirmSheet(isPresented: $confirmLeave,
+                          icon: "rectangle.portrait.and.arrow.right",
+                          tone: .warning,
+                          title: loc("unity.leave_goal"),
+                          message: loc("unity.leave_goal_confirm"),
+                          confirmLabel: loc("unity.leave_goal")) {
+                Task { if await unity.leaveGoal(goal) { dismiss() } }
+            }
+            .confirmSheet(item: $memberToRemove,
+                          icon: "person.fill.xmark",
+                          title: { _ in loc("unity.remove_member") },
+                          message: { String(format: loc("unity.remove_confirm"), $0.displayName) },
+                          confirmLabel: loc("unity.remove_member")) { m in
+                Task { _ = await unity.removeMember(goal, memberUid: m.id); await load() }
+            }
         }
     }
 

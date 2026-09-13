@@ -320,7 +320,6 @@ struct ProfileView: View {
                 confirmLabel: loc("profile.reset_btn"),
                 onConfirm: { resetAllData() }
             )
-            .presentationDetents([.height(420)])
             .presentationDragIndicator(.visible)
             .presentationBackground(AppTheme.bg)
             .presentationCornerRadius(28)
@@ -447,7 +446,6 @@ struct ProfileView: View {
                     runImport(from: url)
                 }
             )
-            .presentationDetents([.height(420)])
             .presentationDragIndicator(.visible)
             .presentationBackground(AppTheme.bg)
             .presentationCornerRadius(28)
@@ -1760,6 +1758,10 @@ extension Notification.Name {
 /// `.sheet(isPresented:)` with `.presentationDetents([.height(...)])`.
 struct DangerConfirmSheet: View {
     @Environment(\.dismiss) private var dismiss
+    /// Measured, so a long message or large Dynamic Type never clips and a short
+    /// one does not leave a half-empty panel. Call sites used to guess 420pt,
+    /// and two set no height at all and opened full-screen.
+    @State private var contentHeight: CGFloat = 400
 
     /// SF Symbol shown in the colored circle at the top.
     let icon: String
@@ -1864,7 +1866,51 @@ struct DangerConfirmSheet: View {
             .padding(.bottom, 22)
         }
         .frame(maxWidth: .infinity)
+        .fixedSize(horizontal: false, vertical: true)
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { contentHeight = $0 + 20 }
         .background(AppTheme.bg)
+        .presentationDetents([.height(contentHeight)])
+        .presentationDragIndicator(.visible)
+        .presentationBackground(AppTheme.bg)
+        .presentationCornerRadius(28)
+    }
+}
+
+extension View {
+    /// The one confirmation for anything that deletes, removes or overrides:
+    /// a sheet that names the action, says what happens, and keeps Cancel the
+    /// easy tap. Replaces system action sheets and alerts, which could not say
+    /// more than one line and looked like a different app from the rest of DiPo.
+    func confirmSheet(isPresented: Binding<Bool>,
+                      icon: String = "trash.fill",
+                      tone: DangerConfirmSheet.Tone = .danger,
+                      title: String,
+                      message: String,
+                      confirmLabel: String,
+                      onConfirm: @escaping () -> Void) -> some View {
+        sheet(isPresented: isPresented) {
+            DangerConfirmSheet(icon: icon, tone: tone, title: title, message: message,
+                               confirmLabel: confirmLabel, onConfirm: onConfirm)
+                .preferredColorScheme(appColorScheme())
+        }
+    }
+
+    /// Same, for confirming an action on a specific item (this instalment, this
+    /// member). The item is captured when the sheet opens: the sheet closes
+    /// before `onConfirm` runs, and closing clears the binding, so reading the
+    /// optional at confirm time would find nil and silently do nothing.
+    func confirmSheet<Item: Identifiable>(item: Binding<Item?>,
+                                          icon: String = "trash.fill",
+                                          tone: DangerConfirmSheet.Tone = .danger,
+                                          title: @escaping (Item) -> String,
+                                          message: @escaping (Item) -> String,
+                                          confirmLabel: String,
+                                          onConfirm: @escaping (Item) -> Void) -> some View {
+        sheet(item: item) { it in
+            DangerConfirmSheet(icon: icon, tone: tone, title: title(it), message: message(it),
+                               confirmLabel: confirmLabel, onConfirm: { onConfirm(it) })
+                .preferredColorScheme(appColorScheme())
+        }
     }
 }
 

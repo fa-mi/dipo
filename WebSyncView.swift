@@ -64,14 +64,13 @@ struct WebSyncView: View {
         .onAppear {
             withAnimation(.spring(response: 0.5, dampingFraction: 0.85)) { appeared = true }
         }
-        .confirmationDialog(loc("websync.revoke_title"),
-                            isPresented: $showRevokeConfirm, titleVisibility: .visible) {
-            Button(loc("websync.revoke_action"), role: .destructive) {
-                Task { await service.revoke() }
-            }
-            Button(loc("common.cancel"), role: .cancel) {}
-        } message: {
-            Text(loc("websync.revoke_body"))
+        .confirmSheet(isPresented: $showRevokeConfirm,
+                      icon: "eye.slash.fill",
+                      tone: .warning,
+                      title: loc("websync.revoke_title"),
+                      message: loc("websync.revoke_body"),
+                      confirmLabel: loc("websync.revoke_action")) {
+            Task { await service.revoke() }
         }
     }
 
