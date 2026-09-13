@@ -94,7 +94,7 @@ struct SmartRecommendationDetailView: View {
         return VStack(alignment: .leading, spacing: 8) {
             Text(loc("reco.sum.where_title"))
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.7))
+                .foregroundStyle(AppTheme.textSecondary)
             Text(headline)
                 .font(.system(size: 30, weight: .bold))
                 .foregroundStyle(positive ? AppTheme.accent : AppTheme.red)
@@ -103,7 +103,7 @@ struct SmartRecommendationDetailView: View {
                  ? String(format: loc("reco.sum.where_surplus"), money(reco.avgMonthlyExpense))
                  : String(format: loc("reco.sum.where_deficit"),
                           money(reco.avgMonthlyExpense), money(reco.monthlyIncome)))
-                .font(.system(size: 12)).foregroundStyle(.white.opacity(0.85))
+                .font(.system(size: 12)).foregroundStyle(AppTheme.textPrimary)
                 .fixedSize(horizontal: false, vertical: true).lineSpacing(2)
             if !reco.periodLabel.isEmpty {
                 Text(reco.periodLabel)
@@ -113,7 +113,13 @@ struct SmartRecommendationDetailView: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(hex: "#1B2A24"), in: RoundedRectangle(cornerRadius: 18))
+        // Was a fixed dark #1B2A24 with white text in BOTH themes — a dark slab on
+        // the light page, and once light mode's green, red and purple were
+        // deepened for legibility, the headline on it fell to ~3:1. The card
+        // now sits on the theme's own surface, tinted with the verdict's colour.
+        .background((positive ? AppTheme.accent : AppTheme.red).opacity(0.10),
+                    in: RoundedRectangle(cornerRadius: 18))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 18))
     }
 
     /// 2. What to do, in order. Same items as the main screen but numbered, so
