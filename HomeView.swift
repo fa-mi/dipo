@@ -1108,6 +1108,7 @@ struct RecurringReminderBanner: View {
                         .frame(width: 26, height: 26)
                         .background(AppTheme.cardMid, in: Circle())
                 }
+.accessibilityLabel(loc("a11y.dismiss"))
                 .buttonStyle(ScaleButtonStyle())
             }
         }
@@ -1508,6 +1509,7 @@ struct HomeHeader: View {
                         Image(systemName: "magnifyingglass").font(.system(size: 17)).foregroundStyle(AppTheme.textSecondary)
                     }
                 }
+.accessibilityLabel(loc("a11y.search"))
                 .buttonStyle(ScaleButtonStyle())
 
                 Button { HapticManager.shared.tap(); showNotifications = true } label: {
@@ -1529,6 +1531,11 @@ struct HomeHeader: View {
                     }
                 }
                 .buttonStyle(ScaleButtonStyle())
+                // Read as "Notifications, 3 unread" — the badge digit alone
+                // was announced with no noun attached.
+                .accessibilityLabel(loc("a11y.notifications"))
+                .accessibilityValue(notifMgr.unreadCount > 0
+                                    ? String(format: loc("a11y.unread_count"), notifMgr.unreadCount) : "")
             }
         }
         .onAppear(perform: loadIdentity)
@@ -1669,6 +1676,7 @@ struct BankCardView: View {
                                 .font(.system(size: 12, weight: .medium))
                                 .foregroundStyle(.white.opacity(0.7))
                         }
+.accessibilityLabel(loc(card.isHidden ? "a11y.show_balance" : "a11y.hide_balance"))
                         .buttonStyle(ScaleButtonStyle())
                     }
                     Spacer()
@@ -2011,6 +2019,7 @@ struct TransactionSection: View {
                         Image(systemName: "xmark.circle.fill")
                             .font(.system(size: 16)).foregroundStyle(AppTheme.textSecondary)
                     }
+.accessibilityLabel(loc("a11y.clear_filter"))
                 }
                 .padding(.horizontal, 12).padding(.vertical, 8)
                 .background(filter.color.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))

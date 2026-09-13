@@ -190,6 +190,7 @@ struct WishlistView: View {
                                     .foregroundStyle(AppTheme.bg)
                             }
                         }
+.accessibilityLabel(loc("a11y.add_goal"))
                         .buttonStyle(ScaleButtonStyle())
                     }
                     .padding(.horizontal, 22)

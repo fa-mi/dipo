@@ -970,6 +970,7 @@ struct PaywallView: View {
                         .frame(width: 32, height: 32)
                         .background(AppTheme.cardMid, in: Circle())
                 }
+.accessibilityLabel(loc("a11y.close"))
                 .buttonStyle(ScaleButtonStyle())
                 .padding(.trailing, 22)
                 .padding(.top, 20)

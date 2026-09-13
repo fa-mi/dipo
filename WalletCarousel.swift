@@ -379,6 +379,7 @@ struct WalletCardActions: View {
                     .frame(width: 36, height: 36)
                     .background(AppTheme.cardMid, in: Circle())
             }
+.accessibilityLabel(loc("common.edit"))
             .buttonStyle(ScaleButtonStyle())
             Button { HapticManager.shared.warning(); onDelete() } label: {
                 Image(systemName: "trash")
@@ -386,6 +387,7 @@ struct WalletCardActions: View {
                     .frame(width: 36, height: 36)
                     .background(AppTheme.red.opacity(0.12), in: Circle())
             }
+.accessibilityLabel(loc("common.delete"))
             .buttonStyle(ScaleButtonStyle())
         }
         .padding(.horizontal, 14).padding(.vertical, 12)

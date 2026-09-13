@@ -272,7 +272,8 @@ struct DebtView: View {
                                     .shadow(color: AppTheme.red.opacity(0.4), radius: 10, y: 4)
                                 Image(systemName: "plus").font(.system(size: 18, weight: .semibold)).foregroundStyle(.white)
                             }
-                        }.buttonStyle(ScaleButtonStyle())
+                        }
+.accessibilityLabel(loc("a11y.add_debt")).buttonStyle(ScaleButtonStyle())
                     }
                     .padding(.horizontal, 22).padding(.top, 20)
                     .opacity(appeared ? 1 : 0)
@@ -901,7 +902,9 @@ struct DebtCard: View {
                         Image(systemName: "ellipsis").font(.system(size: 15))
                             .foregroundStyle(AppTheme.textSecondary).frame(width: 36, height: 36)
                             .background(AppTheme.cardMid, in: Circle())
-                    }.buttonStyle(ScaleButtonStyle())
+                    }
+.accessibilityLabel(loc("a11y.more_actions"))
+.hitTarget(36).buttonStyle(ScaleButtonStyle())
                 }
 
                 // Balance info
@@ -1363,6 +1366,7 @@ struct DebtFormSheet: View {
                                             .foregroundStyle(AppTheme.textPrimary).frame(width: 44, height: 44)
                                             .contentShape(Rectangle())
                                     }
+.accessibilityLabel(loc("a11y.earlier_day"))
                                     Text("\(vm.formDueDay)").font(.system(size: 18, weight: .bold)).foregroundStyle(AppTheme.textPrimary).frame(width: 40)
                                         .contentTransition(.numericText())
                                     Button { HapticManager.shared.tap(); if vm.formDueDay < 31 { vm.formDueDay += 1 } } label: {
@@ -1370,6 +1374,7 @@ struct DebtFormSheet: View {
                                             .foregroundStyle(AppTheme.textPrimary).frame(width: 44, height: 44)
                                             .contentShape(Rectangle())
                                     }
+.accessibilityLabel(loc("a11y.later_day"))
                                 }
                                 .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
                             }

@@ -211,6 +211,7 @@ extension View {
                 Image(systemName: isRevealed.wrappedValue ? "eye.slash" : "eye")
                     .foregroundStyle(AppTheme.accent)
             }
+.accessibilityLabel(loc(isRevealed.wrappedValue ? "a11y.hide_value" : "a11y.show_value"))
         }
     }
 }
@@ -251,6 +252,7 @@ struct CardDetailView: View {
                 } label: {
                     Image(systemName: cardNumberRevealed ? "eye.slash.fill" : "eye.fill")
                 }
+.accessibilityLabel(loc(cardNumberRevealed ? "a11y.hide_number" : "a11y.show_number"))
             }
             
             Text(CurrencyManager.shared.formatted(card.balance, currency: card.currency))

@@ -532,6 +532,7 @@ struct BiometricPulseIcon: View {
                 }
             }
         }
+.accessibilityLabel(String(format: loc("a11y.unlock_with"), authVM.biometricLabel))
         .buttonStyle(ScaleButtonStyle())
         .onAppear { pulsing = true }
     }

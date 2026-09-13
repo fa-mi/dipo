@@ -795,6 +795,7 @@ struct BudgetRatioCard: View {
                             .frame(width: 32, height: 32)
                             .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: 8))
                     }
+.accessibilityLabel(loc("a11y.decrease"))
                     Text("\(pct)%")
                         .font(.system(size: 18, weight: .bold))
                         .foregroundStyle(group.color)
@@ -809,6 +810,7 @@ struct BudgetRatioCard: View {
                             .frame(width: 32, height: 32)
                             .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: 8))
                     }
+.accessibilityLabel(loc("a11y.increase"))
                 }
             }
 

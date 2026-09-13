@@ -679,6 +679,7 @@ struct AIChatView: View {
                         .frame(width: 38, height: 38)
                         .background(AppTheme.accentFill, in: Circle())
                 }
+.accessibilityLabel(loc("a11y.send"))
                 .disabled(vm.input.trimmingCharacters(in: .whitespaces).isEmpty || vm.isLoading)
                 .opacity(vm.input.trimmingCharacters(in: .whitespaces).isEmpty ? 0.5 : 1)
             }

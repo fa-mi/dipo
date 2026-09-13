@@ -102,6 +102,7 @@ struct TabLogoButton: View {
             }
             .frame(maxWidth: .infinity)
         }
+.accessibilityLabel(loc("a11y.add_transaction"))
         .buttonStyle(ScaleButtonStyle())
     }
 }

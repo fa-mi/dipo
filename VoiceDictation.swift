@@ -410,6 +410,7 @@ struct VoiceCaptureView: View {
                     .frame(width: 38, height: 38)
                     .background(AppTheme.cardDark, in: Circle())
             }
+.accessibilityLabel(loc("a11y.back"))
             Spacer()
             Text(loc("voice.title"))
                 .font(.system(size: 16, weight: .semibold))
@@ -451,7 +452,7 @@ struct VoiceCaptureView: View {
             // Secondary: send what has been heard so far, without waiting for
             // the silence timer. Someone who has finished talking should not
             // have to wait to be believed.
-            circleButton(icon: "text.badge.checkmark",
+            circleButton(icon: "text.badge.checkmark", label: loc("a11y.send_now"),
                          enabled: !voice.transcript.isEmpty) {
                 voice.stop()
             }
@@ -485,6 +486,7 @@ struct VoiceCaptureView: View {
                             .foregroundStyle(AppTheme.onVividFill)
                     }
                 }
+.accessibilityLabel(loc(isListening ? "voice.stop" : "voice.start"))
                 .buttonStyle(ScaleButtonStyle())
 
                 Text(isListening ? loc("voice.tap_stop") : loc("voice.tap_speak"))
@@ -492,14 +494,14 @@ struct VoiceCaptureView: View {
                     .foregroundStyle(AppTheme.textSecondary)
             }
 
-            circleButton(icon: "xmark", enabled: true) {
+            circleButton(icon: "xmark", label: loc("common.cancel"), enabled: true) {
                 voice.cancel()
                 dismiss()
             }
         }
     }
 
-    private func circleButton(icon: String, enabled: Bool,
+    private func circleButton(icon: String, label: String, enabled: Bool,
                               action: @escaping () -> Void) -> some View {
         Button {
             HapticManager.shared.tap(); action()
@@ -512,6 +514,7 @@ struct VoiceCaptureView: View {
         }
         .buttonStyle(ScaleButtonStyle())
         .disabled(!enabled)
+        .accessibilityLabel(label)
     }
 }
 

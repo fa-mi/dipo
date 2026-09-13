@@ -551,6 +551,8 @@ struct ProfileView: View {
                         .font(.system(size: 13, weight: .semibold)).foregroundStyle(AppTheme.onVividFill)
                 }
             }
+.accessibilityLabel(loc("a11y.change_photo"))
+.hitTarget(32)
             .buttonStyle(ScaleButtonStyle())
             .offset(x: 36, y: 36)
         }
@@ -583,10 +585,12 @@ struct ProfileView: View {
                         .submitLabel(.done).onSubmit { saveName() }
                     Button { saveName() } label: {
                         Image(systemName: "checkmark.circle.fill").font(.system(size: 28)).foregroundStyle(AppTheme.accent)
-                    }.buttonStyle(ScaleButtonStyle())
+                    }
+.accessibilityLabel(loc("a11y.save_name")).buttonStyle(ScaleButtonStyle())
                     Button { isEditingName = false; editNameText = authVM.savedName } label: {
                         Image(systemName: "xmark.circle.fill").font(.system(size: 28)).foregroundStyle(AppTheme.textSecondary)
-                    }.buttonStyle(ScaleButtonStyle())
+                    }
+.accessibilityLabel(loc("common.cancel")).buttonStyle(ScaleButtonStyle())
                 }
                 .padding(.horizontal, 28)
                 .transition(.scale(scale: 0.95).combined(with: .opacity))

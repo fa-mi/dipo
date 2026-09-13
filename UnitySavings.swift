@@ -888,7 +888,8 @@ struct InviteInboxRow: View {
                         Image(systemName: "xmark").font(.system(size: 13, weight: .bold))
                             .foregroundStyle(AppTheme.textSecondary)
                             .frame(width: 34, height: 34).background(AppTheme.cardMid, in: Circle())
-                    }.buttonStyle(ScaleButtonStyle())
+                    }
+.accessibilityLabel(loc("a11y.decline_invite")).buttonStyle(ScaleButtonStyle())
                     Button {
                         busy = true
                         Task {
@@ -900,7 +901,8 @@ struct InviteInboxRow: View {
                         Image(systemName: "checkmark").font(.system(size: 13, weight: .bold))
                             .foregroundStyle(AppTheme.onVividFill)
                             .frame(width: 34, height: 34).background(AppTheme.purple, in: Circle())
-                    }.buttonStyle(ScaleButtonStyle())
+                    }
+.accessibilityLabel(loc("a11y.accept_invite")).buttonStyle(ScaleButtonStyle())
                 }
             }
         }
@@ -1064,7 +1066,8 @@ struct SharedGoalDetailView: View {
                                     if goal.isOwner && !m.isOwner {
                                         Button { memberToRemove = m } label: {
                                             Image(systemName: "minus.circle").font(.system(size: 15)).foregroundStyle(AppTheme.red)
-                                        }.buttonStyle(.plain)
+                                        }
+.accessibilityLabel(loc("a11y.remove_member")).buttonStyle(.plain)
                                     }
                                 }
                             }

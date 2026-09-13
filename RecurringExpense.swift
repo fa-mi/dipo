@@ -507,6 +507,7 @@ struct RecurringExpensesView: View {
                         .foregroundStyle(cards.isEmpty ? AppTheme.textSecondary : AppTheme.bg)
                 }
             }
+.accessibilityLabel(loc("a11y.add_recurring"))
             .disabled(cards.isEmpty).buttonStyle(ScaleButtonStyle())
         }
     }
@@ -830,10 +831,12 @@ struct RecurringFormSheet: View {
                                     Button { HapticManager.shared.tap(); if vm.formDay > 1 { vm.formDay -= 1 } } label: {
                                         Image(systemName: "minus").font(.system(size: 14, weight: .semibold)).foregroundStyle(AppTheme.textPrimary).frame(width: 40, height: 40)
                                     }
+.accessibilityLabel(loc("a11y.earlier_day"))
                                     Text("\(vm.formDay)").font(.system(size: 20, weight: .bold)).foregroundStyle(AppTheme.accent).frame(width: 44).contentTransition(.numericText())
                                     Button { HapticManager.shared.tap(); if vm.formDay < 31 { vm.formDay += 1 } } label: {
                                         Image(systemName: "plus").font(.system(size: 14, weight: .semibold)).foregroundStyle(AppTheme.textPrimary).frame(width: 40, height: 40)
                                     }
+.accessibilityLabel(loc("a11y.later_day"))
                                 }
                                 .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: 12))
                             }

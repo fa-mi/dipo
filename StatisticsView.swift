@@ -1022,6 +1022,7 @@ struct StatisticsView: View {
                                 .frame(width: 44, height: 44)
                                 .background(AppTheme.accent.opacity(0.12), in: Circle())
                         }
+.accessibilityLabel(loc("a11y.export"))
                         .buttonStyle(ScaleButtonStyle())
                     }
                     .padding(.horizontal, 22)

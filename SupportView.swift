@@ -523,6 +523,7 @@ struct NewTicketForm: View {
                     Image(systemName: "xmark").font(.system(size: 9, weight: .bold)).foregroundStyle(.white)
                 }
             }
+.accessibilityLabel(loc("a11y.remove_image"))
             .offset(x: 5, y: -5)
         }
     }
@@ -750,6 +751,7 @@ struct TicketThreadView: View {
                             }
                         }
                     }
+.accessibilityLabel(loc("a11y.send"))
                     .disabled(replyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSending)
                 }
                 .padding(.horizontal, 16)
@@ -1009,6 +1011,8 @@ struct FullscreenImageView: View {
                     Image(systemName: "xmark").font(.system(size: 13, weight: .semibold)).foregroundStyle(.white)
                 }
             }
+.accessibilityLabel(loc("a11y.close"))
+.hitTarget(36)
             .padding(20)
         }
     }

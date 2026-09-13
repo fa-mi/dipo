@@ -264,6 +264,7 @@ private struct LandingView: View {
                         .foregroundStyle(AppTheme.textPrimary)
                         .frame(width: 36, height: 36)
                 }
+.accessibilityLabel(loc("a11y.back"))
                 Text(loc("receipt.landing.title"))
                     .font(.system(size: 22, weight: .bold))
                     .foregroundStyle(AppTheme.textPrimary)
@@ -491,7 +492,7 @@ struct ScanCameraView: View {
             // Top controls
             VStack {
                 HStack {
-                    circleButton(icon: "xmark") { onCancel() }
+                    circleButton(icon: "xmark", label: loc("common.cancel")) { onCancel() }
                     Spacer()
                 }
                 .padding(.horizontal, 18)
@@ -513,7 +514,8 @@ struct ScanCameraView: View {
             VStack {
                 Spacer()
                 HStack(spacing: 32) {
-                    bottomButton(icon: torchOn ? "bolt.fill" : "bolt") {
+                    bottomButton(icon: torchOn ? "bolt.fill" : "bolt",
+                                 label: loc(torchOn ? "a11y.torch_off" : "a11y.torch_on")) {
                         torchOn.toggle()
                         camera.setTorch(on: torchOn)
                     }
@@ -536,7 +538,8 @@ struct ScanCameraView: View {
                                 .foregroundStyle(AppTheme.accent)
                         }
                     }
-                    bottomButton(icon: "checkmark") {
+.accessibilityLabel(loc("a11y.capture"))
+                    bottomButton(icon: "checkmark", label: loc("a11y.capture")) {
                         // Same as capture — provided to mirror the mock layout
                         HapticManager.shared.tap()
                         camera.capture { image in
@@ -555,7 +558,7 @@ struct ScanCameraView: View {
         }
     }
 
-    private func circleButton(icon: String, action: @escaping () -> Void) -> some View {
+    private func circleButton(icon: String, label: String, action: @escaping () -> Void) -> some View {
         Button {
             HapticManager.shared.tap()
             action()
@@ -566,9 +569,11 @@ struct ScanCameraView: View {
                 .frame(width: 36, height: 36)
                 .background(.gray.opacity(0.4), in: Circle())
         }
+        .accessibilityLabel(label)
+        .hitTarget(36)
     }
 
-    private func bottomButton(icon: String, action: @escaping () -> Void) -> some View {
+    private func bottomButton(icon: String, label: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: icon)
                 .font(.system(size: 18, weight: .semibold))
@@ -578,6 +583,7 @@ struct ScanCameraView: View {
                 .shadow(color: .black.opacity(0.2), radius: 6, y: 3)
         }
         .buttonStyle(ScaleButtonStyle())
+        .accessibilityLabel(label)
     }
 }
 
@@ -883,6 +889,7 @@ private struct ScanningProgressView: View {
                             .frame(width: 36, height: 36)
                             .background(.black.opacity(0.5), in: Circle())
                     }
+.accessibilityLabel(loc("common.cancel"))
                     Spacer()
                 }
                 .padding(.horizontal, 18)

@@ -99,6 +99,21 @@ struct SheetField: View {
     }
 }
 
+// MARK: - Hit Target
+
+extension View {
+    /// Grows the tappable area to Apple's 44×44pt minimum WITHOUT changing the
+    /// layout: pad out, claim that padded rectangle as the hit shape, then pad
+    /// back in. A 36pt circle keeps looking like a 36pt circle while a thumb
+    /// that lands 4pt outside it still counts.
+    func hitTarget(_ visualSize: CGFloat, minimum: CGFloat = 44) -> some View {
+        let inset = max(0, (minimum - visualSize) / 2)
+        return padding(inset)
+            .contentShape(Rectangle())
+            .padding(-inset)
+    }
+}
+
 // MARK: - Icon Field
 
 /// A labelled text field with a glyph inside it.

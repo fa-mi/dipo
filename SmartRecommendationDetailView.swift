@@ -60,6 +60,8 @@ struct SmartRecommendationDetailView: View {
                     .foregroundStyle(AppTheme.textPrimary)
                     .frame(width: 36, height: 36).background(AppTheme.cardDark, in: Circle())
             }
+.accessibilityLabel(loc("a11y.back"))
+.hitTarget(36)
             Text(loc("reco.detail_title")).font(.system(size: 24, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
             Text(loc("reco.detail_sub")).font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
         }

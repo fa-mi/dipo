@@ -239,6 +239,7 @@ struct CardListView: View {
                                         }
                                     }
                                 }
+.accessibilityLabel(loc("a11y.transfer"))
                                 .buttonStyle(ScaleButtonStyle())
                             }
                             Button {
@@ -255,6 +256,7 @@ struct CardListView: View {
                                         .foregroundStyle(AppTheme.bg)
                                 }
                             }
+.accessibilityLabel(loc("a11y.add_card"))
                             .buttonStyle(ScaleButtonStyle())
                         }
                     }
@@ -1334,6 +1336,7 @@ struct CardTransferSheet: View {
                                     .frame(width: 38, height: 38)
                                     .background(AppTheme.accent.opacity(0.12), in: Circle())
                             }
+.accessibilityLabel(loc("a11y.swap_cards"))
                             .buttonStyle(ScaleButtonStyle())
                             transferSlot(title: loc("transfer.to"),
                                          card: destCard) { picking = .destination }

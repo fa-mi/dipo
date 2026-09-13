@@ -116,6 +116,7 @@ struct ReceiptPreviewSheet: View {
                         }
                         .foregroundStyle(AppTheme.textPrimary)
                     }
+.accessibilityLabel(loc("a11y.back"))
                 }
             }
             .onAppear {
@@ -614,6 +615,7 @@ private struct ZoomableImageView: View {
                     .font(.system(size: 28))
                     .foregroundStyle(.white, .black.opacity(0.5))
             }
+.accessibilityLabel(loc("a11y.close"))
             .padding()
         }
     }

@@ -201,6 +201,7 @@ struct SearchView: View {
                                         .font(.system(size: 16))
                                         .foregroundStyle(AppTheme.textSecondary)
                                 }
+.accessibilityLabel(loc("a11y.clear_search"))
                             }
                         }
                         .padding(.horizontal, 14).padding(.vertical, 12)
@@ -640,6 +641,7 @@ struct TransactionDetailSheet: View {
                             Image(systemName: "pencil")
                                 .foregroundStyle(AppTheme.accent)
                         }
+.accessibilityLabel(loc("common.edit"))
                     }
                 }
             }

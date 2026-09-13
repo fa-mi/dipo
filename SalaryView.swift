@@ -488,6 +488,7 @@ struct SalaryView: View {
                         .frame(width: 44, height: 44)
                         .background(cards.isEmpty ? AppTheme.cardMid : AppTheme.accentFill, in: Circle())
                 }
+.accessibilityLabel(loc("salary.add_full"))
                 .disabled(cards.isEmpty)
                 .buttonStyle(ScaleButtonStyle())
             }
@@ -659,6 +660,8 @@ struct SalaryCard: View {
                         .background(AppTheme.cardMid.opacity(0.7), in: Circle())
                         .contentShape(Circle())
                 }
+.accessibilityLabel(loc("a11y.more_actions"))
+.hitTarget(38)
                 .buttonStyle(ScaleButtonStyle())
             }
 

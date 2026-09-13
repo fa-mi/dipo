@@ -406,6 +406,8 @@ struct SmartRecommendationView: View {
                     .foregroundStyle(AppTheme.textPrimary)
                     .frame(width: 36, height: 36).background(AppTheme.cardDark, in: Circle())
             }
+.accessibilityLabel(loc("a11y.back"))
+.hitTarget(36)
             Spacer()
             Text(loc("profile.budget")).font(.system(size: 16, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
             HStack(spacing: 4) {
