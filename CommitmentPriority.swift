@@ -178,11 +178,11 @@ struct CommitmentPriorityCard: View {
                           tint: Color = AppTheme.textSecondary) -> some View {
         HStack(spacing: 8) {
             Text(label)
-                .font(.system(size: 11))
+                .font(.system(.caption2))
                 .foregroundStyle(AppTheme.textSecondary)
             Spacer(minLength: 6)
             Text(value)
-                .font(.system(size: 11, weight: .medium))
+                .font(.system(.caption2, weight: .medium))
                 .foregroundStyle(tint)
         }
     }
@@ -212,11 +212,11 @@ struct CommitmentPriorityCard: View {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Text(money(max(margin, 0)))
-                        .font(.system(size: 22, weight: .bold))
+                        .font(.system(.title2, weight: .bold))
                         .foregroundStyle(margin <= 0 ? AppTheme.red
                                          : tight ? AppTheme.orange : AppTheme.accent)
                     Text(loc("commit.margin_unit"))
-                        .font(.system(size: 12))
+                        .font(.system(.caption))
                         .foregroundStyle(AppTheme.textSecondary)
                     Spacer(minLength: 0)
                 }
@@ -237,7 +237,7 @@ struct CommitmentPriorityCard: View {
 
                 Text(String(format: loc(margin <= 0 ? "commit.margin_over" : "commit.margin_sub"),
                             money(allowance), money(typicalDaily)))
-                    .font(.system(size: 11))
+                    .font(.system(.caption2))
                     .foregroundStyle(AppTheme.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, 2)
@@ -247,7 +247,7 @@ struct CommitmentPriorityCard: View {
                     let days = irregularThisCycle / margin
                     Text(String(format: loc("commit.margin_irregular"),
                                 money(irregularThisCycle), Int(days.rounded())))
-                        .font(.system(size: 11, weight: .medium))
+                        .font(.system(.caption2, weight: .medium))
                         .foregroundStyle(days >= 30 ? AppTheme.orange : AppTheme.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -263,19 +263,19 @@ struct CommitmentPriorityCard: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
                 Image(systemName: "arrow.triangle.branch")
-                    .font(.system(size: 13)).foregroundStyle(AppTheme.purple)
+                    .font(.system(.footnote)).foregroundStyle(AppTheme.purple)
                 Text(loc("commit.title"))
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.system(.subheadline, weight: .semibold))
                     .foregroundStyle(AppTheme.textPrimary)
                 Spacer()
                 Text(String(format: "%.0f%%", review.shareOfIncome * 100))
-                    .font(.system(size: 12, weight: .bold))
+                    .font(.system(.caption, weight: .bold))
                     .foregroundStyle(review.shareOfIncome > 0.40 ? AppTheme.orange : AppTheme.textSecondary)
             }
 
             Text(String(format: loc("commit.summary"),
                         money(review.total), money(review.monthlyIncome)))
-                .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
 
             marginLine
@@ -286,7 +286,7 @@ struct CommitmentPriorityCard: View {
                 Text(String(format: loc("commit.bucket_headline"),
                             heavy.group.label,
                             String(format: "%.0f%%", heavy.share * 100)))
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(.caption, weight: .semibold))
                     .foregroundStyle(heavy.share > 0.80 ? AppTheme.red
                                      : heavy.share > 0.60 ? AppTheme.orange : AppTheme.textPrimary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -313,16 +313,16 @@ struct CommitmentPriorityCard: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(String(format: loc("commit.goal_impact"),
                                 money(review.discretionary), name, months(saved)))
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.system(.caption, weight: .medium))
                         .foregroundStyle(AppTheme.textPrimary)
                         .fixedSize(horizontal: false, vertical: true)
                     if let now = review.monthsAtCurrentPace, let then = review.monthsIfRedirected {
                         HStack(spacing: 6) {
-                            Text(months(now)).font(.system(size: 11))
+                            Text(months(now)).font(.system(.caption2))
                                 .foregroundStyle(AppTheme.textSecondary)
-                            Image(systemName: "arrow.right").font(.system(size: 9, weight: .bold))
+                            Image(systemName: "arrow.right").font(.system(.caption2, weight: .bold)).imageScale(.small)
                                 .foregroundStyle(AppTheme.textSecondary)
-                            Text(months(then)).font(.system(size: 11, weight: .bold))
+                            Text(months(then)).font(.system(.caption2, weight: .bold))
                                 .foregroundStyle(AppTheme.accent)
                         }
                     }
@@ -337,9 +337,9 @@ struct CommitmentPriorityCard: View {
             } label: {
                 HStack(spacing: 5) {
                     Text(loc(expanded ? "commit.hide" : "commit.show"))
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.system(.caption, weight: .semibold))
                     Image(systemName: expanded ? "chevron.up" : "chevron.down")
-                        .font(.system(size: 9, weight: .bold))
+                        .font(.system(.caption2, weight: .bold)).imageScale(.small)
                 }
                 .foregroundStyle(AppTheme.accent)
             }
@@ -350,28 +350,28 @@ struct CommitmentPriorityCard: View {
                     ForEach(review.lines) { line in
                         HStack(spacing: 10) {
                             Image(systemName: line.category.icon)
-                                .font(.system(size: 11)).foregroundStyle(line.category.color)
+                                .font(.system(.caption2)).foregroundStyle(line.category.color)
                                 .frame(width: 26, height: 26)
                                 .background(line.category.color.opacity(0.12),
                                             in: RoundedRectangle(cornerRadius: 8))
                             VStack(alignment: .leading, spacing: 1) {
                                 Text(line.label)
-                                    .font(.system(size: 12, weight: .medium))
+                                    .font(.system(.caption, weight: .medium))
                                     .foregroundStyle(AppTheme.textPrimary).lineLimit(1)
                                 Text(line.goalMonthsEquivalent > 0.2 && review.goalName != nil
                                      ? String(format: loc("commit.equals_goal"),
                                               months(line.goalMonthsEquivalent))
                                      : loc(line.isDiscretionary ? "commit.changeable" : "commit.fixed"))
-                                    .font(.system(size: 10))
+                                    .font(.system(.caption2))
                                     .foregroundStyle(AppTheme.textSecondary)
                             }
                             Spacer(minLength: 6)
                             VStack(alignment: .trailing, spacing: 1) {
                                 Text(money(line.monthly))
-                                    .font(.system(size: 12, weight: .semibold))
+                                    .font(.system(.caption, weight: .semibold))
                                     .foregroundStyle(AppTheme.textPrimary)
                                 Text(loc(line.isDiscretionary ? "commit.changeable" : "commit.fixed"))
-                                    .font(.system(size: 9, weight: .bold))
+                                    .font(.system(.caption2, weight: .bold))
                                     .foregroundStyle(line.isDiscretionary ? AppTheme.orange : AppTheme.textSecondary)
                             }
                         }
@@ -379,7 +379,7 @@ struct CommitmentPriorityCard: View {
                         .background(AppTheme.cardMid.opacity(0.45), in: RoundedRectangle(cornerRadius: 11))
                     }
                     Text(loc("commit.note"))
-                        .font(.system(size: 10)).foregroundStyle(AppTheme.textSecondary)
+                        .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.top, 2)

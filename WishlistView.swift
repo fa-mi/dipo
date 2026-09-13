@@ -168,10 +168,10 @@ struct WishlistView: View {
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(loc("profile.savings"))
-                                .font(.system(size: 24, weight: .bold))
+                                .font(.system(.title2, weight: .bold))
                                 .foregroundStyle(AppTheme.textPrimary)
                             Text(String(format: loc("savings.active_goals"), activeGoals.count))
-                                .font(.system(size: 13))
+                                .font(.system(.footnote))
                                 .foregroundStyle(AppTheme.textSecondary)
                         }
                         Spacer()
@@ -186,7 +186,7 @@ struct WishlistView: View {
                                     .frame(width: 42, height: 42)
                                     .shadow(color: AppTheme.accent.opacity(0.4), radius: 10, y: 4)
                                 Image(systemName: "plus")
-                                    .font(.system(size: 18, weight: .semibold))
+                                    .font(.system(.body, weight: .semibold))
                                     .foregroundStyle(AppTheme.bg)
                             }
                         }
@@ -227,7 +227,7 @@ struct WishlistView: View {
                             if !activeGoals.isEmpty {
                                 VStack(alignment: .leading, spacing: 10) {
                                     Text(loc("savings.in_progress"))
-                                        .font(.system(size: 14, weight: .semibold))
+                                        .font(.system(.subheadline, weight: .semibold))
                                         .foregroundStyle(AppTheme.textSecondary)
                                         .padding(.horizontal, 22)
 
@@ -272,7 +272,7 @@ struct WishlistView: View {
                             if !completedGoals.isEmpty {
                                 VStack(alignment: .leading, spacing: 10) {
                                     Text(loc("savings.achieved"))
-                                        .font(.system(size: 14, weight: .semibold))
+                                        .font(.system(.subheadline, weight: .semibold))
                                         .foregroundStyle(AppTheme.textSecondary)
                                         .padding(.horizontal, 22)
 
@@ -498,22 +498,22 @@ struct GoalsSummaryCard: View {
                     .rotationEffect(.degrees(-90))
                     .animation(.spring(response: 1.0, dampingFraction: 0.8), value: overallProgress)
                 Text("\(Int(overallProgress * 100))%")
-                    .font(.system(size: 14, weight: .bold))
+                    .font(.system(.subheadline, weight: .bold))
                     .foregroundStyle(AppTheme.accent)
             }
 
             VStack(alignment: .leading, spacing: 8) {
                 Text(loc("savings.overall"))
-                    .font(.system(size: 13))
+                    .font(.system(.footnote))
                     .foregroundStyle(AppTheme.textSecondary)
                 Text(CurrencyManager.shared.formatted(totalSaved, currency: CurrencyManager.shared.preferredCurrency))
-                    .font(.system(size: 20, weight: .bold))
+                    .font(.system(.title3, weight: .bold))
                     .foregroundStyle(AppTheme.textPrimary)
                     .contentTransition(.numericText())
                 Text(String(format: loc("savings.of_across"),
                             CurrencyManager.shared.formatted(totalTarget, currency: CurrencyManager.shared.preferredCurrency),
                             goalCount))
-                    .font(.system(size: 12))
+                    .font(.system(.caption))
                     .foregroundStyle(AppTheme.textSecondary)
             }
             Spacer()
@@ -552,18 +552,18 @@ struct GoalCard: View {
                 // Header
                 HStack {
                     Text(goal.emoji)
-                        .font(.system(size: 32))
+                        .font(.system(.largeTitle))
                         .frame(width: 52, height: 52)
                         .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: 14))
 
                     VStack(alignment: .leading, spacing: 3) {
                         Text(goal.name)
-                            .font(.system(size: 16, weight: .semibold))
+                            .font(.system(.callout, weight: .semibold))
                             .foregroundStyle(AppTheme.textPrimary)
                         HStack(spacing: 6) {
                             Circle().fill(goal.priorityColor).frame(width: 6, height: 6)
                             Text(String(format: loc("savings.priority_fmt"), goal.priorityLabel))
-                                .font(.system(size: 12))
+                                .font(.system(.caption))
                                 .foregroundStyle(AppTheme.textSecondary)
                         }
                     }
@@ -574,7 +574,7 @@ struct GoalCard: View {
                         showActions = true
                     } label: {
                         Image(systemName: "ellipsis")
-                            .font(.system(size: 15))
+                            .font(.system(.subheadline))
                             .foregroundStyle(AppTheme.textSecondary)
                             .frame(width: 36, height: 36)
                             .background(AppTheme.cardMid, in: Circle())
@@ -586,20 +586,20 @@ struct GoalCard: View {
                 HStack(alignment: .bottom) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(loc("savings.saved"))
-                            .font(.system(size: 11))
+                            .font(.system(.caption2))
                             .foregroundStyle(AppTheme.textSecondary)
                         Text(CurrencyManager.shared.formatted(goal.savedAmount, currency: goal.currency))
-                            .font(.system(size: 22, weight: .bold))
+                            .font(.system(.title2, weight: .bold))
                             .foregroundStyle(AppTheme.accent)
                             .contentTransition(.numericText())
                     }
                     Spacer()
                     VStack(alignment: .trailing, spacing: 2) {
                         Text(loc("savings.goal"))
-                            .font(.system(size: 11))
+                            .font(.system(.caption2))
                             .foregroundStyle(AppTheme.textSecondary)
                         Text(CurrencyManager.shared.formatted(goal.targetAmount, currency: goal.currency))
-                            .font(.system(size: 16, weight: .semibold))
+                            .font(.system(.callout, weight: .semibold))
                             .foregroundStyle(AppTheme.textPrimary)
                     }
                 }
@@ -622,16 +622,16 @@ struct GoalCard: View {
 
                     HStack {
                         Text(String(format: loc("savings.saved_pct"), String(format: "%.1f", goal.progressPercent)))
-                            .font(.system(size: 11))
+                            .font(.system(.caption2))
                             .foregroundStyle(AppTheme.textSecondary)
                         Spacer()
                         if let months = goal.monthsToGoal {
                             Text(String(format: loc("savings.months_left_fmt"), months))
-                                .font(.system(size: 11))
+                                .font(.system(.caption2))
                                 .foregroundStyle(AppTheme.textSecondary)
                         } else if goal.monthlyContribution == 0 {
                             Text(loc("savings.set_monthly"))
-                                .font(.system(size: 11))
+                                .font(.system(.caption2))
                                 .foregroundStyle(AppTheme.orange)
                         }
                     }
@@ -641,23 +641,23 @@ struct GoalCard: View {
                 if goal.monthlyContribution > 0 || suggestedMonthly > 0 {
                     HStack(spacing: 8) {
                         Image(systemName: "brain.fill")
-                            .font(.system(size: 12))
+                            .font(.system(.caption))
                             .foregroundStyle(AppTheme.purple)
                         if goal.monthlyContribution > 0 {
                             Text(String(format: loc("savings.save_per_mo"),
                                         CurrencyManager.shared.formatted(goal.monthlyContribution, currency: goal.currency)))
-                                .font(.system(size: 12, weight: .medium))
+                                .font(.system(.caption, weight: .medium))
                                 .foregroundStyle(AppTheme.textPrimary)
                             if monthlyIncome > 0 {
                                 Text(String(format: loc("savings.pct_of_income"),
                                             String(format: "%.0f", (goal.monthlyContribution/monthlyIncome)*100)))
-                                    .font(.system(size: 11))
+                                    .font(.system(.caption2))
                                     .foregroundStyle(AppTheme.textSecondary)
                             }
                         } else {
                             Text(String(format: loc("savings.suggested_per_mo"),
                                         CurrencyManager.shared.formatted(suggestedMonthly, currency: goal.currency)))
-                                .font(.system(size: 12))
+                                .font(.system(.caption))
                                 .foregroundStyle(AppTheme.textSecondary)
                         }
                         Spacer()
@@ -670,11 +670,11 @@ struct GoalCard: View {
                 NavigationLink(destination: GoalDetailView(goal: goal, monthlyIncome: monthlyIncome)) {
                     HStack {
                         Text(loc("savings.view_details"))
-                            .font(.system(size: 13, weight: .medium))
+                            .font(.system(.footnote, weight: .medium))
                             .foregroundStyle(AppTheme.accent)
                         Spacer()
                         Image(systemName: "chevron.right")
-                            .font(.system(size: 12))
+                            .font(.system(.caption))
                             .foregroundStyle(AppTheme.textSecondary)
                     }
                     .padding(.vertical, 4)
@@ -687,8 +687,8 @@ struct GoalCard: View {
                     showDepositSheet = true
                 } label: {
                     HStack(spacing: 8) {
-                        Image(systemName: "plus.circle.fill").font(.system(size: 16))
-                        Text(loc("savings.add")).font(.system(size: 14, weight: .semibold))
+                        Image(systemName: "plus.circle.fill").font(.system(.callout))
+                        Text(loc("savings.add")).font(.system(.subheadline, weight: .semibold))
                     }
                     .foregroundStyle(AppTheme.bg)
                     .frame(maxWidth: .infinity)
@@ -771,19 +771,19 @@ struct DepositSheet: View {
             VStack(spacing: 6) {
                 Text(goal.emoji).font(.system(size: 40))
                 Text(String(format: loc("savings.add_to"), goal.name))
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(.system(.body, weight: .semibold))
                     .foregroundStyle(AppTheme.textPrimary)
                 Text(String(format: loc("savings.saved_of"),
                             CurrencyManager.shared.formatted(goal.savedAmount, currency: goal.currency),
                             CurrencyManager.shared.formatted(goal.targetAmount, currency: goal.currency)))
-                    .font(.system(size: 14))
+                    .font(.system(.subheadline))
                     .foregroundStyle(AppTheme.textSecondary)
             }
 
             // Amount input
             HStack(spacing: 8) {
                 Text(goal.currency)
-                    .font(.system(size: 20, weight: .bold))
+                    .font(.system(.title3, weight: .bold))
                     .foregroundStyle(AppTheme.accent)
                 TextField("0.00", text: $amountText)
                     .font(.system(size: 36, weight: .bold))
@@ -816,7 +816,7 @@ struct DepositSheet: View {
                                 amountText = formatEntry(amount + quick)
                             } label: {
                                 Text("+\(CurrencyManager.shared.formatted(quick, currency: goal.currency))")
-                                    .font(.system(size: 13, weight: .semibold))
+                                    .font(.system(.footnote, weight: .semibold))
                                     .foregroundStyle(AppTheme.textPrimary)
                                     .lineLimit(1).minimumScaleFactor(0.8)
                                     .frame(maxWidth: .infinity).padding(.vertical, 11)
@@ -837,10 +837,10 @@ struct DepositSheet: View {
                         amountText = formatEntry(goal.monthlyContribution)
                     } label: {
                         HStack(spacing: 6) {
-                            Image(systemName: "repeat").font(.system(size: 11, weight: .semibold))
-                            Text(loc("savings.monthly")).font(.system(size: 12))
+                            Image(systemName: "repeat").font(.system(.caption2, weight: .semibold))
+                            Text(loc("savings.monthly")).font(.system(.caption))
                             Text(CurrencyManager.shared.formatted(goal.monthlyContribution, currency: goal.currency))
-                                .font(.system(size: 13, weight: .bold))
+                                .font(.system(.footnote, weight: .bold))
                         }
                         .foregroundStyle(AppTheme.purple)
                         .frame(maxWidth: .infinity).padding(.vertical, 11)
@@ -858,16 +858,16 @@ struct DepositSheet: View {
             // savings simply vanished from every balance and every budget.
             VStack(alignment: .leading, spacing: 8) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(loc("savings.source_account")).font(.system(size: 13, weight: .semibold))
+                    Text(loc("savings.source_account")).font(.system(.footnote, weight: .semibold))
                         .foregroundStyle(AppTheme.textPrimary)
-                    Text(loc("savings.source_account_sub")).font(.system(size: 11))
+                    Text(loc("savings.source_account_sub")).font(.system(.caption2))
                         .foregroundStyle(AppTheme.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
                 if fundingCards.isEmpty {
                     Text(loc("savings.reconcile_no_account"))
-                        .font(.system(size: 11, weight: .medium))
+                        .font(.system(.caption2, weight: .medium))
                         .foregroundStyle(AppTheme.orange)
                         .fixedSize(horizontal: false, vertical: true)
                 } else {
@@ -893,7 +893,7 @@ struct DepositSheet: View {
                 Text(amount > 0
                      ? String(format: loc("savings.add_amount"), CurrencyManager.shared.formatted(amount, currency: goal.currency))
                      : loc("savings.add"))
-                    .font(.system(size: 16, weight: .bold))
+                    .font(.system(.callout, weight: .bold))
                     .foregroundStyle(canDeposit ? AppTheme.onVividFill : AppTheme.textSecondary)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
@@ -935,14 +935,14 @@ struct GoalCelebration: View {
 
                 VStack(spacing: 10) {
                     Text(loc("savings.reached"))
-                        .font(.system(size: 28, weight: .bold))
+                        .font(.system(.title, weight: .bold))
                         .foregroundStyle(AppTheme.textPrimary)
                     Text(goal.name)
-                        .font(.system(size: 18, weight: .semibold))
+                        .font(.system(.body, weight: .semibold))
                         .foregroundStyle(AppTheme.accent)
                     Text(String(format: loc("savings.you_saved"),
                                 CurrencyManager.shared.formatted(goal.targetAmount, currency: goal.currency)))
-                        .font(.system(size: 15))
+                        .font(.system(.subheadline))
                         .foregroundStyle(AppTheme.textSecondary)
                 }
                 .scaleEffect(scale)
@@ -953,7 +953,7 @@ struct GoalCelebration: View {
                     onDismiss()
                 } label: {
                     Text(loc("savings.amazing"))
-                        .font(.system(size: 16, weight: .bold))
+                        .font(.system(.callout, weight: .bold))
                         .foregroundStyle(AppTheme.bg)
                         .padding(.horizontal, 48).padding(.vertical, 16)
                         .background(AppTheme.accentFill, in: Capsule())
@@ -1061,22 +1061,22 @@ struct CompletedGoalRow: View {
 
     var body: some View {
         HStack(spacing: 14) {
-            Text(goal.emoji).font(.system(size: 24))
+            Text(goal.emoji).font(.system(.title2))
                 .frame(width: 44, height: 44)
                 .background(AppTheme.accent.opacity(0.1), in: RoundedRectangle(cornerRadius: 12))
                 .overlay(RoundedRectangle(cornerRadius: 12).stroke(AppTheme.accent.opacity(0.3), lineWidth: 1))
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(goal.name)
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.system(.subheadline, weight: .semibold))
                     .foregroundStyle(AppTheme.textPrimary)
                 Text(CurrencyManager.shared.formatted(goal.targetAmount, currency: goal.currency) + " saved")
-                    .font(.system(size: 12))
+                    .font(.system(.caption))
                     .foregroundStyle(AppTheme.textSecondary)
             }
             Spacer()
             Image(systemName: "checkmark.seal.fill")
-                .font(.system(size: 20))
+                .font(.system(.title3))
                 .foregroundStyle(AppTheme.accent)
         }
         .padding(14)
@@ -1097,15 +1097,15 @@ struct GoalsEmptyState: View {
         VStack(spacing: 20) {
             Text("🎯").font(.system(size: 60)).gentleFloat()
             VStack(spacing: 8) {
-                Text(loc("savings.no_goals")).font(.system(size: 18, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                Text(loc("savings.no_goals")).font(.system(.body, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
                 Text(loc("savings.empty_goals"))
-                    .font(.system(size: 14)).foregroundStyle(AppTheme.textSecondary)
+                    .font(.system(.subheadline)).foregroundStyle(AppTheme.textSecondary)
                     .multilineTextAlignment(.center).lineSpacing(3)
             }
             Button { HapticManager.shared.tap(); showAdd = true } label: {
                 HStack(spacing: 8) {
-                    Image(systemName: "plus").font(.system(size: 14, weight: .semibold))
-                    Text(loc("savings.add_goal")).font(.system(size: 15, weight: .semibold))
+                    Image(systemName: "plus").font(.system(.subheadline, weight: .semibold))
+                    Text(loc("savings.add_goal")).font(.system(.subheadline, weight: .semibold))
                 }
                 .foregroundStyle(AppTheme.bg)
                 .padding(.horizontal, 32).padding(.vertical, 14)
@@ -1169,13 +1169,13 @@ struct GoalFormSheet: View {
 
                         // Emoji picker
                         VStack(spacing: 10) {
-                            Text(loc("savings.choose_emoji")).font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
+                            Text(loc("savings.choose_emoji")).font(.system(.footnote)).foregroundStyle(AppTheme.textSecondary)
                                 .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 22)
                             ScrollView(.horizontal, showsIndicators: false) {
                                 HStack(spacing: 10) {
                                     ForEach(emojis, id: \.self) { e in
                                         Button { HapticManager.shared.tap(); emoji = e } label: {
-                                            Text(e).font(.system(size: 28))
+                                            Text(e).font(.system(.title))
                                                 .frame(width: 52, height: 52)
                                                 .background(emoji == e ? AppTheme.accent.opacity(0.2) : AppTheme.cardDark,
                                                             in: RoundedRectangle(cornerRadius: 14))
@@ -1194,25 +1194,25 @@ struct GoalFormSheet: View {
                         // Amounts
                         HStack(spacing: 12) {
                             VStack(spacing: 8) {
-                                Text(loc("savings.target_amt")).font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
+                                Text(loc("savings.target_amt")).font(.system(.footnote)).foregroundStyle(AppTheme.textSecondary)
                                     .frame(maxWidth: .infinity, alignment: .leading)
-                                TextField("0", text: $targetAmount).font(.system(size: 18, weight: .bold))
+                                TextField("0", text: $targetAmount).font(.system(.body, weight: .bold))
                                     .foregroundStyle(AppTheme.textPrimary).keyboardType(.decimalPad)
                                     .padding(14).background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
                                 if let p = AmountInputHelper.preview(targetAmount, currency: currency) {
-                                    Text(p).font(.system(size: 11, weight: .medium))
+                                    Text(p).font(.system(.caption2, weight: .medium))
                                         .foregroundStyle(AppTheme.textSecondary)
                                         .frame(maxWidth: .infinity, alignment: .leading)
                                 }
                             }
                             VStack(spacing: 8) {
-                                Text(loc("savings.already")).font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
+                                Text(loc("savings.already")).font(.system(.footnote)).foregroundStyle(AppTheme.textSecondary)
                                     .frame(maxWidth: .infinity, alignment: .leading)
-                                TextField("0", text: $savedAmount).font(.system(size: 18, weight: .bold))
+                                TextField("0", text: $savedAmount).font(.system(.body, weight: .bold))
                                     .foregroundStyle(AppTheme.accent).keyboardType(.decimalPad)
                                     .padding(14).background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
                                 if let p = AmountInputHelper.preview(savedAmount, currency: currency) {
-                                    Text(p).font(.system(size: 11, weight: .medium))
+                                    Text(p).font(.system(.caption2, weight: .medium))
                                         .foregroundStyle(AppTheme.textSecondary)
                                         .frame(maxWidth: .infinity, alignment: .leading)
                                 }
@@ -1224,14 +1224,14 @@ struct GoalFormSheet: View {
                         // Monthly + currency
                         HStack(spacing: 12) {
                             VStack(spacing: 8) {
-                                Text(loc("savings.monthly_sav")).font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
+                                Text(loc("savings.monthly_sav")).font(.system(.footnote)).foregroundStyle(AppTheme.textSecondary)
                                     .frame(maxWidth: .infinity, alignment: .leading)
-                                TextField("0", text: $monthly).font(.system(size: 18, weight: .bold))
+                                TextField("0", text: $monthly).font(.system(.body, weight: .bold))
                                     .foregroundStyle(AppTheme.purple).keyboardType(.decimalPad)
                                     .padding(14).background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
                             }
                             VStack(spacing: 8) {
-                                Text(loc("common.currency")).font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
+                                Text(loc("common.currency")).font(.system(.footnote)).foregroundStyle(AppTheme.textSecondary)
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                 Menu {
                                     ForEach(currencies, id: \.self) { c in
@@ -1239,8 +1239,8 @@ struct GoalFormSheet: View {
                                     }
                                 } label: {
                                     HStack {
-                                        Text(currency).font(.system(size: 18, weight: .bold)).foregroundStyle(AppTheme.accent)
-                                        Image(systemName: "chevron.up.chevron.down").font(.system(size: 10)).foregroundStyle(AppTheme.textSecondary)
+                                        Text(currency).font(.system(.body, weight: .bold)).foregroundStyle(AppTheme.accent)
+                                        Image(systemName: "chevron.up.chevron.down").font(.system(.caption2)).imageScale(.small).foregroundStyle(AppTheme.textSecondary)
                                     }
                                     .padding(14).frame(maxWidth: .infinity)
                                     .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
@@ -1252,12 +1252,12 @@ struct GoalFormSheet: View {
 
                         // Priority
                         VStack(spacing: 8) {
-                            Text(loc("debt.priority")).font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
+                            Text(loc("debt.priority")).font(.system(.footnote)).foregroundStyle(AppTheme.textSecondary)
                                 .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 22)
                             HStack(spacing: 10) {
                                 ForEach([(1,loc("savings.high"),AppTheme.red),(2,loc("savings.medium"),AppTheme.orange),(3,loc("savings.low"),AppTheme.blue)], id: \.0) { p, label, color in
                                     Button { HapticManager.shared.tap(); priority = p } label: {
-                                        Text(label).font(.system(size: 13, weight: .semibold))
+                                        Text(label).font(.system(.footnote, weight: .semibold))
                                             .foregroundStyle(priority == p ? AppTheme.bg : AppTheme.textSecondary)
                                             .frame(maxWidth: .infinity).padding(.vertical, 10)
                                             .background(priority == p ? color : AppTheme.cardDark, in: Capsule())
@@ -1270,13 +1270,13 @@ struct GoalFormSheet: View {
                         // Live preview
                         if let months = monthsPreview {
                             HStack(spacing: 12) {
-                                Image(systemName: "calendar.badge.clock").font(.system(size: 20)).foregroundStyle(AppTheme.purple)
+                                Image(systemName: "calendar.badge.clock").font(.system(.title3)).foregroundStyle(AppTheme.purple)
                                 VStack(alignment: .leading, spacing: 3) {
                                     Text(String(format: loc("savings.reach_in_months"), months))
-                                        .font(.system(size: 14, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                                        .font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
                                     if let dateStr = previewDateText {
                                         Text(dateStr)
-                                            .font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
+                                            .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                                     }
                                 }
                                 Spacer()
@@ -1302,7 +1302,7 @@ struct GoalFormSheet: View {
                             && (Double(targetAmount) ?? 0) > 0
                         Button { save() } label: {
                             Text(isEditing ? loc("general.edit") : loc("savings.add_goal"))
-                                .font(.system(size: 16, weight: .bold))
+                                .font(.system(.callout, weight: .bold))
                                 .foregroundStyle(canSave ? AppTheme.bg : AppTheme.textSecondary)
                                 .frame(maxWidth: .infinity).padding(.vertical, 16)
                                 .background(canSave ? AppTheme.accent : AppTheme.textSecondary.opacity(0.3), in: Capsule())
@@ -1407,28 +1407,28 @@ struct GoalDetailView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
                 Image(systemName: "tray.full.fill")
-                    .font(.system(size: 13)).foregroundStyle(AppTheme.purple)
+                    .font(.system(.footnote)).foregroundStyle(AppTheme.purple)
                 Text(loc("savings.breakdown_title"))
-                    .font(.system(size: 13, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                    .font(.system(.footnote, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
             }
 
             HStack {
                 Text(loc("savings.opening_balance"))
-                    .font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
+                    .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                 Spacer()
                 Text(CurrencyManager.shared.formatted(openingBalance, currency: currency))
-                    .font(.system(size: 13, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                    .font(.system(.footnote, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
             }
             HStack {
                 Text(loc("savings.recorded_deposits"))
-                    .font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
+                    .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                 Spacer()
                 Text(CurrencyManager.shared.formatted(recordedDeposits, currency: currency))
-                    .font(.system(size: 13, weight: .semibold)).foregroundStyle(AppTheme.accent)
+                    .font(.system(.footnote, weight: .semibold)).foregroundStyle(AppTheme.accent)
             }
 
             Text(loc("savings.breakdown_hint"))
-                .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary.opacity(0.8))
+                .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary.opacity(0.8))
                 .fixedSize(horizontal: false, vertical: true).lineSpacing(2)
 
             Button {
@@ -1436,9 +1436,9 @@ struct GoalDetailView: View {
                 showPastDepositSheet = true
             } label: {
                 HStack(spacing: 6) {
-                    Image(systemName: "clock.arrow.circlepath").font(.system(size: 12))
+                    Image(systemName: "clock.arrow.circlepath").font(.system(.caption))
                     Text(loc("savings.record_past"))
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.system(.caption, weight: .semibold))
                 }
                 .foregroundStyle(AppTheme.purple)
                 .frame(maxWidth: .infinity).padding(.vertical, 10)
@@ -1473,7 +1473,7 @@ struct GoalDetailView: View {
                         VStack(spacing: 2) {
                             Text(goal.emoji).font(.system(size: 40))
                             Text("\(displayPct)%")
-                                .font(.system(size: 14, weight: .bold))
+                                .font(.system(.subheadline, weight: .bold))
                                 .foregroundStyle(AppTheme.accent)
                                 .contentTransition(.numericText(countsDown: false))
                                 .animation(.easeInOut(duration: 0.05), value: displayPct)
@@ -1483,14 +1483,14 @@ struct GoalDetailView: View {
 
                     // Name + priority
                     VStack(spacing: 8) {
-                        Text(goal.name).font(.system(size: 24, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
+                        Text(goal.name).font(.system(.title2, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
                         HStack(spacing: 8) {
                             Circle().fill(goal.priorityColor).frame(width: 7, height: 7)
                             Text(String(format: loc("savings.priority_fmt"), goal.priorityLabel))
-                                .font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
+                                .font(.system(.footnote)).foregroundStyle(AppTheme.textSecondary)
                             if goal.isPinned {
-                                Image(systemName: "pin.fill").font(.system(size: 11)).foregroundStyle(AppTheme.accent)
-                                Text(loc("cards.pin_to_home")).font(.system(size: 12)).foregroundStyle(AppTheme.accent)
+                                Image(systemName: "pin.fill").font(.system(.caption2)).foregroundStyle(AppTheme.accent)
+                                Text(loc("cards.pin_to_home")).font(.system(.caption)).foregroundStyle(AppTheme.accent)
                             }
                         }
                     }
@@ -1503,11 +1503,11 @@ struct GoalDetailView: View {
                             HStack {
                                 HStack(spacing: 6) {
                                     Circle().fill(AppTheme.accent).frame(width: 8, height: 8)
-                                    Text(loc("savings.saved")).font(.system(size: 13, weight: .medium)).foregroundStyle(AppTheme.textSecondary)
+                                    Text(loc("savings.saved")).font(.system(.footnote, weight: .medium)).foregroundStyle(AppTheme.textSecondary)
                                 }
                                 Spacer()
                                 Text(CurrencyManager.shared.formatted(goal.savedAmount, currency: currency))
-                                    .font(.system(size: 15, weight: .bold)).foregroundStyle(AppTheme.accent)
+                                    .font(.system(.subheadline, weight: .bold)).foregroundStyle(AppTheme.accent)
                                     .contentTransition(.numericText())
                             }
                             .padding(.horizontal, 16).padding(.vertical, 14)
@@ -1517,11 +1517,11 @@ struct GoalDetailView: View {
                             HStack {
                                 HStack(spacing: 6) {
                                     Circle().fill(AppTheme.textSecondary).frame(width: 8, height: 8)
-                                    Text(loc("savings.goal")).font(.system(size: 13, weight: .medium)).foregroundStyle(AppTheme.textSecondary)
+                                    Text(loc("savings.goal")).font(.system(.footnote, weight: .medium)).foregroundStyle(AppTheme.textSecondary)
                                 }
                                 Spacer()
                                 Text(CurrencyManager.shared.formatted(goal.targetAmount, currency: currency))
-                                    .font(.system(size: 15, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
+                                    .font(.system(.subheadline, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
                             }
                             .padding(.horizontal, 16).padding(.vertical, 14)
 
@@ -1530,11 +1530,11 @@ struct GoalDetailView: View {
                             HStack {
                                 HStack(spacing: 6) {
                                     Circle().fill(AppTheme.orange).frame(width: 8, height: 8)
-                                    Text(loc("debt.remaining")).font(.system(size: 13, weight: .medium)).foregroundStyle(AppTheme.textSecondary)
+                                    Text(loc("debt.remaining")).font(.system(.footnote, weight: .medium)).foregroundStyle(AppTheme.textSecondary)
                                 }
                                 Spacer()
                                 Text(CurrencyManager.shared.formatted(remaining, currency: currency))
-                                    .font(.system(size: 15, weight: .bold)).foregroundStyle(AppTheme.orange)
+                                    .font(.system(.subheadline, weight: .bold)).foregroundStyle(AppTheme.orange)
                             }
                             .padding(.horizontal, 16).padding(.vertical, 14)
                         }
@@ -1561,7 +1561,7 @@ struct GoalDetailView: View {
                         Text(String(format: loc("savings.percent_saved_of"),
                                     String(format: "%.1f", progress * 100),
                                     CurrencyManager.shared.formatted(goal.targetAmount, currency: currency)))
-                            .font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
+                            .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                     }
                     .padding(.horizontal, 20)
                     .padding(.vertical, 20)
@@ -1573,18 +1573,18 @@ struct GoalDetailView: View {
                     if goal.monthlyContribution > 0 || (monthlyIncome > 0 && remaining > 0) {
                         VStack(alignment: .leading, spacing: 16) {
                             HStack(spacing: 7) {
-                                Image(systemName: "brain.fill").font(.system(size: 14)).foregroundStyle(AppTheme.purple)
+                                Image(systemName: "brain.fill").font(.system(.subheadline)).foregroundStyle(AppTheme.purple)
                                 Text(loc("debt.smart_proj"))
-                                    .font(.system(size: 14, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                                    .font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
                             }
 
                             if goal.monthlyContribution > 0 {
                                 HStack(spacing: 0) {
                                     VStack(spacing: 6) {
                                         Text(loc("savings.monthly_sav"))
-                                            .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                                            .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                                         Text(CurrencyManager.shared.formatted(goal.monthlyContribution, currency: currency))
-                                            .font(.system(size: 14, weight: .bold)).foregroundStyle(AppTheme.purple)
+                                            .font(.system(.subheadline, weight: .bold)).foregroundStyle(AppTheme.purple)
                                             .minimumScaleFactor(0.6).lineLimit(1)
                                     }
                                     .frame(maxWidth: .infinity)
@@ -1593,9 +1593,9 @@ struct GoalDetailView: View {
                                         Rectangle().fill(AppTheme.purple.opacity(0.2)).frame(width: 1, height: 36)
                                         VStack(spacing: 6) {
                                             Text(loc("debt.of_income"))
-                                                .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                                                .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                                             Text("\(String(format: "%.0f", (goal.monthlyContribution / monthlyIncome) * 100))%")
-                                                .font(.system(size: 14, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
+                                                .font(.system(.subheadline, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
                                         }
                                         .frame(maxWidth: .infinity)
                                     }
@@ -1604,9 +1604,9 @@ struct GoalDetailView: View {
                                         Rectangle().fill(AppTheme.purple.opacity(0.2)).frame(width: 1, height: 36)
                                         VStack(spacing: 6) {
                                             Text(loc("debt.months_left"))
-                                                .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                                                .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                                             Text("\(months)")
-                                                .font(.system(size: 14, weight: .bold)).foregroundStyle(AppTheme.accent)
+                                                .font(.system(.subheadline, weight: .bold)).foregroundStyle(AppTheme.accent)
                                         }
                                         .frame(maxWidth: .infinity)
                                     }
@@ -1616,9 +1616,9 @@ struct GoalDetailView: View {
                                 if let dateStr = estimatedDateText {
                                     HStack(spacing: 6) {
                                         Image(systemName: "calendar.badge.clock")
-                                            .font(.system(size: 12)).foregroundStyle(AppTheme.purple)
+                                            .font(.system(.caption)).foregroundStyle(AppTheme.purple)
                                         Text(String(format: loc("savings.goal_reached_around"), dateStr))
-                                            .font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
+                                            .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                                     }
                                 }
                             }
@@ -1634,9 +1634,9 @@ struct GoalDetailView: View {
                     if !goal.notes.isEmpty {
                         VStack(alignment: .leading, spacing: 8) {
                             Text(loc("common.notes"))
-                                .font(.system(size: 13, weight: .semibold)).foregroundStyle(AppTheme.textSecondary)
+                                .font(.system(.footnote, weight: .semibold)).foregroundStyle(AppTheme.textSecondary)
                             Text(goal.notes)
-                                .font(.system(size: 14)).foregroundStyle(AppTheme.textPrimary).lineSpacing(3)
+                                .font(.system(.subheadline)).foregroundStyle(AppTheme.textPrimary).lineSpacing(3)
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(16)
@@ -1651,8 +1651,8 @@ struct GoalDetailView: View {
                             showDepositSheet = true
                         } label: {
                             HStack(spacing: 10) {
-                                Image(systemName: "plus.circle.fill").font(.system(size: 16))
-                                Text(loc("savings.add")).font(.system(size: 15, weight: .semibold))
+                                Image(systemName: "plus.circle.fill").font(.system(.callout))
+                                Text(loc("savings.add")).font(.system(.subheadline, weight: .semibold))
                             }
                             .foregroundStyle(AppTheme.bg).frame(maxWidth: .infinity).padding(.vertical, 16)
                             .background(AppTheme.accentFill, in: Capsule())
@@ -1667,8 +1667,8 @@ struct GoalDetailView: View {
                                 HapticManager.shared.select()
                             } label: {
                                 HStack(spacing: 6) {
-                                    Image(systemName: goal.isPinned ? "pin.slash.fill" : "pin.fill").font(.system(size: 13))
-                                    Text(goal.isPinned ? loc("savings.unpin") : loc("savings.pin")).font(.system(size: 13, weight: .medium))
+                                    Image(systemName: goal.isPinned ? "pin.slash.fill" : "pin.fill").font(.system(.footnote))
+                                    Text(goal.isPinned ? loc("savings.unpin") : loc("savings.pin")).font(.system(.footnote, weight: .medium))
                                 }
                                 .foregroundStyle(AppTheme.accent).frame(maxWidth: .infinity).padding(.vertical, 13)
                                 .background(AppTheme.accent.opacity(0.1), in: Capsule())
@@ -1681,8 +1681,8 @@ struct GoalDetailView: View {
                                 showDelete = true
                             } label: {
                                 HStack(spacing: 6) {
-                                    Image(systemName: "trash").font(.system(size: 13))
-                                    Text(loc("action.delete")).font(.system(size: 13, weight: .medium))
+                                    Image(systemName: "trash").font(.system(.footnote))
+                                    Text(loc("action.delete")).font(.system(.footnote, weight: .medium))
                                 }
                                 .foregroundStyle(AppTheme.red).frame(maxWidth: .infinity).padding(.vertical, 13)
                                 .background(AppTheme.red.opacity(0.1), in: Capsule())
@@ -1788,18 +1788,18 @@ struct RecordPastDepositSheet: View {
                 ScrollView(showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 18) {
                         Text(loc("savings.past_intro"))
-                            .font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
+                            .font(.system(.footnote)).foregroundStyle(AppTheme.textSecondary)
                             .fixedSize(horizontal: false, vertical: true).lineSpacing(2)
 
                         // Amount
                         VStack(alignment: .leading, spacing: 8) {
                             Text(loc("savings.past_amount"))
-                                .font(.system(size: 13, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                                .font(.system(.footnote, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
                             HStack(spacing: 8) {
                                 Text(goal.currency)
-                                    .font(.system(size: 18, weight: .bold)).foregroundStyle(AppTheme.purple)
+                                    .font(.system(.body, weight: .bold)).foregroundStyle(AppTheme.purple)
                                 TextField("0", text: $amountText)
-                                    .font(.system(size: 28, weight: .bold))
+                                    .font(.system(.title, weight: .bold))
                                     .foregroundStyle(AppTheme.textPrimary)
                                     .keyboardType(.decimalPad)
                             }
@@ -1810,10 +1810,10 @@ struct RecordPastDepositSheet: View {
                         // Source account
                         VStack(alignment: .leading, spacing: 8) {
                             Text(loc("savings.source_account"))
-                                .font(.system(size: 13, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                                .font(.system(.footnote, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
                             if fundingCards.isEmpty {
                                 Text(loc("savings.reconcile_no_account"))
-                                    .font(.system(size: 11, weight: .medium)).foregroundStyle(AppTheme.orange)
+                                    .font(.system(.caption2, weight: .medium)).foregroundStyle(AppTheme.orange)
                                     .fixedSize(horizontal: false, vertical: true)
                             } else {
                                 CardChipPicker(cards: fundingCards,
@@ -1827,7 +1827,7 @@ struct RecordPastDepositSheet: View {
                         // pay cycle, which is what the analysis groups by.
                         VStack(alignment: .leading, spacing: 8) {
                             Text(loc("savings.past_date"))
-                                .font(.system(size: 13, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                                .font(.system(.footnote, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
                             DatePicker("", selection: $date, in: ...Date(), displayedComponents: .date)
                                 .datePickerStyle(.compact)
                                 .labelsHidden()
@@ -1835,7 +1835,7 @@ struct RecordPastDepositSheet: View {
                         }
 
                         Text(loc("savings.past_note"))
-                            .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary.opacity(0.8))
+                            .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary.opacity(0.8))
                             .fixedSize(horizontal: false, vertical: true).lineSpacing(2)
 
                         Button {
@@ -1844,7 +1844,7 @@ struct RecordPastDepositSheet: View {
                             save()
                         } label: {
                             Text(loc("savings.past_save"))
-                                .font(.system(size: 16, weight: .bold)).foregroundStyle(AppTheme.onVividFill)
+                                .font(.system(.callout, weight: .bold)).foregroundStyle(AppTheme.onVividFill)
                                 .frame(maxWidth: .infinity).padding(.vertical, 15)
                                 .background(canSave ? AppTheme.purple : AppTheme.cardMid,
                                             in: RoundedRectangle(cornerRadius: 14))

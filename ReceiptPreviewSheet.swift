@@ -112,7 +112,7 @@ struct ReceiptPreviewSheet: View {
                     } label: {
                         HStack(spacing: 4) {
                             Image(systemName: "chevron.left")
-                                .font(.system(size: 14, weight: .semibold))
+                                .font(.system(.subheadline, weight: .semibold))
                         }
                         .foregroundStyle(AppTheme.textPrimary)
                     }
@@ -174,8 +174,8 @@ struct ReceiptPreviewSheet: View {
                     .clipShape(RoundedRectangle(cornerRadius: 14))
 
                 HStack(spacing: 4) {
-                    Image(systemName: "magnifyingglass").font(.system(size: 10))
-                    Text(loc("receipt.tap_to_zoom")).font(.system(size: 11, weight: .medium))
+                    Image(systemName: "magnifyingglass").font(.system(.caption2)).imageScale(.small)
+                    Text(loc("receipt.tap_to_zoom")).font(.system(.caption2, weight: .medium))
                 }
                 .foregroundStyle(.white)
                 .padding(.horizontal, 10).padding(.vertical, 5)
@@ -195,13 +195,13 @@ struct ReceiptPreviewSheet: View {
         let low = scan.confidence < 0.85
         return HStack(spacing: 7) {
             Image(systemName: low ? "eye.trianglebadge.exclamationmark.fill" : "checkmark.seal.fill")
-                .font(.system(size: 12, weight: .semibold))
+                .font(.system(.caption, weight: .semibold))
             Text(low ? loc("receipt.check_fields") : loc("receipt.looks_clear"))
-                .font(.system(size: 12, weight: .medium))
+                .font(.system(.caption, weight: .medium))
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
             Text(scan.confidenceLabel)
-                .font(.system(size: 11, weight: .semibold))
+                .font(.system(.caption2, weight: .semibold))
                 .padding(.horizontal, 8).padding(.vertical, 3)
                 .background((low ? AppTheme.orange : AppTheme.accent).opacity(0.16), in: Capsule())
         }
@@ -219,11 +219,11 @@ struct ReceiptPreviewSheet: View {
                 if isEditing {
                     TextField(loc("receipt.field.merchant_placeholder"), text: $scan.merchantName)
                         .multilineTextAlignment(.trailing)
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.system(.subheadline, weight: .semibold))
                         .foregroundStyle(AppTheme.textPrimary)
                 } else {
                     Text(scan.merchantName.isEmpty ? "—" : scan.merchantName)
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.system(.subheadline, weight: .semibold))
                         .foregroundStyle(AppTheme.textPrimary)
                         .lineLimit(1)
                 }
@@ -243,10 +243,10 @@ struct ReceiptPreviewSheet: View {
                 } else {
                     HStack(spacing: 6) {
                         Image(systemName: scan.category.icon)
-                            .font(.system(size: 12))
+                            .font(.system(.caption))
                             .foregroundStyle(scan.category.color)
                         Text(scan.category.displayLabel)
-                            .font(.system(size: 15, weight: .semibold))
+                            .font(.system(.subheadline, weight: .semibold))
                             .foregroundStyle(AppTheme.textPrimary)
                     }
                 }
@@ -268,14 +268,14 @@ struct ReceiptPreviewSheet: View {
                         TextField("0", text: $amountText)
                             .keyboardType(.decimalPad)
                             .multilineTextAlignment(.trailing)
-                            .font(.system(size: 15, weight: .bold))
+                            .font(.system(.subheadline, weight: .bold))
                             .foregroundStyle(AppTheme.textPrimary)
                             .frame(maxWidth: 110)
                             .onChange(of: amountText) { _, v in scan.amount = parseAmount(v) }
                     }
                 } else {
                     Text(CurrencyManager.shared.formatted(scan.amount, currency: scan.currency))
-                        .font(.system(size: 15, weight: .bold))
+                        .font(.system(.subheadline, weight: .bold))
                         .foregroundStyle(AppTheme.textPrimary)
                 }
             }
@@ -288,7 +288,7 @@ struct ReceiptPreviewSheet: View {
                         .tint(AppTheme.accent)
                 } else {
                     Text(formatDate(scan.date))
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.system(.subheadline, weight: .semibold))
                         .foregroundStyle(AppTheme.textPrimary)
                 }
             }
@@ -301,12 +301,12 @@ struct ReceiptPreviewSheet: View {
                 if isEditing {
                     TextField(loc("tx.notes_placeholder"), text: $scan.notes, axis: .vertical)
                         .multilineTextAlignment(.trailing)
-                        .font(.system(size: 14))
+                        .font(.system(.subheadline))
                         .foregroundStyle(AppTheme.textPrimary)
                         .lineLimit(1...3)
                 } else {
                     Text(scan.notes.isEmpty ? "N/A" : scan.notes)
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.system(.subheadline, weight: .semibold))
                         .foregroundStyle(scan.notes.isEmpty ? AppTheme.textSecondary : AppTheme.textPrimary)
                         .lineLimit(2)
                 }
@@ -330,9 +330,9 @@ struct ReceiptPreviewSheet: View {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 6) {
                     Image(systemName: "creditcard.fill")
-                        .font(.system(size: 12)).foregroundStyle(AppTheme.accent)
+                        .font(.system(.caption)).foregroundStyle(AppTheme.accent)
                     Text(loc("receipt.field.card"))
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.system(.footnote, weight: .semibold))
                         .foregroundStyle(AppTheme.textSecondary)
                 }
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -346,18 +346,18 @@ struct ReceiptPreviewSheet: View {
                             } label: {
                                 HStack(spacing: 9) {
                                     Image(systemName: card.isDigitalWallet ? "wallet.pass.fill" : "creditcard.fill")
-                                        .font(.system(size: 14))
+                                        .font(.system(.subheadline))
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text(cardTitle(card))
-                                            .font(.system(size: 13, weight: .semibold))
+                                            .font(.system(.footnote, weight: .semibold))
                                             .lineLimit(1)
                                         Text(cardSubtitle(card))
-                                            .font(.system(size: 10))
+                                            .font(.system(.caption2))
                                             .foregroundStyle(isSel ? AppTheme.onVividFill.opacity(0.85) : AppTheme.textSecondary)
                                     }
                                     if isSel {
                                         Image(systemName: "checkmark.circle.fill")
-                                            .font(.system(size: 14))
+                                            .font(.system(.subheadline))
                                     }
                                 }
                                 .foregroundStyle(isSel ? AppTheme.onVividFill : AppTheme.textPrimary)
@@ -380,9 +380,9 @@ struct ReceiptPreviewSheet: View {
     private var tipBanner: some View {
         HStack(spacing: 10) {
             Text("💡")
-                .font(.system(size: 13))
+                .font(.system(.footnote))
             Text(loc("receipt.preview.tip"))
-                .font(.system(size: 12, weight: .medium))
+                .font(.system(.caption, weight: .medium))
                 .foregroundStyle(AppTheme.accent)
                 .multilineTextAlignment(.leading)
             Spacer(minLength: 0)
@@ -402,9 +402,9 @@ struct ReceiptPreviewSheet: View {
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: isEditing ? "checkmark" : "pencil")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.system(.footnote, weight: .semibold))
                     Text(isEditing ? loc("common.done") : loc("receipt.preview.edit"))
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.system(.subheadline, weight: .semibold))
                 }
                 .foregroundStyle(AppTheme.textPrimary)
                 .frame(maxWidth: .infinity)
@@ -422,9 +422,9 @@ struct ReceiptPreviewSheet: View {
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: "checkmark")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.system(.footnote, weight: .semibold))
                     Text(loc("receipt.preview.submit"))
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.system(.subheadline, weight: .semibold))
                 }
                 .foregroundStyle(.white)
                 .frame(maxWidth: .infinity)
@@ -443,9 +443,9 @@ struct ReceiptPreviewSheet: View {
         HStack(spacing: 8) {
             Image(systemName: "exclamationmark.triangle.fill")
                 .foregroundStyle(AppTheme.red)
-                .font(.system(size: 14))
+                .font(.system(.subheadline))
             Text(message)
-                .font(.system(size: 12))
+                .font(.system(.caption))
                 .foregroundStyle(AppTheme.red)
             Spacer()
         }
@@ -459,7 +459,7 @@ struct ReceiptPreviewSheet: View {
                                     @ViewBuilder content: () -> Content) -> some View {
         HStack(spacing: 12) {
             Text(label)
-                .font(.system(size: 14))
+                .font(.system(.subheadline))
                 .foregroundStyle(AppTheme.textSecondary)
             Spacer(minLength: 12)
             content()
@@ -612,7 +612,7 @@ private struct ZoomableImageView: View {
                 dismiss()
             } label: {
                 Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 28))
+                    .font(.system(.title))
                     .foregroundStyle(.white, .black.opacity(0.5))
             }
 .accessibilityLabel(loc("a11y.close"))

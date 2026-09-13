@@ -163,11 +163,11 @@ struct ObligationLoadCard: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 8) {
                 Text(loc("oblig.load_title"))
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(.caption, weight: .semibold))
                     .foregroundStyle(AppTheme.textSecondary)
                 Spacer()
                 Text(loc(shown.verdict.labelKey))
-                    .font(.system(size: 10, weight: .bold))
+                    .font(.system(.caption2, weight: .bold))
                     .foregroundStyle(shown.verdict.tint)
                     .padding(.horizontal, 8).padding(.vertical, 3)
                     .background(shown.verdict.tint.opacity(0.15), in: Capsule())
@@ -175,23 +175,23 @@ struct ObligationLoadCard: View {
 
             if load.monthlyIncome <= 0 {
                 Text(loc("oblig.no_income"))
-                    .font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
+                    .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             } else {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text(pct(shown.ratio))
-                        .font(.system(size: 32, weight: .bold))
+                        .font(.system(.largeTitle, weight: .bold))
                         .foregroundStyle(shown.verdict.tint)
                     if projected != nil {
                         Text("← " + pct(load.ratio))
-                            .font(.system(size: 13, weight: .medium))
+                            .font(.system(.footnote, weight: .medium))
                             .foregroundStyle(AppTheme.textSecondary)
                     }
                     Spacer()
                 }
                 Text(String(format: loc("oblig.of_income"),
                             money(shown.total), money(load.monthlyIncome)))
-                    .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                    .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
 
                 ratioBar
 
@@ -215,7 +215,7 @@ struct ObligationLoadCard: View {
                                              : "oblig.income_elsewhere_n"),
                                  money(load.incomeElsewhere), load.jobsElsewhere),
                           systemImage: "arrow.turn.down.right")
-                        .font(.system(size: 11))
+                        .font(.system(.caption2))
                         .foregroundStyle(AppTheme.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -246,9 +246,9 @@ struct ObligationLoadCard: View {
 
     private func line(_ label: String, _ value: String, tint: Color = AppTheme.textPrimary) -> some View {
         HStack {
-            Text(label).font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+            Text(label).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
             Spacer()
-            Text(value).font(.system(size: 11, weight: .semibold)).foregroundStyle(tint)
+            Text(value).font(.system(.caption2, weight: .semibold)).foregroundStyle(tint)
         }
     }
 }

@@ -201,10 +201,10 @@ struct CardListView: View {
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(loc("wallet.title"))
-                                .font(.system(size: 24, weight: .bold))
+                                .font(.system(.title2, weight: .bold))
                                 .foregroundStyle(AppTheme.textPrimary)
                             Text(String(format: loc(vm.cards.count == 1 ? "cards.card_count" : "cards.card_counts"), vm.cards.count))
-                                .font(.system(size: 13))
+                                .font(.system(.footnote))
                                 .foregroundStyle(AppTheme.textSecondary)
                         }
                         Spacer()
@@ -227,11 +227,11 @@ struct CardListView: View {
                                             .frame(width: 42, height: 42)
                                             .overlay(Circle().stroke(AppTheme.accent.opacity(0.3), lineWidth: 1))
                                         Image(systemName: "arrow.left.arrow.right")
-                                            .font(.system(size: 16, weight: .semibold))
+                                            .font(.system(.callout, weight: .semibold))
                                             .foregroundStyle(AppTheme.accent)
                                         if !pm.canAccess(.cardTransfer) {
                                             Image(systemName: "crown.fill")
-                                                .font(.system(size: 8, weight: .bold))
+                                                .font(.system(.caption2, weight: .bold)).imageScale(.small)
                                                 .foregroundStyle(AppTheme.onVividFill)
                                                 .padding(3)
                                                 .background(PremiumPlan.royal.color, in: Circle())
@@ -252,7 +252,7 @@ struct CardListView: View {
                                         .frame(width: 42, height: 42)
                                         .shadow(color: AppTheme.accent.opacity(0.4), radius: 10, y: 4)
                                     Image(systemName: "plus")
-                                        .font(.system(size: 18, weight: .semibold))
+                                        .font(.system(.body, weight: .semibold))
                                         .foregroundStyle(AppTheme.bg)
                                 }
                             }
@@ -297,11 +297,11 @@ struct CardListView: View {
                         VStack(spacing: 0) {
                             HStack {
                                 Text(loc("cards.total_balance"))
-                                    .font(.system(size: 13))
+                                    .font(.system(.footnote))
                                     .foregroundStyle(AppTheme.textSecondary)
                                 Spacer()
                                 Image(systemName: "creditcard.fill")
-                                    .font(.system(size: 18))
+                                    .font(.system(.body))
                                     .foregroundStyle(AppTheme.accent.opacity(0.4))
                             }
                             .padding(.bottom, balancePerCurrency.count > 1 ? 10 : 6)
@@ -314,7 +314,7 @@ struct CardListView: View {
                                 }
                                 HStack(alignment: .firstTextBaseline) {
                                     Text(item.currency)
-                                        .font(.system(size: 11, weight: .medium))
+                                        .font(.system(.caption2, weight: .medium))
                                         .foregroundStyle(AppTheme.textSecondary)
                                         .frame(width: 36, alignment: .leading)
                                     Spacer()
@@ -345,17 +345,17 @@ struct CardListView: View {
                         .font(.system(size: 48))
                         .foregroundStyle(AppTheme.textSecondary)
                     Text(loc("cards.no_cards"))
-                        .font(.system(size: 18, weight: .semibold))
+                        .font(.system(.body, weight: .semibold))
                         .foregroundStyle(AppTheme.textPrimary)
                     Text(loc("cards.no_cards_sub"))
-                        .font(.system(size: 14))
+                        .font(.system(.subheadline))
                         .foregroundStyle(AppTheme.textSecondary)
                     Button {
                         HapticManager.shared.tap()
                         showAddCard = true
                     } label: {
                         Text(loc("cards.add_card"))
-                            .font(.system(size: 15, weight: .semibold))
+                            .font(.system(.subheadline, weight: .semibold))
                             .foregroundStyle(AppTheme.bg)
                             .padding(.horizontal, 32)
                             .padding(.vertical, 14)
@@ -443,7 +443,7 @@ struct CardNetworkLogo: View {
 
         case .unknown:
             Image(systemName: "creditcard")
-                .font(.system(size: 18))
+                .font(.system(.body))
                 .foregroundStyle(AppTheme.textSecondary)
         }
     }
@@ -511,10 +511,10 @@ struct CardFormSheet: View {
         let autoDetected = BankIssuer.detect(from: numberForDetect)
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
-                Text(loc("cards.issuer")).font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
+                Text(loc("cards.issuer")).font(.system(.footnote)).foregroundStyle(AppTheme.textSecondary)
                 if let d = autoDetected, !issuerTouched {
                     Text(String(format: loc("cards.issuer_detected"), d.name))
-                        .font(.system(size: 11, weight: .semibold)).foregroundStyle(AppTheme.accent)
+                        .font(.system(.caption2, weight: .semibold)).foregroundStyle(AppTheme.accent)
                 }
                 Spacer()
             }
@@ -562,11 +562,11 @@ struct CardFormSheet: View {
                         .overlay(RoundedRectangle(cornerRadius: 10)
                             .stroke(selected ? AppTheme.accent : .clear, lineWidth: 2.5))
                     if let systemIcon {
-                        Image(systemName: systemIcon).font(.system(size: 14, weight: .semibold))
+                        Image(systemName: systemIcon).font(.system(.subheadline, weight: .semibold))
                             .foregroundStyle(.white.opacity(0.9))
                     }
                     if selected {
-                        Image(systemName: "checkmark.circle.fill").font(.system(size: 13))
+                        Image(systemName: "checkmark.circle.fill").font(.system(.footnote))
                             .foregroundStyle(AppTheme.onVividFill).background(AppTheme.accentFill, in: Circle())
                             .offset(x: 20, y: -13)
                     }
@@ -618,9 +618,9 @@ struct CardFormSheet: View {
                                     } label: {
                                         HStack(spacing: 6) {
                                             Image(systemName: icon)
-                                                .font(.system(size: 13, weight: .semibold))
+                                                .font(.system(.footnote, weight: .semibold))
                                             Text(label)
-                                                .font(.system(size: 13, weight: .semibold))
+                                                .font(.system(.footnote, weight: .semibold))
                                         }
                                         .foregroundStyle(isWallet == walletMode ? AppTheme.onVividFill : AppTheme.textSecondary)
                                         .frame(maxWidth: .infinity)
@@ -658,10 +658,10 @@ struct CardFormSheet: View {
                         if isWallet {
                             HStack(spacing: 8) {
                                 Image(systemName: "apps.iphone")
-                                    .font(.system(size: 14))
+                                    .font(.system(.subheadline))
                                     .foregroundStyle(walletProvider.color)
                                 Text("\(walletProvider.rawValue)")
-                                    .font(.system(size: 13))
+                                    .font(.system(.footnote))
                                     .foregroundStyle(walletProvider.color)
                                 Spacer()
                             }
@@ -673,7 +673,7 @@ struct CardFormSheet: View {
                                 Text(effectiveNetwork == .unknown
                                      ? loc("cards.networkplaceholder")
                                      : "\(effectiveNetwork.name)")
-                                    .font(.system(size: 13))
+                                    .font(.system(.footnote))
                                     .foregroundStyle(effectiveNetwork == .unknown
                                                      ? AppTheme.textSecondary
                                                      : effectiveNetwork.accentColor)
@@ -693,7 +693,7 @@ struct CardFormSheet: View {
                         if isWallet && !isEditing {
                             VStack(alignment: .leading, spacing: 8) {
                                 Text(loc("cards.wallet_provider"))
-                                    .font(.system(size: 13))
+                                    .font(.system(.footnote))
                                     .foregroundStyle(AppTheme.textSecondary)
                                     .padding(.horizontal, 22)
 
@@ -708,9 +708,9 @@ struct CardFormSheet: View {
                                             } label: {
                                                 HStack(spacing: 6) {
                                                     Image(systemName: provider.icon)
-                                                        .font(.system(size: 13, weight: .semibold))
+                                                        .font(.system(.footnote, weight: .semibold))
                                                     Text(provider.rawValue)
-                                                        .font(.system(size: 13, weight: .medium))
+                                                        .font(.system(.footnote, weight: .medium))
                                                 }
                                                 .foregroundStyle(walletProvider == provider ? .white : AppTheme.textSecondary)
                                                 .padding(.horizontal, 14).padding(.vertical, 9)
@@ -737,14 +737,14 @@ struct CardFormSheet: View {
                         if !isWallet {
                         VStack(spacing: 8) {
                             Text(loc("cards.card_number"))
-                                .font(.system(size: 13))
+                                .font(.system(.footnote))
                                 .foregroundStyle(AppTheme.textSecondary)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .padding(.horizontal, 22)
 
                             TextField(isEditing ? loc("cards.card_number_blank") : loc("cards.card_number"),
                                       text: $displayText)
-                            .font(.system(size: 18, weight: .semibold))
+                            .font(.system(.body, weight: .semibold))
                             .foregroundStyle(cardNumber.count == 16 ? AppTheme.accent : AppTheme.textPrimary)
                             .keyboardType(.numberPad)
                             .onChange(of: displayText) { _, newVal in
@@ -768,17 +768,17 @@ struct CardFormSheet: View {
                             HStack {
                                 if isEditing && cardNumber.isEmpty {
                                     HStack(spacing: 4) {
-                                        Image(systemName: "info.circle.fill").font(.system(size: 10)).foregroundStyle(AppTheme.textSecondary)
-                                        Text(loc("cards.leave_blank")).font(.system(size: 10)).foregroundStyle(AppTheme.textSecondary)
+                                        Image(systemName: "info.circle.fill").font(.system(.caption2)).imageScale(.small).foregroundStyle(AppTheme.textSecondary)
+                                        Text(loc("cards.leave_blank")).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                                     }
                                 } else {
                                     Text(String(format: loc("cards.digit_count"), cardNumber.count))
-                                        .font(.system(size: 11))
+                                        .font(.system(.caption2))
                                         .foregroundStyle(cardNumber.count == 16 ? AppTheme.accent : AppTheme.textSecondary)
                                 }
                                 Spacer()
                                 if cardNumber.count == 16 {
-                                    Image(systemName: "checkmark.circle.fill").font(.system(size: 13)).foregroundStyle(AppTheme.accent)
+                                    Image(systemName: "checkmark.circle.fill").font(.system(.footnote)).foregroundStyle(AppTheme.accent)
                                 }
                             }
                             .padding(.horizontal, 22)
@@ -798,15 +798,15 @@ struct CardFormSheet: View {
                         if isWallet {
                             VStack(alignment: .leading, spacing: 8) {
                                 Text(loc("cards.phone_number"))
-                                    .font(.system(size: 13))
+                                    .font(.system(.footnote))
                                     .foregroundStyle(AppTheme.textSecondary)
                                     .padding(.horizontal, 22)
                                 HStack(spacing: 10) {
                                     Image(systemName: "phone.fill")
-                                        .font(.system(size: 14))
+                                        .font(.system(.subheadline))
                                         .foregroundStyle(walletProvider.color)
                                     TextField("812 3456 7890", text: $phoneNumber)
-                                        .font(.system(size: 15))
+                                        .font(.system(.subheadline))
                                         .foregroundStyle(AppTheme.textPrimary)
                                         .keyboardType(.phonePad)
                                         .onChange(of: phoneNumber) { _, v in
@@ -834,7 +834,7 @@ struct CardFormSheet: View {
                                 let localDigits = max(phoneNumber.filter({ $0.isNumber }).count - 2, 0)
                                 HStack(spacing: 6) {
                                     Image(systemName: localDigits >= 9 && localDigits <= 13 ? "checkmark.circle.fill" : "info.circle")
-                                        .font(.system(size: 11))
+                                        .font(.system(.caption2))
                                         .foregroundStyle(localDigits >= 9 && localDigits <= 13 ? AppTheme.accent : localDigits > 13 ? AppTheme.red : AppTheme.textSecondary)
                                     Text(localDigits == 0
                                          ? "(+62 812 3456 7890)"
@@ -843,7 +843,7 @@ struct CardFormSheet: View {
                                             : localDigits > 13
                                             ? loc("cards.phone_too_long")
                                             : String(format: loc("cards.phone_valid"), localDigits))
-                                        .font(.system(size: 11))
+                                        .font(.system(.caption2))
                                         .foregroundStyle(localDigits > 13 ? AppTheme.red : localDigits >= 9 ? AppTheme.accent : AppTheme.textSecondary)
                                     Spacer()
                                 }
@@ -857,13 +857,13 @@ struct CardFormSheet: View {
                         if !isWallet {
                         VStack(spacing: 8) {
                             Text(loc("cards.expiry_date"))
-                                .font(.system(size: 13))
+                                .font(.system(.footnote))
                                 .foregroundStyle(AppTheme.textSecondary)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .padding(.horizontal, 22)
                             HStack(spacing: 12) {
                                 TextField("MM", text: $expireMonth)
-                                    .font(.system(size: 18, weight: .semibold))
+                                    .font(.system(.body, weight: .semibold))
                                     .foregroundStyle(AppTheme.textPrimary)
                                     .keyboardType(.numberPad)
                                     .focused($focusedField, equals: .month)
@@ -892,11 +892,11 @@ struct CardFormSheet: View {
                                     }
 
                                 Text("/")
-                                    .font(.system(size: 20, weight: .light))
+                                    .font(.system(.title3, weight: .light))
                                     .foregroundStyle(AppTheme.textSecondary)
 
                                 TextField("YY", text: $expireYear)
-                                    .font(.system(size: 18, weight: .semibold))
+                                    .font(.system(.body, weight: .semibold))
                                     .foregroundStyle(AppTheme.textPrimary)
                                     .keyboardType(.numberPad)
                                     .focused($focusedField, equals: .year)
@@ -937,23 +937,23 @@ struct CardFormSheet: View {
                                                 .fill(AppTheme.green.opacity(0.12))
                                                 .frame(width: 38, height: 38)
                                             Image(systemName: "dollarsign.circle.fill")
-                                                .font(.system(size: 18))
+                                                .font(.system(.body))
                                                 .foregroundStyle(AppTheme.green)
                                         }
                                         VStack(alignment: .leading, spacing: 2) {
                                             Text(loc("common.currency"))
-                                                .font(.system(size: 14, weight: .medium))
+                                                .font(.system(.subheadline, weight: .medium))
                                                 .foregroundStyle(AppTheme.textPrimary)
                                         }
                                         Spacer()
                                         HStack(spacing: 6) {
                                             Text(CurrencyManager.flag(for: cardCurrency))
-                                                .font(.system(size: 16))
+                                                .font(.system(.callout))
                                             Text(cardCurrency)
-                                                .font(.system(size: 14, weight: .bold))
+                                                .font(.system(.subheadline, weight: .bold))
                                                 .foregroundStyle(AppTheme.accent)
                                             Image(systemName: "chevron.up.chevron.down")
-                                                .font(.system(size: 10))
+                                                .font(.system(.caption2)).imageScale(.small)
                                                 .foregroundStyle(AppTheme.textSecondary)
                                         }
                                         .padding(.horizontal, 12).padding(.vertical, 8)
@@ -977,21 +977,21 @@ struct CardFormSheet: View {
                                         .fill(AppTheme.textSecondary.opacity(0.08))
                                         .frame(width: 38, height: 38)
                                     Image(systemName: "lock.fill")
-                                        .font(.system(size: 16))
+                                        .font(.system(.callout))
                                         .foregroundStyle(AppTheme.textSecondary)
                                 }
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(loc("common.currency"))
-                                        .font(.system(size: 14, weight: .medium))
+                                        .font(.system(.subheadline, weight: .medium))
                                         .foregroundStyle(AppTheme.textSecondary)
                                     Text(loc("cards.cannot_change"))
-                                        .font(.system(size: 12))
+                                        .font(.system(.caption))
                                         .foregroundStyle(AppTheme.textSecondary.opacity(0.6))
                                 }
                                 Spacer()
                                 HStack(spacing: 6) {
-                                    Text(CurrencyManager.flag(for: cardCurrency)).font(.system(size: 16))
-                                    Text(cardCurrency).font(.system(size: 14, weight: .bold))
+                                    Text(CurrencyManager.flag(for: cardCurrency)).font(.system(.callout))
+                                    Text(cardCurrency).font(.system(.subheadline, weight: .bold))
                                         .foregroundStyle(AppTheme.textSecondary)
                                 }
                                 .padding(.horizontal, 12).padding(.vertical, 8)
@@ -1013,7 +1013,7 @@ struct CardFormSheet: View {
                         // Save
                         Button { save() } label: {
                             Text(isEditing ? loc("general.edit") : (isWallet ? loc("cards.add_wallet") : loc("cards.add_card")))
-                                .font(.system(size: 16, weight: .bold))
+                                .font(.system(.callout, weight: .bold))
                                 .foregroundStyle(.white)
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 16)
@@ -1213,15 +1213,15 @@ struct CardPreviewMini: View {
                         // Wallet: show provider icon + "Digital Wallet" label
                         HStack(spacing: 6) {
                             Image(systemName: wp.icon)
-                                .font(.system(size: 15, weight: .semibold))
+                                .font(.system(.subheadline, weight: .semibold))
                                 .foregroundStyle(Color.white.opacity(0.9))
                             Text(loc("cards.wallet"))
-                                .font(.system(size: 11, weight: .medium))
+                                .font(.system(.caption2, weight: .medium))
                                 .foregroundStyle(Color.white.opacity(0.7))
                         }
                     } else {
                         Image(systemName: "wave.3.right")
-                            .font(.system(size: 16))
+                            .font(.system(.callout))
                             .foregroundStyle(Color.white.opacity(0.6))
                     }
                     Spacer()
@@ -1233,25 +1233,25 @@ struct CardPreviewMini: View {
                 if isWallet {
                     // For wallets show provider name as the "number"
                     Text(walletProvider?.rawValue ?? number)
-                        .font(.system(size: 20, weight: .bold))
+                        .font(.system(.title3, weight: .bold))
                         .foregroundStyle(Color.white)
                 } else {
                     Text(number)
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.system(.callout, weight: .semibold))
                         .foregroundStyle(Color.white)
                         .tracking(1)
                 }
                 HStack(alignment: .bottom) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(holderName)
-                            .font(.system(size: 13, weight: .medium))
+                            .font(.system(.footnote, weight: .medium))
                             .foregroundStyle(Color.white)
                     }
                     Spacer()
                     if !isWallet {
                         VStack(alignment: .trailing, spacing: 2) {
-                            Text(loc("cards.expires")).font(.system(size: 9)).foregroundStyle(Color.white.opacity(0.6))
-                            Text(expire).font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.white)
+                            Text(loc("cards.expires")).font(.system(.caption2)).foregroundStyle(Color.white.opacity(0.6))
+                            Text(expire).font(.system(.caption, weight: .semibold)).foregroundStyle(Color.white)
                         }
                     }
                 }
@@ -1331,7 +1331,7 @@ struct CardTransferSheet: View {
                                 }
                             } label: {
                                 Image(systemName: "arrow.left.arrow.right")
-                                    .font(.system(size: 14, weight: .bold))
+                                    .font(.system(.subheadline, weight: .bold))
                                     .foregroundStyle(AppTheme.accent)
                                     .frame(width: 38, height: 38)
                                     .background(AppTheme.accent.opacity(0.12), in: Circle())
@@ -1347,8 +1347,8 @@ struct CardTransferSheet: View {
 
                         if let err = validationError {
                             HStack(spacing: 8) {
-                                Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 13))
-                                Text(err).font(.system(size: 13, weight: .medium))
+                                Image(systemName: "exclamationmark.triangle.fill").font(.system(.footnote))
+                                Text(err).font(.system(.footnote, weight: .medium))
                             }
                             .foregroundStyle(AppTheme.red)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -1390,7 +1390,7 @@ struct CardTransferSheet: View {
         } label: {
             VStack(spacing: 8) {
                 Text(title.uppercased())
-                    .font(.system(size: 9, weight: .bold))
+                    .font(.system(.caption2, weight: .bold))
                     .foregroundStyle(AppTheme.textSecondary)
                     .tracking(0.7)
                 if let card {
@@ -1398,7 +1398,7 @@ struct CardTransferSheet: View {
                         .frame(width: 96)
                     Text(CurrencyManager.shared.formatted(card.computedBalance(),
                                                           currency: card.resolvedCurrency))
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.system(.caption2, weight: .semibold))
                         .foregroundStyle(AppTheme.textPrimary)
                         .lineLimit(1).minimumScaleFactor(0.7)
                 } else {
@@ -1457,9 +1457,9 @@ struct CardTransferSheet: View {
         VStack(spacing: 6) {
             ZStack {
                 Circle().fill(AppTheme.accent.opacity(0.12)).frame(width: 56, height: 56)
-                Image(systemName: "arrow.left.arrow.right").font(.system(size: 24)).foregroundStyle(AppTheme.accent)
+                Image(systemName: "arrow.left.arrow.right").font(.system(.title2)).foregroundStyle(AppTheme.accent)
             }
-            Text(loc("transfer.subtitle")).font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
+            Text(loc("transfer.subtitle")).font(.system(.footnote)).foregroundStyle(AppTheme.textSecondary)
                 .multilineTextAlignment(.center).padding(.horizontal, 32)
         }
         .padding(.bottom, 2)
@@ -1479,15 +1479,15 @@ struct CardTransferSheet: View {
 
     private var amountField: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(loc("transfer.amount")).font(.system(size: 12, weight: .semibold)).foregroundStyle(AppTheme.textSecondary)
+            Text(loc("transfer.amount")).font(.system(.caption, weight: .semibold)).foregroundStyle(AppTheme.textSecondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
             HStack(spacing: 12) {
                 Text(sourceCard?.resolvedCurrency ?? "")
-                    .font(.system(size: 15, weight: .bold)).foregroundStyle(AppTheme.accent)
+                    .font(.system(.subheadline, weight: .bold)).foregroundStyle(AppTheme.accent)
                     .frame(width: 58, height: 56)
                     .background(AppTheme.accent.opacity(0.10), in: RoundedRectangle(cornerRadius: 14))
                 TextField("0", text: $amountText)
-                    .font(.system(size: 28, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
+                    .font(.system(.title, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
                     .keyboardType(.decimalPad)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 16)
@@ -1504,7 +1504,7 @@ struct CardTransferSheet: View {
             if crossCurrency && amount > 0 {
                 Text(String(format: loc("transfer.converted"),
                             CurrencyManager.shared.formatted(convertedToDest, currency: destCard?.resolvedCurrency ?? "")))
-                    .font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
+                    .font(.system(.footnote)).foregroundStyle(AppTheme.textSecondary)
             }
         }
         .padding(.horizontal, 22)
@@ -1522,7 +1522,7 @@ struct CardTransferSheet: View {
                 : String(format: "%.2f", value)
         } label: {
             Text(title)
-                .font(.system(size: 13, weight: .semibold))
+                .font(.system(.footnote, weight: .semibold))
                 .foregroundStyle(AppTheme.accent)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 9)
@@ -1537,8 +1537,8 @@ struct CardTransferSheet: View {
             performTransfer()
         } label: {
             HStack(spacing: 10) {
-                Image(systemName: "arrow.left.arrow.right").font(.system(size: 16, weight: .semibold))
-                Text(loc("transfer.button")).font(.system(size: 16, weight: .bold))
+                Image(systemName: "arrow.left.arrow.right").font(.system(.callout, weight: .semibold))
+                Text(loc("transfer.button")).font(.system(.callout, weight: .bold))
             }
             .foregroundStyle(canTransfer ? AppTheme.onVividFill : AppTheme.textSecondary)
             .frame(maxWidth: .infinity).padding(.vertical, 17)
@@ -1617,21 +1617,21 @@ private struct TransferCardTile: View {
                 HStack(alignment: .top) {
                     HStack(spacing: 7) {
                         Image(systemName: card.isDigitalWallet ? "wallet.pass.fill" : "wave.3.right")
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(.system(.subheadline, weight: .semibold))
                             .foregroundStyle(Color.white.opacity(0.75))
                         Text(title)
-                            .font(.system(size: 15, weight: .bold))
+                            .font(.system(.subheadline, weight: .bold))
                             .foregroundStyle(.white)
                     }
                     Spacer()
                     if card.isCreditCard {
                         Text(loc("cc.badge"))
-                            .font(.system(size: 9, weight: .heavy)).foregroundStyle(.white)
+                            .font(.system(.caption2, weight: .heavy)).foregroundStyle(.white)
                             .padding(.horizontal, 8).padding(.vertical, 3)
                             .background(Color.white.opacity(0.22), in: Capsule())
                     } else if inUse {
                         Text(loc("transfer.in_use"))
-                            .font(.system(size: 9, weight: .heavy))
+                            .font(.system(.caption2, weight: .heavy))
                             .foregroundStyle(.white.opacity(0.9))
                             .padding(.horizontal, 9).padding(.vertical, 4)
                             .background(Color.white.opacity(0.20), in: Capsule())
@@ -1643,17 +1643,17 @@ private struct TransferCardTile: View {
                 // A credit card shows what's OWED + available (paying it reduces
                 // owed), not a cash balance.
                 Text((card.isCreditCard ? loc("cc.owed") : loc("transfer.available_label")).uppercased())
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(.system(.caption2, weight: .semibold))
                     .tracking(0.5)
                     .foregroundStyle(.white.opacity(0.7))
                 Text(card.isCreditCard ? card.formattedOwed : card.formattedBalance)
-                    .font(.system(size: 26, weight: .heavy))
+                    .font(.system(.title, weight: .heavy))
                     .foregroundStyle(highlightInsufficient ? Color(hex: "#FFD1D1") : .white)
                     .minimumScaleFactor(0.6)
                     .lineLimit(1)
                 if card.isCreditCard {
                     Text(String(format: loc("cc.avail_short"), card.formattedAvailable))
-                        .font(.system(size: 11, weight: .medium)).foregroundStyle(.white.opacity(0.8))
+                        .font(.system(.caption2, weight: .medium)).foregroundStyle(.white.opacity(0.8))
                 }
             }
             .padding(18)

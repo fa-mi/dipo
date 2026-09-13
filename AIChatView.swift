@@ -363,10 +363,10 @@ struct AIChatView: View {
         HStack(spacing: 12) {
             HStack(spacing: 7) {
                 Image(systemName: "sparkles")
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.system(.subheadline, weight: .semibold))
                     .foregroundStyle(AppTheme.purple)
                 Text(loc("ai.title"))
-                    .font(.system(size: 17, weight: .bold))
+                    .font(.system(.body, weight: .bold))
                     .foregroundStyle(AppTheme.textPrimary)
             }
             Spacer()
@@ -376,9 +376,9 @@ struct AIChatView: View {
             // chip surfaces just in time as a gentle "almost out" warning.
             if let credits = vm.creditsLeft, credits < 10 {
                 HStack(spacing: 5) {
-                    Image(systemName: "bolt.fill").font(.system(size: 10))
+                    Image(systemName: "bolt.fill").font(.system(.caption2)).imageScale(.small)
                     Text("\(credits)")
-                        .font(.system(size: 13, weight: .bold))
+                        .font(.system(.footnote, weight: .bold))
                         .contentTransition(.numericText())
                 }
                 .foregroundStyle(credits == 0 ? AppTheme.red : AppTheme.orange)
@@ -440,15 +440,15 @@ struct AIChatView: View {
                                             startPoint: .top, endPoint: .bottom))
                     .frame(width: 26, height: 17)
                 Text(loc("ai.add_to"))
-                    .font(.system(size: 12))
+                    .font(.system(.caption))
                     .foregroundStyle(AppTheme.textSecondary)
                 Text(targetCard.map(cardLabel) ?? "—")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(.caption, weight: .semibold))
                     .foregroundStyle(AppTheme.textPrimary)
                     .lineLimit(1)
                 if cards.count > 1 {
                     Image(systemName: "chevron.down")
-                        .font(.system(size: 9, weight: .bold))
+                        .font(.system(.caption2, weight: .bold)).imageScale(.small)
                         .foregroundStyle(AppTheme.textSecondary)
                 }
                 Spacer(minLength: 0)
@@ -504,7 +504,7 @@ struct AIChatView: View {
                         HStack {
                             ProgressView().scaleEffect(0.8)
                             Text(loc("ai.thinking"))
-                                .font(.system(size: 13))
+                                .font(.system(.footnote))
                                 .foregroundStyle(AppTheme.textSecondary)
                             Spacer()
                         }
@@ -529,7 +529,7 @@ struct AIChatView: View {
             HStack {
                 Spacer(minLength: 50)
                 Text(msg.text)
-                    .font(.system(size: 14))
+                    .font(.system(.subheadline))
                     .foregroundStyle(AppTheme.onVividFill)
                     .padding(.horizontal, 14).padding(.vertical, 10)
                     .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: 16))
@@ -538,7 +538,7 @@ struct AIChatView: View {
         } else {
             VStack(alignment: .leading, spacing: 10) {
                 Text(msg.text)
-                    .font(.system(size: 14))
+                    .font(.system(.subheadline))
                     .foregroundStyle(msg.isError ? AppTheme.red : AppTheme.textPrimary)
                     .padding(.horizontal, 14).padding(.vertical, 10)
                     .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
@@ -562,21 +562,21 @@ struct AIChatView: View {
                         .fill(tx.category.color.opacity(0.18))
                         .frame(width: 38, height: 38)
                     Image(systemName: tx.category.icon)
-                        .font(.system(size: 15))
+                        .font(.system(.subheadline))
                         .foregroundStyle(tx.category.color)
                 }
                 VStack(alignment: .leading, spacing: 2) {
                     Text(tx.name)
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.system(.subheadline, weight: .semibold))
                         .foregroundStyle(AppTheme.textPrimary)
                     Text(tx.category.displayLabel)
-                        .font(.system(size: 11))
+                        .font(.system(.caption2))
                         .foregroundStyle(AppTheme.textSecondary)
                 }
                 Spacer()
                 Text((tx.isExpense ? "-" : "+") +
                      CurrencyManager.shared.formatted(tx.amount, currency: tx.currency))
-                    .font(.system(size: 14, weight: .bold))
+                    .font(.system(.subheadline, weight: .bold))
                     .foregroundStyle(tx.isExpense ? AppTheme.red : AppTheme.accent)
             }
             // Add / Added button.
@@ -587,7 +587,7 @@ struct AIChatView: View {
                     Image(systemName: tx.added ? "checkmark.circle.fill" : "plus.circle.fill")
                     Text(tx.added ? loc("ai.tx.added") : loc("ai.tx.add"))
                 }
-                .font(.system(size: 13, weight: .semibold))
+                .font(.system(.footnote, weight: .semibold))
                 .foregroundStyle(tx.added ? AppTheme.accent : .white)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 9)
@@ -631,7 +631,7 @@ struct AIChatView: View {
                         .animation(.easeOut(duration: 0.12), value: voice.level)
                 }
                 Image(systemName: voice.isListening ? "stop.fill" : "mic.fill")
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.system(.subheadline, weight: .semibold))
                     .foregroundStyle(voice.isListening ? AppTheme.red : AppTheme.textSecondary)
             }
         }
@@ -650,9 +650,9 @@ struct AIChatView: View {
             if let voiceNotice {
                 HStack(spacing: 6) {
                     Image(systemName: "exclamationmark.circle.fill")
-                        .font(.system(size: 11)).foregroundStyle(AppTheme.orange)
+                        .font(.system(.caption2)).foregroundStyle(AppTheme.orange)
                     Text(voiceNotice)
-                        .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                        .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                     Spacer()
                 }
                 .padding(.horizontal, 16).padding(.top, 8)
@@ -663,7 +663,7 @@ struct AIChatView: View {
 
                 TextField(voice.isListening ? loc("voice.listening") : loc("ai.input_placeholder"),
                           text: $vm.input, axis: .vertical)
-                    .font(.system(size: 14))
+                    .font(.system(.subheadline))
                     .lineLimit(1...4)
                     .focused($inputFocused)
                     .padding(.horizontal, 14).padding(.vertical, 10)
@@ -674,7 +674,7 @@ struct AIChatView: View {
                     Task { await vm.send(context: snapshot) }
                 } label: {
                     Image(systemName: "arrow.up")
-                        .font(.system(size: 16, weight: .bold))
+                        .font(.system(.callout, weight: .bold))
                         .foregroundStyle(AppTheme.onVividFill)
                         .frame(width: 38, height: 38)
                         .background(AppTheme.accentFill, in: Circle())
@@ -686,7 +686,7 @@ struct AIChatView: View {
             .padding(.horizontal, 16).padding(.vertical, 12)
             // 1 credit/message hint.
             Text(loc("ai.credit_hint"))
-                .font(.system(size: 10))
+                .font(.system(.caption2))
                 .foregroundStyle(AppTheme.textSecondary.opacity(0.7))
                 .padding(.bottom, 8)
         }
@@ -700,7 +700,7 @@ struct AIChatView: View {
                 .font(.system(size: 40))
                 .foregroundStyle(AppTheme.textSecondary)
             Text(loc("ai.no_card"))
-                .font(.system(size: 14))
+                .font(.system(.subheadline))
                 .foregroundStyle(AppTheme.textSecondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 40)

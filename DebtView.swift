@@ -241,8 +241,8 @@ struct DebtView: View {
                     // Header
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(loc("debt.title_full")).font(.system(size: 24, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
-                            Text(loc("debt.smart_sub")).font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
+                            Text(loc("debt.title_full")).font(.system(.title2, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
+                            Text(loc("debt.smart_sub")).font(.system(.footnote)).foregroundStyle(AppTheme.textSecondary)
                         }
                         Spacer()
                         // Simulator button — hidden when embedded, where the
@@ -256,9 +256,9 @@ struct DebtView: View {
                             } label: {
                                 HStack(spacing: 5) {
                                     Image(systemName: "chart.line.uptrend.xyaxis")
-                                        .font(.system(size: 13, weight: .semibold))
+                                        .font(.system(.footnote, weight: .semibold))
                                     Text(loc("debt.simulate"))
-                                        .font(.system(size: 13, weight: .semibold))
+                                        .font(.system(.footnote, weight: .semibold))
                                 }
                                 .foregroundStyle(AppTheme.accent)
                                 .padding(.horizontal, 12).padding(.vertical, 8)
@@ -270,7 +270,7 @@ struct DebtView: View {
                             ZStack {
                                 Circle().fill(AppTheme.red.opacity(0.9)).frame(width: 42, height: 42)
                                     .shadow(color: AppTheme.red.opacity(0.4), radius: 10, y: 4)
-                                Image(systemName: "plus").font(.system(size: 18, weight: .semibold)).foregroundStyle(.white)
+                                Image(systemName: "plus").font(.system(.body, weight: .semibold)).foregroundStyle(.white)
                             }
                         }
 .accessibilityLabel(loc("a11y.add_debt")).buttonStyle(ScaleButtonStyle())
@@ -327,10 +327,10 @@ struct DebtView: View {
                             // Debt list
                             VStack(spacing: 12) {
                                 HStack {
-                                    Text(loc("debt.your_debts")).font(.system(size: 17, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                                    Text(loc("debt.your_debts")).font(.system(.body, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
                                     Spacer()
                                     Text(String(format: loc("debt.active_count"), debts.filter { $0.isActive }.count))
-                                        .font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
+                                        .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                                 }
                                 .padding(.horizontal, 22)
 
@@ -474,12 +474,12 @@ struct DebtView: View {
     @ViewBuilder private var creditCardSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text(loc("cc.section_title")).font(.system(size: 17, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                Text(loc("cc.section_title")).font(.system(.body, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
                 Spacer()
                 Button { HapticManager.shared.tap(); showAddCreditCard = true } label: {
                     HStack(spacing: 5) {
-                        Image(systemName: "plus").font(.system(size: 12, weight: .bold))
-                        Text(loc("cc.add")).font(.system(size: 13, weight: .semibold))
+                        Image(systemName: "plus").font(.system(.caption, weight: .bold))
+                        Text(loc("cc.add")).font(.system(.footnote, weight: .semibold))
                     }
                     .foregroundStyle(AppTheme.purple)
                     .padding(.horizontal, 12).padding(.vertical, 7)
@@ -490,7 +490,7 @@ struct DebtView: View {
 
             if creditCards.isEmpty {
                 Text(loc("cc.section_empty"))
-                    .font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
+                    .font(.system(.footnote)).foregroundStyle(AppTheme.textSecondary)
                     .padding(.horizontal, 22)
             } else {
                 ForEach(creditCards) { card in
@@ -557,15 +557,15 @@ struct SalarySetupCTA: View {
             ZStack {
                 Circle().fill(AppTheme.accent.opacity(0.12)).frame(width: 56, height: 56)
                 Image(systemName: "banknote.fill")
-                    .font(.system(size: 24))
+                    .font(.system(.title2))
                     .foregroundStyle(AppTheme.accent)
             }
             VStack(spacing: 6) {
                 Text(loc("salary.cta.title"))
-                    .font(.system(size: 16, weight: .bold))
+                    .font(.system(.callout, weight: .bold))
                     .foregroundStyle(AppTheme.textPrimary)
                 Text(message)
-                    .font(.system(size: 13))
+                    .font(.system(.footnote))
                     .foregroundStyle(AppTheme.textSecondary)
                     .multilineTextAlignment(.center)
                     .lineSpacing(2)
@@ -575,8 +575,8 @@ struct SalarySetupCTA: View {
                 action()
             } label: {
                 HStack(spacing: 8) {
-                    Image(systemName: "plus.circle.fill").font(.system(size: 15))
-                    Text(loc("salary.cta.button")).font(.system(size: 15, weight: .bold))
+                    Image(systemName: "plus.circle.fill").font(.system(.subheadline))
+                    Text(loc("salary.cta.button")).font(.system(.subheadline, weight: .bold))
                 }
                 .foregroundStyle(AppTheme.onVividFill)
                 .frame(maxWidth: .infinity)
@@ -612,29 +612,29 @@ struct HealthScoreCard: View {
                         .rotationEffect(.degrees(-90))
                         .animation(.spring(response: 1.2, dampingFraction: 0.8), value: animScore)
                     VStack(spacing: 0) {
-                        Text("\(animScore)").font(.system(size: 22, weight: .bold)).foregroundStyle(engine.healthColor)
-                        Text("/ 100").font(.system(size: 9)).foregroundStyle(AppTheme.textSecondary)
+                        Text("\(animScore)").font(.system(.title2, weight: .bold)).foregroundStyle(engine.healthColor)
+                        Text("/ 100").font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                     }
                 }
 
                 VStack(alignment: .leading, spacing: 6) {
                     HStack(spacing: 8) {
-                        Image(systemName: engine.healthIcon).font(.system(size: 16)).foregroundStyle(engine.healthColor)
-                        Text(loc("debt.health")).font(.system(size: 14, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                        Image(systemName: engine.healthIcon).font(.system(.callout)).foregroundStyle(engine.healthColor)
+                        Text(loc("debt.health")).font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
                     }
                     Text(engine.healthLabel)
-                        .font(.system(size: 20, weight: .bold)).foregroundStyle(engine.healthColor)
+                        .font(.system(.title3, weight: .bold)).foregroundStyle(engine.healthColor)
                     if monthlyIncome <= 0 {
                         HStack(spacing: 4) {
                             Image(systemName: "exclamationmark.circle")
-                                .font(.system(size: 10))
+                                .font(.system(.caption2)).imageScale(.small)
                             Text(loc("debt.health_sub"))
-                                .font(.system(size: 10))
+                                .font(.system(.caption2))
                         }
                         .foregroundStyle(AppTheme.orange)
                     } else {
                         Text(String(format: loc("debt.dti_label"), String(format: "%.1f", engine.dtiRatio)))
-                            .font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
+                            .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                     }
                 }
                 Spacer()
@@ -642,8 +642,8 @@ struct HealthScoreCard: View {
 
             // Advice
             HStack(spacing: 10) {
-                Image(systemName: "lightbulb.fill").font(.system(size: 14)).foregroundStyle(AppTheme.orange)
-                Text(engine.primaryAdvice).font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary).lineSpacing(2)
+                Image(systemName: "lightbulb.fill").font(.system(.subheadline)).foregroundStyle(AppTheme.orange)
+                Text(engine.primaryAdvice).font(.system(.footnote)).foregroundStyle(AppTheme.textSecondary).lineSpacing(2)
             }
             .padding(12)
             .background(AppTheme.orange.opacity(0.07), in: RoundedRectangle(cornerRadius: 12))
@@ -682,16 +682,16 @@ struct AllocationCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
-                Image(systemName: "chart.pie.fill").font(.system(size: 16)).foregroundStyle(AppTheme.accent)
-                Text(loc("salary.allocation")).font(.system(size: 15, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                Image(systemName: "chart.pie.fill").font(.system(.callout)).foregroundStyle(AppTheme.accent)
+                Text(loc("salary.allocation")).font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
                 Spacer()
-                Text(loc("salary.per_month")).font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                Text(loc("salary.per_month")).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
             }
             
             // Explainer — clarifies that this allocation is based on monthly
             // salary (not balance), and what the recommended split means.
             Text(loc("salary.allocation.explainer"))
-                .font(.system(size: 11))
+                .font(.system(.caption2))
                 .foregroundStyle(AppTheme.textSecondary)
                 .lineSpacing(2)
 
@@ -759,21 +759,21 @@ struct AllocationCard: View {
             // Reframes the allocation in terms users actually relate to.
             if balanceCoversMonths > 0 && totalBalance > 0 {
                 HStack(spacing: 8) {
-                    Image(systemName: "wallet.pass.fill").font(.system(size: 11)).foregroundStyle(AppTheme.accent)
+                    Image(systemName: "wallet.pass.fill").font(.system(.caption2)).foregroundStyle(AppTheme.accent)
                     Text(String(format: loc("debt.balance_coverage"),
                                 CurrencyManager.shared.formatted(totalBalance, currency: CurrencyManager.shared.preferredCurrency),
                                 String(format: "%.1f", balanceCoversMonths)))
-                        .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary).lineSpacing(2)
+                        .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary).lineSpacing(2)
                 }
                 .padding(.top, 2)
             }
 
             if engine.extraPaymentAvailable > 0 {
                 HStack(spacing: 8) {
-                    Image(systemName: "arrow.up.circle.fill").font(.system(size: 12)).foregroundStyle(AppTheme.accent)
+                    Image(systemName: "arrow.up.circle.fill").font(.system(.caption)).foregroundStyle(AppTheme.accent)
                     Text(String(format: loc("debt.extra_recommended"),
                                 CurrencyManager.shared.formatted(engine.extraPaymentAvailable, currency: CurrencyManager.shared.preferredCurrency)))
-                        .font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary).lineSpacing(2)
+                        .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary).lineSpacing(2)
                 }
             }
         }
@@ -789,10 +789,10 @@ struct AllocationRow: View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 5) {
                 Circle().fill(color).frame(width: 7, height: 7)
-                Text(label).font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                Text(label).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
             }
-            Text("\(String(format: "%.0f", percent))%").font(.system(size: 16, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
-            Text(CurrencyManager.shared.formatted(amount, currency: currency)).font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+            Text("\(String(format: "%.0f", percent))%").font(.system(.callout, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
+            Text(CurrencyManager.shared.formatted(amount, currency: currency)).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
         }
     }
 }
@@ -805,13 +805,13 @@ struct OverspendingWarning: View {
         HStack(spacing: 12) {
             ZStack {
                 Circle().fill(AppTheme.red.opacity(0.15)).frame(width: 44, height: 44)
-                Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 20)).foregroundStyle(AppTheme.red)
+                Image(systemName: "exclamationmark.triangle.fill").font(.system(.title3)).foregroundStyle(AppTheme.red)
             }
             VStack(alignment: .leading, spacing: 3) {
-                Text(loc("debt.overspending")).font(.system(size: 14, weight: .bold)).foregroundStyle(AppTheme.red)
+                Text(loc("debt.overspending")).font(.system(.subheadline, weight: .bold)).foregroundStyle(AppTheme.red)
                 Text(String(format: loc("debt.reduce_expenses"),
                             CurrencyManager.shared.formatted(engine.overspendAmount, currency: CurrencyManager.shared.preferredCurrency)))
-                    .font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary).lineSpacing(2)
+                    .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary).lineSpacing(2)
             }
             Spacer()
         }
@@ -828,22 +828,22 @@ struct UrgentPaymentsCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
-                Image(systemName: "bell.badge.fill").font(.system(size: 14)).foregroundStyle(AppTheme.orange)
-                Text(loc("debt.due_soon")).font(.system(size: 14, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                Image(systemName: "bell.badge.fill").font(.system(.subheadline)).foregroundStyle(AppTheme.orange)
+                Text(loc("debt.due_soon")).font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
             }
             ForEach(debts) { debt in
                 HStack {
-                    Image(systemName: debt.debtType.icon).font(.system(size: 14)).foregroundStyle(debt.debtType.color)
-                    Text(debt.name).font(.system(size: 13, weight: .medium)).foregroundStyle(AppTheme.textPrimary)
+                    Image(systemName: debt.debtType.icon).font(.system(.subheadline)).foregroundStyle(debt.debtType.color)
+                    Text(debt.name).font(.system(.footnote, weight: .medium)).foregroundStyle(AppTheme.textPrimary)
                     Spacer()
                     Text(CurrencyManager.shared.formatted(debt.minimumPayment, currency: debt.currency))
-                        .font(.system(size: 13, weight: .bold)).foregroundStyle(AppTheme.orange)
+                        .font(.system(.footnote, weight: .bold)).foregroundStyle(AppTheme.orange)
                     if debt.minimumPayment == 0 {
                         Text(loc("debt.set_min"))
-                            .font(.system(size: 10, weight: .semibold))
+                            .font(.system(.caption2, weight: .semibold))
                             .foregroundStyle(AppTheme.red)
                     }
-                    Text(String(format: loc("debt.due_short"), debt.dueDayOfMonth)).font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                    Text(String(format: loc("debt.due_short"), debt.dueDayOfMonth)).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                 }
                 .padding(10)
                 .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: 10))
@@ -877,12 +877,12 @@ struct DebtCard: View {
                             .fill(debt.debtType.color.opacity(0.15))
                             .frame(width: 44, height: 44)
                         Image(systemName: debt.debtType.icon)
-                            .font(.system(size: 20)).foregroundStyle(debt.debtType.color)
+                            .font(.system(.title3)).foregroundStyle(debt.debtType.color)
                     }
                     VStack(alignment: .leading, spacing: 3) {
                         HStack(spacing: 6) {
-                            Text(debt.name).font(.system(size: 15, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
-                            Text(debt.debtType.label).font(.system(size: 10, weight: .semibold))
+                            Text(debt.name).font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                            Text(debt.debtType.label).font(.system(.caption2, weight: .semibold))
                                 .foregroundStyle(debt.debtType.color)
                                 .padding(.horizontal, 7).padding(.vertical, 2)
                                 .background(debt.debtType.color.opacity(0.12), in: Capsule())
@@ -890,16 +890,16 @@ struct DebtCard: View {
                         Text(String(format: loc("debt.apr_due"),
                                     String(format: "%.1f", debt.annualInterestRate),
                                     debt.dueDayOfMonth))
-                            .font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
+                            .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                     }
                     Spacer()
                     // Priority tag
-                    Text("#\(priority)").font(.system(size: 11, weight: .bold))
+                    Text("#\(priority)").font(.system(.caption2, weight: .bold))
                         .foregroundStyle(priority == 1 ? AppTheme.red : AppTheme.textSecondary)
                         .padding(.horizontal, 8).padding(.vertical, 4)
                         .background(priority == 1 ? AppTheme.red.opacity(0.12) : AppTheme.cardMid, in: Capsule())
                     Button { HapticManager.shared.tap(); showActions = true } label: {
-                        Image(systemName: "ellipsis").font(.system(size: 15))
+                        Image(systemName: "ellipsis").font(.system(.subheadline))
                             .foregroundStyle(AppTheme.textSecondary).frame(width: 36, height: 36)
                             .background(AppTheme.cardMid, in: Circle())
                     }
@@ -910,9 +910,9 @@ struct DebtCard: View {
                 // Balance info
                 HStack {
                     VStack(alignment: .leading, spacing: 3) {
-                        Text(loc("debt.remaining")).font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                        Text(loc("debt.remaining")).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                         Text(CurrencyManager.shared.formatted(debt.currentBalance, currency: debt.currency))
-                            .font(.system(size: 22, weight: .bold)).foregroundStyle(AppTheme.red)
+                            .font(.system(.title2, weight: .bold)).foregroundStyle(AppTheme.red)
                             .contentTransition(.numericText())
                     }
                     Spacer()
@@ -922,15 +922,15 @@ struct DebtCard: View {
                         // of a confusing "Rp 0". Labelled "Suggested" when derived
                         // so we never misrepresent it as a lender requirement.
                         Text(debt.isMinimumDerived ? loc("debt.suggested_payment") : loc("debt.min_payment"))
-                            .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                            .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                         Text(CurrencyManager.shared.formatted(debt.effectiveMinimumPayment, currency: debt.currency))
-                            .font(.system(size: 16, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
+                            .font(.system(.callout, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
                     }
                     Spacer()
                     VStack(alignment: .trailing, spacing: 3) {
-                        Text(loc("debt.monthly_int")).font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                        Text(loc("debt.monthly_int")).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                         Text(CurrencyManager.shared.formatted(debt.monthlyInterestCost, currency: debt.currency))
-                            .font(.system(size: 16, weight: .bold)).foregroundStyle(AppTheme.orange)
+                            .font(.system(.callout, weight: .bold)).foregroundStyle(AppTheme.orange)
                     }
                 }
 
@@ -938,11 +938,11 @@ struct DebtCard: View {
                 VStack(alignment: .leading, spacing: 6) {
                     HStack {
                         Text(String(format: loc("debt.paid_off"), String(format: "%.1f", debt.percentagePaid)))
-                            .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                            .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                         Spacer()
                         if let months = debt.monthsToPayoffMinimum {
                             Text(String(format: loc("debt.months_to_payoff"), months))
-                                .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                                .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                         }
                     }
                     GeometryReader { g in
@@ -961,8 +961,8 @@ struct DebtCard: View {
                     showPaymentSheet = true
                 } label: {
                     HStack(spacing: 8) {
-                        Image(systemName: "dollarsign.circle.fill").font(.system(size: 15))
-                        Text(loc("debt.make_payment")).font(.system(size: 14, weight: .semibold))
+                        Image(systemName: "dollarsign.circle.fill").font(.system(.subheadline))
+                        Text(loc("debt.make_payment")).font(.system(.subheadline, weight: .semibold))
                     }
                     .foregroundStyle(.white)
                     .frame(maxWidth: .infinity)
@@ -1093,15 +1093,15 @@ struct DebtPayoffCelebration: View {
 
                 VStack(spacing: 9) {
                     Text(loc("debt.celebrate.title"))
-                        .font(.system(size: 27, weight: .bold))
+                        .font(.system(.title, weight: .bold))
                         .foregroundStyle(AppTheme.textPrimary)
                     Text(summary.name)
-                        .font(.system(size: 17, weight: .semibold))
+                        .font(.system(.body, weight: .semibold))
                         .foregroundStyle(AppTheme.accent)
                         .multilineTextAlignment(.center)
                     Text(String(format: loc("debt.celebrate.paid"),
                                 CurrencyManager.shared.formatted(summary.total, currency: summary.currency)))
-                        .font(.system(size: 15))
+                        .font(.system(.subheadline))
                         .foregroundStyle(AppTheme.textSecondary)
                         .multilineTextAlignment(.center)
 
@@ -1117,7 +1117,7 @@ struct DebtPayoffCelebration: View {
                                 .foregroundStyle(AppTheme.accent.opacity(0.9))
                         }
                     }
-                    .font(.system(size: 12.5, weight: .medium))
+                    .font(.system(.caption, weight: .medium))
                     .foregroundStyle(AppTheme.textSecondary.opacity(0.85))
                     .multilineTextAlignment(.center)
                     .padding(.top, 6)
@@ -1131,7 +1131,7 @@ struct DebtPayoffCelebration: View {
                     onDismiss()
                 } label: {
                     Text(loc("debt.celebrate.cta"))
-                        .font(.system(size: 16, weight: .bold))
+                        .font(.system(.callout, weight: .bold))
                         .foregroundStyle(AppTheme.bg)
                         .padding(.horizontal, 44).padding(.vertical, 15)
                         .background(AppTheme.accentFill, in: Capsule())
@@ -1168,8 +1168,8 @@ struct PayoffStrategyCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
-                Image(systemName: "map.fill").font(.system(size: 14)).foregroundStyle(AppTheme.purple)
-                Text(loc("debt.payoff_strat")).font(.system(size: 15, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                Image(systemName: "map.fill").font(.system(.subheadline)).foregroundStyle(AppTheme.purple)
+                Text(loc("debt.payoff_strat")).font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
                 Spacer()
             }
 
@@ -1178,7 +1178,7 @@ struct PayoffStrategyCard: View {
                 ForEach(["Avalanche", "Snowball"].indices, id: \.self) { i in
                     Button { HapticManager.shared.tap(); withAnimation { strategy = i } } label: {
                         Text(i == 0 ? "Avalanche" : "Snowball")
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(.system(.footnote, weight: .semibold))
                             .foregroundStyle(strategy == i ? AppTheme.bg : AppTheme.textSecondary)
                             .frame(maxWidth: .infinity).padding(.vertical, 8)
                             .background { if strategy == i { Capsule().fill(AppTheme.purple) } }
@@ -1189,21 +1189,21 @@ struct PayoffStrategyCard: View {
 
             // Strategy description
             Text(strategy == 0 ? loc("debt.avalanche_desc") : loc("debt.snowball_desc"))
-                .font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary).lineSpacing(2)
+                .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary).lineSpacing(2)
 
             // Order list
             VStack(spacing: 8) {
                 ForEach(Array(ordered.enumerated()), id: \.element.id) { i, debt in
                     HStack(spacing: 10) {
-                        Text("\(i+1)").font(.system(size: 13, weight: .bold))
+                        Text("\(i+1)").font(.system(.footnote, weight: .bold))
                             .foregroundStyle(AppTheme.textSecondary).frame(width: 20)
-                        Image(systemName: debt.debtType.icon).font(.system(size: 14)).foregroundStyle(debt.debtType.color)
-                        Text(debt.name).font(.system(size: 13, weight: .medium)).foregroundStyle(AppTheme.textPrimary)
+                        Image(systemName: debt.debtType.icon).font(.system(.subheadline)).foregroundStyle(debt.debtType.color)
+                        Text(debt.name).font(.system(.footnote, weight: .medium)).foregroundStyle(AppTheme.textPrimary)
                         Spacer()
                         Text(strategy == 0
                              ? String(format: loc("debt.apr_only"), String(format: "%.1f", debt.annualInterestRate))
                              : CurrencyManager.shared.formatted(debt.currentBalance, currency: debt.currency))
-                            .font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
+                            .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                     }
                     .padding(10).background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: 10))
                 }
@@ -1227,15 +1227,15 @@ struct DebtEmptyState: View {
             }
             .gentleFloat()
             VStack(spacing: 8) {
-                Text(loc("debt.no_debts")).font(.system(size: 18, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                Text(loc("debt.no_debts")).font(.system(.body, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
                 Text(loc("debt.empty_desc"))
-                    .font(.system(size: 14)).foregroundStyle(AppTheme.textSecondary)
+                    .font(.system(.subheadline)).foregroundStyle(AppTheme.textSecondary)
                     .multilineTextAlignment(.center).lineSpacing(3)
             }
             Button { HapticManager.shared.tap(); vm.resetForm(); vm.showAddSheet = true } label: {
                 HStack(spacing: 8) {
-                    Image(systemName: "plus").font(.system(size: 14, weight: .semibold))
-                    Text(loc("debt.add")).font(.system(size: 15, weight: .semibold))
+                    Image(systemName: "plus").font(.system(.subheadline, weight: .semibold))
+                    Text(loc("debt.add")).font(.system(.subheadline, weight: .semibold))
                 }
                 .foregroundStyle(.white).padding(.horizontal, 32).padding(.vertical, 14)
                 .background(AppTheme.red.opacity(0.9), in: Capsule())
@@ -1260,15 +1260,15 @@ struct DebtFormSheet: View {
                     VStack(spacing: 20) {
                         // Type picker
                         VStack(spacing: 8) {
-                            Text(loc("debt.type")).font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
+                            Text(loc("debt.type")).font(.system(.footnote)).foregroundStyle(AppTheme.textSecondary)
                                 .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 22)
                             ScrollView(.horizontal, showsIndicators: false) {
                                 HStack(spacing: 10) {
                                     ForEach(DebtType.allCases, id: \.self) { type in
                                         Button { HapticManager.shared.tap(); vm.formType = type } label: {
                                             HStack(spacing: 6) {
-                                                Image(systemName: type.icon).font(.system(size: 13))
-                                                Text(type.label).font(.system(size: 13, weight: .medium))
+                                                Image(systemName: type.icon).font(.system(.footnote))
+                                                Text(type.label).font(.system(.footnote, weight: .medium))
                                             }
                                             .foregroundStyle(vm.formType == type ? AppTheme.bg : AppTheme.textSecondary)
                                             .padding(.horizontal, 14).padding(.vertical, 9)
@@ -1286,9 +1286,9 @@ struct DebtFormSheet: View {
                         // Balance fields
                         HStack(spacing: 12) {
                             VStack(spacing: 8) {
-                                Text(loc("cards.current_balance")).font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
+                                Text(loc("cards.current_balance")).font(.system(.footnote)).foregroundStyle(AppTheme.textSecondary)
                                     .frame(maxWidth: .infinity, alignment: .leading)
-                                TextField("0", text: $vm.formBalance).font(.system(size: 18, weight: .bold))
+                                TextField("0", text: $vm.formBalance).font(.system(.body, weight: .bold))
                                     .foregroundStyle(AppTheme.red).keyboardType(.decimalPad)
                                     .padding(14).background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
                                     .onChange(of: vm.formBalance) { _, v in
@@ -1300,15 +1300,15 @@ struct DebtFormSheet: View {
                                 // wrong digit count (typing 5000 vs 50000).
                                 if let p = AmountInputHelper.preview(vm.formBalance, currency: vm.formCurrency) {
                                     Text(p)
-                                        .font(.system(size: 11, weight: .medium))
+                                        .font(.system(.caption2, weight: .medium))
                                         .foregroundStyle(AppTheme.textSecondary)
                                         .frame(maxWidth: .infinity, alignment: .leading)
                                 }
                             }
                             VStack(spacing: 8) {
-                                Text(loc("debt.min_payment")).font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
+                                Text(loc("debt.min_payment")).font(.system(.footnote)).foregroundStyle(AppTheme.textSecondary)
                                     .frame(maxWidth: .infinity, alignment: .leading)
-                                TextField("0", text: $vm.formMinPayment).font(.system(size: 18, weight: .bold))
+                                TextField("0", text: $vm.formMinPayment).font(.system(.body, weight: .bold))
                                     .foregroundStyle(AppTheme.textPrimary).keyboardType(.decimalPad)
                                     .padding(14).background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
                                     .onChange(of: vm.formMinPayment) { _, v in
@@ -1318,7 +1318,7 @@ struct DebtFormSheet: View {
                                     }
                                 if let p = AmountInputHelper.preview(vm.formMinPayment, currency: vm.formCurrency) {
                                     Text(p)
-                                        .font(.system(size: 11, weight: .medium))
+                                        .font(.system(.caption2, weight: .medium))
                                         .foregroundStyle(AppTheme.textSecondary)
                                         .frame(maxWidth: .infinity, alignment: .leading)
                                 }
@@ -1330,9 +1330,9 @@ struct DebtFormSheet: View {
                         // Interest + Due day
                         HStack(spacing: 12) {
                             VStack(spacing: 8) {
-                                Text(loc("debt.annual_int")).font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
+                                Text(loc("debt.annual_int")).font(.system(.footnote)).foregroundStyle(AppTheme.textSecondary)
                                     .frame(maxWidth: .infinity, alignment: .leading)
-                                TextField("0.0", text: $vm.formInterestRate).font(.system(size: 18, weight: .bold))
+                                TextField("0.0", text: $vm.formInterestRate).font(.system(.body, weight: .bold))
                                     .foregroundStyle(AppTheme.orange).keyboardType(.decimalPad)
                                     .padding(14).background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
                                     .onChange(of: vm.formInterestRate) { _, v in
@@ -1354,7 +1354,7 @@ struct DebtFormSheet: View {
                                     }
                             }
                             VStack(spacing: 8) {
-                                Text(loc("debt.due_day")).font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
+                                Text(loc("debt.due_day")).font(.system(.footnote)).foregroundStyle(AppTheme.textSecondary)
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                 // 44×44pt is Apple HIG's minimum tap target.
                                 // Buttons were 36×36 — usable but missed
@@ -1362,15 +1362,15 @@ struct DebtFormSheet: View {
                                 // for users with larger fingers / thumbs.
                                 HStack(spacing: 0) {
                                     Button { HapticManager.shared.tap(); if vm.formDueDay > 1 { vm.formDueDay -= 1 } } label: {
-                                        Image(systemName: "minus").font(.system(size: 14, weight: .semibold))
+                                        Image(systemName: "minus").font(.system(.subheadline, weight: .semibold))
                                             .foregroundStyle(AppTheme.textPrimary).frame(width: 44, height: 44)
                                             .contentShape(Rectangle())
                                     }
 .accessibilityLabel(loc("a11y.earlier_day"))
-                                    Text("\(vm.formDueDay)").font(.system(size: 18, weight: .bold)).foregroundStyle(AppTheme.textPrimary).frame(width: 40)
+                                    Text("\(vm.formDueDay)").font(.system(.body, weight: .bold)).foregroundStyle(AppTheme.textPrimary).frame(width: 40)
                                         .contentTransition(.numericText())
                                     Button { HapticManager.shared.tap(); if vm.formDueDay < 31 { vm.formDueDay += 1 } } label: {
-                                        Image(systemName: "plus").font(.system(size: 14, weight: .semibold))
+                                        Image(systemName: "plus").font(.system(.subheadline, weight: .semibold))
                                             .foregroundStyle(AppTheme.textPrimary).frame(width: 44, height: 44)
                                             .contentShape(Rectangle())
                                     }
@@ -1384,13 +1384,13 @@ struct DebtFormSheet: View {
 
                         // Currency
                         VStack(spacing: 8) {
-                            Text(loc("common.currency")).font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
+                            Text(loc("common.currency")).font(.system(.footnote)).foregroundStyle(AppTheme.textSecondary)
                                 .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 22)
                             ScrollView(.horizontal, showsIndicators: false) {
                                 HStack(spacing: 10) {
                                     ForEach(vm.currencies, id: \.self) { c in
                                         Button { HapticManager.shared.tap(); vm.formCurrency = c } label: {
-                                            Text(c).font(.system(size: 13, weight: .semibold))
+                                            Text(c).font(.system(.footnote, weight: .semibold))
                                                 .foregroundStyle(vm.formCurrency == c ? AppTheme.onVividFill : AppTheme.textSecondary)
                                                 .padding(.horizontal, 16).padding(.vertical, 8)
                                                 .background(vm.formCurrency == c ? AppTheme.accentFill : AppTheme.cardDark, in: Capsule())
@@ -1408,18 +1408,18 @@ struct DebtFormSheet: View {
                             let previewDebt = DebtRecord(name: "Preview", totalAmount: bal, currentBalance: bal,
                                                           minimumPayment: minPay, annualInterestRate: rate, dueDayOfMonth: 1)
                             VStack(alignment: .leading, spacing: 8) {
-                                Text(loc("debt.payoff_preview")).font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
+                                Text(loc("debt.payoff_preview")).font(.system(.footnote)).foregroundStyle(AppTheme.textSecondary)
                                 HStack(spacing: 20) {
                                     if let m = previewDebt.monthsToPayoffMinimum {
                                         VStack(alignment: .leading, spacing: 2) {
-                                            Text(String(format: loc("debt.month"), m)).font(.system(size: 16, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
-                                            Text(loc("debt.at_min")).font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                                            Text(String(format: loc("debt.month"), m)).font(.system(.callout, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
+                                            Text(loc("debt.at_min")).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                                         }
                                     }
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text(CurrencyManager.shared.formatted(previewDebt.totalInterestAtMinimum, currency: vm.formCurrency))
-                                            .font(.system(size: 16, weight: .bold)).foregroundStyle(AppTheme.orange)
-                                        Text(loc("debt.total_int")).font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                                            .font(.system(.callout, weight: .bold)).foregroundStyle(AppTheme.orange)
+                                        Text(loc("debt.total_int")).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                                     }
                                 }
                             }
@@ -1452,7 +1452,7 @@ struct DebtFormSheet: View {
                         }()
                         Button { save() } label: {
                             Text(vm.isEditing ? loc("general.edit") : loc("debt.add"))
-                                .font(.system(size: 16, weight: .bold))
+                                .font(.system(.callout, weight: .bold))
                                 .foregroundStyle(canSave ? .white : AppTheme.textSecondary)
                                 .frame(maxWidth: .infinity).padding(.vertical, 16)
                                 .background(canSave ? AppTheme.red.opacity(0.9) : AppTheme.textSecondary.opacity(0.3), in: Capsule())
@@ -1579,10 +1579,10 @@ struct DebtPaymentSheet: View {
                     RoundedRectangle(cornerRadius: 12)
                         .fill(debt.debtType.color.opacity(0.15)).frame(width: 48, height: 48)
                     Image(systemName: debt.debtType.icon)
-                        .font(.system(size: 22)).foregroundStyle(debt.debtType.color)
+                        .font(.system(.title2)).foregroundStyle(debt.debtType.color)
                 }
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(debt.name).font(.system(size: 16, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                    Text(debt.name).font(.system(.callout, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
                     Text(String(
                         format: loc("debt.balance"),
                         CurrencyManager.shared.formatted(
@@ -1590,7 +1590,7 @@ struct DebtPaymentSheet: View {
                             currency: debt.currency
                         )
                     ))
-                        .font(.system(size: 13)).foregroundStyle(AppTheme.red)
+                        .font(.system(.footnote)).foregroundStyle(AppTheme.red)
                     Text(String(
                         format: loc("debt.minimum_payment"),
                         CurrencyManager.shared.formatted(
@@ -1598,7 +1598,7 @@ struct DebtPaymentSheet: View {
                             currency: debt.currency
                         )
                     ))
-                        .font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
+                        .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                 }
                 Spacer()
             }
@@ -1610,7 +1610,7 @@ struct DebtPaymentSheet: View {
 
             // Quick amounts
             VStack(spacing: 10) {
-                Text(loc("debt.payment_amt")).font(.system(size: 13, weight: .medium)).foregroundStyle(AppTheme.textSecondary)
+                Text(loc("debt.payment_amt")).font(.system(.footnote, weight: .medium)).foregroundStyle(AppTheme.textSecondary)
                     .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 22)
 
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -1647,9 +1647,9 @@ struct DebtPaymentSheet: View {
                 // Custom amount
                 HStack(spacing: 8) {
                     Text(activeCurrency)
-                        .font(.system(size: 18, weight: .bold)).foregroundStyle(debt.debtType.color)
+                        .font(.system(.body, weight: .bold)).foregroundStyle(debt.debtType.color)
                     TextField("0", text: $amountText)
-                        .font(.system(size: 28, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
+                        .font(.system(.title, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
                         .keyboardType(.decimalPad)
                 }
                 .padding(16)
@@ -1663,12 +1663,12 @@ struct DebtPaymentSheet: View {
                     let remaining = debt.currentBalance - amountInDebtCurrency
                     HStack(spacing: 8) {
                         Image(systemName: remaining == 0 ? "checkmark.seal.fill" : "minus.circle")
-                            .font(.system(size: 13))
+                            .font(.system(.footnote))
                             .foregroundStyle(remaining == 0 ? AppTheme.accent : AppTheme.textSecondary)
                         Text(remaining == 0
                              ? String(format: loc("debt.payoff_full"), debt.name)
                              : String(format: loc("debt.remaining_amount"), CurrencyManager.shared.formatted(remaining, currency: debt.currency)))
-                            .font(.system(size: 13))
+                            .font(.system(.footnote))
                             .foregroundStyle(remaining == 0 ? AppTheme.accent : AppTheme.textSecondary)
                     }
                     .padding(.horizontal, 22)
@@ -1679,9 +1679,9 @@ struct DebtPaymentSheet: View {
                 if amount > 0 && wouldGoNegative {
                     HStack(spacing: 8) {
                         Image(systemName: "exclamationmark.triangle.fill")
-                            .font(.system(size: 13)).foregroundStyle(AppTheme.red)
+                            .font(.system(.footnote)).foregroundStyle(AppTheme.red)
                         Text(String(format: loc("debt.insufficient_balance"), CurrencyManager.shared.formatted(availableBalance, currency: activeCurrency)))
-                            .font(.system(size: 13)).foregroundStyle(AppTheme.red)
+                            .font(.system(.footnote)).foregroundStyle(AppTheme.red)
                     }
                     .padding(.horizontal, 22)
                     .transition(.opacity)
@@ -1692,11 +1692,11 @@ struct DebtPaymentSheet: View {
                     let cardCur = activeCurrency
                     HStack(spacing: 8) {
                         Image(systemName: "arrow.triangle.2.circlepath")
-                            .font(.system(size: 12)).foregroundStyle(AppTheme.orange)
+                            .font(.system(.caption)).foregroundStyle(AppTheme.orange)
                         Text(String(format: loc("debt.approx_in"), CurrencyManager.shared.formatted(amountInDebtCurrency, currency: debt.currency), debt.currency))
-                            .font(.system(size: 12)).foregroundStyle(AppTheme.orange)
+                            .font(.system(.caption)).foregroundStyle(AppTheme.orange)
                         Text("(\(cardCur) → \(debt.currency))")
-                            .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                            .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                     }
                     .padding(.horizontal, 22)
                     .transition(.opacity)
@@ -1707,7 +1707,7 @@ struct DebtPaymentSheet: View {
             if cards.count > 1 {
                 Divider().padding(.horizontal, 22).padding(.vertical, 4)
                 VStack(spacing: 8) {
-                    Text(loc("debt.pay_from")).font(.system(size: 13, weight: .medium)).foregroundStyle(AppTheme.textSecondary)
+                    Text(loc("debt.pay_from")).font(.system(.footnote, weight: .medium)).foregroundStyle(AppTheme.textSecondary)
                         .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 22)
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 10) {
@@ -1732,17 +1732,17 @@ struct DebtPaymentSheet: View {
                                                 Text(card.isDigitalWallet
                                                      ? (card.walletProvider.isEmpty ? loc("cards.wallet") : card.walletProvider)
                                                      : "•••• \(card.cardNumber.suffix(4))")
-                                                    .font(.system(size: 9, weight: .semibold)).foregroundStyle(.white)
+                                                    .font(.system(.caption2, weight: .semibold)).foregroundStyle(.white)
                                                 Text(card.isDigitalWallet ? loc("cards.wallet") : network.name)
-                                                    .font(.system(size: 8)).foregroundStyle(.white.opacity(0.6))
+                                                    .font(.system(.caption2)).foregroundStyle(.white.opacity(0.6))
                                             }
                                         }
                                         Text(CurrencyManager.shared.formatted(rawBal, currency: cardCur))
-                                            .font(.system(size: 9, weight: .medium))
+                                            .font(.system(.caption2, weight: .medium))
                                             .foregroundStyle(selectedCardIndex == i ? AppTheme.accent : AppTheme.textSecondary)
                                         if hasMismatch {
                                             Text(loc("tx.auto_convert"))
-                                                .font(.system(size: 8))
+                                                .font(.system(.caption2))
                                                 .foregroundStyle(AppTheme.orange)
                                         }
                                     }
@@ -1758,15 +1758,15 @@ struct DebtPaymentSheet: View {
             Divider().padding(.horizontal, 22).padding(.top, 8)
 
             if let err = errorMsg {
-                Text(err).font(.system(size: 13)).foregroundStyle(AppTheme.red).padding(.horizontal, 22)
+                Text(err).font(.system(.footnote)).foregroundStyle(AppTheme.red).padding(.horizontal, 22)
             }
 
             // Pay button
             Button { makePayment() } label: {
                 HStack(spacing: 10) {
-                    Image(systemName: "dollarsign.circle.fill").font(.system(size: 16))
+                    Image(systemName: "dollarsign.circle.fill").font(.system(.callout))
                     Text(amount > 0 ? String(format: loc("debt.pay"), CurrencyManager.shared.formatted(amount, currency: activeCurrency)) : loc("debt.enter_amount"))
-                        .font(.system(size: 16, weight: .bold))
+                        .font(.system(.callout, weight: .bold))
                 }
                 .foregroundStyle(isValid ? .white : AppTheme.textSecondary)
                 .frame(maxWidth: .infinity).padding(.vertical, 16)
@@ -1864,9 +1864,9 @@ struct QuickPayButton: View {
     var body: some View {
         Button(action: { HapticManager.shared.tap(); action() }) {
             VStack(spacing: 3) {
-                Text(label).font(.system(size: 11, weight: .semibold)).foregroundStyle(color)
+                Text(label).font(.system(.caption2, weight: .semibold)).foregroundStyle(color)
                 Text(CurrencyManager.shared.formatted(amount, currency: currency))
-                    .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                    .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
             }
             .padding(.horizontal, 14).padding(.vertical, 8)
             .background(color.opacity(0.1), in: Capsule())
@@ -1969,7 +1969,7 @@ struct PayoffSimulatorSheet: View {
                         if allDebts.count > 1 {
                             VStack(alignment: .leading, spacing: 8) {
                                 Text(loc("debt.select_debt"))
-                                    .font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
+                                    .font(.system(.footnote)).foregroundStyle(AppTheme.textSecondary)
                                 ScrollView(.horizontal, showsIndicators: false) {
                                     HStack(spacing: 8) {
                                         ForEach(allDebts) { d in
@@ -1996,11 +1996,11 @@ struct PayoffSimulatorSheet: View {
                             HStack {
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text(selectedDebt.name)
-                                        .font(.system(size: 16, weight: .bold))
+                                        .font(.system(.callout, weight: .bold))
                                         .foregroundStyle(AppTheme.textPrimary)
                                     HStack(spacing: 8) {
                                         Text(selectedDebt.debtType.label)
-                                            .font(.system(size: 11))
+                                            .font(.system(.caption2))
                                             .foregroundStyle(AppTheme.textSecondary)
                                             .padding(.horizontal, 8).padding(.vertical, 3)
                                             .background(AppTheme.cardMid, in: Capsule())
@@ -2008,7 +2008,7 @@ struct PayoffSimulatorSheet: View {
                                             format: loc("debt.apr"),
                                             selectedDebt.annualInterestRate
                                         ))
-                                            .font(.system(size: 11, weight: .semibold))
+                                            .font(.system(.caption2, weight: .semibold))
                                             .foregroundStyle(AppTheme.red)
                                             .padding(.horizontal, 8).padding(.vertical, 3)
                                             .background(AppTheme.red.opacity(0.12), in: Capsule())
@@ -2016,7 +2016,7 @@ struct PayoffSimulatorSheet: View {
                                 }
                                 Spacer()
                                 Text(fmt(selectedDebt.currentBalance))
-                                    .font(.system(size: 20, weight: .bold))
+                                    .font(.system(.title3, weight: .bold))
                                     .foregroundStyle(AppTheme.red)
                             }
                         }
@@ -2028,14 +2028,14 @@ struct PayoffSimulatorSheet: View {
                         // Extra payment input
                         VStack(alignment: .leading, spacing: 10) {
                             Text(String(format: loc("debt.extra_payment_count"), fmt(extraPayment)))
-                                .font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
+                                .font(.system(.footnote)).foregroundStyle(AppTheme.textSecondary)
 
                             HStack(spacing: 12) {
                                 Text(CurrencyManager.symbol(for: currency))
-                                    .font(.system(size: 18, weight: .bold))
+                                    .font(.system(.body, weight: .bold))
                                     .foregroundStyle(AppTheme.textSecondary)
                                 TextField("0", text: $extraPaymentText)
-                                    .font(.system(size: 24, weight: .bold))
+                                    .font(.system(.title2, weight: .bold))
                                     .foregroundStyle(AppTheme.textPrimary)
                                     .keyboardType(.numberPad)
                                     .onChange(of: extraPaymentText) { _, v in
@@ -2070,7 +2070,7 @@ struct PayoffSimulatorSheet: View {
                                         extraPaymentText = String(Int(extraPayment))
                                     } label: {
                                         Text(quickChipLabel(amt))
-                                            .font(.system(size: 12, weight: .semibold))
+                                            .font(.system(.caption, weight: .semibold))
                                             .foregroundStyle(AppTheme.accent)
                                             .padding(.horizontal, 10).padding(.vertical, 6)
                                             .background(AppTheme.accent.opacity(0.1), in: Capsule())
@@ -2083,7 +2083,7 @@ struct PayoffSimulatorSheet: View {
                                         extraPayment = 0; extraPaymentText = ""
                                     } label: {
                                         Text(loc("notif.clear"))
-                                            .font(.system(size: 12))
+                                            .font(.system(.caption))
                                             .foregroundStyle(AppTheme.textSecondary)
                                     }
                                 }
@@ -2095,12 +2095,12 @@ struct PayoffSimulatorSheet: View {
                         VStack(spacing: 12) {
                             HStack {
                                 Text(loc("debt.payoff_proj"))
-                                    .font(.system(size: 15, weight: .semibold))
+                                    .font(.system(.subheadline, weight: .semibold))
                                     .foregroundStyle(AppTheme.textPrimary)
                                 Spacer()
                                 if monthsSaved > 0 {
                                     Text(String(format: loc("debt.month_saved"), monthsSaved))
-                                        .font(.system(size: 12, weight: .bold))
+                                        .font(.system(.caption, weight: .bold))
                                         .foregroundStyle(AppTheme.accent)
                                         .padding(.horizontal, 10).padding(.vertical, 4)
                                         .background(AppTheme.accent.opacity(0.12), in: Capsule())
@@ -2112,28 +2112,28 @@ struct PayoffSimulatorSheet: View {
                                 // Minimum only
                                 VStack(alignment: .leading, spacing: 8) {
                                     Text(loc("debt.min_only"))
-                                        .font(.system(size: 12, weight: .semibold))
+                                        .font(.system(.caption, weight: .semibold))
                                         .foregroundStyle(AppTheme.textSecondary)
                                     VStack(alignment: .leading, spacing: 4) {
                                         Text(String(
                                             format: loc("debt.amount_per_month"),
                                             fmt(selectedDebt.minimumPayment)
                                         ))
-                                            .font(.system(size: 13, weight: .bold))
+                                            .font(.system(.footnote, weight: .bold))
                                             .foregroundStyle(AppTheme.textPrimary)
                                         if let m = baseMonths {
                                             Text(String(format: loc("debt.month"), m))
-                                                .font(.system(size: 20, weight: .bold))
+                                                .font(.system(.title3, weight: .bold))
                                                 .foregroundStyle(AppTheme.red)
                                             Text(String(format: loc("debt.free_by"), payoffDateBase))
-                                                .font(.system(size: 11))
+                                                .font(.system(.caption2))
                                                 .foregroundStyle(AppTheme.textSecondary)
                                         } else {
                                             Text("∞")
-                                                .font(.system(size: 28, weight: .bold))
+                                                .font(.system(.title, weight: .bold))
                                                 .foregroundStyle(AppTheme.red)
                                             Text(loc("debt.payment_lt_int"))
-                                                .font(.system(size: 11))
+                                                .font(.system(.caption2))
                                                 .foregroundStyle(AppTheme.red.opacity(0.8))
                                         }
                                     }
@@ -2146,22 +2146,22 @@ struct PayoffSimulatorSheet: View {
                                 // With extra
                                 VStack(alignment: .leading, spacing: 8) {
                                     Text(loc("debt.with_extra"))
-                                        .font(.system(size: 12, weight: .semibold))
+                                        .font(.system(.caption, weight: .semibold))
                                         .foregroundStyle(AppTheme.accent)
                                     VStack(alignment: .leading, spacing: 4) {
                                         Text(String(format: loc("debt.amount_per_month"), fmt(selectedDebt.minimumPayment + max(extraPayment, 0))))
-                                            .font(.system(size: 13, weight: .bold))
+                                            .font(.system(.footnote, weight: .bold))
                                             .foregroundStyle(AppTheme.textPrimary)
                                         if let m = boostedMonths {
                                             Text(String(format: loc("debt.month"), m))
-                                                .font(.system(size: 20, weight: .bold))
+                                                .font(.system(.title3, weight: .bold))
                                                 .foregroundStyle(AppTheme.accent)
                                             Text(String(format: loc("debt.free_by"), payoffDateBoosted))
-                                                .font(.system(size: 11))
+                                                .font(.system(.caption2))
                                                 .foregroundStyle(AppTheme.textSecondary)
                                         } else {
                                             Text(String(format: loc("debt.amount_per_month"), fmt(selectedDebt.minimumPayment)))
-                                                .font(.system(size: 13))
+                                                .font(.system(.footnote))
                                                 .foregroundStyle(AppTheme.textSecondary)
                                         }
                                     }
@@ -2176,13 +2176,13 @@ struct PayoffSimulatorSheet: View {
                             if interestSaved > 0 {
                                 HStack(spacing: 10) {
                                     Image(systemName: "banknote.fill")
-                                        .font(.system(size: 16)).foregroundStyle(AppTheme.accent)
+                                        .font(.system(.callout)).foregroundStyle(AppTheme.accent)
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text(String(format: loc("debt.interest_saved"), fmt(interestSaved)))
-                                            .font(.system(size: 13, weight: .semibold))
+                                            .font(.system(.footnote, weight: .semibold))
                                             .foregroundStyle(AppTheme.textPrimary)
                                         Text(String(format: loc("debt.interest_saved"), fmt(extraPayment)))
-                                            .font(.system(size: 11))
+                                            .font(.system(.caption2))
                                             .foregroundStyle(AppTheme.textSecondary)
                                     }
                                     Spacer()
@@ -2196,9 +2196,9 @@ struct PayoffSimulatorSheet: View {
 
                         // Monthly interest cost note
                         HStack(spacing: 8) {
-                            Image(systemName: "info.circle").font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
+                            Image(systemName: "info.circle").font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                             Text(String(format: loc("debt.monthly_interest"), fmt(selectedDebt.monthlyInterestCost)))
-                                .font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
+                                .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                         }
                         .padding(.horizontal, 22)
 

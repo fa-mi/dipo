@@ -98,7 +98,7 @@ struct NoInternetOverlay: View {
 
                 // Title
                 Text(loc("network.no_connection"))
-                    .font(.system(size: 22, weight: .bold))
+                    .font(.system(.title2, weight: .bold))
                     .foregroundStyle(AppTheme.textPrimary)
                     .opacity(appeared ? 1 : 0)
                     .animation(AppMotion.appear, value: appeared)
@@ -107,7 +107,7 @@ struct NoInternetOverlay: View {
 
                 // Subtitle
                 Text(loc("network.message"))
-                    .font(.system(size: 14))
+                    .font(.system(.subheadline))
                     .foregroundStyle(AppTheme.textSecondary)
                     .multilineTextAlignment(.center)
                     .lineSpacing(3)
@@ -127,7 +127,7 @@ struct NoInternetOverlay: View {
 
                 // Footer hint
                 Text(loc("network.data_safe"))
-                    .font(.system(size: 12))
+                    .font(.system(.caption))
                     .foregroundStyle(AppTheme.textSecondary.opacity(0.5))
                     .padding(.bottom, 40)
                     .opacity(appeared ? 1 : 0)
@@ -144,12 +144,12 @@ struct NoInternetOverlay: View {
                 if monitor.isChecking {
                     ProgressView().tint(.white).scaleEffect(0.85)
                     Text(loc("network.checking"))
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.system(.callout, weight: .semibold))
                 } else {
                     Image(systemName: "arrow.clockwise")
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.system(.subheadline, weight: .semibold))
                     Text(loc("network.check"))
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.system(.callout, weight: .semibold))
                 }
             }
             .foregroundStyle(monitor.isChecking ? AppTheme.textSecondary : AppTheme.onVividFill)
@@ -178,9 +178,9 @@ struct ReconnectedToast: View {
             if monitor.justReconnected {
                 HStack(spacing: 8) {
                     Image(systemName: "wifi")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.system(.footnote, weight: .semibold))
                     Text(loc("network.back_online"))
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.system(.footnote, weight: .semibold))
                 }
                 .foregroundStyle(AppTheme.onVividFill)
                 .padding(.horizontal, 16).padding(.vertical, 9)

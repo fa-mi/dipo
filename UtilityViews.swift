@@ -188,17 +188,17 @@ struct SearchView: View {
                     HStack(spacing: 12) {
                         HStack(spacing: 10) {
                             Image(systemName: "magnifyingglass")
-                                .font(.system(size: 16))
+                                .font(.system(.callout))
                                 .foregroundStyle(AppTheme.textSecondary)
                             TextField(loc("search.placeholder"), text: $query)
-                                .font(.system(size: 16))
+                                .font(.system(.callout))
                                 .foregroundStyle(AppTheme.textPrimary)
                                 .focused($focused)
                                 .autocorrectionDisabled()
                             if !query.isEmpty {
                                 Button { query = "" } label: {
                                     Image(systemName: "xmark.circle.fill")
-                                        .font(.system(size: 16))
+                                        .font(.system(.callout))
                                         .foregroundStyle(AppTheme.textSecondary)
                                 }
 .accessibilityLabel(loc("a11y.clear_search"))
@@ -210,7 +210,7 @@ struct SearchView: View {
                             .stroke(focused ? AppTheme.accent.opacity(0.5) : Color.clear, lineWidth: 1.5))
 
                         Button(loc("common.cancel")) { HapticManager.shared.tap(); dismiss() }
-                            .foregroundStyle(AppTheme.textSecondary).font(.system(size: 15))
+                            .foregroundStyle(AppTheme.textSecondary).font(.system(.subheadline))
                     }
                     .padding(.horizontal, 22).padding(.top, 16).padding(.bottom, 10)
 
@@ -226,7 +226,7 @@ struct SearchView: View {
                                     HStack(spacing: 5) {
                                         if period != .all_period {
                                             Image(systemName: "calendar")
-                                                .font(.system(size: 10, weight: .medium))
+                                                .font(.system(.caption2, weight: .medium)).imageScale(.small)
                                         }
                                         if period == .custom && selectedPeriod == .custom {
                                             // Show the selected date range, locale-aware
@@ -238,7 +238,7 @@ struct SearchView: View {
                                                 return f
                                             }()
                                             Text("\(df.string(from: customStart)) – \(df.string(from: customEnd))")
-                                                .font(.system(size: 12, weight: .semibold))
+                                                .font(.system(.caption, weight: .semibold))
                                         } else {
                                             Text(period.title)
                                                 .font(.system(size: 12, weight: selectedPeriod == period ? .semibold : .regular))
@@ -284,7 +284,7 @@ struct SearchView: View {
                             Image(systemName: "magnifyingglass")
                                 .font(.system(size: 40)).foregroundStyle(AppTheme.textSecondary)
                             Text(query.isEmpty ? loc("search.nil_period") : String(format: loc("search.no_results"), query))
-                                .font(.system(size: 15)).foregroundStyle(AppTheme.textSecondary)
+                                .font(.system(.subheadline)).foregroundStyle(AppTheme.textSecondary)
                                 .multilineTextAlignment(.center)
                         }
                         .padding(.top, 80)
@@ -297,7 +297,7 @@ struct SearchView: View {
                                         ? loc("search.result_count")
                                         : loc("search.results_count")
                                     Text(String(format: fmt, filtered.count))
-                                        .font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
+                                        .font(.system(.footnote)).foregroundStyle(AppTheme.textSecondary)
                                     // Order: by time, or by amount.
                                     Menu {
                                         ForEach(SearchSort.allCases, id: \.self) { option in
@@ -312,9 +312,9 @@ struct SearchView: View {
                                     } label: {
                                         HStack(spacing: 4) {
                                             Image(systemName: "arrow.up.arrow.down")
-                                                .font(.system(size: 10, weight: .semibold))
+                                                .font(.system(.caption2, weight: .semibold)).imageScale(.small)
                                             Text(loc(sort.titleKey))
-                                                .font(.system(size: 12, weight: .medium))
+                                                .font(.system(.caption, weight: .medium))
                                         }
                                         .foregroundStyle(AppTheme.accent)
                                         .padding(.horizontal, 10).padding(.vertical, 5)
@@ -325,7 +325,7 @@ struct SearchView: View {
                                     Text(totalAmount >= 0
                                          ? "+\(CurrencyManager.shared.formatted(totalAmount, currency: filtered.first?.currency ?? CurrencyManager.shared.preferredCurrency))"
                                          : CurrencyManager.shared.formatted(totalAmount, currency: filtered.first?.currency ?? CurrencyManager.shared.preferredCurrency))
-                                        .font(.system(size: 13, weight: .semibold))
+                                        .font(.system(.footnote, weight: .semibold))
                                         .foregroundStyle(totalAmount >= 0 ? AppTheme.accent : AppTheme.red)
                                 }
                                 .padding(.horizontal, 22).padding(.vertical, 12)
@@ -342,13 +342,13 @@ struct SearchView: View {
                                             if !group.label.isEmpty {
                                             HStack {
                                                 Text(group.label)
-                                                    .font(.system(size: 13, weight: .semibold))
+                                                    .font(.system(.footnote, weight: .semibold))
                                                     .foregroundStyle(AppTheme.textSecondary)
                                                 Spacer()
                                                 Text(groupTotal >= 0
                                                      ? "+\(CurrencyManager.shared.formatted(groupTotal, currency: group.txs.first?.currency ?? CurrencyManager.shared.preferredCurrency))"
                                                      : CurrencyManager.shared.formatted(groupTotal, currency: group.txs.first?.currency ?? CurrencyManager.shared.preferredCurrency))
-                                                    .font(.system(size: 12, weight: .medium))
+                                                    .font(.system(.caption, weight: .medium))
                                                     .foregroundStyle(groupTotal >= 0 ? AppTheme.accent.opacity(0.8) : AppTheme.red.opacity(0.8))
                                             }
                                             .padding(.horizontal, 22)
@@ -447,11 +447,11 @@ struct SearchTxRow: View {
             }
             VStack(alignment: .leading, spacing: 3) {
                 Text(tx.name)
-                    .font(.system(size: 15, weight: .medium))
+                    .font(.system(.subheadline, weight: .medium))
                     .foregroundStyle(AppTheme.textPrimary)
                 HStack(spacing: 6) {
                     Text(formattedDate)
-                        .font(.system(size: 11))
+                        .font(.system(.caption2))
                         .foregroundStyle(AppTheme.textSecondary)
                         // The date yields first. A truncated date is still
                         // readable; a wrapped category chip ("Commitm/ent")
@@ -459,7 +459,7 @@ struct SearchTxRow: View {
                         .lineLimit(1)
                         .layoutPriority(0)
                     Text(tx.category.shortLabel)
-                        .font(.system(size: 10, weight: .medium))
+                        .font(.system(.caption2, weight: .medium))
                         .foregroundStyle(tx.category.color)
                         .lineLimit(1)
                         .fixedSize(horizontal: true, vertical: false)
@@ -472,12 +472,12 @@ struct SearchTxRow: View {
             Spacer()
             VStack(alignment: .trailing, spacing: 3) {
                 Text(CurrencyManager.shared.formatted(abs(tx.amount), currency: tx.currency))
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.system(.subheadline, weight: .semibold))
                     .foregroundStyle(tx.amount >= 0 ? AppTheme.green : AppTheme.textPrimary)
                 if tx.amount >= 0 {
-                    Text(loc("home.income")).font(.system(size: 10)).foregroundStyle(AppTheme.textSecondary)
+                    Text(loc("home.income")).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                 } else {
-                    Text(tx.displayType).font(.system(size: 10)).foregroundStyle(AppTheme.textSecondary)
+                    Text(tx.displayType).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                 }
             }
         }
@@ -533,7 +533,7 @@ struct TransactionDetailSheet: View {
             try? context.save()
         } label: {
             Text(title)
-                .font(.system(size: 12, weight: .semibold))
+                .font(.system(.caption, weight: .semibold))
                 .foregroundStyle(on ? AppTheme.onVividFill : AppTheme.textSecondary)
                 .padding(.horizontal, 12).padding(.vertical, 7)
                 .background(on ? AppTheme.accentFill : AppTheme.cardMid, in: Capsule())
@@ -696,9 +696,9 @@ struct TransactionDetailSheet: View {
                 if tx.txSubtype != .normal {
                     HStack(spacing: 5) {
                         Image(systemName: tx.txSubtype.icon)
-                            .font(.system(size: 10, weight: .semibold))
+                            .font(.system(.caption2, weight: .semibold)).imageScale(.small)
                         Text(tx.txSubtype.displayLabel)
-                            .font(.system(size: 11, weight: .bold))
+                            .font(.system(.caption2, weight: .bold))
                     }
                     .foregroundStyle(AppTheme.orange)
                     .padding(.horizontal, 10).padding(.vertical, 4)
@@ -707,7 +707,7 @@ struct TransactionDetailSheet: View {
                 }
 
                 Text(tx.amount >= 0 ? "+\(formattedAmount)" : "-\(formattedAmount)")
-                    .font(.system(size: 34, weight: .bold))
+                    .font(.system(.largeTitle, weight: .bold))
                     // The same money-in / money-out pair as Home's flow card.
                     .foregroundStyle(tx.amount >= 0 ? AppTheme.flowIn : AppTheme.flowOut)
 
@@ -721,29 +721,29 @@ struct TransactionDetailSheet: View {
                         Text(String(format: loc("tx.fx_original"),
                                     CurrencyManager.shared.formatted(abs(tx.fxOriginalAmount),
                                                                      currency: tx.fxOriginalCurrency)))
-                            .font(.system(size: 14))
+                            .font(.system(.subheadline))
                             .foregroundStyle(AppTheme.textSecondary)
                         Text(String(format: loc("tx.fx_rate_used"),
                                     CurrencyManager.symbol(for: tx.fxOriginalCurrency),
                                     CurrencyManager.shared.formatted(tx.fxRate, currency: tx.currency)))
-                            .font(.system(size: 11))
+                            .font(.system(.caption2))
                             .foregroundStyle(AppTheme.textSecondary)
                     }
                 } else {
                     Text(convertedLabel)
-                        .font(.system(size: 14))
+                        .font(.system(.subheadline))
                         .foregroundStyle(AppTheme.textSecondary)
 
                     if CurrencyManager.shared.isLoading {
                         HStack(spacing: 6) {
                             ProgressView().scaleEffect(0.7).tint(AppTheme.textSecondary)
-                            Text(loc("common.updating_rate")).font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                            Text(loc("common.updating_rate")).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                         }
                     } else if let updated = CurrencyManager.shared.lastUpdated {
                         Text(String(format: loc("common.rate_as_of"),
                                     CurrencyManager.shared.rateLabel,
                                     Self.shortTimeString(from: updated)))
-                            .font(.system(size: 11))
+                            .font(.system(.caption2))
                             .foregroundStyle(AppTheme.textSecondary)
                     }
                 }
@@ -786,12 +786,12 @@ struct TransactionDetailSheet: View {
 
                 VStack(alignment: .leading, spacing: 10) {
                     Text(loc("tx.rhythm_title"))
-                        .font(.system(size: 10, weight: .bold))
+                        .font(.system(.caption2, weight: .bold))
                         .foregroundStyle(AppTheme.textSecondary)
                         .tracking(0.6)
 
                     Text(loc(explanationKey(for: auto)))
-                        .font(.system(size: 12))
+                        .font(.system(.caption))
                         .foregroundStyle(AppTheme.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
 
@@ -819,8 +819,8 @@ struct TransactionDetailSheet: View {
                 pendingDelete = tx
             } label: {
                 HStack(spacing: 10) {
-                    Image(systemName: "trash").font(.system(size: 16))
-                    Text(loc("tx.delete")).font(.system(size: 15, weight: .semibold))
+                    Image(systemName: "trash").font(.system(.callout))
+                    Text(loc("tx.delete")).font(.system(.subheadline, weight: .semibold))
                 }
                 .foregroundStyle(AppTheme.red)
                 .frame(maxWidth: .infinity)
@@ -854,8 +854,8 @@ struct TransactionDetailSheet: View {
                         }
                     } label: {
                         HStack(spacing: 8) {
-                            Image(systemName: type.icon).font(.system(size: 15))
-                            Text(type.localizedLabel).font(.system(size: 15, weight: .semibold))
+                            Image(systemName: type.icon).font(.system(.subheadline))
+                            Text(type.localizedLabel).font(.system(.subheadline, weight: .semibold))
                         }
                         .foregroundStyle(editType == type ? AppTheme.onVividFill : AppTheme.textSecondary)
                         .frame(maxWidth: .infinity)
@@ -880,19 +880,19 @@ struct TransactionDetailSheet: View {
                     // silently rewrite what hits the card balance.
                     HStack(spacing: 6) {
                         Text(CurrencyManager.symbol(for: editCurrency))
-                            .font(.system(size: 15, weight: .bold))
+                            .font(.system(.subheadline, weight: .bold))
                             .foregroundStyle(AppTheme.accent)
                         Text(editCurrency)
-                            .font(.system(size: 13, weight: .medium))
+                            .font(.system(.footnote, weight: .medium))
                         Image(systemName: "lock.fill")
-                            .font(.system(size: 9))
+                            .font(.system(.caption2)).imageScale(.small)
                     }
                     .foregroundStyle(AppTheme.textSecondary)
                     .padding(.horizontal, 13).padding(.vertical, 12)
                     .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: 13))
 
                     TextField("0", text: $editAmount)
-                        .font(.system(size: 34, weight: .bold))
+                        .font(.system(.largeTitle, weight: .bold))
                         .foregroundStyle(AppTheme.textPrimary)
                         .keyboardType(.decimalPad)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -904,7 +904,7 @@ struct TransactionDetailSheet: View {
                 // digits back formatted, so a missing zero is caught here.
                 if let p = AmountInputHelper.preview(editAmount, currency: editCurrency) {
                     Text(p)
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.system(.caption, weight: .medium))
                         .foregroundStyle(AppTheme.textSecondary)
                 }
             }
@@ -938,8 +938,8 @@ struct TransactionDetailSheet: View {
             Button { saveEdits() } label: {
                 let canSave = (Double(editAmount) ?? 0) > 0
                 HStack(spacing: 10) {
-                    Image(systemName: "checkmark.circle.fill").font(.system(size: 17))
-                    Text(loc("common.save")).font(.system(size: 16, weight: .bold))
+                    Image(systemName: "checkmark.circle.fill").font(.system(.body))
+                    Text(loc("common.save")).font(.system(.callout, weight: .bold))
                 }
                 .foregroundStyle(canSave ? AppTheme.onVividFill : AppTheme.textSecondary)
                 .frame(maxWidth: .infinity).padding(.vertical, 17)
@@ -989,9 +989,9 @@ struct DetailRow: View {
     let value: String
     var body: some View {
         HStack {
-            Text(label).font(.system(size: 14)).foregroundStyle(AppTheme.textSecondary)
+            Text(label).font(.system(.subheadline)).foregroundStyle(AppTheme.textSecondary)
             Spacer()
-            Text(value).font(.system(size: 14, weight: .medium)).foregroundStyle(AppTheme.textPrimary)
+            Text(value).font(.system(.subheadline, weight: .medium)).foregroundStyle(AppTheme.textPrimary)
                 .multilineTextAlignment(.trailing)
         }
         .padding(.horizontal, 18).padding(.vertical, 14)
@@ -1204,13 +1204,13 @@ struct AddTransactionSheet: View {
     var currencyButtonLabel: some View {
         HStack(spacing: 6) {
             Text(CurrencyManager.symbol(for: currency))
-                .font(.system(size: 15, weight: .bold))
+                .font(.system(.subheadline, weight: .bold))
                 .foregroundStyle(AppTheme.accent)
             Text(currency)
-                .font(.system(size: 13, weight: .medium))
+                .font(.system(.footnote, weight: .medium))
                 .foregroundStyle(AppTheme.textSecondary)
             Image(systemName: "chevron.up.chevron.down")
-                .font(.system(size: 10))
+                .font(.system(.caption2)).imageScale(.small)
                 .foregroundStyle(AppTheme.textSecondary)
         }
         // `cardMid`, not `cardDark`: this pill now sits INSIDE the amount card,
@@ -1255,30 +1255,30 @@ struct AddTransactionSheet: View {
                             .fill(AppTheme.accent.opacity(0.14))
                             .frame(width: 38, height: 38)
                         Image(systemName: "doc.text.viewfinder")
-                            .font(.system(size: 17, weight: .semibold))
+                            .font(.system(.body, weight: .semibold))
                             .foregroundStyle(AppTheme.accent)
                     }
                     VStack(alignment: .leading, spacing: 1) {
                         HStack(spacing: 6) {
                             Text(loc("receipt.entry.title"))
-                                .font(.system(size: 14, weight: .bold))
+                                .font(.system(.subheadline, weight: .bold))
                                 .foregroundStyle(AppTheme.textPrimary)
                             if !PremiumManager.shared.canAccess(.scanReceipt) {
                                 Image(systemName: "crown.fill")
-                                    .font(.system(size: 9, weight: .bold))
+                                    .font(.system(.caption2, weight: .bold)).imageScale(.small)
                                     .foregroundStyle(AppTheme.onVividFill)
                                     .padding(3)
                                     .background(PremiumPlan.royal.color, in: Circle())
                             }
                         }
                         Text(loc("receipt.entry.subtitle"))
-                            .font(.system(size: 11))
+                            .font(.system(.caption2))
                             .foregroundStyle(AppTheme.textSecondary)
                             .lineLimit(1)
                     }
                     Spacer(minLength: 4)
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.system(.caption, weight: .semibold))
                         .foregroundStyle(AppTheme.textSecondary)
                 }
                 .padding(12)
@@ -1303,8 +1303,8 @@ struct AddTransactionSheet: View {
                     }
                 } label: {
                     HStack(spacing: 8) {
-                        Image(systemName: type.icon).font(.system(size: 15))
-                        Text(type.title).font(.system(size: 15, weight: .semibold))
+                        Image(systemName: type.icon).font(.system(.subheadline))
+                        Text(type.title).font(.system(.subheadline, weight: .semibold))
                     }
                     .foregroundStyle(txType == type ? AppTheme.onVividFill
                                      : AppTheme.textSecondary.opacity(blocked ? 0.35 : 1))
@@ -1351,7 +1351,7 @@ struct AddTransactionSheet: View {
                         currencyButtonLabel
                             .overlay(alignment: .topTrailing) {
                                 Image(systemName: "lock.fill")
-                                    .font(.system(size: 8, weight: .bold))
+                                    .font(.system(.caption2, weight: .bold)).imageScale(.small)
                                     .foregroundStyle(AppTheme.onVividFill)
                                     .padding(3)
                                     .background(PremiumPlan.royal.color, in: Circle())
@@ -1362,7 +1362,7 @@ struct AddTransactionSheet: View {
                 }
 
                 TextField("0", text: $amountText)
-                    .font(.system(size: 34, weight: .bold))
+                    .font(.system(.largeTitle, weight: .bold))
                     .foregroundStyle(AppTheme.textPrimary)
                     .keyboardType(.decimalPad)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -1376,17 +1376,17 @@ struct AddTransactionSheet: View {
             Group {
                 if !convertedPreview.isEmpty {
                     Text(convertedPreview)
-                        .font(.system(size: 12))
+                        .font(.system(.caption))
                         .foregroundStyle(AppTheme.textSecondary)
                 } else if let p = AmountInputHelper.preview(amountText, currency: currency) {
                     // Echo "5000000" back as "Rp 5.000.000" so a digit-count
                     // typo is caught before it is saved, not after.
                     Text(p)
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.system(.caption, weight: .medium))
                         .foregroundStyle(AppTheme.textSecondary)
                 } else {
                     Text(CurrencyManager.shared.rateLabel)
-                        .font(.system(size: 11))
+                        .font(.system(.caption2))
                         .foregroundStyle(AppTheme.textSecondary.opacity(0.7))
                 }
             }
@@ -1405,22 +1405,22 @@ struct AddTransactionSheet: View {
                 ZStack {
                     Circle().fill(AppTheme.accent.opacity(0.12)).frame(width: 36, height: 36)
                     Image(systemName: "arrow.triangle.2.circlepath")
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.system(.subheadline, weight: .semibold))
                         .foregroundStyle(AppTheme.accent)
                 }
                 VStack(alignment: .leading, spacing: 2) {
                     Text(loc("tx.smart_convert"))
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.system(.footnote, weight: .semibold))
                         .foregroundStyle(AppTheme.textPrimary)
                     Text(String(format: loc("tx.save_in_currency"), selectedCardCurrency))
-                        .font(.system(size: 11))
+                        .font(.system(.caption2))
                         .foregroundStyle(AppTheme.textSecondary)
                 }
                 Spacer()
                 // Locked ON: a transaction in a currency the card does not hold
                 // MUST be converted, or the balance stops meaning anything.
                 Text(loc("tx.required"))
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(.system(.caption2, weight: .semibold))
                     .foregroundStyle(AppTheme.accent)
                     .padding(.horizontal, 8).padding(.vertical, 4)
                     .background(AppTheme.accent.opacity(0.12), in: Capsule())
@@ -1431,23 +1431,23 @@ struct AddTransactionSheet: View {
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(loc("tx.you_entered"))
-                            .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                            .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                         Text(CurrencyManager.shared.formatted(amount, currency: currency))
-                            .font(.system(size: 14, weight: .semibold)).foregroundStyle(AppTheme.textSecondary)
+                            .font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.textSecondary)
                     }
                     Image(systemName: "arrow.right")
-                        .font(.system(size: 12)).foregroundStyle(AppTheme.accent)
+                        .font(.system(.caption)).foregroundStyle(AppTheme.accent)
                         .padding(.horizontal, 8)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(loc("tx.saved_as"))
-                            .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                            .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                         Text(CurrencyManager.shared.formatted(convertedAmount, currency: selectedCardCurrency))
-                            .font(.system(size: 14, weight: .bold)).foregroundStyle(AppTheme.accent)
+                            .font(.system(.subheadline, weight: .bold)).foregroundStyle(AppTheme.accent)
                     }
                     Spacer()
                 }
                 Text(CurrencyManager.shared.rateLabel)
-                    .font(.system(size: 10)).foregroundStyle(AppTheme.textSecondary.opacity(0.6))
+                    .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary.opacity(0.6))
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
@@ -1485,14 +1485,14 @@ struct AddTransactionSheet: View {
                 let learned = SmartBudgetManager.learnedCategory(
                     for: name, transactions: allTransactions)
                 HStack(spacing: 8) {
-                    Image(systemName: suggested.icon).font(.system(size: 12)).foregroundStyle(suggested.color)
+                    Image(systemName: suggested.icon).font(.system(.caption)).foregroundStyle(suggested.color)
                     // Cite the evidence when it came from the user's own
                     // history. "Because you did this 5 times" is trustworthy in
                     // a way a bare "detected" never is.
                     Text(learned.map {
                             String(format: loc("tx.learned_from"), $0.count, $0.matchedTerm)
                          } ?? String(format: loc("tx.auto_detected"), suggested.displayLabel))
-                        .font(.system(size: 12, weight: .medium)).foregroundStyle(AppTheme.textSecondary)
+                        .font(.system(.caption, weight: .medium)).foregroundStyle(AppTheme.textSecondary)
                     Spacer()
                     Button {
                         HapticManager.shared.tap()
@@ -1502,7 +1502,7 @@ struct AddTransactionSheet: View {
                         // mix of fixed bright hexes and adaptive tokens that go
                         // DARK in light mode, so the label has to invert with
                         // the scheme. onVividFill never inverts.
-                        Text(loc("tx.apply")).font(.system(size: 11, weight: .semibold))
+                        Text(loc("tx.apply")).font(.system(.caption2, weight: .semibold))
                             .foregroundStyle(AppTheme.onSolid)
                             .padding(.horizontal, 10).padding(.vertical, 4)
                             .background(suggested.color, in: Capsule())
@@ -1603,9 +1603,9 @@ struct AddTransactionSheet: View {
                 // light text on a light grey fill — effectively invisible.
                 let canSubmit = isValid && !(wouldGoNegative && txType == .expense)
                 HStack(spacing: 10) {
-                    Image(systemName: "checkmark.circle.fill").font(.system(size: 17))
+                    Image(systemName: "checkmark.circle.fill").font(.system(.body))
                     Text(String(format: loc("tx.add_type"), txType.title))
-                        .font(.system(size: 16, weight: .bold))
+                        .font(.system(.callout, weight: .bold))
                 }
                 .foregroundStyle(canSubmit ? AppTheme.onVividFill : AppTheme.textSecondary)
                 .frame(maxWidth: .infinity).padding(.vertical, 17)
@@ -1899,10 +1899,10 @@ struct CustomDateRangeSheet: View {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(loc("tx.custom_range"))
-                        .font(.system(size: 18, weight: .bold))
+                        .font(.system(.body, weight: .bold))
                         .foregroundStyle(AppTheme.textPrimary)
                     Text(loc("tx.max_range"))
-                        .font(.system(size: 12))
+                        .font(.system(.caption))
                         .foregroundStyle(AppTheme.textSecondary)
                 }
                 Spacer()
@@ -1913,7 +1913,7 @@ struct CustomDateRangeSheet: View {
             VStack(spacing: 16) {
                 VStack(spacing: 6) {
                     Text(loc("tx.start_date"))
-                        .font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
+                        .font(.system(.footnote)).foregroundStyle(AppTheme.textSecondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                     DatePicker("", selection: $localStart, in: ...Date(), displayedComponents: .date)
                         .datePickerStyle(.compact).labelsHidden().tint(AppTheme.accent)
@@ -1928,7 +1928,7 @@ struct CustomDateRangeSheet: View {
 
                 VStack(spacing: 6) {
                     Text(loc("tx.end_date"))
-                        .font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
+                        .font(.system(.footnote)).foregroundStyle(AppTheme.textSecondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                     let maxEnd = Calendar.current.safeDate(byAdding: .month, value: 1, to: localStart)
                     DatePicker("", selection: $localEnd,
@@ -1940,9 +1940,9 @@ struct CustomDateRangeSheet: View {
 
                 let days = max(Calendar.current.dateComponents([.day], from: localStart, to: localEnd).day ?? 0, 0)
                 HStack(spacing: 8) {
-                    Image(systemName: "calendar.badge.clock").font(.system(size: 13)).foregroundStyle(AppTheme.accent)
+                    Image(systemName: "calendar.badge.clock").font(.system(.footnote)).foregroundStyle(AppTheme.accent)
                     Text(days == 1 ? String(format: loc("search.day_results"), days) : String(format: loc("search.days_results"), days))
-                        .font(.system(size: 13, weight: .medium)).foregroundStyle(AppTheme.textSecondary)
+                        .font(.system(.footnote, weight: .medium)).foregroundStyle(AppTheme.textSecondary)
                     Spacer()
                 }
                 .padding(12)
@@ -1961,7 +1961,7 @@ struct CustomDateRangeSheet: View {
                 dismiss()
             } label: {
                 Text(loc("tx.apply_range"))
-                    .font(.system(size: 16, weight: .bold)).foregroundStyle(AppTheme.bg)
+                    .font(.system(.callout, weight: .bold)).foregroundStyle(AppTheme.bg)
                     .frame(maxWidth: .infinity).padding(.vertical, 16)
                     .background(AppTheme.accentFill, in: Capsule())
                     .shadow(color: AppTheme.accent.opacity(0.35), radius: 12, y: 6)

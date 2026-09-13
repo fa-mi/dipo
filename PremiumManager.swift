@@ -566,16 +566,16 @@ struct LockedFeaturePlaceholder: View {
                         .fill(feature.requiredPlan.color.opacity(0.12))
                         .frame(width: 88, height: 88)
                     Image(systemName: feature.icon)
-                        .font(.system(size: 34, weight: .semibold))
+                        .font(.system(.largeTitle, weight: .semibold))
                         .foregroundStyle(feature.requiredPlan.color)
                 }
 
                 VStack(spacing: 10) {
                     HStack(spacing: 6) {
                         Image(systemName: feature.requiredPlan.icon)
-                            .font(.system(size: 12, weight: .bold))
+                            .font(.system(.caption, weight: .bold))
                         Text(feature.requiredPlan.label.uppercased())
-                            .font(.system(size: 11, weight: .bold))
+                            .font(.system(.caption2, weight: .bold))
                             .tracking(1.5)
                     }
                     .foregroundStyle(feature.requiredPlan.color)
@@ -584,12 +584,12 @@ struct LockedFeaturePlaceholder: View {
                     .overlay(Capsule().stroke(feature.requiredPlan.color.opacity(0.3), lineWidth: 1))
 
                     Text(feature.displayName)
-                        .font(.system(size: 24, weight: .bold))
+                        .font(.system(.title2, weight: .bold))
                         .foregroundStyle(AppTheme.textPrimary)
                         .multilineTextAlignment(.center)
 
                     Text(feature.description)
-                        .font(.system(size: 15))
+                        .font(.system(.subheadline))
                         .foregroundStyle(AppTheme.textSecondary)
                         .multilineTextAlignment(.center)
                         .lineSpacing(3)
@@ -601,9 +601,9 @@ struct LockedFeaturePlaceholder: View {
                     showPaywall = true
                 } label: {
                     HStack(spacing: 10) {
-                        Image(systemName: "lock.open.fill").font(.system(size: 16))
+                        Image(systemName: "lock.open.fill").font(.system(.callout))
                         Text(String(format: loc("premium.unlock"), feature.requiredPlan.label))
-                            .font(.system(size: 16, weight: .bold))
+                            .font(.system(.callout, weight: .bold))
                     }
                     .foregroundStyle(.white)
                     .frame(maxWidth: .infinity)
@@ -682,7 +682,7 @@ struct PaywallView: View {
                                 .fill(selectedPlan.color.opacity(0.12))
                                 .frame(width: 80, height: 80)
                             Image(systemName: selectedPlan.icon)
-                                .font(.system(size: 32, weight: .semibold))
+                                .font(.system(.largeTitle, weight: .semibold))
                                 .foregroundStyle(selectedPlan.color)
                         }
                         .animation(.spring(response: 0.35), value: selectedPlan)
@@ -691,13 +691,13 @@ struct PaywallView: View {
                         .animation(AppMotion.appear, value: appeared)
 
                         Text(loc("premium.upgrade"))
-                            .font(.system(size: 26, weight: .bold))
+                            .font(.system(.title, weight: .bold))
                             .foregroundStyle(AppTheme.textPrimary)
                             .opacity(appeared ? 1 : 0)
                             .animation(AppMotion.appear, value: appeared)
 
                         Text(loc("premium.sub"))
-                            .font(.system(size: 14))
+                            .font(.system(.subheadline))
                             .foregroundStyle(AppTheme.textSecondary)
                             .multilineTextAlignment(.center)
                             .padding(.horizontal, 32)
@@ -707,9 +707,9 @@ struct PaywallView: View {
                     .padding(.top, 32)
 
                     HStack(spacing: 6) {
-                        Image(systemName: mgr.plan.icon).font(.system(size: 12))
+                        Image(systemName: mgr.plan.icon).font(.system(.caption))
                         Text(String(format: loc("premium.current_member"), mgr.plan.label))
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(.system(.caption, weight: .semibold))
                     }
                     .foregroundStyle(mgr.plan.color)
                     .padding(.horizontal, 14).padding(.vertical, 7)
@@ -730,7 +730,7 @@ struct PaywallView: View {
 
                     VStack(alignment: .leading, spacing: 12) {
                         Text(loc("premium.what_you_get"))
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(.system(.subheadline, weight: .semibold))
                             .foregroundStyle(AppTheme.textSecondary)
 
                         ForEach(royalAllFeatures, id: \.rawValue) { feature in
@@ -740,21 +740,21 @@ struct PaywallView: View {
                                         .fill(feature.color.opacity(0.12))
                                         .frame(width: 38, height: 38)
                                     Image(systemName: feature.icon)
-                                        .font(.system(size: 16))
+                                        .font(.system(.callout))
                                         .foregroundStyle(feature.color)
                                 }
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(feature.displayName)
-                                        .font(.system(size: 13, weight: .semibold))
+                                        .font(.system(.footnote, weight: .semibold))
                                         .foregroundStyle(AppTheme.textPrimary)
                                     Text(feature.description)
-                                        .font(.system(size: 11))
+                                        .font(.system(.caption2))
                                         .foregroundStyle(AppTheme.textSecondary)
                                         .lineSpacing(2)
                                 }
                                 Spacer()
                                 Image(systemName: "checkmark.circle.fill")
-                                    .font(.system(size: 18))
+                                    .font(.system(.body))
                                     .foregroundStyle(selectedPlan.color)
                             }
                         }
@@ -771,10 +771,10 @@ struct PaywallView: View {
                             VStack(spacing: 12) {
                                 HStack(spacing: 10) {
                                     Image(systemName: "lock.fill")
-                                        .font(.system(size: 14))
+                                        .font(.system(.subheadline))
                                         .foregroundStyle(AppTheme.orange)
                                     Text(loc("premium.sign_req"))
-                                        .font(.system(size: 13, weight: .semibold))
+                                        .font(.system(.footnote, weight: .semibold))
                                         .foregroundStyle(AppTheme.orange)
                                 }
                                 .frame(maxWidth: .infinity)
@@ -783,14 +783,14 @@ struct PaywallView: View {
                                 .overlay(RoundedRectangle(cornerRadius: 12).stroke(AppTheme.orange.opacity(0.3), lineWidth: 1))
 
                                 Text(loc("auth.sub_linked"))
-                                    .font(.system(size: 11))
+                                    .font(.system(.caption2))
                                     .foregroundStyle(AppTheme.textSecondary)
                                     .multilineTextAlignment(.center)
 
                                 HStack(spacing: 10) {
-                                    Image(systemName: "lock.fill").font(.system(size: 16))
+                                    Image(systemName: "lock.fill").font(.system(.callout))
                                     Text(loc("premium.sign_in"))
-                                        .font(.system(size: 16, weight: .bold))
+                                        .font(.system(.callout, weight: .bold))
                                 }
                                 .foregroundStyle(.white)
                                 .frame(maxWidth: .infinity)
@@ -805,7 +805,7 @@ struct PaywallView: View {
 
                             if let err = mgr.purchaseError {
                                 Text(err)
-                                    .font(.system(size: 12))
+                                    .font(.system(.caption))
                                     .foregroundStyle(AppTheme.red)
                                     .multilineTextAlignment(.center)
                                     .transition(.opacity)
@@ -818,7 +818,7 @@ struct PaywallView: View {
                                         if mgr.isLoading {
                                             ProgressView().tint(.white)
                                         } else {
-                                            Image(systemName: selectedPlan.icon).font(.system(size: 16))
+                                            Image(systemName: selectedPlan.icon).font(.system(.callout))
                                         }
                                         // CTA copy — App Store 3.1.2(c):
                                         // The CTA is the most visually dominant
@@ -839,7 +839,7 @@ struct PaywallView: View {
                                             return String(format: loc("premium.upgrade_to"), selectedPlan.label)
                                         }()
                                         Text(ctaText)
-                                            .font(.system(size: 16, weight: .bold))
+                                            .font(.system(.callout, weight: .bold))
                                     }
                                 }
                                 .foregroundStyle(.white)
@@ -863,7 +863,7 @@ struct PaywallView: View {
                             // renews. Cancel anytime." The billed amount here is
                             // not styled smaller than any trial text on screen.
                             Text(billingDisclosure)
-                                .font(.system(size: 12, weight: .medium))
+                                .font(.system(.caption, weight: .medium))
                                 .foregroundStyle(AppTheme.textSecondary)
                                 .multilineTextAlignment(.center)
                                 .padding(.horizontal, 8)
@@ -871,7 +871,7 @@ struct PaywallView: View {
                             HStack(spacing: 8) {
                                 Image(systemName: "checkmark.seal.fill").foregroundStyle(selectedPlan.color)
                                 Text(String(format: loc("premium.youre_on"), selectedPlan.label))
-                                    .font(.system(size: 15, weight: .semibold))
+                                    .font(.system(.subheadline, weight: .semibold))
                                     .foregroundStyle(AppTheme.textPrimary)
                             }
                             .frame(maxWidth: .infinity)
@@ -899,7 +899,7 @@ struct PaywallView: View {
                                 Button(loc("premium.dismiss"), role: .cancel) {}
                             } label: {
                                 Text(loc("premium.change_plan"))
-                                    .font(.system(size: 13))
+                                    .font(.system(.footnote))
                                     .foregroundStyle(AppTheme.textSecondary)
                                     .underline()
                             }
@@ -912,25 +912,25 @@ struct PaywallView: View {
                             if mgr.isLoading {
                                 HStack(spacing: 6) {
                                     ProgressView().scaleEffect(0.7)
-                                    Text(loc("premium.restoring")).font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
+                                    Text(loc("premium.restoring")).font(.system(.footnote)).foregroundStyle(AppTheme.textSecondary)
                                 }
                             } else {
                                 Text(loc("premium.restore"))
-                                    .font(.system(size: 13))
+                                    .font(.system(.footnote))
                                     .foregroundStyle(AppTheme.textSecondary)
                                     .underline()
                             }
                         }
                         if let msg = mgr.restoreMessage {
                             Text(msg)
-                                .font(.system(size: 13, weight: .medium))
+                                .font(.system(.footnote, weight: .medium))
                                 .foregroundStyle(msg.hasPrefix("✅") ? AppTheme.accent : AppTheme.orange)
                                 .multilineTextAlignment(.center)
                                 .transition(.opacity)
                         }
 
                         Text(loc("premium.legal"))
-                            .font(.system(size: 10))
+                            .font(.system(.caption2))
                             .foregroundStyle(AppTheme.textSecondary.opacity(0.5))
                             .multilineTextAlignment(.center)
 
@@ -949,7 +949,7 @@ struct PaywallView: View {
                             Link(loc("premium.terms"),
                                  destination: URL(string: "https://dipo.info/terms")!)
                         }
-                        .font(.system(size: 11, weight: .medium))
+                        .font(.system(.caption2, weight: .medium))
                         .tint(AppTheme.accent)
                         .padding(.top, 2)
                     }
@@ -965,7 +965,7 @@ struct PaywallView: View {
                 Spacer()
                 Button { dismiss() } label: {
                     Image(systemName: "xmark")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.system(.footnote, weight: .semibold))
                         .foregroundStyle(AppTheme.textSecondary)
                         .frame(width: 32, height: 32)
                         .background(AppTheme.cardMid, in: Circle())
@@ -999,15 +999,15 @@ struct PaywallView: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Image(systemName: plan.icon)
-                    .font(.system(size: 22, weight: .semibold))
+                    .font(.system(.title2, weight: .semibold))
                     .foregroundStyle(plan.color)
                 Text(plan.label)
-                    .font(.system(size: 22, weight: .bold))
+                    .font(.system(.title2, weight: .bold))
                     .foregroundStyle(plan.color)
                 Spacer()
                 if isCurrent {
                     Text(loc("premium.current"))
-                        .font(.system(size: 9, weight: .bold))
+                        .font(.system(.caption2, weight: .bold))
                         .tracking(0.8)
                         .foregroundStyle(plan.color)
                         .padding(.horizontal, 8).padding(.vertical, 4)
@@ -1025,7 +1025,7 @@ struct PaywallView: View {
             if plan == .royal && !isCurrent {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(mgr.royalDisplayPrice)
-                        .font(.system(size: 30, weight: .heavy))
+                        .font(.system(.title, weight: .heavy))
                         .foregroundStyle(AppTheme.textPrimary)
                         .minimumScaleFactor(0.7)
                         .lineLimit(1)
@@ -1035,11 +1035,11 @@ struct PaywallView: View {
                     // exists (live) or the static trial label is configured.
                     if let intro = mgr.royalIntroString {
                         Text(intro)
-                            .font(.system(size: 12, weight: .medium))
+                            .font(.system(.caption, weight: .medium))
                             .foregroundStyle(AppTheme.textSecondary)
                     } else if !plan.trialLabel.isEmpty {
                         Text(plan.trialLabel)
-                            .font(.system(size: 12, weight: .medium))
+                            .font(.system(.caption, weight: .medium))
                             .foregroundStyle(AppTheme.textSecondary)
                     }
                 }
@@ -1051,10 +1051,10 @@ struct PaywallView: View {
                 ForEach(features, id: \.rawValue) { f in
                     HStack(spacing: 8) {
                         Image(systemName: "checkmark.circle.fill")
-                            .font(.system(size: 12))
+                            .font(.system(.caption))
                             .foregroundStyle(plan.color)
                         Text(f.displayName)
-                            .font(.system(size: 12, weight: .medium))
+                            .font(.system(.caption, weight: .medium))
                             .foregroundStyle(AppTheme.textPrimary)
                     }
                 }

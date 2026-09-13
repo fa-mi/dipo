@@ -237,7 +237,7 @@ struct ActionFeedbackOverlay: View {
             ZStack {
                 Circle().fill(toast.tint.opacity(0.16)).frame(width: 34, height: 34)
                 Image(systemName: toast.icon)
-                    .font(.system(size: 15, weight: .bold))
+                    .font(.system(.subheadline, weight: .bold))
                     .foregroundStyle(toast.tint)
                     // A checkmark that simply appears feels static; drawing it
                     // in sells the "it happened just now".
@@ -245,12 +245,12 @@ struct ActionFeedbackOverlay: View {
             }
             VStack(alignment: .leading, spacing: 2) {
                 Text(toast.title)
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.system(.subheadline, weight: .semibold))
                     .foregroundStyle(AppTheme.textPrimary)
                     .lineLimit(1).minimumScaleFactor(0.8)
                 if let detail = toast.detail {
                     Text(detail)
-                        .font(.system(size: 11))
+                        .font(.system(.caption2))
                         .foregroundStyle(AppTheme.textSecondary)
                         .lineLimit(1)
                 }

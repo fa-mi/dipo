@@ -386,15 +386,15 @@ struct RecurringExpensesView: View {
                                 HapticManager.shared.tap(); showOrphanCleanup = true
                             } label: {
                                 HStack(spacing: 10) {
-                                    Image(systemName: "wand.and.stars.inverse").font(.system(size: 16)).foregroundStyle(AppTheme.orange)
+                                    Image(systemName: "wand.and.stars.inverse").font(.system(.callout)).foregroundStyle(AppTheme.orange)
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text(String(format: loc("recurring.orphan_title"), orphanedAutoCharges.count))
-                                            .font(.system(size: 13, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                                            .font(.system(.footnote, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
                                         Text(loc("recurring.orphan_sub"))
-                                            .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                                            .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                                     }
                                     Spacer()
-                                    Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold)).foregroundStyle(AppTheme.textSecondary)
+                                    Image(systemName: "chevron.right").font(.system(.caption2, weight: .semibold)).foregroundStyle(AppTheme.textSecondary)
                                 }
                                 .padding(14)
                                 .background(AppTheme.orange.opacity(0.10), in: RoundedRectangle(cornerRadius: 14))
@@ -414,15 +414,15 @@ struct RecurringExpensesView: View {
                             } label: {
                                 HStack(spacing: 10) {
                                     Image(systemName: "calendar.badge.exclamationmark")
-                                        .font(.system(size: 16)).foregroundStyle(AppTheme.red)
+                                        .font(.system(.callout)).foregroundStyle(AppTheme.red)
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text(String(format: loc("recurring.phantom_title"), phantomAutoCharges.count))
-                                            .font(.system(size: 13, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                                            .font(.system(.footnote, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
                                         Text(loc("recurring.phantom_sub"))
-                                            .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                                            .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                                     }
                                     Spacer()
-                                    Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold)).foregroundStyle(AppTheme.textSecondary)
+                                    Image(systemName: "chevron.right").font(.system(.caption2, weight: .semibold)).foregroundStyle(AppTheme.textSecondary)
                                 }
                                 .padding(14)
                                 .background(AppTheme.red.opacity(0.10), in: RoundedRectangle(cornerRadius: 14))
@@ -492,8 +492,8 @@ struct RecurringExpensesView: View {
     private var navBar: some View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
-                Text(loc("recurring.title")).font(.system(size: 24, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
-                Text(loc("recurring.sub")).font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
+                Text(loc("recurring.title")).font(.system(.title2, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
+                Text(loc("recurring.sub")).font(.system(.footnote)).foregroundStyle(AppTheme.textSecondary)
             }
             Spacer()
             Button {
@@ -503,7 +503,7 @@ struct RecurringExpensesView: View {
                     Circle().fill(cards.isEmpty ? AppTheme.cardMid : AppTheme.accent)
                         .frame(width: 42, height: 42)
                         .shadow(color: cards.isEmpty ? .clear : AppTheme.accent.opacity(0.4), radius: 10, y: 4)
-                    Image(systemName: "plus").font(.system(size: 18, weight: .semibold))
+                    Image(systemName: "plus").font(.system(.body, weight: .semibold))
                         .foregroundStyle(cards.isEmpty ? AppTheme.textSecondary : AppTheme.bg)
                 }
             }
@@ -516,15 +516,15 @@ struct RecurringExpensesView: View {
         VStack(spacing: 0) {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(loc("recurring.total")).font(.system(size: 12, weight: .semibold)).foregroundStyle(AppTheme.textSecondary)
+                    Text(loc("recurring.total")).font(.system(.caption, weight: .semibold)).foregroundStyle(AppTheme.textSecondary)
                     Text(CurrencyManager.shared.formatted(monthlyTotal, currency: CurrencyManager.shared.preferredCurrency))
-                        .font(.system(size: 26, weight: .heavy)).foregroundStyle(AppTheme.textPrimary)
+                        .font(.system(.title, weight: .heavy)).foregroundStyle(AppTheme.textPrimary)
                         .minimumScaleFactor(0.6).lineLimit(1)
                 }
                 Spacer()
                 ZStack {
                     RoundedRectangle(cornerRadius: 14).fill(AppTheme.accent.opacity(0.12)).frame(width: 52, height: 52)
-                    Image(systemName: "arrow.triangle.2.circlepath").font(.system(size: 22)).foregroundStyle(AppTheme.accent)
+                    Image(systemName: "arrow.triangle.2.circlepath").font(.system(.title2)).foregroundStyle(AppTheme.accent)
                 }
             }
             .padding(18)
@@ -532,11 +532,11 @@ struct RecurringExpensesView: View {
             if let n = nextDue {
                 Divider().background(AppTheme.cardMid).padding(.horizontal, 18)
                 HStack(spacing: 10) {
-                    Image(systemName: "calendar").font(.system(size: 13)).foregroundStyle(AppTheme.accent)
-                    Text(loc("recurring.next")).font(.system(size: 12, weight: .medium)).foregroundStyle(AppTheme.textSecondary)
-                    Text(n.label).font(.system(size: 12, weight: .semibold)).foregroundStyle(AppTheme.textPrimary).lineLimit(1)
+                    Image(systemName: "calendar").font(.system(.footnote)).foregroundStyle(AppTheme.accent)
+                    Text(loc("recurring.next")).font(.system(.caption, weight: .medium)).foregroundStyle(AppTheme.textSecondary)
+                    Text(n.label).font(.system(.caption, weight: .semibold)).foregroundStyle(AppTheme.textPrimary).lineLimit(1)
                     Spacer()
-                    Text(dueLabel(for: n.dayOfMonth)).font(.system(size: 12, weight: .semibold)).foregroundStyle(AppTheme.accent)
+                    Text(dueLabel(for: n.dayOfMonth)).font(.system(.caption, weight: .semibold)).foregroundStyle(AppTheme.accent)
                 }
                 .padding(.horizontal, 18).padding(.vertical, 13)
             }
@@ -550,12 +550,12 @@ struct RecurringExpensesView: View {
             ZStack {
                 Circle().fill(AppTheme.cardDark).frame(width: 88, height: 88)
                     .overlay(Circle().stroke(AppTheme.accent.opacity(0.2), lineWidth: 1))
-                Image(systemName: "arrow.triangle.2.circlepath").font(.system(size: 34)).foregroundStyle(AppTheme.accent)
+                Image(systemName: "arrow.triangle.2.circlepath").font(.system(.largeTitle)).foregroundStyle(AppTheme.accent)
             }
             VStack(spacing: 8) {
-                Text(loc("recurring.none_title")).font(.system(size: 18, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                Text(loc("recurring.none_title")).font(.system(.body, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
                 Text(cards.isEmpty ? loc("recurring.none_needs_card") : loc("recurring.none_sub"))
-                    .font(.system(size: 14)).foregroundStyle(AppTheme.textSecondary)
+                    .font(.system(.subheadline)).foregroundStyle(AppTheme.textSecondary)
                     .multilineTextAlignment(.center).lineSpacing(3)
             }
             if !cards.isEmpty {
@@ -563,8 +563,8 @@ struct RecurringExpensesView: View {
                     HapticManager.shared.tap(); vm.resetForm(); vm.showAddSheet = true
                 } label: {
                     HStack(spacing: 8) {
-                        Image(systemName: "plus").font(.system(size: 14, weight: .semibold))
-                        Text(loc("recurring.add")).font(.system(size: 15, weight: .semibold))
+                        Image(systemName: "plus").font(.system(.subheadline, weight: .semibold))
+                        Text(loc("recurring.add")).font(.system(.subheadline, weight: .semibold))
                     }
                     .foregroundStyle(AppTheme.bg).padding(.horizontal, 32).padding(.vertical, 14)
                     .background(AppTheme.accentFill, in: Capsule())
@@ -608,15 +608,15 @@ struct RecurringExpenseRow: View {
             HStack(spacing: 14) {
                 ZStack {
                     RoundedRectangle(cornerRadius: 13).fill(expense.category.color.opacity(0.14)).frame(width: 46, height: 46)
-                    Image(systemName: expense.category.icon).font(.system(size: 19)).foregroundStyle(expense.category.color)
+                    Image(systemName: expense.category.icon).font(.system(.title3)).foregroundStyle(expense.category.color)
                 }
                 VStack(alignment: .leading, spacing: 5) {
                     HStack(spacing: 8) {
-                        Text(expense.label).font(.system(size: 15, weight: .semibold))
+                        Text(expense.label).font(.system(.subheadline, weight: .semibold))
                             .foregroundStyle(expense.isActive ? AppTheme.textPrimary : AppTheme.textSecondary)
                             .lineLimit(1)
                         if !expense.autoRecord {
-                            Text(loc("recurring.manual_badge")).font(.system(size: 9, weight: .bold))
+                            Text(loc("recurring.manual_badge")).font(.system(.caption2, weight: .bold))
                                 .foregroundStyle(AppTheme.textSecondary)
                                 .padding(.horizontal, 7).padding(.vertical, 2)
                                 .background(AppTheme.cardMid, in: Capsule())
@@ -624,17 +624,17 @@ struct RecurringExpenseRow: View {
                     }
                     HStack(spacing: 8) {
                         Text(String(format: loc("recurring.day_of"), expense.dayOfMonth))
-                            .font(.system(size: 11, weight: .medium)).foregroundStyle(AppTheme.textSecondary)
+                            .font(.system(.caption2, weight: .medium)).foregroundStyle(AppTheme.textSecondary)
                         Circle().fill(AppTheme.textSecondary.opacity(0.4)).frame(width: 3, height: 3)
                         Text(expense.isActive ? dueLabel : loc("recurring.paused"))
-                            .font(.system(size: 11, weight: .medium))
+                            .font(.system(.caption2, weight: .medium))
                             .foregroundStyle(expense.isActive ? AppTheme.accent : AppTheme.textSecondary)
                     }
                 }
                 Spacer(minLength: 6)
                 VStack(alignment: .trailing, spacing: 5) {
                     Text(CurrencyManager.shared.formatted(expense.amount, currency: expense.currency))
-                        .font(.system(size: 15, weight: .bold))
+                        .font(.system(.subheadline, weight: .bold))
                         .foregroundStyle(expense.isActive ? AppTheme.textPrimary : AppTheme.textSecondary)
                         .lineLimit(1).minimumScaleFactor(0.7)
                     Menu {
@@ -655,7 +655,7 @@ struct RecurringExpenseRow: View {
                             Label(loc("recurring.delete"), systemImage: "trash")
                         }
                     } label: {
-                        Image(systemName: "ellipsis").font(.system(size: 15, weight: .semibold))
+                        Image(systemName: "ellipsis").font(.system(.subheadline, weight: .semibold))
                             .foregroundStyle(AppTheme.textSecondary)
                             .frame(width: 28, height: 28)
                             .background(AppTheme.cardMid, in: Circle())
@@ -740,7 +740,7 @@ struct RecurringFormSheet: View {
                         // to that card's (see .onChange below); it just no longer
                         // forbids changing it afterwards.
                         VStack(spacing: 8) {
-                            Text(loc("recurring.amount")).font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
+                            Text(loc("recurring.amount")).font(.system(.footnote)).foregroundStyle(AppTheme.textSecondary)
                                 .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 22)
                             HStack(spacing: 10) {
                                 Menu {
@@ -749,14 +749,14 @@ struct RecurringFormSheet: View {
                                     }
                                 } label: {
                                     HStack(spacing: 6) {
-                                        Text(vm.formCurrency).font(.system(size: 15, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
-                                        Image(systemName: "chevron.up.chevron.down").font(.system(size: 10)).foregroundStyle(AppTheme.textSecondary)
+                                        Text(vm.formCurrency).font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                                        Image(systemName: "chevron.up.chevron.down").font(.system(.caption2)).imageScale(.small).foregroundStyle(AppTheme.textSecondary)
                                     }
                                     .padding(.horizontal, 14).padding(.vertical, 14)
                                     .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
                                 }
                                 TextField("0", text: $vm.formAmount)
-                                    .font(.system(size: 22, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
+                                    .font(.system(.title2, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
                                     .keyboardType(.decimalPad)
                                     .padding(.horizontal, 16).padding(.vertical, 14)
                                     .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
@@ -781,9 +781,9 @@ struct RecurringFormSheet: View {
                             if let preview = fxPreview {
                                 HStack(spacing: 6) {
                                     Image(systemName: "arrow.left.arrow.right")
-                                        .font(.system(size: 10)).foregroundStyle(AppTheme.textSecondary)
+                                        .font(.system(.caption2)).imageScale(.small).foregroundStyle(AppTheme.textSecondary)
                                     Text(preview)
-                                        .font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
+                                        .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                                 }
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .padding(.horizontal, 22)
@@ -792,7 +792,7 @@ struct RecurringFormSheet: View {
 
                         // Category picker
                         VStack(spacing: 8) {
-                            Text(loc("recurring.category")).font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
+                            Text(loc("recurring.category")).font(.system(.footnote)).foregroundStyle(AppTheme.textSecondary)
                                 .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 22)
                             ScrollView(.horizontal, showsIndicators: false) {
                                 HStack(spacing: 10) {
@@ -802,8 +802,8 @@ struct RecurringFormSheet: View {
                                             HapticManager.shared.tap(); vm.formCategory = cat
                                         } label: {
                                             HStack(spacing: 7) {
-                                                Image(systemName: cat.icon).font(.system(size: 13))
-                                                Text(cat.displayLabel).font(.system(size: 13, weight: .semibold))
+                                                Image(systemName: cat.icon).font(.system(.footnote))
+                                                Text(cat.displayLabel).font(.system(.footnote, weight: .semibold))
                                             }
                                             .foregroundStyle(selected ? AppTheme.bg : cat.color)
                                             .padding(.horizontal, 14).padding(.vertical, 10)
@@ -818,23 +818,23 @@ struct RecurringFormSheet: View {
 
                         // Charge day stepper
                         VStack(spacing: 8) {
-                            Text(loc("recurring.due_day")).font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
+                            Text(loc("recurring.due_day")).font(.system(.footnote)).foregroundStyle(AppTheme.textSecondary)
                                 .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 22)
                             HStack {
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text(String(format: loc("recurring.day_of"), vm.formDay))
-                                        .font(.system(size: 17, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
-                                    Text(loc("recurring.due_day_sub")).font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
+                                        .font(.system(.body, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                                    Text(loc("recurring.due_day_sub")).font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                                 }
                                 Spacer()
                                 HStack(spacing: 0) {
                                     Button { HapticManager.shared.tap(); if vm.formDay > 1 { vm.formDay -= 1 } } label: {
-                                        Image(systemName: "minus").font(.system(size: 14, weight: .semibold)).foregroundStyle(AppTheme.textPrimary).frame(width: 40, height: 40)
+                                        Image(systemName: "minus").font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.textPrimary).frame(width: 40, height: 40)
                                     }
 .accessibilityLabel(loc("a11y.earlier_day"))
-                                    Text("\(vm.formDay)").font(.system(size: 20, weight: .bold)).foregroundStyle(AppTheme.accent).frame(width: 44).contentTransition(.numericText())
+                                    Text("\(vm.formDay)").font(.system(.title3, weight: .bold)).foregroundStyle(AppTheme.accent).frame(width: 44).contentTransition(.numericText())
                                     Button { HapticManager.shared.tap(); if vm.formDay < 31 { vm.formDay += 1 } } label: {
-                                        Image(systemName: "plus").font(.system(size: 14, weight: .semibold)).foregroundStyle(AppTheme.textPrimary).frame(width: 40, height: 40)
+                                        Image(systemName: "plus").font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.textPrimary).frame(width: 40, height: 40)
                                     }
 .accessibilityLabel(loc("a11y.later_day"))
                                 }
@@ -848,8 +848,8 @@ struct RecurringFormSheet: View {
                         // Card picker — REQUIRED: which card gets charged
                         VStack(spacing: 8) {
                             HStack(spacing: 6) {
-                                Image(systemName: "exclamationmark.circle.fill").font(.system(size: 12)).foregroundStyle(AppTheme.orange)
-                                Text(loc("recurring.choose_card")).font(.system(size: 12, weight: .medium)).foregroundStyle(AppTheme.orange)
+                                Image(systemName: "exclamationmark.circle.fill").font(.system(.caption)).foregroundStyle(AppTheme.orange)
+                                Text(loc("recurring.choose_card")).font(.system(.caption, weight: .medium)).foregroundStyle(AppTheme.orange)
                             }
                             .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 22)
                             CardPickerSection(selectedCardID: $vm.formCardID, titleKey: "recurring.charge_to")
@@ -860,11 +860,11 @@ struct RecurringFormSheet: View {
 
                         // Auto-record toggle
                         HStack(spacing: 12) {
-                            Image(systemName: "wand.and.stars").font(.system(size: 16)).foregroundStyle(AppTheme.accent)
+                            Image(systemName: "wand.and.stars").font(.system(.callout)).foregroundStyle(AppTheme.accent)
                                 .frame(width: 36, height: 36).background(AppTheme.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(loc("recurring.autorecord_label")).font(.system(size: 14, weight: .medium)).foregroundStyle(AppTheme.textPrimary)
-                                Text(loc("recurring.autorecord_sub")).font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                                Text(loc("recurring.autorecord_label")).font(.system(.subheadline, weight: .medium)).foregroundStyle(AppTheme.textPrimary)
+                                Text(loc("recurring.autorecord_sub")).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                             }
                             Spacer()
                             Toggle("", isOn: $vm.formAutoRecord).labelsHidden().tint(AppTheme.accent)
@@ -875,8 +875,8 @@ struct RecurringFormSheet: View {
 
                         if let err = vm.formError {
                             HStack(spacing: 8) {
-                                Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 13))
-                                Text(err).font(.system(size: 13, weight: .medium))
+                                Image(systemName: "exclamationmark.triangle.fill").font(.system(.footnote))
+                                Text(err).font(.system(.footnote, weight: .medium))
                             }
                             .foregroundStyle(AppTheme.red)
                             .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 22)
@@ -905,7 +905,7 @@ struct RecurringFormSheet: View {
             guard vm.validate() else { HapticManager.shared.error(); return }
             save()
         } label: {
-            Text(loc("recurring.save")).font(.system(size: 16, weight: .bold))
+            Text(loc("recurring.save")).font(.system(.callout, weight: .bold))
                 .foregroundStyle(AppTheme.bg).frame(maxWidth: .infinity).padding(.vertical, 17)
                 .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: 16))
         }
@@ -996,13 +996,13 @@ struct OrphanedAutoChargesView: View {
                 if orphans.isEmpty {
                     VStack(spacing: 14) {
                         Image(systemName: "checkmark.seal.fill").font(.system(size: 40)).foregroundStyle(AppTheme.accent)
-                        Text(loc("recurring.orphan_none")).font(.system(size: 16)).foregroundStyle(AppTheme.textSecondary)
+                        Text(loc("recurring.orphan_none")).font(.system(.callout)).foregroundStyle(AppTheme.textSecondary)
                     }
                 } else {
                     ScrollView(showsIndicators: false) {
                         LazyVStack(spacing: 10) {
                             Text(loc("recurring.orphan_explain"))
-                                .font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
+                                .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .padding(.horizontal, 22).padding(.bottom, 4)
                             ForEach(orphans) { tx in
@@ -1034,15 +1034,15 @@ struct OrphanedAutoChargesView: View {
         } label: {
             HStack(spacing: 12) {
                 Image(systemName: isOn ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 20)).foregroundStyle(isOn ? AppTheme.red : AppTheme.textSecondary)
+                    .font(.system(.title3)).foregroundStyle(isOn ? AppTheme.red : AppTheme.textSecondary)
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(tx.name).font(.system(size: 14, weight: .medium)).foregroundStyle(AppTheme.textPrimary).lineLimit(1)
+                    Text(tx.name).font(.system(.subheadline, weight: .medium)).foregroundStyle(AppTheme.textPrimary).lineLimit(1)
                     Text(tx.date.formatted(date: .abbreviated, time: .omitted))
-                        .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                        .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                 }
                 Spacer()
                 Text(CurrencyManager.shared.formatted(abs(tx.amount), currency: tx.currency.isEmpty ? CurrencyManager.shared.preferredCurrency : tx.currency))
-                    .font(.system(size: 14, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                    .font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
             }
             .padding(12)
             .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
@@ -1059,7 +1059,7 @@ struct OrphanedAutoChargesView: View {
         } label: {
             Text(String(format: loc("recurring.orphan_delete"), chosen.count,
                         CurrencyManager.shared.formatted(chosenTotal, currency: CurrencyManager.shared.preferredCurrency)))
-                .font(.system(size: 16, weight: .bold)).foregroundStyle(.white)
+                .font(.system(.callout, weight: .bold)).foregroundStyle(.white)
                 .frame(maxWidth: .infinity).padding(.vertical, 16)
                 .background(chosen.isEmpty ? AppTheme.cardMid : AppTheme.red, in: RoundedRectangle(cornerRadius: 16))
         }
@@ -1185,13 +1185,13 @@ struct PhantomAutoChargesView: View {
                 if phantoms.isEmpty {
                     VStack(spacing: 14) {
                         Image(systemName: "checkmark.seal.fill").font(.system(size: 40)).foregroundStyle(AppTheme.accent)
-                        Text(loc("recurring.phantom_none")).font(.system(size: 16)).foregroundStyle(AppTheme.textSecondary)
+                        Text(loc("recurring.phantom_none")).font(.system(.callout)).foregroundStyle(AppTheme.textSecondary)
                     }
                 } else {
                     ScrollView(showsIndicators: false) {
                         LazyVStack(spacing: 10) {
                             Text(loc("recurring.phantom_explain"))
-                                .font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
+                                .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .padding(.horizontal, 22).padding(.bottom, 4)
                             ForEach(phantoms) { p in
@@ -1224,14 +1224,14 @@ struct PhantomAutoChargesView: View {
         } label: {
             HStack(spacing: 12) {
                 Image(systemName: isOn ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 20)).foregroundStyle(isOn ? AppTheme.red : AppTheme.textSecondary)
+                    .font(.system(.title3)).foregroundStyle(isOn ? AppTheme.red : AppTheme.textSecondary)
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 6) {
                         Text(p.tx.name)
-                            .font(.system(size: 14, weight: .medium)).foregroundStyle(AppTheme.textPrimary).lineLimit(1)
+                            .font(.system(.subheadline, weight: .medium)).foregroundStyle(AppTheme.textPrimary).lineLimit(1)
                         if p.isIncome {
                             Text(loc("recurring.phantom_income_badge"))
-                                .font(.system(size: 9, weight: .semibold))
+                                .font(.system(.caption2, weight: .semibold))
                                 .foregroundStyle(AppTheme.accent)
                                 .padding(.horizontal, 5).padding(.vertical, 2)
                                 .background(AppTheme.accent.opacity(0.15), in: Capsule())
@@ -1241,11 +1241,11 @@ struct PhantomAutoChargesView: View {
                     // the schedule's own creation date. Show both, side by side.
                     Text(String(format: loc("recurring.phantom_row"),
                                 dayText(p.tx.date), dayText(p.scheduleCreatedAt)))
-                        .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                        .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                 }
                 Spacer()
                 Text(CurrencyManager.shared.formatted(abs(p.tx.amount), currency: cur))
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.system(.subheadline, weight: .semibold))
                     .foregroundStyle(p.isIncome ? AppTheme.accent : AppTheme.textPrimary)
             }
             .padding(12)
@@ -1261,7 +1261,7 @@ struct PhantomAutoChargesView: View {
                 Text(String(format: loc(up ? "recurring.phantom_effect_up" : "recurring.phantom_effect_down"),
                             CurrencyManager.shared.formatted(abs(netEffect),
                                                              currency: CurrencyManager.shared.preferredCurrency)))
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.system(.caption, weight: .medium))
                     .foregroundStyle(up ? AppTheme.accent : AppTheme.orange)
             }
             Button {
@@ -1271,7 +1271,7 @@ struct PhantomAutoChargesView: View {
                 dismiss()
             } label: {
                 Text(String(format: loc("recurring.phantom_delete"), chosen.count))
-                    .font(.system(size: 16, weight: .bold)).foregroundStyle(.white)
+                    .font(.system(.callout, weight: .bold)).foregroundStyle(.white)
                     .frame(maxWidth: .infinity).padding(.vertical, 16)
                     .background(chosen.isEmpty ? AppTheme.cardMid : AppTheme.red, in: RoundedRectangle(cornerRadius: 16))
             }

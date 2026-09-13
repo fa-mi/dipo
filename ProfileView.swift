@@ -31,7 +31,7 @@ struct PremiumLockedFeatureLink: View {
         }) {
             HStack(spacing: 14) {
                 Image(systemName: badgeIcon)
-                    .font(.system(size: 18))
+                    .font(.system(.body))
                     .foregroundStyle(isLocked ? AppTheme.textSecondary : badgeTint)
                     .frame(width: 36, height: 36)
                     .background(
@@ -41,14 +41,14 @@ struct PremiumLockedFeatureLink: View {
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 6) {
                         Text(title)
-                            .font(.system(size: 14, weight: .medium))
+                            .font(.system(.subheadline, weight: .medium))
                             .foregroundStyle(isLocked ? AppTheme.textSecondary : AppTheme.textPrimary)
                         if isLocked {
                             HStack(spacing: 3) {
                                 Image(systemName: feature.requiredPlan.icon)
-                                    .font(.system(size: 8, weight: .bold))
+                                    .font(.system(.caption2, weight: .bold)).imageScale(.small)
                                 Text(feature.requiredPlan.label)
-                                    .font(.system(size: 9, weight: .bold))
+                                    .font(.system(.caption2, weight: .bold))
                                     .tracking(0.5)
                             }
                             .foregroundStyle(feature.requiredPlan.color)
@@ -57,7 +57,7 @@ struct PremiumLockedFeatureLink: View {
                         }
                     }
                     Text(subtitle)
-                        .font(.system(size: 12))
+                        .font(.system(.caption))
                         .foregroundStyle(AppTheme.textSecondary)
                 }
                 Spacer()
@@ -87,21 +87,21 @@ struct ProfileFeatureLink: View {
         Button(action: { HapticManager.shared.tap(); action() }) {
             HStack(spacing: 14) {
                 Image(systemName: icon)
-                    .font(.system(size: 18))
+                    .font(.system(.body))
                     .foregroundStyle(color)
                     .frame(width: 36, height: 36)
                     .background(color.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
-                        .font(.system(size: 14, weight: .medium))
+                        .font(.system(.subheadline, weight: .medium))
                         .foregroundStyle(AppTheme.textPrimary)
                     Text(subtitle)
-                        .font(.system(size: 12))
+                        .font(.system(.caption))
                         .foregroundStyle(AppTheme.textSecondary)
                 }
                 Spacer()
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 13))
+                    .font(.system(.footnote))
                     .foregroundStyle(AppTheme.textSecondary)
             }
             .padding(14)
@@ -359,7 +359,7 @@ struct ProfileView: View {
                     VStack(spacing: 14) {
                         ProgressView().tint(.white).scaleEffect(1.2)
                         Text(loc("delete_acct.working"))
-                            .font(.system(size: 14, weight: .medium)).foregroundStyle(.white)
+                            .font(.system(.subheadline, weight: .medium)).foregroundStyle(.white)
                     }
                     .padding(28)
                     .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20))
@@ -548,7 +548,7 @@ struct ProfileView: View {
                     Circle().fill(AppTheme.accentFill).frame(width: 32, height: 32)
                         .shadow(color: AppTheme.accent.opacity(0.55), radius: 8, y: 3)
                     Image(systemName: "camera.fill")
-                        .font(.system(size: 13, weight: .semibold)).foregroundStyle(AppTheme.onVividFill)
+                        .font(.system(.footnote, weight: .semibold)).foregroundStyle(AppTheme.onVividFill)
                 }
             }
 .accessibilityLabel(loc("a11y.change_photo"))
@@ -576,7 +576,7 @@ struct ProfileView: View {
             if isEditingName {
                 HStack(spacing: 8) {
                     TextField(loc("auth.name_placeholder"), text: $editNameText)
-                        .font(.system(size: 24, weight: .bold, design: .rounded))
+                        .font(.system(.title2, design: .rounded, weight: .bold))
                         .foregroundStyle(AppTheme.textPrimary)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 16).padding(.vertical, 10)
@@ -584,11 +584,11 @@ struct ProfileView: View {
                         .overlay(RoundedRectangle(cornerRadius: 14).stroke(AppTheme.accent.opacity(0.5), lineWidth: 1.5))
                         .submitLabel(.done).onSubmit { saveName() }
                     Button { saveName() } label: {
-                        Image(systemName: "checkmark.circle.fill").font(.system(size: 28)).foregroundStyle(AppTheme.accent)
+                        Image(systemName: "checkmark.circle.fill").font(.system(.title)).foregroundStyle(AppTheme.accent)
                     }
 .accessibilityLabel(loc("a11y.save_name")).buttonStyle(ScaleButtonStyle())
                     Button { isEditingName = false; editNameText = authVM.savedName } label: {
-                        Image(systemName: "xmark.circle.fill").font(.system(size: 28)).foregroundStyle(AppTheme.textSecondary)
+                        Image(systemName: "xmark.circle.fill").font(.system(.title)).foregroundStyle(AppTheme.textSecondary)
                     }
 .accessibilityLabel(loc("common.cancel")).buttonStyle(ScaleButtonStyle())
                 }
@@ -601,9 +601,9 @@ struct ProfileView: View {
                 } label: {
                     HStack(spacing: 6) {
                         Text(authVM.savedName)
-                            .font(.system(size: 26, weight: .bold, design: .rounded))
+                            .font(.system(.title, design: .rounded, weight: .bold))
                             .foregroundStyle(AppTheme.textPrimary)
-                        Image(systemName: "pencil").font(.system(size: 13, weight: .medium))
+                        Image(systemName: "pencil").font(.system(.footnote, weight: .medium))
                             .foregroundStyle(AppTheme.textSecondary.opacity(0.6))
                     }
                 }
@@ -612,11 +612,11 @@ struct ProfileView: View {
             }
             HStack(spacing: 5) {
                 if premiumMgr.plan != .free {
-                    Image(systemName: premiumMgr.plan.icon).font(.system(size: 10, weight: .bold))
+                    Image(systemName: premiumMgr.plan.icon).font(.system(.caption2, weight: .bold)).imageScale(.small)
                         .foregroundStyle(premiumMgr.plan.color)
                 }
                 Text(premiumMgr.plan == .free ? loc("auth.tagline") : "DiPo \(premiumMgr.plan.label)")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(.caption, weight: .semibold))
                     .foregroundStyle(planTaglineFill)
                     .tracking(premiumMgr.plan == .free ? 1.4 : 0.5)
             }
@@ -633,14 +633,14 @@ struct ProfileView: View {
         HStack(spacing: 12) {
             let c: Color = hasEmail ? AppTheme.accent : AppTheme.orange
             Image(systemName: hasEmail ? "envelope.fill" : "envelope.badge")
-                .font(.system(size: 18)).foregroundStyle(c)
+                .font(.system(.body)).foregroundStyle(c)
                 .frame(width: 36, height: 36)
                 .background(c.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
             VStack(alignment: .leading, spacing: 2) {
                 Text(loc("profile.email_title"))
-                    .font(.system(size: 14, weight: .medium)).foregroundStyle(AppTheme.textPrimary)
+                    .font(.system(.subheadline, weight: .medium)).foregroundStyle(AppTheme.textPrimary)
                 Text(hasEmail ? (session.email ?? "") : loc("profile.email_not_set"))
-                    .font(.system(size: 12))
+                    .font(.system(.caption))
                     .foregroundStyle(hasEmail ? AppTheme.textSecondary : AppTheme.orange)
                     .lineLimit(1)
             }
@@ -651,7 +651,7 @@ struct ProfileView: View {
                 showEmailEdit = true
             } label: {
                 Text(hasEmail ? loc("common.edit") : loc("profile.add_email"))
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(.caption, weight: .semibold))
                     .foregroundStyle(hasEmail ? AppTheme.accent : .white)
                     .padding(.horizontal, 14).padding(.vertical, 7)
                     .background(hasEmail ? AppTheme.accent.opacity(0.12) : AppTheme.accent, in: Capsule())
@@ -690,15 +690,15 @@ struct ProfileView: View {
                                   startPoint: .topLeading, endPoint: .bottomTrailing)
         HStack(spacing: 12) {
             Image(systemName: "person.text.rectangle.fill")
-                .font(.system(size: 18)).foregroundStyle(.white)
+                .font(.system(.body)).foregroundStyle(.white)
                 .frame(width: 36, height: 36)
                 .background(grad, in: RoundedRectangle(cornerRadius: 10))
                 .shadow(color: brandB.opacity(0.35), radius: 5, y: 2)
             VStack(alignment: .leading, spacing: 2) {
                 Text(loc("profile.dipo_id_title"))
-                    .font(.system(size: 14, weight: .medium)).foregroundStyle(AppTheme.textPrimary)
+                    .font(.system(.subheadline, weight: .medium)).foregroundStyle(AppTheme.textPrimary)
                 Text(id)
-                    .font(.system(size: 13, weight: .bold, design: .monospaced))
+                    .font(.system(.footnote, design: .monospaced, weight: .bold))
                     .foregroundStyle(brandB)
                     .lineLimit(1)
             }
@@ -713,9 +713,9 @@ struct ProfileView: View {
             } label: {
                 HStack(spacing: 4) {
                     Image(systemName: idCopied ? "checkmark" : "doc.on.doc")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.system(.caption2, weight: .semibold))
                     Text(idCopied ? loc("common.copied") : loc("common.copy"))
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.system(.caption, weight: .semibold))
                 }
                 .foregroundStyle(.white)
                 .padding(.horizontal, 14).padding(.vertical, 7)
@@ -737,11 +737,11 @@ struct ProfileView: View {
     private var securityCard: some View {
         HStack(spacing: 12) {
             let bioColor = authVM.isBiometricAvailable ? AppTheme.accent : AppTheme.textSecondary
-            Image(systemName: authVM.biometricIcon).font(.system(size: 18)).foregroundStyle(bioColor)
+            Image(systemName: authVM.biometricIcon).font(.system(.body)).foregroundStyle(bioColor)
                 .frame(width: 36, height: 36)
                 .background(bioColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
             VStack(alignment: .leading, spacing: 2) {
-                Text(authVM.biometricLabel).font(.system(size: 14, weight: .medium)).foregroundStyle(AppTheme.textPrimary)
+                Text(authVM.biometricLabel).font(.system(.subheadline, weight: .medium)).foregroundStyle(AppTheme.textPrimary)
                 Text(
                     authVM.isBiometricAvailable
                     ? (biometricEnabled
@@ -749,7 +749,7 @@ struct ProfileView: View {
                         : loc("biometric.disabled"))
                     : loc("biometric.unavailable")
                 )
-                .font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
+                .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
             }
             Spacer()
             if authVM.isBiometricAvailable {
@@ -780,29 +780,29 @@ struct ProfileView: View {
                     .overlay(RoundedRectangle(cornerRadius: 12)
                         .stroke(isApple ? Color.white.opacity(0.08) : Color(hex: "#4285F4").opacity(0.3), lineWidth: 1))
                 if session.provider == .apple {
-                    Image(systemName: "apple.logo").font(.system(size: 18, weight: .medium)).foregroundStyle(.white)
+                    Image(systemName: "apple.logo").font(.system(.body, weight: .medium)).foregroundStyle(.white)
                 } else {
-                    Text("G").font(.system(size: 18, weight: .bold)).foregroundStyle(Color(hex: "#4285F4"))
+                    Text("G").font(.system(.body, weight: .bold)).foregroundStyle(Color(hex: "#4285F4"))
                 }
             }
             VStack(alignment: .leading, spacing: 3) {
                 Text(session.displayName ?? loc("profile.account"))
-                    .font(.system(size: 15, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                    .font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
                 HStack(spacing: 4) {
                     let isApple = session.provider == .apple
                     Text(isApple ? "Apple" : "Google")
-                        .font(.system(size: 10, weight: .bold))
+                        .font(.system(.caption2, weight: .bold))
                         .foregroundStyle(isApple ? .white : Color(hex: "#4285F4"))
                         .padding(.horizontal, 6).padding(.vertical, 2)
                         .background(isApple ? Color(hex: "#3A3A3C") : Color(hex: "#4285F4").opacity(0.15), in: Capsule())
                     if let email = session.email, !email.isEmpty {
-                        Text("· \(email)").font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary).lineLimit(1)
+                        Text("· \(email)").font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary).lineLimit(1)
                     }
                 }
             }
             Spacer()
             Button { HapticManager.shared.tap(); showSignOut = true } label: {
-                Text(loc("profile.logout")).font(.system(size: 12, weight: .semibold)).foregroundStyle(AppTheme.red)
+                Text(loc("profile.logout")).font(.system(.caption, weight: .semibold)).foregroundStyle(AppTheme.red)
                     .padding(.horizontal, 12).padding(.vertical, 6)
                     .background(AppTheme.red.opacity(0.1), in: Capsule())
                     .overlay(Capsule().stroke(AppTheme.red.opacity(0.3), lineWidth: 1))
@@ -827,19 +827,19 @@ struct ProfileView: View {
                     RoundedRectangle(cornerRadius: 12).fill(planIconFill).frame(width: 44, height: 44)
                         .overlay(RoundedRectangle(cornerRadius: 12)
                             .stroke(premiumMgr.plan == .free ? Color.clear : premiumMgr.plan.color.opacity(0.4), lineWidth: 1))
-                    Image(systemName: premiumMgr.plan.icon).font(.system(size: 18, weight: .medium))
+                    Image(systemName: premiumMgr.plan.icon).font(.system(.body, weight: .medium))
                         .foregroundStyle(premiumMgr.plan == .free ? AppTheme.textSecondary : premiumMgr.plan.color)
                 }
                 VStack(alignment: .leading, spacing: 3) {
                     Text(premiumMgr.plan == .free ? loc("free.user") : "DiPo \(premiumMgr.plan.label)")
-                        .font(.system(size: 15, weight: .bold))
+                        .font(.system(.subheadline, weight: .bold))
                         .foregroundStyle(premiumMgr.plan == .free ? AppTheme.textPrimary : premiumMgr.plan.color)
                     // Subtitle ternary collapsed from 3-tier to 2-tier
                     // (Premium plan removed). Only Free or Royal possible.
                     let subtitle = premiumMgr.plan == .free
                         ? loc("free.title")
                         : loc("royal.title")
-                    Text(subtitle).font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
+                    Text(subtitle).font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                 }
                 Spacer()
                 if premiumMgr.plan == .free {
@@ -847,14 +847,14 @@ struct ProfileView: View {
                     // amber tone is gone with the tier. Consistent purple
                     // throughout the upgrade journey is also clearer
                     // branding ("this color = paid feature").
-                    Text(loc("profile.upgrade")).font(.system(size: 12, weight: .bold)).foregroundStyle(.white)
+                    Text(loc("profile.upgrade")).font(.system(.caption, weight: .bold)).foregroundStyle(.white)
                         .padding(.horizontal, 14).padding(.vertical, 7)
                         .background(
                             LinearGradient(colors: [PremiumPlan.royal.color, PremiumPlan.royal.color.opacity(0.75)],
                                            startPoint: .topLeading, endPoint: .bottomTrailing), in: Capsule())
                         .shadow(color: PremiumPlan.royal.color.opacity(0.4), radius: 6, y: 3)
                 } else {
-                    Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold))
+                    Image(systemName: "chevron.right").font(.system(.footnote, weight: .semibold))
                         .foregroundStyle(premiumMgr.plan.color.opacity(0.7))
                 }
             }
@@ -948,13 +948,13 @@ struct ProfileView: View {
     private var appearanceCard: some View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
-                Image(systemName: "circle.lefthalf.filled").font(.system(size: 18)).foregroundStyle(AppTheme.textPrimary)
+                Image(systemName: "circle.lefthalf.filled").font(.system(.body)).foregroundStyle(AppTheme.textPrimary)
                     .frame(width: 36, height: 36)
                     .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: 10))
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(loc("profile.appearance")).font(.system(size: 14, weight: .medium)).foregroundStyle(AppTheme.textPrimary)
+                    Text(loc("profile.appearance")).font(.system(.subheadline, weight: .medium)).foregroundStyle(AppTheme.textPrimary)
                     Text(appearanceMode == "system" ? loc("appearance.following_system") : appearanceMode == "dark" ? loc("appearance.dark_mode") : loc("appearance.light_mode"))
-                        .font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
+                        .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                 }
                 Spacer()
             }
@@ -973,7 +973,7 @@ struct ProfileView: View {
                         performAppearanceTransition(to: item.mode)
                     } label: {
                         VStack(spacing: 5) {
-                            Image(systemName: item.icon).font(.system(size: 16))
+                            Image(systemName: item.icon).font(.system(.callout))
                                 .foregroundStyle(appearanceMode == item.mode ? AppTheme.onVividFill : AppTheme.textSecondary)
                             Text(item.label)
                                 .font(.system(size: 11, weight: appearanceMode == item.mode ? .semibold : .regular))
@@ -1012,14 +1012,14 @@ struct ProfileView: View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
                 Text("🌐")
-                    .font(.system(size: 18))
+                    .font(.system(.body))
                     .frame(width: 36, height: 36)
                     .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: 10))
                 VStack(alignment: .leading, spacing: 2) {
                     Text(loc("profile.language"))
-                        .font(.system(size: 14, weight: .medium)).foregroundStyle(AppTheme.textPrimary)
+                        .font(.system(.subheadline, weight: .medium)).foregroundStyle(AppTheme.textPrimary)
                     Text(lang.current.flag + " " + lang.current.nativeName)
-                        .font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
+                        .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                 }
                 Spacer()
             }
@@ -1034,7 +1034,7 @@ struct ProfileView: View {
                         }
                     } label: {
                         VStack(spacing: 5) {
-                            Text(language.flag).font(.system(size: 22))
+                            Text(language.flag).font(.system(.title2))
                             Text(language.nativeName)
                                 .font(.system(size: 11,
                                               weight: language == lang.current ? .semibold : .regular))
@@ -1062,7 +1062,7 @@ struct ProfileView: View {
             if isSigningIn {
                 HStack(spacing: 10) {
                     ProgressView().tint(AppTheme.accent)
-                    Text(loc("profile.signing_in")).font(.system(size: 15)).foregroundStyle(AppTheme.textSecondary)
+                    Text(loc("profile.signing_in")).font(.system(.subheadline)).foregroundStyle(AppTheme.textSecondary)
                 }
                 .frame(maxWidth: .infinity).padding(.vertical, 16)
             } else {
@@ -1073,8 +1073,8 @@ struct ProfileView: View {
                 } label: {
                     HStack(spacing: 10) {
                         Image(systemName: loggedIn ? "person.crop.circle.badge.xmark" : "person.crop.circle.badge.checkmark")
-                            .font(.system(size: 16))
-                        Text(loggedIn ? loc("profile.logout") : loc("profile.login")).font(.system(size: 15, weight: .medium))
+                            .font(.system(.callout))
+                        Text(loggedIn ? loc("profile.logout") : loc("profile.login")).font(.system(.subheadline, weight: .medium))
                     }
                     .foregroundStyle(loggedIn ? AppTheme.red : AppTheme.accent)
                     .frame(maxWidth: .infinity).padding(.vertical, 16)
@@ -1093,7 +1093,7 @@ struct ProfileView: View {
                     showDeleteAccount = true
                 } label: {
                     Text(loc("profile.delete"))
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.system(.footnote, weight: .semibold))
                         .foregroundStyle(AppTheme.red.opacity(0.85))
                         .underline()
                         .padding(.vertical, 6)
@@ -1150,22 +1150,22 @@ struct ProfileView: View {
                 } label: {
                     HStack(spacing: 10) {
                         Image(systemName: lastExportDate == nil ? "exclamationmark.circle.fill" : "clock.arrow.circlepath")
-                            .font(.system(size: 18))
+                            .font(.system(.body))
                             .foregroundStyle(AppTheme.orange)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(lastExportDate == nil
                                  ? loc("backup.reminder.never_title")
                                  : loc("backup.reminder.stale_title"))
-                                .font(.system(size: 13, weight: .semibold))
+                                .font(.system(.footnote, weight: .semibold))
                                 .foregroundStyle(AppTheme.textPrimary)
                             Text(backupReminderSubtitle)
-                                .font(.system(size: 11))
+                                .font(.system(.caption2))
                                 .foregroundStyle(AppTheme.textSecondary)
                                 .multilineTextAlignment(.leading)
                         }
                         Spacer()
                         Image(systemName: "chevron.right")
-                            .font(.system(size: 11, weight: .semibold))
+                            .font(.system(.caption2, weight: .semibold))
                             .foregroundStyle(AppTheme.textSecondary)
                     }
                     .padding(12)
@@ -1178,10 +1178,10 @@ struct ProfileView: View {
             // Section header so users understand what they're touching
             HStack(spacing: 6) {
                 Image(systemName: "externaldrive.fill")
-                    .font(.system(size: 12))
+                    .font(.system(.caption))
                     .foregroundStyle(AppTheme.textSecondary)
                 Text(loc("backup.section_title"))
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(.caption, weight: .semibold))
                     .foregroundStyle(AppTheme.textSecondary)
                 Spacer()
             }
@@ -1199,8 +1199,8 @@ struct ProfileView: View {
                     runExport()
                 } label: {
                     HStack(spacing: 8) {
-                        Image(systemName: "square.and.arrow.up").font(.system(size: 14, weight: .semibold))
-                        Text(loc("backup.export")).font(.system(size: 14, weight: .semibold))
+                        Image(systemName: "square.and.arrow.up").font(.system(.subheadline, weight: .semibold))
+                        Text(loc("backup.export")).font(.system(.subheadline, weight: .semibold))
                     }
                     .foregroundStyle(AppTheme.accent)
                     .frame(maxWidth: .infinity).padding(.vertical, 14)
@@ -1217,8 +1217,8 @@ struct ProfileView: View {
                     showImportPicker = true
                 } label: {
                     HStack(spacing: 8) {
-                        Image(systemName: "square.and.arrow.down").font(.system(size: 14, weight: .semibold))
-                        Text(loc("backup.import")).font(.system(size: 14, weight: .semibold))
+                        Image(systemName: "square.and.arrow.down").font(.system(.subheadline, weight: .semibold))
+                        Text(loc("backup.import")).font(.system(.subheadline, weight: .semibold))
                     }
                     .foregroundStyle(AppTheme.blue)
                     .frame(maxWidth: .infinity).padding(.vertical, 14)
@@ -1235,14 +1235,14 @@ struct ProfileView: View {
                 // letting them silently wonder. Subtle inline hint —
                 // matches existing `backup.subtitle` styling.
                 Text(loc("backup.login_required"))
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.system(.caption2, weight: .medium))
                     .foregroundStyle(AppTheme.red.opacity(0.85))
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: .infinity)
             }
 
             Text(loc("backup.subtitle"))
-                .font(.system(size: 11))
+                .font(.system(.caption2))
                 .foregroundStyle(AppTheme.textSecondary.opacity(0.8))
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: .infinity)
@@ -1272,8 +1272,8 @@ struct ProfileView: View {
     private var resetButton: some View {
         Button { HapticManager.shared.warning(); showResetConfirm = true } label: {
             HStack(spacing: 10) {
-                Image(systemName: "trash.fill").font(.system(size: 16))
-                Text(loc("profile.reset_all")).font(.system(size: 15, weight: .medium))
+                Image(systemName: "trash.fill").font(.system(.callout))
+                Text(loc("profile.reset_all")).font(.system(.subheadline, weight: .medium))
             }
             .foregroundStyle(AppTheme.red).frame(maxWidth: .infinity).padding(.vertical, 16)
             .background(AppTheme.red.opacity(0.08), in: RoundedRectangle(cornerRadius: 16))
@@ -1297,17 +1297,17 @@ struct ProfileView: View {
                 } label: {
                     HStack(spacing: 14) {
                         Image(systemName: "headphones.circle.fill")
-                            .font(.system(size: 18)).foregroundStyle(AppTheme.textSecondary)
+                            .font(.system(.body)).foregroundStyle(AppTheme.textSecondary)
                             .frame(width: 36, height: 36)
                             .background(AppTheme.textSecondary.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
                         VStack(alignment: .leading, spacing: 2) {
                             Text(loc("profile.support"))
-                                .font(.system(size: 14, weight: .medium)).foregroundStyle(AppTheme.textSecondary)
+                                .font(.system(.subheadline, weight: .medium)).foregroundStyle(AppTheme.textSecondary)
                             Text(loc("profile.support_needs_email"))
-                                .font(.system(size: 12)).foregroundStyle(AppTheme.orange)
+                                .font(.system(.caption)).foregroundStyle(AppTheme.orange)
                         }
                         Spacer()
-                        Image(systemName: "lock.fill").font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
+                        Image(systemName: "lock.fill").font(.system(.footnote)).foregroundStyle(AppTheme.textSecondary)
                     }
                     .padding(14)
                     .background(AppTheme.cardDark.opacity(0.6), in: RoundedRectangle(cornerRadius: 14))
@@ -1446,7 +1446,7 @@ struct ProfileView: View {
                         .controlSize(.large)
                         .tint(.white)
                     Text(label)
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.system(.subheadline, weight: .semibold))
                         .foregroundStyle(.white)
                 }
                 .padding(.horizontal, 32)
@@ -1648,9 +1648,9 @@ struct ProfileSignInSheet: View {
                     value: appeared
                 )
                 VStack(spacing: 5) {
-                    Text(context.title).font(.system(size: 20, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
+                    Text(context.title).font(.system(.title3, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
                     Text(context.subtitle)
-                        .font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary).multilineTextAlignment(.center)
+                        .font(.system(.footnote)).foregroundStyle(AppTheme.textSecondary).multilineTextAlignment(.center)
                 }
                 .opacity(appeared ? 1 : 0).offset(y: appeared ? 0 : 10)
                 .animation(AppMotion.appear, value: appeared)
@@ -1666,8 +1666,8 @@ struct ProfileSignInSheet: View {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { onApple() }
                 } label: {
                     HStack(spacing: 10) {
-                        Image(systemName: "apple.logo").font(.system(size: 17, weight: .medium))
-                        Text(loc("auth.apple")).font(.system(size: 16, weight: .semibold))
+                        Image(systemName: "apple.logo").font(.system(.body, weight: .medium))
+                        Text(loc("auth.apple")).font(.system(.callout, weight: .semibold))
                     }
                     // Use textPrimary (auto-inverts: dark in light mode, white
                     // in dark mode) instead of fixed `.white`. Previously the
@@ -1689,9 +1689,9 @@ struct ProfileSignInSheet: View {
                     HStack(spacing: 10) {
                         ZStack {
                             Circle().fill(.white).frame(width: 20, height: 20)
-                            Text("G").font(.system(size: 13, weight: .bold)).foregroundStyle(Color(hex: "#4285F4"))
+                            Text("G").font(.system(.footnote, weight: .bold)).foregroundStyle(Color(hex: "#4285F4"))
                         }
-                        Text(loc("auth.google")).font(.system(size: 16, weight: .semibold))
+                        Text(loc("auth.google")).font(.system(.callout, weight: .semibold))
                             .foregroundStyle(AppTheme.textPrimary)
                     }
                     .frame(maxWidth: .infinity).padding(.vertical, 15)
@@ -1701,7 +1701,7 @@ struct ProfileSignInSheet: View {
                 .buttonStyle(ScaleButtonStyle())
 
                 Text(loc("auth.data_stays"))
-                    .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary.opacity(0.5))
+                    .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary.opacity(0.5))
                     .multilineTextAlignment(.center).padding(.top, 2)
             }
             .padding(.horizontal, 24).padding(.top, 24)
@@ -1812,11 +1812,11 @@ struct DangerConfirmSheet: View {
             // Title + message
             VStack(spacing: 10) {
                 Text(title)
-                    .font(.system(size: 22, weight: .bold))
+                    .font(.system(.title2, weight: .bold))
                     .foregroundStyle(AppTheme.textPrimary)
                     .multilineTextAlignment(.center)
                 Text(message)
-                    .font(.system(size: 14))
+                    .font(.system(.subheadline))
                     .foregroundStyle(AppTheme.textSecondary)
                     .multilineTextAlignment(.center)
                     .lineSpacing(3)
@@ -1834,7 +1834,7 @@ struct DangerConfirmSheet: View {
                     dismiss()
                 } label: {
                     Text(loc("common.cancel"))
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.system(.subheadline, weight: .semibold))
                         .foregroundStyle(AppTheme.textPrimary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 15)
@@ -1857,7 +1857,7 @@ struct DangerConfirmSheet: View {
                     }
                 } label: {
                     Text(confirmLabel)
-                        .font(.system(size: 15, weight: .bold))
+                        .font(.system(.subheadline, weight: .bold))
                         .foregroundStyle(AppTheme.onVividFill)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 15)
@@ -1896,17 +1896,17 @@ struct BackupPreviewSheet: View {
                         .fill(AppTheme.blue.opacity(0.12))
                         .frame(width: 70, height: 70)
                     Image(systemName: "doc.text.magnifyingglass")
-                        .font(.system(size: 30, weight: .semibold))
+                        .font(.system(.title, weight: .semibold))
                         .foregroundStyle(AppTheme.blue)
                 }
                 .padding(.top, 12)
 
                 Text(loc("backup.preview.title"))
-                    .font(.system(size: 20, weight: .bold))
+                    .font(.system(.title3, weight: .bold))
                     .foregroundStyle(AppTheme.textPrimary)
 
                 Text(loc("backup.preview.subtitle"))
-                    .font(.system(size: 13))
+                    .font(.system(.footnote))
                     .foregroundStyle(AppTheme.textSecondary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 24)
@@ -1934,7 +1934,7 @@ struct BackupPreviewSheet: View {
             // Counts grid
             VStack(alignment: .leading, spacing: 8) {
                 Text(loc("backup.preview.contents"))
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(.caption, weight: .semibold))
                     .foregroundStyle(AppTheme.textSecondary)
                     .padding(.horizontal, 22)
 
@@ -1964,7 +1964,7 @@ struct BackupPreviewSheet: View {
                     onCancel()
                 } label: {
                     Text(loc("common.cancel"))
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.system(.subheadline, weight: .semibold))
                         .foregroundStyle(AppTheme.textPrimary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 14)
@@ -1978,7 +1978,7 @@ struct BackupPreviewSheet: View {
                     onContinue()
                 } label: {
                     Text(loc("backup.preview.continue"))
-                        .font(.system(size: 15, weight: .bold))
+                        .font(.system(.subheadline, weight: .bold))
                         .foregroundStyle(AppTheme.onVividFill)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 14)
@@ -1996,15 +1996,15 @@ struct BackupPreviewSheet: View {
     private func metadataRow(icon: String, label: String, value: String) -> some View {
         HStack(spacing: 12) {
             Image(systemName: icon)
-                .font(.system(size: 13))
+                .font(.system(.footnote))
                 .foregroundStyle(AppTheme.textSecondary)
                 .frame(width: 18)
             Text(label)
-                .font(.system(size: 13))
+                .font(.system(.footnote))
                 .foregroundStyle(AppTheme.textSecondary)
             Spacer()
             Text(value)
-                .font(.system(size: 13, weight: .semibold))
+                .font(.system(.footnote, weight: .semibold))
                 .foregroundStyle(AppTheme.textPrimary)
         }
         .padding(.horizontal, 14)
@@ -2023,16 +2023,16 @@ struct BackupPreviewSheet: View {
             ZStack {
                 Circle().fill(color.opacity(0.15)).frame(width: 32, height: 32)
                 Image(systemName: icon)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.system(.footnote, weight: .semibold))
                     .foregroundStyle(color)
             }
             VStack(alignment: .leading, spacing: 1) {
                 Text("\(count)")
-                    .font(.system(size: 15, weight: .bold))
+                    .font(.system(.subheadline, weight: .bold))
                     .foregroundStyle(AppTheme.textPrimary)
                     .contentTransition(.numericText())
                 Text(label)
-                    .font(.system(size: 10))
+                    .font(.system(.caption2))
                     .foregroundStyle(AppTheme.textSecondary)
             }
             Spacer(minLength: 0)
@@ -2108,7 +2108,7 @@ struct BackTapGuideView: View {
 
                         sectionLabel(loc("backtap.voice_heading"), tint: AppTheme.accent)
                         Text(loc("backtap.voice_intro"))
-                            .font(.system(size: 13))
+                            .font(.system(.footnote))
                             .foregroundStyle(AppTheme.textSecondary)
                             .fixedSize(horizontal: false, vertical: true)
                         stepList(voiceSteps, tint: AppTheme.accent)
@@ -2129,8 +2129,8 @@ struct BackTapGuideView: View {
                             }
                         } label: {
                             HStack(spacing: 8) {
-                                Image(systemName: "arrow.up.forward.app.fill").font(.system(size: 14))
-                                Text(loc("backtap.open_shortcuts")).font(.system(size: 15, weight: .semibold))
+                                Image(systemName: "arrow.up.forward.app.fill").font(.system(.subheadline))
+                                Text(loc("backtap.open_shortcuts")).font(.system(.subheadline, weight: .semibold))
                             }
                             .foregroundStyle(AppTheme.onVividFill)
                             .frame(maxWidth: .infinity).padding(.vertical, 14)
@@ -2156,10 +2156,10 @@ struct BackTapGuideView: View {
     private var hero: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(loc("backtap.hero_title"))
-                .font(.system(size: 21, weight: .bold))
+                .font(.system(.title3, weight: .bold))
                 .foregroundStyle(AppTheme.textPrimary)
             Text(loc("backtap.hero_body"))
-                .font(.system(size: 14))
+                .font(.system(.subheadline))
                 .foregroundStyle(AppTheme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -2174,7 +2174,7 @@ struct BackTapGuideView: View {
         HStack(spacing: 8) {
             Circle().fill(tint).frame(width: 6, height: 6)
             Text(text)
-                .font(.system(size: 12, weight: .semibold))
+                .font(.system(.caption, weight: .semibold))
                 .foregroundStyle(AppTheme.textSecondary)
         }
     }
@@ -2190,7 +2190,7 @@ struct BackTapGuideView: View {
                             Circle().fill(tint.opacity(0.14))
                                 .frame(width: 30, height: 30)
                             Text("\(step.id)")
-                                .font(.system(size: 13, weight: .bold))
+                                .font(.system(.footnote, weight: .bold))
                                 .foregroundStyle(tint)
                         }
                         if step.id != items.count {
@@ -2203,14 +2203,14 @@ struct BackTapGuideView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         HStack(spacing: 7) {
                             Image(systemName: step.glyph)
-                                .font(.system(size: 12, weight: .semibold))
+                                .font(.system(.caption, weight: .semibold))
                                 .foregroundStyle(tint)
                             Text(step.title)
-                                .font(.system(size: 14, weight: .semibold))
+                                .font(.system(.subheadline, weight: .semibold))
                                 .foregroundStyle(AppTheme.textPrimary)
                         }
                         Text(step.body)
-                            .font(.system(size: 13))
+                            .font(.system(.footnote))
                             .foregroundStyle(AppTheme.textSecondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -2229,10 +2229,10 @@ struct BackTapGuideView: View {
                          icon: String, tint: Color) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Label(title, systemImage: icon)
-                .font(.system(size: 13, weight: .semibold))
+                .font(.system(.footnote, weight: .semibold))
                 .foregroundStyle(tint)
             Text(body)
-                .font(.system(size: 13))
+                .font(.system(.footnote))
                 .foregroundStyle(AppTheme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
         }

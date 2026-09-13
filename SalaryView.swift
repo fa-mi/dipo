@@ -309,7 +309,7 @@ struct PayCycleBar: View {
                     Spacer()
                     Text(SalaryFormat.date(cycle.next, "d MMM"))
                 }
-                .font(.system(size: 11))
+                .font(.system(.caption2))
                 .foregroundStyle(AppTheme.textSecondary)
             }
         }
@@ -331,14 +331,14 @@ struct PaydayTile: View {
     var body: some View {
         VStack(spacing: 3) {
             Text(SalaryFormat.date(date, "MMM").uppercased())
-                .font(.system(size: 10, weight: .semibold))
+                .font(.system(.caption2, weight: .semibold))
                 .tracking(0.6)
                 .foregroundStyle(isToday ? AppTheme.onVividFill.opacity(0.75) : AppTheme.textSecondary)
             Text(SalaryFormat.date(date, "d"))
-                .font(.system(size: 20, weight: .bold))
+                .font(.system(.title3, weight: .bold))
                 .foregroundStyle(isToday ? AppTheme.onVividFill : AppTheme.textPrimary)
             Text(SalaryFormat.date(date, "EEE"))
-                .font(.system(size: 10, weight: .medium))
+                .font(.system(.caption2, weight: .medium))
                 .foregroundStyle(isToday ? AppTheme.onVividFill.opacity(0.75) : AppTheme.textSecondary)
         }
         .frame(maxWidth: .infinity)
@@ -469,10 +469,10 @@ struct SalaryView: View {
         HStack(alignment: .center) {
             VStack(alignment: .leading, spacing: 3) {
                 Text(loc("salary.title"))
-                    .font(.system(size: 26, weight: .bold))
+                    .font(.system(.title, weight: .bold))
                     .foregroundStyle(AppTheme.textPrimary)
                 Text(loc("salary.smart_sub"))
-                    .font(.system(size: 13))
+                    .font(.system(.footnote))
                     .foregroundStyle(AppTheme.textSecondary)
             }
             Spacer()
@@ -483,7 +483,7 @@ struct SalaryView: View {
                     vm.showAddSheet = true
                 } label: {
                     Image(systemName: "plus")
-                        .font(.system(size: 18, weight: .bold))
+                        .font(.system(.body, weight: .bold))
                         .foregroundStyle(cards.isEmpty ? AppTheme.textSecondary : AppTheme.onVividFill)
                         .frame(width: 44, height: 44)
                         .background(cards.isEmpty ? AppTheme.cardMid : AppTheme.accentFill, in: Circle())
@@ -509,11 +509,11 @@ struct PaydayHeroCard: View {
             HStack(spacing: 8) {
                 Circle().fill(AppTheme.accentFill).frame(width: 8, height: 8)
                 Text(loc("salary.next_payday"))
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.system(.footnote, weight: .semibold))
                     .foregroundStyle(AppTheme.textSecondary)
                 Spacer()
                 Text(schedule.label)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(.caption, weight: .semibold))
                     .foregroundStyle(AppTheme.textPrimary)
                     .lineLimit(1)
                     .padding(.horizontal, 10).padding(.vertical, 4)
@@ -527,7 +527,7 @@ struct PaydayHeroCard: View {
                     .contentTransition(.numericText())
                 Text(SalaryFormat.date(cycle.next, "EEEE d MMMM") + "  ·  "
                      + CurrencyManager.shared.formatted(schedule.amount, currency: schedule.currency))
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.system(.subheadline, weight: .medium))
                     .foregroundStyle(AppTheme.textSecondary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
@@ -556,15 +556,15 @@ struct SalaryEmptyState: View {
                 Circle().fill(AppTheme.accent.opacity(0.14)).frame(width: 120, height: 120)
                 Circle().fill(AppTheme.accentFill).frame(width: 76, height: 76)
                 Image(systemName: "banknote.fill")
-                    .font(.system(size: 30, weight: .semibold))
+                    .font(.system(.title, weight: .semibold))
                     .foregroundStyle(AppTheme.onVividFill)
             }
             VStack(spacing: 8) {
                 Text(loc("salary.no_salary"))
-                    .font(.system(size: 20, weight: .bold))
+                    .font(.system(.title3, weight: .bold))
                     .foregroundStyle(AppTheme.textPrimary)
                 Text(loc("salary.nil"))
-                    .font(.system(size: 14))
+                    .font(.system(.subheadline))
                     .foregroundStyle(AppTheme.textSecondary)
                     .multilineTextAlignment(.center)
                     .lineSpacing(3)
@@ -578,8 +578,8 @@ struct SalaryEmptyState: View {
                 vm.showAddSheet = true
             } label: {
                 HStack(spacing: 8) {
-                    Image(systemName: "plus.circle.fill").font(.system(size: 17))
-                    Text(loc("salary.add_full")).font(.system(size: 16, weight: .bold))
+                    Image(systemName: "plus.circle.fill").font(.system(.body))
+                    Text(loc("salary.add_full")).font(.system(.callout, weight: .bold))
                 }
                 .foregroundStyle(hasCards ? AppTheme.onVividFill : AppTheme.textSecondary)
                 .frame(maxWidth: .infinity)
@@ -627,17 +627,17 @@ struct SalaryCard: View {
                         .fill(active ? AppTheme.accentFill : AppTheme.cardMid)
                         .frame(width: 44, height: 44)
                     Image(systemName: "banknote.fill")
-                        .font(.system(size: 18, weight: .semibold))
+                        .font(.system(.body, weight: .semibold))
                         .foregroundStyle(active ? AppTheme.onVividFill : AppTheme.textSecondary)
                 }
                 VStack(alignment: .leading, spacing: 5) {
                     Text(schedule.label)
-                        .font(.system(size: 17, weight: .bold))
+                        .font(.system(.body, weight: .bold))
                         .foregroundStyle(AppTheme.textPrimary)
                         .lineLimit(1)
                     HStack(spacing: 6) {
                         Text(String(format: loc("salary.every_day"), schedule.dayOfMonth))
-                            .font(.system(size: 12))
+                            .font(.system(.caption))
                             .foregroundStyle(AppTheme.textSecondary)
                         if !active {
                             chip(loc("salary.paused"), icon: "pause.fill", tint: AppTheme.textSecondary)
@@ -654,7 +654,7 @@ struct SalaryCard: View {
                 Spacer(minLength: 4)
                 Button(action: onMore) {
                     Image(systemName: "ellipsis")
-                        .font(.system(size: 16, weight: .bold))
+                        .font(.system(.callout, weight: .bold))
                         .foregroundStyle(AppTheme.textPrimary)
                         .frame(width: 38, height: 38)
                         .background(AppTheme.cardMid.opacity(0.7), in: Circle())
@@ -668,7 +668,7 @@ struct SalaryCard: View {
             // Amount + countdown
             HStack(alignment: .firstTextBaseline) {
                 Text(CurrencyManager.shared.formatted(schedule.amount, currency: schedule.currency))
-                    .font(.system(size: 28, weight: .bold))
+                    .font(.system(.title, weight: .bold))
                     .foregroundStyle(active ? AppTheme.textPrimary : AppTheme.textSecondary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
@@ -676,7 +676,7 @@ struct SalaryCard: View {
                 Spacer(minLength: 8)
                 if active {
                     Text(cycle.countdown)
-                        .font(.system(size: 13, weight: .bold))
+                        .font(.system(.footnote, weight: .bold))
                         .foregroundStyle(cycle.daysLeft == 0 ? AppTheme.onVividFill : cycle.tint)
                         .padding(.horizontal, 12).padding(.vertical, 6)
                         .background(cycle.daysLeft == 0 ? AppTheme.accentFill
@@ -694,10 +694,10 @@ struct SalaryCard: View {
                 // systemGreen as 12pt text would be 2.2:1 on a white card.
                 HStack(spacing: 6) {
                     Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 13))
+                        .font(.system(.footnote))
                         .foregroundStyle(AppTheme.accent)
                     Text(loc("salary.recorded_this_month"))
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.system(.caption, weight: .semibold))
                         .foregroundStyle(AppTheme.textPrimary)
                 }
             }
@@ -719,7 +719,7 @@ struct SalaryCard: View {
                         .clipShape(RoundedRectangle(cornerRadius: 5))
                     Text(String(format: loc("salary.lands_on"),
                                 "\(CardLabel.title(card)) \(CardLabel.subtitle(card))"))
-                        .font(.system(size: 12))
+                        .font(.system(.caption))
                         .foregroundStyle(AppTheme.textSecondary)
                         .lineLimit(1)
                 }
@@ -727,9 +727,9 @@ struct SalaryCard: View {
                 NavigationLink(destination: SalaryDetailView(schedule: schedule)) {
                     HStack(spacing: 3) {
                         Text(loc("salary.full_schedule"))
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(.system(.caption, weight: .semibold))
                         Image(systemName: "chevron.right")
-                            .font(.system(size: 10, weight: .bold))
+                            .font(.system(.caption2, weight: .bold)).imageScale(.small)
                     }
                     .foregroundStyle(AppTheme.textPrimary)
                 }
@@ -742,8 +742,8 @@ struct SalaryCard: View {
 
     private func chip(_ text: String, icon: String, tint: Color) -> some View {
         HStack(spacing: 3) {
-            Image(systemName: icon).font(.system(size: 8, weight: .bold))
-            Text(text).font(.system(size: 10, weight: .semibold))
+            Image(systemName: icon).font(.system(.caption2, weight: .bold)).imageScale(.small)
+            Text(text).font(.system(.caption2, weight: .semibold))
         }
         .foregroundStyle(tint)
         .padding(.horizontal, 7).padding(.vertical, 3)
@@ -779,17 +779,17 @@ struct SalaryActionsSheet: View {
                     Circle().fill(schedule.isActive ? AppTheme.accentFill : AppTheme.cardMid)
                         .frame(width: 46, height: 46)
                     Image(systemName: "banknote.fill")
-                        .font(.system(size: 19, weight: .semibold))
+                        .font(.system(.title3, weight: .semibold))
                         .foregroundStyle(schedule.isActive ? AppTheme.onVividFill : AppTheme.textSecondary)
                 }
                 VStack(alignment: .leading, spacing: 2) {
                     Text(schedule.label)
-                        .font(.system(size: 18, weight: .bold))
+                        .font(.system(.body, weight: .bold))
                         .foregroundStyle(AppTheme.textPrimary)
                         .lineLimit(1)
                     Text(CurrencyManager.shared.formatted(schedule.amount, currency: schedule.currency)
                          + "  ·  " + String(format: loc("salary.every_day"), schedule.dayOfMonth))
-                        .font(.system(size: 13))
+                        .font(.system(.footnote))
                         .foregroundStyle(AppTheme.textSecondary)
                         .lineLimit(1)
                 }
@@ -816,10 +816,10 @@ struct SalaryActionsSheet: View {
                     iconTile("wand.and.stars", tint: AppTheme.accentFill, solid: true)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(loc("salary.autorecord_label"))
-                            .font(.system(size: 15, weight: .semibold))
+                            .font(.system(.subheadline, weight: .semibold))
                             .foregroundStyle(AppTheme.textPrimary)
                         Text(loc("salary.autorecord_hint"))
-                            .font(.system(size: 12))
+                            .font(.system(.caption))
                             .foregroundStyle(AppTheme.textSecondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -841,10 +841,10 @@ struct SalaryActionsSheet: View {
                     iconTile("trash.fill", tint: AppTheme.flowOut, solid: true)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(loc("salary.action.delete"))
-                            .font(.system(size: 15, weight: .semibold))
+                            .font(.system(.subheadline, weight: .semibold))
                             .foregroundStyle(AppTheme.flowOut)
                         Text(loc("salary.delete_keeps"))
-                            .font(.system(size: 12))
+                            .font(.system(.caption))
                             .foregroundStyle(AppTheme.textSecondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -876,7 +876,7 @@ struct SalaryActionsSheet: View {
     /// and red badge in the app.
     private func iconTile(_ icon: String, tint: Color, solid: Bool = false) -> some View {
         Image(systemName: icon)
-            .font(.system(size: 15, weight: .semibold))
+            .font(.system(.subheadline, weight: .semibold))
             .foregroundStyle(solid ? AppTheme.onVividFill : tint)
             .frame(width: 36, height: 36)
             .background(solid ? tint : tint.opacity(0.14), in: RoundedRectangle(cornerRadius: 11))
@@ -889,17 +889,17 @@ struct SalaryActionsSheet: View {
                 iconTile(icon, tint: tint)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.system(.subheadline, weight: .semibold))
                         .foregroundStyle(AppTheme.textPrimary)
                     Text(detail)
-                        .font(.system(size: 12))
+                        .font(.system(.caption))
                         .foregroundStyle(AppTheme.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                         .multilineTextAlignment(.leading)
                 }
                 Spacer(minLength: 6)
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(.caption, weight: .semibold))
                     .foregroundStyle(AppTheme.textSecondary)
             }
             .padding(.horizontal, 14).padding(.vertical, 12)
@@ -928,13 +928,13 @@ struct SalaryDeleteSheet: View {
             ZStack {
                 Circle().fill(AppTheme.flowOut).frame(width: 56, height: 56)
                 Image(systemName: "trash.fill")
-                    .font(.system(size: 22, weight: .semibold))
+                    .font(.system(.title2, weight: .semibold))
                     .foregroundStyle(AppTheme.onVividFill)
             }
             .padding(.top, 8)
 
             Text(String(format: loc("salary.delete_title"), schedule.label))
-                .font(.system(size: 19, weight: .bold))
+                .font(.system(.title3, weight: .bold))
                 .foregroundStyle(AppTheme.textPrimary)
                 .multilineTextAlignment(.center)
 
@@ -952,7 +952,7 @@ struct SalaryDeleteSheet: View {
             VStack(spacing: 10) {
                 Button(action: onConfirm) {
                     Text(loc("common.delete"))
-                        .font(.system(size: 16, weight: .bold))
+                        .font(.system(.callout, weight: .bold))
                         .foregroundStyle(AppTheme.onVividFill)
                         .frame(maxWidth: .infinity).padding(.vertical, 16)
                         .background(AppTheme.flowOut, in: RoundedRectangle(cornerRadius: 18))
@@ -962,7 +962,7 @@ struct SalaryDeleteSheet: View {
                     HapticManager.shared.tap(); onCancel()
                 } label: {
                     Text(loc("tx.delete_keep"))
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.system(.callout, weight: .semibold))
                         .foregroundStyle(AppTheme.textPrimary)
                         .frame(maxWidth: .infinity).padding(.vertical, 16)
                         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 18))
@@ -984,9 +984,9 @@ struct SalaryDeleteSheet: View {
 
     private func note(_ icon: String, _ tint: Color, _ text: String) -> some View {
         HStack(alignment: .top, spacing: 10) {
-            Image(systemName: icon).font(.system(size: 14)).foregroundStyle(tint)
+            Image(systemName: icon).font(.system(.subheadline)).foregroundStyle(tint)
             Text(text)
-                .font(.system(size: 13))
+                .font(.system(.footnote))
                 .foregroundStyle(AppTheme.textPrimary)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -1115,13 +1115,13 @@ struct SalaryFormSheet: View {
                 // on that card, so any other currency would be converted anyway.
                 HStack(spacing: 6) {
                     Text(CurrencyManager.symbol(for: vm.formCurrency))
-                        .font(.system(size: 15, weight: .bold))
+                        .font(.system(.subheadline, weight: .bold))
                         .foregroundStyle(AppTheme.textPrimary)
                     Text(vm.formCurrency)
-                        .font(.system(size: 13, weight: .medium))
+                        .font(.system(.footnote, weight: .medium))
                         .foregroundStyle(AppTheme.textSecondary)
                     if lockedCard != nil {
-                        Image(systemName: "lock.fill").font(.system(size: 9))
+                        Image(systemName: "lock.fill").font(.system(.caption2)).imageScale(.small)
                             .foregroundStyle(AppTheme.textSecondary)
                     }
                 }
@@ -1129,7 +1129,7 @@ struct SalaryFormSheet: View {
                 .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: 13))
 
                 TextField("0", text: $vm.formAmount)
-                    .font(.system(size: 34, weight: .bold))
+                    .font(.system(.largeTitle, weight: .bold))
                     .foregroundStyle(AppTheme.textPrimary)
                     .keyboardType(.decimalPad)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -1139,7 +1139,7 @@ struct SalaryFormSheet: View {
 
             if let p = AmountInputHelper.preview(vm.formAmount, currency: vm.formCurrency) {
                 Text(p)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.system(.caption, weight: .medium))
                     .foregroundStyle(AppTheme.textSecondary)
             }
         }
@@ -1157,19 +1157,19 @@ struct SalaryFormSheet: View {
                 // What that choice means THIS month, live.
                 HStack(spacing: 12) {
                     Image(systemName: previewAdjusted ? "arrow.uturn.backward" : "checkmark")
-                        .font(.system(size: 14, weight: .bold))
+                        .font(.system(.subheadline, weight: .bold))
                         .foregroundStyle(AppTheme.onVividFill)
                         .frame(width: 32, height: 32)
                         .background(previewAdjusted ? AppTheme.orange : AppTheme.accentFill, in: Circle())
                     VStack(alignment: .leading, spacing: 2) {
                         Text(String(format: loc("salary.this_month_on"),
                                     SalaryFormat.date(previewDate, "EEEE d MMM")))
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(.system(.subheadline, weight: .semibold))
                             .foregroundStyle(AppTheme.textPrimary)
                         Text(previewAdjusted
                              ? String(format: loc("salary.moved"), vm.formDay)
                              : loc("salary.on_business_day"))
-                            .font(.system(size: 12))
+                            .font(.system(.caption))
                             .foregroundStyle(previewAdjusted ? AppTheme.orange : AppTheme.textSecondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -1179,7 +1179,7 @@ struct SalaryFormSheet: View {
 
                 if vm.formDay >= 29 {
                     Label(loc("salary.short_month_hint"), systemImage: "info.circle")
-                        .font(.system(size: 11))
+                        .font(.system(.caption2))
                         .foregroundStyle(AppTheme.textSecondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
@@ -1207,7 +1207,7 @@ struct SalaryFormSheet: View {
                 // discovered later as a budget that ignores this income.
                 if let id = vm.formCardID, MainCard.id != nil, id.uuidString != MainCard.id {
                     Label(loc("salary.not_main_card"), systemImage: "info.circle")
-                        .font(.system(size: 11))
+                        .font(.system(.caption2))
                         .foregroundStyle(AppTheme.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(.horizontal, 22)
@@ -1219,16 +1219,16 @@ struct SalaryFormSheet: View {
     private var autoRecordSection: some View {
         HStack(spacing: 12) {
             Image(systemName: "wand.and.stars")
-                .font(.system(size: 15, weight: .semibold))
+                .font(.system(.subheadline, weight: .semibold))
                 .foregroundStyle(AppTheme.onVividFill)
                 .frame(width: 36, height: 36)
                 .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: 11))
             VStack(alignment: .leading, spacing: 2) {
                 Text(loc("salary.autorecord_label"))
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.system(.subheadline, weight: .semibold))
                     .foregroundStyle(AppTheme.textPrimary)
                 Text(loc("salary.autorecord_hint"))
-                    .font(.system(size: 12))
+                    .font(.system(.caption))
                     .foregroundStyle(AppTheme.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -1245,9 +1245,9 @@ struct SalaryFormSheet: View {
     private var saveButton: some View {
         Button { save() } label: {
             HStack(spacing: 10) {
-                Image(systemName: "checkmark.circle.fill").font(.system(size: 17))
+                Image(systemName: "checkmark.circle.fill").font(.system(.body))
                 Text(isEditing ? loc("common.save") : loc("salary.add_full"))
-                    .font(.system(size: 16, weight: .bold))
+                    .font(.system(.callout, weight: .bold))
             }
             .foregroundStyle(cards.isEmpty ? AppTheme.textSecondary : AppTheme.onVividFill)
             .frame(maxWidth: .infinity)
@@ -1320,7 +1320,7 @@ struct CardPickerSection: View {
         VStack(spacing: 8) {
             HStack {
                 Text(loc(titleKey))
-                    .font(.system(size: 13))
+                    .font(.system(.footnote))
                     .foregroundStyle(AppTheme.textSecondary)
                 Spacer()
             }
@@ -1329,9 +1329,9 @@ struct CardPickerSection: View {
             if cards.isEmpty {
                 HStack(spacing: 10) {
                     Image(systemName: "creditcard.trianglebadge.exclamationmark")
-                        .font(.system(size: 14)).foregroundStyle(AppTheme.orange)
+                        .font(.system(.subheadline)).foregroundStyle(AppTheme.orange)
                     Text(loc("home.add_card_salary"))
-                        .font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
+                        .font(.system(.footnote)).foregroundStyle(AppTheme.textSecondary)
                 }
                 .padding(14)
                 .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
@@ -1368,17 +1368,17 @@ struct SalaryDetailView: View {
                                 Circle().fill(schedule.isActive ? AppTheme.accentFill : AppTheme.cardMid)
                                     .frame(width: 48, height: 48)
                                 Image(systemName: "banknote.fill")
-                                    .font(.system(size: 20, weight: .semibold))
+                                    .font(.system(.title3, weight: .semibold))
                                     .foregroundStyle(schedule.isActive ? AppTheme.onVividFill : AppTheme.textSecondary)
                             }
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(CurrencyManager.shared.formatted(schedule.amount, currency: schedule.currency))
-                                    .font(.system(size: 26, weight: .bold))
+                                    .font(.system(.title, weight: .bold))
                                     .foregroundStyle(AppTheme.textPrimary)
                                     .lineLimit(1).minimumScaleFactor(0.7)
                                 Text(String(format: loc("salary.every_day"), schedule.dayOfMonth)
                                      + (schedule.isActive ? "" : "  ·  " + loc("salary.paused")))
-                                    .font(.system(size: 13))
+                                    .font(.system(.footnote))
                                     .foregroundStyle(AppTheme.textSecondary)
                             }
                             Spacer(minLength: 0)
@@ -1386,11 +1386,11 @@ struct SalaryDetailView: View {
                         if schedule.isActive {
                             HStack(alignment: .firstTextBaseline) {
                                 Text(loc("salary.next_payday"))
-                                    .font(.system(size: 13, weight: .semibold))
+                                    .font(.system(.footnote, weight: .semibold))
                                     .foregroundStyle(AppTheme.textSecondary)
                                 Spacer()
                                 Text(cycle.countdown)
-                                    .font(.system(size: 20, weight: .bold))
+                                    .font(.system(.title3, weight: .bold))
                                     .foregroundStyle(cycle.daysLeft == 0 ? AppTheme.accent : cycle.tint)
                             }
                             PayCycleBar(cycle: cycle)
@@ -1424,7 +1424,7 @@ struct SalaryDetailView: View {
                         HStack(spacing: 6) {
                             Circle().fill(AppTheme.orange).frame(width: 7, height: 7)
                             Text(loc("salary.adjusted_legend"))
-                                .font(.system(size: 11))
+                                .font(.system(.caption2))
                                 .foregroundStyle(AppTheme.textSecondary)
                         }
                     }

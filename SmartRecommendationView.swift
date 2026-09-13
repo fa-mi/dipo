@@ -38,13 +38,13 @@ struct SmartRecommendationView: View {
         } label: {
             HStack(spacing: 10) {
                 Image(systemName: "text.magnifyingglass")
-                    .font(.system(size: 15, weight: .semibold)).foregroundStyle(AppTheme.purple)
+                    .font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.purple)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(loc("brief.title")).font(.system(size: 14, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
-                    Text(loc("brief.entry_sub")).font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                    Text(loc("brief.title")).font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                    Text(loc("brief.entry_sub")).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                 }
                 Spacer()
-                Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(AppTheme.textSecondary)
+                Image(systemName: "chevron.right").font(.system(.caption, weight: .semibold)).foregroundStyle(AppTheme.textSecondary)
             }
             .padding(14)
             .background(AppTheme.purple.opacity(0.08), in: RoundedRectangle(cornerRadius: 16))
@@ -61,19 +61,19 @@ struct SmartRecommendationView: View {
         } label: {
             HStack(spacing: 10) {
                 Image(systemName: r.declaredIntents.isEmpty ? "hand.raised.fill" : "checkmark.seal.fill")
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.system(.subheadline, weight: .semibold))
                     .foregroundStyle(r.declaredIntents.isEmpty ? AppTheme.blue : AppTheme.accent)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(loc(r.declaredIntents.isEmpty ? "reco.intent_cta" : "reco.intent_active"))
-                        .font(.system(size: 14, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                        .font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
                     Text(r.declaredIntents.isEmpty
                          ? loc("reco.intent_cta_sub")
                          : r.declaredIntents.map(\.label).joined(separator: " · "))
-                        .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                        .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: 0)
-                Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold))
+                Image(systemName: "chevron.right").font(.system(.caption, weight: .semibold))
                     .foregroundStyle(AppTheme.textSecondary)
             }
             .padding(14)
@@ -402,17 +402,17 @@ struct SmartRecommendationView: View {
     private var header: some View {
         HStack {
             Button { HapticManager.shared.tap(); dismiss() } label: {
-                Image(systemName: "chevron.left").font(.system(size: 16, weight: .semibold))
+                Image(systemName: "chevron.left").font(.system(.callout, weight: .semibold))
                     .foregroundStyle(AppTheme.textPrimary)
                     .frame(width: 36, height: 36).background(AppTheme.cardDark, in: Circle())
             }
 .accessibilityLabel(loc("a11y.back"))
 .hitTarget(36)
             Spacer()
-            Text(loc("profile.budget")).font(.system(size: 16, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
+            Text(loc("profile.budget")).font(.system(.callout, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
             HStack(spacing: 4) {
-                Image(systemName: "sparkles").font(.system(size: 9, weight: .bold))
-                Text(loc("reco.ai_powered")).font(.system(size: 10, weight: .bold))
+                Image(systemName: "sparkles").font(.system(.caption2, weight: .bold)).imageScale(.small)
+                Text(loc("reco.ai_powered")).font(.system(.caption2, weight: .bold))
             }
             .foregroundStyle(AppTheme.purple)
             .padding(.horizontal, 8).padding(.vertical, 4)
@@ -425,20 +425,20 @@ struct SmartRecommendationView: View {
     private func titleBlock(_ r: SmartRecommendation) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(loc("reco.title"))
-                .font(.system(size: 24, weight: .bold))
+                .font(.system(.title2, weight: .bold))
                 .foregroundStyle(AppTheme.textPrimary)
                 .fixedSize(horizontal: false, vertical: true)
             Text(r.isPreliminary
                  ? loc("reco.subtitle_preliminary")
                  : String(format: loc(r.dataMonths == 1 ? "reco.subtitle_one" : "reco.subtitle"), r.dataMonths))
-                .font(.system(size: 13))
+                .font(.system(.footnote))
                 .foregroundStyle(AppTheme.textSecondary)
             // Exact analysis window, pay-cycle aligned — the user should never
             // wonder WHICH month of their life these numbers describe.
             if !r.periodLabel.isEmpty {
                 HStack(spacing: 5) {
-                    Image(systemName: "calendar").font(.system(size: 10, weight: .semibold))
-                    Text(r.periodLabel).font(.system(size: 11, weight: .semibold))
+                    Image(systemName: "calendar").font(.system(.caption2, weight: .semibold)).imageScale(.small)
+                    Text(r.periodLabel).font(.system(.caption2, weight: .semibold))
                 }
                 .foregroundStyle(AppTheme.purple)
                 .padding(.horizontal, 9).padding(.vertical, 4)
@@ -474,12 +474,12 @@ struct SmartRecommendationView: View {
                     .animation(.spring(response: 1.0, dampingFraction: 0.85), value: appeared)
                 VStack(spacing: 0) {
                     Text("\(animatedScore)")
-                        .font(.system(size: 32, weight: .bold, design: .rounded))
+                        .font(.system(.largeTitle, design: .rounded, weight: .bold))
                         .foregroundStyle(AppTheme.textPrimary)
                         .contentTransition(.numericText())
                         .monospacedDigit()          // digits never shift the centre
                     Text(loc("reco.score_label"))
-                        .font(.system(size: 8.5, weight: .medium))
+                        .font(.system(.caption2, weight: .medium))
                         .foregroundStyle(AppTheme.textSecondary)
                         .textCase(.uppercase)
                         .kerning(0.4)
@@ -494,12 +494,12 @@ struct SmartRecommendationView: View {
                 // "Perlu perbaikan" wrapped and pushed the number off-centre.
                 HStack(spacing: 6) {
                     Text(r.scoreLabel)
-                        .font(.system(size: 13, weight: .bold))
+                        .font(.system(.footnote, weight: .bold))
                         .foregroundStyle(tint)
                         .lineLimit(1).minimumScaleFactor(0.8)
                     Spacer(minLength: 4)
                     Image(systemName: "info.circle")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.system(.caption, weight: .semibold))
                         .foregroundStyle(AppTheme.textSecondary)
                 }
                 .padding(.bottom, 10)
@@ -549,14 +549,14 @@ struct SmartRecommendationView: View {
     private func metricRow(_ m: RecoMetricDetail) -> some View {
         HStack(spacing: 8) {
             Image(systemName: m.icon)
-                .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                 .frame(width: 16, alignment: .center)
             Text(m.shortLabel)
-                .font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
+                .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                 .lineLimit(1)
             Spacer(minLength: 8)
             Text(m.rating.label)
-                .font(.system(size: 12, weight: .bold)).foregroundStyle(m.rating.color)
+                .font(.system(.caption, weight: .bold)).foregroundStyle(m.rating.color)
                 .lineLimit(1)
         }
         .frame(height: 18)
@@ -570,14 +570,14 @@ struct SmartRecommendationView: View {
                 Text(r.isPreliminary
                      ? loc("reco.analyzed_preliminary")
                      : String(format: loc("reco.analyzed"), r.transactionsAnalyzed))
-                    .font(.system(size: 13))
+                    .font(.system(.footnote))
                     .foregroundStyle(AppTheme.textPrimary)
                     .fixedSize(horizontal: false, vertical: true)
                 ConfidenceBadge(confidence: r.confidence)
             }
             Spacer(minLength: 0)
             Image(systemName: "brain.head.profile")
-                .font(.system(size: 26)).foregroundStyle(AppTheme.purple)
+                .font(.system(.title)).foregroundStyle(AppTheme.purple)
         }
         .padding(14)
         .background(AppTheme.purple.opacity(0.10), in: RoundedRectangle(cornerRadius: 16))
@@ -588,15 +588,15 @@ struct SmartRecommendationView: View {
     private func recommendationsSection(_ r: SmartRecommendation) -> some View {
         VStack(spacing: 12) {
             HStack {
-                Text(loc("reco.top_recommendations")).font(.system(size: 15, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
+                Text(loc("reco.top_recommendations")).font(.system(.subheadline, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
                 Spacer()
                 Button {
                     HapticManager.shared.tap()
                     detailReco = r
                 } label: {
                     HStack(spacing: 3) {
-                        Text(loc("reco.view_details")).font(.system(size: 12, weight: .semibold))
-                        Image(systemName: "chevron.right").font(.system(size: 10, weight: .semibold))
+                        Text(loc("reco.view_details")).font(.system(.caption, weight: .semibold))
+                        Image(systemName: "chevron.right").font(.system(.caption2, weight: .semibold)).imageScale(.small)
                     }
                     .foregroundStyle(AppTheme.purple)
                 }
@@ -605,17 +605,17 @@ struct SmartRecommendationView: View {
                 HStack(spacing: 12) {
                     ZStack {
                         RoundedRectangle(cornerRadius: 11).fill(item.tint.opacity(0.15)).frame(width: 40, height: 40)
-                        Image(systemName: item.icon).font(.system(size: 16)).foregroundStyle(item.tint)
+                        Image(systemName: item.icon).font(.system(.callout)).foregroundStyle(item.tint)
                     }
                     VStack(alignment: .leading, spacing: 3) {
-                        Text(item.title).font(.system(size: 14, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                        Text(item.title).font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
                             .fixedSize(horizontal: false, vertical: true)
-                        Text(item.subtitle).font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                        Text(item.subtitle).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     Spacer(minLength: 6)
                     Text(item.badge)
-                        .font(.system(size: 11, weight: .bold)).foregroundStyle(item.badgeTint)
+                        .font(.system(.caption2, weight: .bold)).foregroundStyle(item.badgeTint)
                         .padding(.horizontal, 8).padding(.vertical, 5)
                         .background(item.badgeTint.opacity(0.12), in: Capsule())
                 }
@@ -634,7 +634,7 @@ struct SmartRecommendationView: View {
                 apply(r)
             } label: {
                 Text(loc("reco.apply"))
-                    .font(.system(size: 16, weight: .bold)).foregroundStyle(.white)
+                    .font(.system(.callout, weight: .bold)).foregroundStyle(.white)
                     .frame(maxWidth: .infinity).padding(.vertical, 16)
                     .background(
                         LinearGradient(colors: [AppTheme.purple, AppTheme.purple.opacity(0.75)],
@@ -649,7 +649,7 @@ struct SmartRecommendationView: View {
                 HapticManager.shared.tap(); dismiss()
             } label: {
                 Text(loc("reco.customize"))
-                    .font(.system(size: 14, weight: .semibold)).foregroundStyle(AppTheme.purple)
+                    .font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.purple)
             }
         }
     }
@@ -665,7 +665,7 @@ struct SmartRecommendationView: View {
         ]
         return VStack(alignment: .leading, spacing: 10) {
             Text(loc("reco.split_header"))
-                .font(.system(size: 13, weight: .semibold))
+                .font(.system(.footnote, weight: .semibold))
                 .foregroundStyle(AppTheme.textPrimary)
             GeometryReader { geo in
                 HStack(spacing: 3) {
@@ -681,13 +681,13 @@ struct SmartRecommendationView: View {
                 ForEach(Array(buckets.enumerated()), id: \.offset) { _, b in
                     HStack(spacing: 8) {
                         Circle().fill(b.2).frame(width: 7, height: 7)
-                        Text(b.0).font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
+                        Text(b.0).font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                         Spacer()
                         Text("\(Int((b.1 * 100).rounded()))%")
-                            .font(.system(size: 12, weight: .bold)).foregroundStyle(b.2)
+                            .font(.system(.caption, weight: .bold)).foregroundStyle(b.2)
                         if r.monthlyIncome > 0 {
                             Text(cm.formatted(r.monthlyIncome * b.1, currency: r.currency))
-                                .font(.system(size: 11, weight: .semibold))
+                                .font(.system(.caption2, weight: .semibold))
                                 .foregroundStyle(AppTheme.textSecondary)
                                 .frame(minWidth: 86, alignment: .trailing)
                         }
@@ -703,11 +703,11 @@ struct SmartRecommendationView: View {
 
     private func whySection(_ r: SmartRecommendation) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(loc("reco.why_title")).font(.system(size: 14, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+            Text(loc("reco.why_title")).font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
             ForEach(Array(r.reasons.enumerated()), id: \.offset) { _, reason in
                 HStack(alignment: .top, spacing: 8) {
-                    Image(systemName: "sparkle").font(.system(size: 11)).foregroundStyle(AppTheme.purple).padding(.top, 2)
-                    Text(reason).font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
+                    Image(systemName: "sparkle").font(.system(.caption2)).foregroundStyle(AppTheme.purple).padding(.top, 2)
+                    Text(reason).font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 0)
                 }
@@ -720,10 +720,10 @@ struct SmartRecommendationView: View {
 
     private var privacyNote: some View {
         HStack(spacing: 10) {
-            Image(systemName: "lock.shield.fill").font(.system(size: 16)).foregroundStyle(AppTheme.accent)
+            Image(systemName: "lock.shield.fill").font(.system(.callout)).foregroundStyle(AppTheme.accent)
             VStack(alignment: .leading, spacing: 2) {
-                Text(loc("reco.privacy_title")).font(.system(size: 12, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
-                Text(loc("reco.privacy_body")).font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                Text(loc("reco.privacy_title")).font(.system(.caption, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                Text(loc("reco.privacy_body")).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 0)
@@ -801,8 +801,8 @@ struct ConfidenceBadge: View {
     }
     var body: some View {
         HStack(spacing: 4) {
-            Image(systemName: "info.circle.fill").font(.system(size: 8))
-            Text(text).font(.system(size: 9, weight: .semibold))
+            Image(systemName: "info.circle.fill").font(.system(.caption2)).imageScale(.small)
+            Text(text).font(.system(.caption2, weight: .semibold))
         }
         .foregroundStyle(tint)
         .padding(.horizontal, 7).padding(.vertical, 3)
@@ -836,11 +836,11 @@ struct ScoreDetailSheet: View {
                             .rotationEffect(.degrees(-90))
                         VStack(spacing: 0) {
                             Text("\(reco.smartScore)")
-                                .font(.system(size: 30, weight: .bold, design: .rounded))
+                                .font(.system(.title, design: .rounded, weight: .bold))
                                 .foregroundStyle(AppTheme.textPrimary)
                                 .monospacedDigit()
                             Text(reco.scoreLabel)
-                                .font(.system(size: 9, weight: .semibold))
+                                .font(.system(.caption2, weight: .semibold))
                                 .foregroundStyle(tint)
                                 .lineLimit(1).minimumScaleFactor(0.7)
                                 .padding(.horizontal, 6)
@@ -850,14 +850,14 @@ struct ScoreDetailSheet: View {
 
                     VStack(spacing: 5) {
                         Text(loc("reco.score_detail_title"))
-                            .font(.system(size: 19, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
+                            .font(.system(.title3, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
                         Text(loc("reco.score_detail_sub"))
-                            .font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
+                            .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                             .multilineTextAlignment(.center)
                             .fixedSize(horizontal: false, vertical: true)
                         if !reco.periodLabel.isEmpty {
                             Text(reco.periodLabel)
-                                .font(.system(size: 11, weight: .semibold))
+                                .font(.system(.caption2, weight: .semibold))
                                 .foregroundStyle(AppTheme.purple)
                                 .padding(.horizontal, 10).padding(.vertical, 4)
                                 .background(AppTheme.purple.opacity(0.12), in: Capsule())
@@ -873,29 +873,29 @@ struct ScoreDetailSheet: View {
                     VStack(alignment: .leading, spacing: 7) {
                         HStack(spacing: 8) {
                             Image(systemName: m.icon)
-                                .font(.system(size: 13)).foregroundStyle(m.rating.color)
+                                .font(.system(.footnote)).foregroundStyle(m.rating.color)
                                 .frame(width: 18)
                             // Full label here — the sheet has the width the
                             // compact card doesn't.
                             Text(m.fullLabel)
-                                .font(.system(size: 14, weight: .semibold))
+                                .font(.system(.subheadline, weight: .semibold))
                                 .foregroundStyle(AppTheme.textPrimary)
                                 .fixedSize(horizontal: false, vertical: true)
                             Spacer(minLength: 8)
                             Text(m.rating.label)
-                                .font(.system(size: 12, weight: .bold)).foregroundStyle(m.rating.color)
+                                .font(.system(.caption, weight: .bold)).foregroundStyle(m.rating.color)
                                 .padding(.horizontal, 9).padding(.vertical, 4)
                                 .background(m.rating.color.opacity(0.13), in: Capsule())
                         }
                         if !m.measured.isEmpty {
                             Text(m.measured)
-                                .font(.system(size: 12, weight: .medium))
+                                .font(.system(.caption, weight: .medium))
                                 .foregroundStyle(AppTheme.textPrimary.opacity(0.85))
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                         if !m.explanation.isEmpty {
                             Text(m.explanation)
-                                .font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
+                                .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                                 .fixedSize(horizontal: false, vertical: true).lineSpacing(2)
                         }
                     }
@@ -907,7 +907,7 @@ struct ScoreDetailSheet: View {
                 }
 
                 Text(loc("brief.disclaimer"))
-                    .font(.system(size: 10))
+                    .font(.system(.caption2))
                     .foregroundStyle(AppTheme.textSecondary.opacity(0.7))
                     .fixedSize(horizontal: false, vertical: true)
 

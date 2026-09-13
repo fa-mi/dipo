@@ -287,16 +287,16 @@ struct StatisticsView: View {
                 ZStack {
                     Circle().fill(AppTheme.purple.opacity(0.15)).frame(width: 46, height: 46)
                     Image(systemName: "crown.fill")
-                        .font(.system(size: 20, weight: .semibold))
+                        .font(.system(.title3, weight: .semibold))
                         .foregroundStyle(AppTheme.purple)
                 }
                 Text(loc("stats.insights"))
-                    .font(.system(size: 15, weight: .bold))
+                    .font(.system(.subheadline, weight: .bold))
                     .foregroundStyle(AppTheme.textPrimary)
                 HStack(spacing: 4) {
-                    Image(systemName: "lock.fill").font(.system(size: 10, weight: .bold))
+                    Image(systemName: "lock.fill").font(.system(.caption2, weight: .bold)).imageScale(.small)
                     Text(loc("stats.insights_locked"))
-                        .font(.system(size: 12, weight: .bold))
+                        .font(.system(.caption, weight: .bold))
                 }
                 .foregroundStyle(AppTheme.purple)
             }
@@ -1008,8 +1008,8 @@ struct StatisticsView: View {
                     // Title
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(loc("stats.title")).font(.system(size: 24, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
-                            Text(periodSubtitle).font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
+                            Text(loc("stats.title")).font(.system(.title2, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
+                            Text(periodSubtitle).font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                         }
                         Spacer()
                         Button {
@@ -1017,7 +1017,7 @@ struct StatisticsView: View {
                             showExportSheet = true
                         } label: {
                             Image(systemName: "square.and.arrow.up")
-                                .font(.system(size: 18))
+                                .font(.system(.body))
                                 .foregroundStyle(AppTheme.accent)
                                 .frame(width: 44, height: 44)
                                 .background(AppTheme.accent.opacity(0.12), in: Circle())
@@ -1054,10 +1054,10 @@ struct StatisticsView: View {
                         } label: {
                             HStack(spacing: 6) {
                                 Text(selectedPeriod.title)
-                                    .font(.system(size: 13, weight: .semibold))
+                                    .font(.system(.footnote, weight: .semibold))
                                     .foregroundStyle(AppTheme.textPrimary)
                                 Image(systemName: "chevron.down")
-                                    .font(.system(size: 10, weight: .semibold))
+                                    .font(.system(.caption2, weight: .semibold)).imageScale(.small)
                                     .foregroundStyle(AppTheme.textSecondary)
                             }
                             .padding(.horizontal, 13).padding(.vertical, 8)
@@ -1086,11 +1086,11 @@ struct StatisticsView: View {
                                 .frame(width: 4, height: 22)
                                 .clipShape(Capsule())
                             Text(cardLabel(main))
-                                .font(.system(size: 13, weight: .semibold))
+                                .font(.system(.footnote, weight: .semibold))
                                 .foregroundStyle(AppTheme.textPrimary)
                                 .lineLimit(1)
                             Text(loc("main.badge"))
-                                .font(.system(size: 9, weight: .bold))
+                                .font(.system(.caption2, weight: .bold))
                                 .foregroundStyle(AppTheme.accent)
                                 .padding(.horizontal, 6).padding(.vertical, 2)
                                 .background(AppTheme.accent.opacity(0.15), in: Capsule())
@@ -1109,10 +1109,10 @@ struct StatisticsView: View {
                             HapticManager.shared.tap(); showTidy = true
                         } label: {
                             HStack(spacing: 8) {
-                                Image(systemName: "wand.and.stars").font(.system(size: 13, weight: .semibold))
-                                Text(String(format: loc("tidy.chip"), tidyableCount)).font(.system(size: 13, weight: .semibold))
+                                Image(systemName: "wand.and.stars").font(.system(.footnote, weight: .semibold))
+                                Text(String(format: loc("tidy.chip"), tidyableCount)).font(.system(.footnote, weight: .semibold))
                                 Spacer()
-                                Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold))
+                                Image(systemName: "chevron.right").font(.system(.caption2, weight: .semibold))
                             }
                             .foregroundStyle(AppTheme.purple)
                             .padding(.horizontal, 14).padding(.vertical, 12)
@@ -1222,17 +1222,17 @@ struct StatisticsView: View {
                                 .foregroundStyle(AppTheme.textSecondary)
                                 .gentleFloat()
                             Text(String(format: loc("stats.title_empty"), statsVM.selectedStatTab.localizedLabel.lowercased()))
-                                .font(.system(size: 16)).foregroundStyle(AppTheme.textSecondary)
+                                .font(.system(.callout)).foregroundStyle(AppTheme.textSecondary)
                             Text(loc("stats.empty"))
-                                .font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary.opacity(0.7))
+                                .font(.system(.footnote)).foregroundStyle(AppTheme.textSecondary.opacity(0.7))
 
                             Button {
                                 HapticManager.shared.tap()
                                 NotificationCenter.default.post(name: .requestOpenAddTransaction, object: nil)
                             } label: {
                                 HStack(spacing: 8) {
-                                    Image(systemName: "plus.circle.fill").font(.system(size: 14))
-                                    Text(loc("home.add_first_tx")).font(.system(size: 13, weight: .semibold))
+                                    Image(systemName: "plus.circle.fill").font(.system(.subheadline))
+                                    Text(loc("home.add_first_tx")).font(.system(.footnote, weight: .semibold))
                                 }
                                 .foregroundStyle(AppTheme.accent)
                                 .padding(.horizontal, 16).padding(.vertical, 9)
@@ -1261,7 +1261,7 @@ struct StatisticsView: View {
                         && premiumMgr.canAccess(.smartBudget) {
                         VStack(alignment: .leading, spacing: 0) {
                             Text(loc("stats.patterns"))
-                                .font(.system(size: 16, weight: .semibold))
+                                .font(.system(.callout, weight: .semibold))
                                 .foregroundStyle(AppTheme.textPrimary)
                                 .padding(.bottom, 12)
 
@@ -1269,16 +1269,16 @@ struct StatisticsView: View {
                                 ForEach(Array(patternRows.enumerated()), id: \.offset) { i, row in
                                     HStack(alignment: .top, spacing: 12) {
                                         Image(systemName: row.icon)
-                                            .font(.system(size: 14))
+                                            .font(.system(.subheadline))
                                             .foregroundStyle(row.tint)
                                             .frame(width: 22)
                                         VStack(alignment: .leading, spacing: 2) {
                                             Text(row.title)
-                                                .font(.system(size: 13.5, weight: .semibold))
+                                                .font(.system(.footnote, weight: .semibold))
                                                 .foregroundStyle(AppTheme.textPrimary)
                                                 .fixedSize(horizontal: false, vertical: true)
                                             Text(row.detail)
-                                                .font(.system(size: 11.5))
+                                                .font(.system(.caption))
                                                 .foregroundStyle(AppTheme.textSecondary)
                                                 .fixedSize(horizontal: false, vertical: true)
                                                 .lineSpacing(1.5)
@@ -1466,10 +1466,10 @@ struct CashflowCard: View {
         VStack(alignment: .leading, spacing: 5) {
             HStack(spacing: 5) {
                 Circle().fill(dot).frame(width: 6, height: 6)
-                Text(title).font(.system(size: 11.5)).foregroundStyle(AppTheme.textSecondary)
+                Text(title).font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
             }
             Text(CurrencyManager.shared.formatted(amount, currency: currency))
-                .font(.system(size: 19, weight: .bold))
+                .font(.system(.title3, weight: .bold))
                 .foregroundStyle(AppTheme.textPrimary)
                 .contentTransition(.numericText())
                 .lineLimit(1).minimumScaleFactor(0.7)
@@ -1478,15 +1478,15 @@ struct CashflowCard: View {
                 let good = up == upIsGood
                 HStack(spacing: 3) {
                     Image(systemName: up ? "arrow.up.right" : "arrow.down.right")
-                        .font(.system(size: 8, weight: .bold))
+                        .font(.system(.caption2, weight: .bold)).imageScale(.small)
                     Text(String(format: "%.0f%%", abs(change)))
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.system(.caption2, weight: .semibold))
                 }
                 .foregroundStyle(good ? AppTheme.accent : AppTheme.red)
             } else {
                 // Keeps both columns the same height when one side has no
                 // history to compare against.
-                Text(" ").font(.system(size: 11, weight: .semibold))
+                Text(" ").font(.system(.caption2, weight: .semibold))
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -1514,8 +1514,8 @@ struct NetBalanceSummary: View {
 
     private func chip(_ icon: String, _ tint: Color, _ text: String) -> some View {
         HStack(spacing: 4) {
-            Image(systemName: icon).font(.system(size: 9, weight: .bold))
-            Text(text).font(.system(size: 10, weight: .semibold))
+            Image(systemName: icon).font(.system(.caption2, weight: .bold)).imageScale(.small)
+            Text(text).font(.system(.caption2, weight: .semibold))
         }
         .foregroundStyle(tint)
         .padding(.horizontal, 8).padding(.vertical, 4)
@@ -1540,14 +1540,14 @@ struct NetBalanceSummary: View {
                 // in/out flow for the selected period only.
                 VStack(alignment: .leading, spacing: 2) {
                     Text(loc("stats.net_balance"))
-                        .font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
+                        .font(.system(.footnote)).foregroundStyle(AppTheme.textSecondary)
                     Text(loc("stats.net_balance_sub"))
-                        .font(.system(size: 10)).foregroundStyle(AppTheme.textSecondary.opacity(0.75))
+                        .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary.opacity(0.75))
                 }
                 Spacer()
                 Text(net >= 0 ? "\(CurrencyManager.shared.formatted(net, currency: currency))"
                              : CurrencyManager.shared.formatted(net, currency: currency))
-                    .font(.system(size: 16, weight: .bold))
+                    .font(.system(.callout, weight: .bold))
                     .foregroundStyle(net >= 0 ? AppTheme.accent : AppTheme.red)
                     .contentTransition(.numericText())
             }
@@ -1571,14 +1571,14 @@ struct NetBalanceSummary: View {
             .frame(height: 12)
             HStack {
                 Text(String(format: loc("stats.percentage_spent"), String(format: "%.0f", spentPct)))
-                    .font(.system(size: 11))
+                    .font(.system(.caption2))
                     .foregroundStyle(AppTheme.textSecondary)
                 Spacer()
                 Text(net >= 0
                      ? String(format: loc(progress == nil ? "stats.saved" : "stats.saved_sofar"),
                               String(format: "%.0f%%", savedPct))
                      : loc("stats.overspent"))
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.system(.caption2, weight: .medium))
                     .foregroundStyle(net >= 0 ? AppTheme.accent : AppTheme.red)
             }
 
@@ -1623,10 +1623,10 @@ struct NetBalanceSummary: View {
                     Divider().background(AppTheme.cardMid.opacity(0.6))
                     HStack {
                         Text(loc(isToday ? "stats.card_balance_now" : "stats.recon_end"))
-                            .font(.system(size: 11, weight: .semibold)).foregroundStyle(AppTheme.textSecondary)
+                            .font(.system(.caption2, weight: .semibold)).foregroundStyle(AppTheme.textSecondary)
                         Spacer()
                         Text("= " + (closing < 0 ? "-" : "") + CurrencyManager.shared.formatted(abs(closing), currency: currency))
-                            .font(.system(size: 12, weight: .bold))
+                            .font(.system(.caption, weight: .bold))
                             .foregroundStyle(closing >= 0 ? AppTheme.accent : AppTheme.red)
                     }
                 }
@@ -1634,10 +1634,10 @@ struct NetBalanceSummary: View {
                 Divider().background(AppTheme.cardMid)
                 HStack {
                     Text(loc("stats.card_balance_now"))
-                        .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                        .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                     Spacer()
                     Text((balance < 0 ? "-" : "") + CurrencyManager.shared.formatted(abs(balance), currency: currency))
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.system(.caption, weight: .semibold))
                         .foregroundStyle(balance >= 0 ? AppTheme.textPrimary : AppTheme.red)
                 }
             }
@@ -1648,11 +1648,11 @@ struct NetBalanceSummary: View {
 
     private func reconRow(_ label: String, _ value: Double, signed: Bool = false) -> some View {
         HStack {
-            Text(label).font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+            Text(label).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
             Spacer()
             Text((value < 0 ? "−" : signed ? "+" : "")
                  + CurrencyManager.shared.formatted(abs(value), currency: currency))
-                .font(.system(size: 12, weight: .medium)).foregroundStyle(AppTheme.textPrimary)
+                .font(.system(.caption, weight: .medium)).foregroundStyle(AppTheme.textPrimary)
         }
     }
 }
@@ -1669,7 +1669,7 @@ struct StatSegmentPicker: View {
                     vm.switchTab(tab)
                 } label: {
                     Text(tab.localizedLabel)
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.system(.subheadline, weight: .semibold))
                         .foregroundStyle(vm.selectedStatTab == tab ? AppTheme.bg : AppTheme.textSecondary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
@@ -1748,10 +1748,10 @@ struct NetWorthTrendCard: View {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(loc("stats.net_worth"))
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.system(.subheadline, weight: .semibold))
                         .foregroundStyle(AppTheme.textPrimary)
                     Text(subtitle)
-                        .font(.system(size: 11))
+                        .font(.system(.caption2))
                         .foregroundStyle(AppTheme.textSecondary)
                 }
                 Spacer()
@@ -1760,9 +1760,9 @@ struct NetWorthTrendCard: View {
                     let up = last.net >= first.net
                     HStack(spacing: 4) {
                         Image(systemName: up ? "arrow.up.right" : "arrow.down.right")
-                            .font(.system(size: 11, weight: .bold))
+                            .font(.system(.caption2, weight: .bold))
                         Text(up ? loc("stats.positive") : loc("stats.negative"))
-                            .font(.system(size: 11, weight: .semibold))
+                            .font(.system(.caption2, weight: .semibold))
                     }
                     .foregroundStyle(up ? AppTheme.accent : AppTheme.red)
                     .padding(.horizontal, 8).padding(.vertical, 4)
@@ -1849,7 +1849,7 @@ struct NetWorthTrendCard: View {
                 }
             } else {
                 Text(loc("stats.trend_empty"))
-                    .font(.system(size: 12))
+                    .font(.system(.caption))
                     .foregroundStyle(AppTheme.textSecondary)
                     .frame(maxWidth: .infinity, alignment: .center)
                     .padding(.vertical, 24)
@@ -1892,11 +1892,11 @@ struct SmartInsightsCard: View {
                 ZStack {
                     Circle().fill(AppTheme.purple.opacity(0.15)).frame(width: 32, height: 32)
                     Image(systemName: "sparkles")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.system(.subheadline, weight: .semibold))
                         .foregroundStyle(AppTheme.purple)
                 }
                 Text(loc("stats.insights"))
-                    .font(.system(size: 15, weight: .bold))
+                    .font(.system(.subheadline, weight: .bold))
                     .foregroundStyle(AppTheme.textPrimary)
                 Spacer()
             }
@@ -1905,18 +1905,18 @@ struct SmartInsightsCard: View {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 6) {
                     Image(systemName: "calendar.badge.clock")
-                        .font(.system(size: 11))
+                        .font(.system(.caption2))
                         .foregroundStyle(AppTheme.purple)
                     Text(loc("stats.weekly_avg"))
-                        .font(.system(size: 11, weight: .medium))
+                        .font(.system(.caption2, weight: .medium))
                         .foregroundStyle(AppTheme.textSecondary)
                     if isPartialPeriod {
                         // Caveat chip — this window is too short for a stable
                         // weekly rate, so mark it as a partial estimate.
                         HStack(spacing: 3) {
-                            Image(systemName: "info.circle.fill").font(.system(size: 8))
+                            Image(systemName: "info.circle.fill").font(.system(.caption2)).imageScale(.small)
                             Text(loc("stats.weekly_avg_partial_badge"))
-                                .font(.system(size: 9, weight: .semibold))
+                                .font(.system(.caption2, weight: .semibold))
                         }
                         .foregroundStyle(AppTheme.orange)
                         .padding(.horizontal, 6).padding(.vertical, 2)
@@ -1924,13 +1924,13 @@ struct SmartInsightsCard: View {
                     }
                 }
                 Text(CurrencyManager.shared.formatted(weeklyAverage, currency: currency))
-                    .font(.system(size: 26, weight: .bold))
+                    .font(.system(.title, weight: .bold))
                     .foregroundStyle(AppTheme.textPrimary)
                     .contentTransition(.numericText())
                 Text(isPartialPeriod
                      ? String(format: loc("stats.weekly_avg_partial_sub"), periodDays)
                      : loc("stats.weekly_avg_sub"))
-                    .font(.system(size: 11))
+                    .font(.system(.caption2))
                     .foregroundStyle(isPartialPeriod ? AppTheme.orange.opacity(0.9) : AppTheme.textSecondary.opacity(0.8))
 
                 // The figure only means something against what a day HAS.
@@ -1938,11 +1938,11 @@ struct SmartInsightsCard: View {
                     let daily = weeklyAverage / 7
                     HStack(spacing: 5) {
                         Image(systemName: daily <= allowance ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
-                            .font(.system(size: 10))
+                            .font(.system(.caption2)).imageScale(.small)
                         Text(String(format: loc("stats.daily_vs_allowance"),
                                     CurrencyManager.shared.formatted(daily, currency: currency),
                                     CurrencyManager.shared.formatted(allowance, currency: currency)))
-                            .font(.system(size: 11, weight: .medium))
+                            .font(.system(.caption2, weight: .medium))
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     .foregroundStyle(daily <= allowance ? AppTheme.accent : AppTheme.orange)
@@ -1956,9 +1956,9 @@ struct SmartInsightsCard: View {
                     Button(action: onAudit) {
                         HStack(spacing: 4) {
                             Text(loc("audit.open"))
-                                .font(.system(size: 11, weight: .semibold))
+                                .font(.system(.caption2, weight: .semibold))
                             Image(systemName: "chevron.right")
-                                .font(.system(size: 9, weight: .bold))
+                                .font(.system(.caption2, weight: .bold)).imageScale(.small)
                         }
                         .foregroundStyle(AppTheme.purple)
                     }
@@ -1970,7 +1970,7 @@ struct SmartInsightsCard: View {
                     Text(String(format: loc(irregular.count == 1 ? "stats.oneoff_day" : "stats.oneoff_days"),
                                 irregular.count,
                                 CurrencyManager.shared.formatted(irregular.total, currency: currency)))
-                        .font(.system(size: 11))
+                        .font(.system(.caption2))
                         .foregroundStyle(AppTheme.textSecondary.opacity(0.8))
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -2019,7 +2019,7 @@ struct TopCategoryRow: View {
             ZStack {
                 Circle().fill(rankColor.opacity(0.15)).frame(width: 26, height: 26)
                 Text("\(rank)")
-                    .font(.system(size: 12, weight: .bold))
+                    .font(.system(.caption, weight: .bold))
                     .foregroundStyle(rankColor)
             }
             
@@ -2027,13 +2027,13 @@ struct TopCategoryRow: View {
             ZStack {
                 Circle().fill(category.color.opacity(0.15)).frame(width: 32, height: 32)
                 Image(systemName: category.icon)
-                    .font(.system(size: 13))
+                    .font(.system(.footnote))
                     .foregroundStyle(category.color)
             }
             
             VStack(alignment: .leading, spacing: 3) {
                 Text(category.displayLabel)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.system(.footnote, weight: .semibold))
                     .foregroundStyle(AppTheme.textPrimary)
                 
                 // Mini progress bar
@@ -2053,10 +2053,10 @@ struct TopCategoryRow: View {
             
             VStack(alignment: .trailing, spacing: 2) {
                 Text(CurrencyManager.shared.formatted(amount, currency: currency))
-                    .font(.system(size: 12, weight: .bold))
+                    .font(.system(.caption, weight: .bold))
                     .foregroundStyle(AppTheme.textPrimary)
                 Text(String(format: "%.0f%%", percentage))
-                    .font(.system(size: 10))
+                    .font(.system(.caption2))
                     .foregroundStyle(AppTheme.textSecondary)
             }
         }
@@ -2098,10 +2098,10 @@ struct StatsExportSheet: View {
                 // Title only — no icon
                 VStack(spacing: 4) {
                     Text(loc("stats.export_preview"))
-                        .font(.system(size: 22, weight: .bold))
+                        .font(.system(.title2, weight: .bold))
                         .foregroundStyle(AppTheme.textPrimary)
                     Text(periodSubtitle)
-                        .font(.system(size: 13))
+                        .font(.system(.footnote))
                         .foregroundStyle(AppTheme.textSecondary)
                 }
                 .padding(.top, 28)
@@ -2133,10 +2133,10 @@ struct StatsExportSheet: View {
                         if isGenerating {
                             ProgressView().tint(.white).scaleEffect(0.85)
                         } else {
-                            Image(systemName: "photo.fill").font(.system(size: 16))
+                            Image(systemName: "photo.fill").font(.system(.callout))
                         }
                         Text(loc("stats.export_image"))
-                            .font(.system(size: 15, weight: .semibold))
+                            .font(.system(.subheadline, weight: .semibold))
                     }
                     .foregroundStyle(.white)
                     .frame(maxWidth: .infinity)
@@ -2267,16 +2267,16 @@ struct StatsReportCard: View {
                     .frame(width: 26, height: 26)
                     .blendMode(colorScheme == .dark ? .screen : .multiply)
                 Text("DiPo")
-                    .font(.system(size: 14, weight: .heavy, design: .rounded))
+                    .font(.system(.subheadline, design: .rounded, weight: .heavy))
                     .foregroundStyle(AppTheme.textPrimary)
                 Circle().fill(cardColor).frame(width: 5, height: 5)
                 Text(cardLabel)
-                    .font(.system(size: 10))
+                    .font(.system(.caption2))
                     .foregroundStyle(AppTheme.textSecondary)
                     .lineLimit(1)
                 Spacer(minLength: 6)
                 Text(periodSubtitle)
-                    .font(.system(size: 10, weight: .medium))
+                    .font(.system(.caption2, weight: .medium))
                     .foregroundStyle(AppTheme.textSecondary)
                     .lineLimit(1).minimumScaleFactor(0.8)
             }
@@ -2284,12 +2284,12 @@ struct StatsReportCard: View {
             // Hero — Net Balance
             VStack(alignment: .leading, spacing: 4) {
                 Text(loc("stats.net_balance"))
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.system(.caption2, weight: .semibold))
                     .foregroundStyle(AppTheme.textSecondary)
                 Text(netBalance >= 0
                      ? "\(CurrencyManager.shared.formatted(netBalance, currency: currency))"
                      : CurrencyManager.shared.formatted(netBalance, currency: currency))
-                    .font(.system(size: 32, weight: .heavy))
+                    .font(.system(.largeTitle, weight: .heavy))
                     .foregroundStyle(netBalance >= 0 ? AppTheme.accent : AppTheme.red)
                     .lineLimit(1).minimumScaleFactor(0.55)
             }
@@ -2333,7 +2333,7 @@ struct StatsReportCard: View {
                 }
                 Text(String(format: loc("stats.report_tx_inline"), transactionCount))
             }
-            .font(.system(size: 10))
+            .font(.system(.caption2))
             .foregroundStyle(AppTheme.textSecondary.opacity(0.8))
             
             // Top Categories
@@ -2341,10 +2341,10 @@ struct StatsReportCard: View {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 5) {
                         Image(systemName: "trophy.fill")
-                            .font(.system(size: 10))
+                            .font(.system(.caption2)).imageScale(.small)
                             .foregroundStyle(AppTheme.orange)
                         Text(loc("stats.top_categories"))
-                            .font(.system(size: 11, weight: .semibold))
+                            .font(.system(.caption2, weight: .semibold))
                             .foregroundStyle(AppTheme.textSecondary)
                     }
                     VStack(spacing: 7) {
@@ -2379,10 +2379,10 @@ struct StatsReportCard: View {
             // Footer
             HStack {
                 Image(systemName: "sparkles")
-                    .font(.system(size: 8))
+                    .font(.system(.caption2)).imageScale(.small)
                     .foregroundStyle(AppTheme.textSecondary.opacity(0.6))
                 Text(String(format: loc("stats.generated_by"), Date().displayDateTimeShort))
-                    .font(.system(size: 9))
+                    .font(.system(.caption2))
                     .foregroundStyle(AppTheme.textSecondary.opacity(0.6))
                 Spacer()
             }
@@ -2406,10 +2406,10 @@ struct StatsReportCard: View {
         return VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 5) {
                 Image(systemName: "chart.pie.fill")
-                    .font(.system(size: 10))
+                    .font(.system(.caption2)).imageScale(.small)
                     .foregroundStyle(AppTheme.purple)
                 Text(loc("budget.allocation_title"))
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.system(.caption2, weight: .semibold))
                     .foregroundStyle(AppTheme.textSecondary)
             }
             VStack(spacing: 6) {
@@ -2493,15 +2493,15 @@ struct StatsReportCard: View {
             ZStack {
                 Circle().fill(tint.opacity(0.15)).frame(width: 28, height: 28)
                 Image(systemName: icon)
-                    .font(.system(size: 12))
+                    .font(.system(.caption))
                     .foregroundStyle(tint)
             }
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.system(size: 11, weight: .bold))
+                    .font(.system(.caption2, weight: .bold))
                     .foregroundStyle(tint)
                 Text(body)
-                    .font(.system(size: 10))
+                    .font(.system(.caption2))
                     .foregroundStyle(AppTheme.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -2526,16 +2526,16 @@ struct BudgetAllocationRow: View {
         HStack(spacing: 8) {
             Circle().fill(color).frame(width: 8, height: 8)
             Text(label)
-                .font(.system(size: 11, weight: .medium))
+                .font(.system(.caption2, weight: .medium))
                 .foregroundStyle(AppTheme.textPrimary)
                 .lineLimit(1)
             Spacer(minLength: 4)
             Text(String(format: "%.0f%%", ratio * 100))
-                .font(.system(size: 11, weight: .semibold))
+                .font(.system(.caption2, weight: .semibold))
                 .foregroundStyle(color)
                 .frame(minWidth: 32, alignment: .trailing)
             Text(CurrencyManager.shared.formatted(limit, currency: currency))
-                .font(.system(size: 10))
+                .font(.system(.caption2))
                 .foregroundStyle(AppTheme.textSecondary)
                 .lineLimit(1)
         }
@@ -2552,15 +2552,15 @@ struct ReportMetricBox: View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 4) {
                 Image(systemName: icon)
-                    .font(.system(size: 9))
+                    .font(.system(.caption2)).imageScale(.small)
                     .foregroundStyle(color)
                 Text(label)
-                    .font(.system(size: 9, weight: .medium))
+                    .font(.system(.caption2, weight: .medium))
                     .foregroundStyle(AppTheme.textSecondary)
                     .lineLimit(1)
             }
             Text(value)
-                .font(.system(size: 13, weight: .bold))
+                .font(.system(.footnote, weight: .bold))
                 .foregroundStyle(AppTheme.textPrimary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
@@ -2592,18 +2592,18 @@ struct ReportCategoryRow: View {
             ZStack {
                 Circle().fill(rankColor.opacity(0.15)).frame(width: 20, height: 20)
                 Text("\(rank)")
-                    .font(.system(size: 10, weight: .bold))
+                    .font(.system(.caption2, weight: .bold))
                     .foregroundStyle(rankColor)
             }
             ZStack {
                 Circle().fill(category.color.opacity(0.15)).frame(width: 24, height: 24)
                 Image(systemName: category.icon)
-                    .font(.system(size: 10))
+                    .font(.system(.caption2)).imageScale(.small)
                     .foregroundStyle(category.color)
             }
             VStack(alignment: .leading, spacing: 2) {
                 Text(category.displayLabel)
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.system(.caption2, weight: .semibold))
                     .foregroundStyle(AppTheme.textPrimary)
                     .lineLimit(1)
                 GeometryReader { g in
@@ -2620,11 +2620,11 @@ struct ReportCategoryRow: View {
             }
             VStack(alignment: .trailing, spacing: 1) {
                 Text(CurrencyManager.shared.formatted(amount, currency: currency))
-                    .font(.system(size: 10, weight: .bold))
+                    .font(.system(.caption2, weight: .bold))
                     .foregroundStyle(AppTheme.textPrimary)
                     .lineLimit(1)
                 Text(String(format: "%.0f%%", percentage))
-                    .font(.system(size: 9))
+                    .font(.system(.caption2))
                     .foregroundStyle(AppTheme.textSecondary)
             }
         }
@@ -2700,17 +2700,17 @@ struct CategoryDonutChart: View {
                 // Centre reads as the answer to whatever is selected.
                 VStack(spacing: 3) {
                     Text(selected?.name ?? loc("stats.total"))
-                        .font(.system(size: 11))
+                        .font(.system(.caption2))
                         .foregroundStyle(AppTheme.textSecondary)
                         .lineLimit(1).minimumScaleFactor(0.8)
                     Text(CurrencyManager.shared.formatted(selected?.amount ?? total, currency: currency))
-                        .font(.system(size: 19, weight: .bold))
+                        .font(.system(.title3, weight: .bold))
                         .foregroundStyle(AppTheme.textPrimary)
                         .contentTransition(.numericText())
                         .lineLimit(1).minimumScaleFactor(0.6)
                     if let sel = selected, total > 0 {
                         Text(String(format: "%.0f%%", sel.amount / total * 100))
-                            .font(.system(size: 11, weight: .semibold))
+                            .font(.system(.caption2, weight: .semibold))
                             .foregroundStyle(sel.color)
                     }
                 }
@@ -2810,7 +2810,7 @@ struct CycleTrendBreakdown: View {
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 12) {
                         Text(loc("stats.trend_detail_intro"))
-                            .font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
+                            .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                             .fixedSize(horizontal: false, vertical: true)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.horizontal, 22)
@@ -2821,22 +2821,22 @@ struct CycleTrendBreakdown: View {
                                     VStack(alignment: .leading, spacing: 2) {
                                         HStack(spacing: 6) {
                                             Text(p.label)
-                                                .font(.system(size: 15, weight: .bold))
+                                                .font(.system(.subheadline, weight: .bold))
                                                 .foregroundStyle(AppTheme.textPrimary)
                                             if p.isRunning {
                                                 Text(loc("stats.trend_running"))
-                                                    .font(.system(size: 9, weight: .bold))
+                                                    .font(.system(.caption2, weight: .bold))
                                                     .foregroundStyle(AppTheme.orange)
                                                     .padding(.horizontal, 5).padding(.vertical, 2)
                                                     .background(AppTheme.orange.opacity(0.15), in: Capsule())
                                             }
                                         }
                                         Text(range(p))
-                                            .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                                            .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                                     }
                                     Spacer()
                                     Text((p.net >= 0 ? "+" : "−") + money(abs(p.net)))
-                                        .font(.system(size: 16, weight: .bold))
+                                        .font(.system(.callout, weight: .bold))
                                         .foregroundStyle(p.net >= 0 ? AppTheme.accent : AppTheme.red)
                                 }
                                 Divider().overlay(AppTheme.cardMid)
@@ -2852,7 +2852,7 @@ struct CycleTrendBreakdown: View {
                         }
 
                         Text(loc("stats.trend_detail_note"))
-                            .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                            .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                             .fixedSize(horizontal: false, vertical: true)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.horizontal, 22).padding(.top, 4)
@@ -2870,9 +2870,9 @@ struct CycleTrendBreakdown: View {
 
     private func row(_ l: String, _ v: String, _ tint: Color) -> some View {
         HStack {
-            Text(l).font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
+            Text(l).font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
             Spacer()
-            Text(v).font(.system(size: 12, weight: .semibold)).foregroundStyle(tint)
+            Text(v).font(.system(.caption, weight: .semibold)).foregroundStyle(tint)
         }
     }
 }

@@ -569,11 +569,11 @@ struct MaintenanceView: View {
 
                 VStack(spacing: 12) {
                     Text(resolvedTitle)
-                        .font(.system(size: 24, weight: .bold))
+                        .font(.system(.title2, weight: .bold))
                         .foregroundStyle(AppTheme.textPrimary)
                         .multilineTextAlignment(.center)
                     Text(resolvedMessage)
-                        .font(.system(size: 15))
+                        .font(.system(.subheadline))
                         .foregroundStyle(AppTheme.textSecondary)
                         .multilineTextAlignment(.center)
                         .lineSpacing(3)
@@ -583,8 +583,8 @@ struct MaintenanceView: View {
                 Spacer()
 
                 HStack(spacing: 6) {
-                    Image(systemName: "lock.fill").font(.system(size: 10))
-                    Text(loc("maintenance.footer")).font(.system(size: 12))
+                    Image(systemName: "lock.fill").font(.system(.caption2)).imageScale(.small)
+                    Text(loc("maintenance.footer")).font(.system(.caption))
                 }
                 .foregroundStyle(AppTheme.textSecondary.opacity(0.7))
                 .padding(.bottom, 40)

@@ -239,18 +239,18 @@ struct DataIntegrityCard: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
                 Image(systemName: "checkmark.shield.fill")
-                    .font(.system(size: 14)).foregroundStyle(AppTheme.orange)
+                    .font(.system(.subheadline)).foregroundStyle(AppTheme.orange)
                 Text(loc("integrity.title"))
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.system(.subheadline, weight: .semibold))
                     .foregroundStyle(AppTheme.textPrimary)
                 Spacer()
                 Text("\(findings.count)")
-                    .font(.system(size: 11, weight: .bold)).foregroundStyle(AppTheme.orange)
+                    .font(.system(.caption2, weight: .bold)).foregroundStyle(AppTheme.orange)
                     .padding(.horizontal, 7).padding(.vertical, 2)
                     .background(AppTheme.orange.opacity(0.15), in: Capsule())
             }
             Text(loc("integrity.subtitle"))
-                .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
 
             ForEach(findings) { f in
@@ -271,26 +271,26 @@ struct DataIntegrityCard: View {
             VStack(alignment: .leading, spacing: 7) {
                 HStack(spacing: 10) {
                     Image(systemName: f.icon)
-                        .font(.system(size: 13)).foregroundStyle(f.tint)
+                        .font(.system(.footnote)).foregroundStyle(f.tint)
                         .frame(width: 28, height: 28)
                         .background(f.tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
                     VStack(alignment: .leading, spacing: 2) {
                         Text(headline(f))
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(.system(.caption, weight: .semibold))
                             .foregroundStyle(AppTheme.textPrimary)
                             .fixedSize(horizontal: false, vertical: true)
                             .multilineTextAlignment(.leading)
                         Text(String(format: loc("integrity.seen"), f.occurrences))
-                            .font(.system(size: 10)).foregroundStyle(AppTheme.textSecondary)
+                            .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                     }
                     Spacer(minLength: 4)
                     Image(systemName: isOpen ? "chevron.up" : "chevron.down")
-                        .font(.system(size: 9, weight: .bold))
+                        .font(.system(.caption2, weight: .bold)).imageScale(.small)
                         .foregroundStyle(AppTheme.textSecondary)
                 }
                 if isOpen {
                     Text(loc(f.explainKey))
-                        .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                        .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                         .multilineTextAlignment(.leading)
                 }
@@ -415,13 +415,13 @@ struct WindfallCard: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
                 Image(systemName: "gift.fill")
-                    .font(.system(size: 13)).foregroundStyle(review.verdict.tint)
+                    .font(.system(.footnote)).foregroundStyle(review.verdict.tint)
                 Text(loc("windfall.title"))
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.system(.footnote, weight: .semibold))
                     .foregroundStyle(AppTheme.textPrimary)
                 Spacer()
                 Text(loc(review.verdict.labelKey))
-                    .font(.system(size: 10, weight: .bold))
+                    .font(.system(.caption2, weight: .bold))
                     .foregroundStyle(review.verdict.tint)
                     .padding(.horizontal, 8).padding(.vertical, 3)
                     .background(review.verdict.tint.opacity(0.15), in: Capsule())
@@ -430,7 +430,7 @@ struct WindfallCard: View {
             Text(String(format: loc("windfall.headline"),
                         money(review.extraIncome),
                         String(format: "%.0f%%", review.productiveShare * 100)))
-                .font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
+                .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
 
             // Where it went, to scale.
@@ -454,7 +454,7 @@ struct WindfallCard: View {
             }
 
             Text(loc(review.verdict.bodyKey))
-                .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(16)
@@ -466,9 +466,9 @@ struct WindfallCard: View {
     private func line(_ l: String, _ v: String, _ tint: Color) -> some View {
         HStack {
             Circle().fill(tint).frame(width: 6, height: 6)
-            Text(l).font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+            Text(l).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
             Spacer()
-            Text(v).font(.system(size: 11, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+            Text(v).font(.system(.caption2, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
         }
     }
 }

@@ -103,10 +103,10 @@ struct MainTabView: View {
             if showNoCardBanner {
                 HStack(spacing: 10) {
                     Image(systemName: "creditcard.fill")
-                        .font(.system(size: 14))
+                        .font(.system(.subheadline))
                         .foregroundStyle(AppTheme.accent)
                     Text(loc("home.add_card_first"))
-                        .font(.system(size: 13, weight: .medium))
+                        .font(.system(.footnote, weight: .medium))
                         .foregroundStyle(AppTheme.textPrimary)
                 }
                 .padding(.horizontal, 18)

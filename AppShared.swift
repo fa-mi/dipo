@@ -81,11 +81,11 @@ struct SheetField: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(label)
-                .font(.system(size: 13, weight: .semibold))
+                .font(.system(.footnote, weight: .semibold))
                 .foregroundStyle(AppTheme.textSecondary)
             TextField(placeholder, text: $text)
                 .keyboardType(keyboard)
-                .font(.system(size: 15))
+                .font(.system(.subheadline))
                 .foregroundStyle(AppTheme.textPrimary)
                 .padding(14)
                 .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
@@ -136,22 +136,22 @@ struct IconField: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 5) {
                 Text(label)
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.system(.subheadline, weight: .semibold))
                     .foregroundStyle(AppTheme.textPrimary)
                 if let optionalHint {
                     Text(optionalHint)
-                        .font(.system(size: 12))
+                        .font(.system(.caption))
                         .foregroundStyle(AppTheme.textSecondary)
                 }
             }
             HStack(spacing: 10) {
                 Image(systemName: icon)
-                    .font(.system(size: 15))
+                    .font(.system(.subheadline))
                     .foregroundStyle(focused ? AppTheme.accent : AppTheme.textSecondary)
                     .frame(width: 20)
                 TextField(placeholder, text: $text)
                     .keyboardType(keyboard)
-                    .font(.system(size: 15))
+                    .font(.system(.subheadline))
                     .foregroundStyle(AppTheme.textPrimary)
                     .focused($focused)
             }
@@ -176,7 +176,7 @@ struct FormSectionLabel: View {
     let text: String
     var body: some View {
         Text(text)
-            .font(.system(size: 14, weight: .semibold))
+            .font(.system(.subheadline, weight: .semibold))
             .foregroundStyle(AppTheme.textPrimary)
             .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -210,7 +210,7 @@ struct CategoryTilePicker: View {
                     } label: {
                         VStack(spacing: 7) {
                             Image(systemName: cat.icon)
-                                .font(.system(size: 19, weight: .medium))
+                                .font(.system(.title3, weight: .medium))
                             Text(cat.displayLabel)
                                 .font(.system(size: 11, weight: on ? .semibold : .regular))
                                 .multilineTextAlignment(.center)
@@ -257,7 +257,7 @@ struct DateTimeFields: View {
     private func box<Content: View>(icon: String, @ViewBuilder content: () -> Content) -> some View {
         HStack(spacing: 8) {
             Image(systemName: icon)
-                .font(.system(size: 14))
+                .font(.system(.subheadline))
                 .foregroundStyle(AppTheme.textSecondary)
             content()
             Spacer(minLength: 0)
@@ -329,12 +329,12 @@ struct CardFaceView: View {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(CardLabel.title(card))
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.system(.subheadline, weight: .semibold))
                         .lineLimit(1)
                     let sub = CardLabel.subtitle(card)
                     if !sub.isEmpty {
                         Text(sub)
-                            .font(.system(size: 11))
+                            .font(.system(.caption2))
                             .opacity(0.75)
                             .lineLimit(1)
                     }
@@ -342,7 +342,7 @@ struct CardFaceView: View {
                 Spacer(minLength: 8)
                 if card.isDigitalWallet, let wp = WalletProvider(rawValue: card.walletProvider) {
                     Image(systemName: wp.icon)
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.system(.callout, weight: .semibold))
                         .opacity(0.9)
                 } else {
                     CardNetworkLogo(network: CardNetwork.detect(from: card.cardNumber))
@@ -352,11 +352,11 @@ struct CardFaceView: View {
             Spacer(minLength: 6)
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(label)
-                    .font(.system(size: 10, weight: .medium))
+                    .font(.system(.caption2, weight: .medium))
                     .opacity(0.75)
                 Spacer(minLength: 6)
                 Text(card.isHidden ? "••••••" : value)
-                    .font(.system(size: 17, weight: .bold))
+                    .font(.system(.body, weight: .bold))
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
             }
@@ -472,10 +472,10 @@ struct InlineBanner: View {
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: tone.icon)
-                .font(.system(size: 14))
+                .font(.system(.subheadline))
                 .foregroundStyle(tone.color)
             Text(message)
-                .font(.system(size: 12, weight: .medium))
+                .font(.system(.caption, weight: .medium))
                 .foregroundStyle(tone.color)
                 .multilineTextAlignment(.leading)
                 .fixedSize(horizontal: false, vertical: true)
@@ -701,7 +701,7 @@ struct DoneToolbar: ViewModifier {
                     action()
                 } label: {
                     Text(loc("common.done"))
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.system(.callout, weight: .semibold))
                         .foregroundStyle(AppTheme.accent)
                 }
             }

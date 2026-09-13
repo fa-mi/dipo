@@ -73,27 +73,27 @@ struct CardChip: View {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 5) {
                     Text(CardLabel.title(card))
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.system(.footnote, weight: .semibold))
                         .lineLimit(1)
                     if MainCard.isMain(card) {
                         Text(loc("main.badge"))
-                            .font(.system(size: 8, weight: .bold))
+                            .font(.system(.caption2, weight: .bold))
                             .foregroundStyle(selected ? AppTheme.bg.opacity(0.8) : AppTheme.accent)
                     }
                 }
                 HStack(spacing: 5) {
                     let sub = CardLabel.subtitle(card)
                     if !sub.isEmpty {
-                        Text(sub).font(.system(size: 11))
+                        Text(sub).font(.system(.caption2))
                     }
                     if showsCurrency {
                         Text(cardCurrency)
-                            .font(.system(size: 10, weight: .bold))
+                            .font(.system(.caption2, weight: .bold))
                             .foregroundStyle(selected ? AppTheme.onVividFill.opacity(0.75) : AppTheme.accent)
                     }
                     if card.isCreditCard {
                         Text(loc("cc.badge"))
-                            .font(.system(size: 9, weight: .bold))
+                            .font(.system(.caption2, weight: .bold))
                             .foregroundStyle(selected ? AppTheme.onVividFill.opacity(0.75) : AppTheme.purple)
                     }
                 }
@@ -165,12 +165,12 @@ struct CardListRow: View {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     Text(CardLabel.title(card))
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.system(.subheadline, weight: .semibold))
                         .foregroundStyle(AppTheme.textPrimary)
                         .lineLimit(1)
                     if MainCard.isMain(card) {
                         Text(loc("main.badge"))
-                            .font(.system(size: 9, weight: .bold))
+                            .font(.system(.caption2, weight: .bold))
                             .foregroundStyle(AppTheme.accent)
                             .padding(.horizontal, 6).padding(.vertical, 2)
                             .background(AppTheme.accent.opacity(0.15), in: Capsule())
@@ -185,7 +185,7 @@ struct CardListRow: View {
                     Text(card.isCreditCard ? card.formattedOwed : card.formattedBalance)
                         .fontWeight(.medium)
                 }
-                .font(.system(size: 11))
+                .font(.system(.caption2))
                 .foregroundStyle(AppTheme.textSecondary)
                 .lineLimit(1)
             }
@@ -193,11 +193,11 @@ struct CardListRow: View {
 
             if showsRadio {
                 Image(systemName: selected ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 19))
+                    .font(.system(.title3))
                     .foregroundStyle(selected ? AppTheme.accent : AppTheme.cardMid)
             } else if selected {
                 Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 19)).foregroundStyle(AppTheme.accent)
+                    .font(.system(.title3)).foregroundStyle(AppTheme.accent)
             }
         }
         .padding(.horizontal, 14)

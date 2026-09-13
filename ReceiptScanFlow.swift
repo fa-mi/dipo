@@ -260,13 +260,13 @@ private struct LandingView: View {
                     onClose()
                 } label: {
                     Image(systemName: "chevron.left")
-                        .font(.system(size: 18, weight: .semibold))
+                        .font(.system(.body, weight: .semibold))
                         .foregroundStyle(AppTheme.textPrimary)
                         .frame(width: 36, height: 36)
                 }
 .accessibilityLabel(loc("a11y.back"))
                 Text(loc("receipt.landing.title"))
-                    .font(.system(size: 22, weight: .bold))
+                    .font(.system(.title2, weight: .bold))
                     .foregroundStyle(AppTheme.textPrimary)
                 Spacer()
             }
@@ -284,7 +284,7 @@ private struct LandingView: View {
                         }
                     } label: {
                         Text(label(for: tab))
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(.system(.subheadline, weight: .semibold))
                             .foregroundStyle(selectedTab == tab ? AppTheme.textPrimary : AppTheme.textSecondary)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 12)
@@ -328,10 +328,10 @@ private struct LandingView: View {
                         Text(selectedTab == .scan
                              ? loc("receipt.landing.scan_heading")
                              : loc("receipt.landing.upload_heading"))
-                            .font(.system(size: 22, weight: .bold))
+                            .font(.system(.title2, weight: .bold))
                             .foregroundStyle(AppTheme.textPrimary)
                         Text(loc("receipt.landing.subtitle"))
-                            .font(.system(size: 14))
+                            .font(.system(.subheadline))
                             .foregroundStyle(AppTheme.textSecondary)
                             .multilineTextAlignment(.center)
                             .padding(.horizontal, 32)
@@ -342,9 +342,9 @@ private struct LandingView: View {
                     // Tip banner
                     HStack(spacing: 10) {
                         Text("💡")
-                            .font(.system(size: 14))
+                            .font(.system(.subheadline))
                         Text(loc("receipt.landing.tip"))
-                            .font(.system(size: 12, weight: .medium))
+                            .font(.system(.caption, weight: .medium))
                             .foregroundStyle(AppTheme.accent)
                             .multilineTextAlignment(.leading)
                         Spacer()
@@ -358,11 +358,11 @@ private struct LandingView: View {
                     Button(action: onStart) {
                         HStack(spacing: 10) {
                             Image(systemName: selectedTab == .scan ? "doc.text.viewfinder" : "photo.on.rectangle")
-                                .font(.system(size: 16, weight: .semibold))
+                                .font(.system(.callout, weight: .semibold))
                             Text(selectedTab == .scan
                                  ? loc("receipt.landing.start_scan")
                                  : loc("receipt.landing.upload_now"))
-                                .font(.system(size: 16, weight: .bold))
+                                .font(.system(.callout, weight: .bold))
                         }
                         .foregroundStyle(AppTheme.onVividFill)
                         .frame(maxWidth: .infinity)
@@ -398,7 +398,7 @@ private struct ReceiptIllustration: View {
                 .frame(width: 44, height: 44)
                 .overlay(
                     Image(systemName: "dollarsign")
-                        .font(.system(size: 18, weight: .heavy))
+                        .font(.system(.body, weight: .heavy))
                         .foregroundStyle(AppTheme.onVividFill)
                 )
                 .offset(x: -78, y: -82)
@@ -409,7 +409,7 @@ private struct ReceiptIllustration: View {
                 .frame(width: 30, height: 30)
                 .overlay(
                     Image(systemName: "dollarsign")
-                        .font(.system(size: 14, weight: .heavy))
+                        .font(.system(.subheadline, weight: .heavy))
                         .foregroundStyle(AppTheme.onSolid)
                 )
                 .offset(x: 70, y: -90)
@@ -419,18 +419,18 @@ private struct ReceiptIllustration: View {
                 .frame(width: 28, height: 28)
                 .overlay(
                     Image(systemName: "dollarsign")
-                        .font(.system(size: 12, weight: .heavy))
+                        .font(.system(.caption, weight: .heavy))
                         .foregroundStyle(.white)
                 )
                 .offset(x: 80, y: 26)
 
             // Star sparkles
             Image(systemName: "star.fill")
-                .font(.system(size: 14))
+                .font(.system(.subheadline))
                 .foregroundStyle(Color(hex: "#FFC857"))
                 .offset(x: -86, y: 12)
             Image(systemName: "circle.fill")
-                .font(.system(size: 10))
+                .font(.system(.caption2)).imageScale(.small)
                 .foregroundStyle(AppTheme.purple.opacity(0.6))
                 .offset(x: -64, y: 56)
 
@@ -500,7 +500,7 @@ struct ScanCameraView: View {
 
                 // Helper hint
                 Text(loc("receipt.camera.hint"))
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(.caption, weight: .semibold))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 8)
@@ -534,7 +534,7 @@ struct ScanCameraView: View {
                                 .stroke(.white, lineWidth: 3)
                                 .frame(width: 84, height: 84)
                             Image(systemName: "viewfinder")
-                                .font(.system(size: 28, weight: .semibold))
+                                .font(.system(.title, weight: .semibold))
                                 .foregroundStyle(AppTheme.accent)
                         }
                     }
@@ -564,7 +564,7 @@ struct ScanCameraView: View {
             action()
         } label: {
             Image(systemName: icon)
-                .font(.system(size: 14, weight: .semibold))
+                .font(.system(.subheadline, weight: .semibold))
                 .foregroundStyle(.white)
                 .frame(width: 36, height: 36)
                 .background(.gray.opacity(0.4), in: Circle())
@@ -576,7 +576,7 @@ struct ScanCameraView: View {
     private func bottomButton(icon: String, label: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: icon)
-                .font(.system(size: 18, weight: .semibold))
+                .font(.system(.body, weight: .semibold))
                 .foregroundStyle(.black)
                 .frame(width: 52, height: 52)
                 .background(.white, in: Circle())
@@ -884,7 +884,7 @@ private struct ScanningProgressView: View {
                         onCancel()
                     } label: {
                         Image(systemName: "xmark")
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(.system(.subheadline, weight: .semibold))
                             .foregroundStyle(.white)
                             .frame(width: 36, height: 36)
                             .background(.black.opacity(0.5), in: Circle())
@@ -911,9 +911,9 @@ private struct ScanningProgressView: View {
 
                     HStack(spacing: 6) {
                         Image(systemName: "doc.text.viewfinder")
-                            .font(.system(size: 11))
+                            .font(.system(.caption2))
                         Text(String(format: loc("receipt.scanning.progress"), Int(progress * 100)))
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(.system(.caption, weight: .semibold))
                     }
                     .foregroundStyle(AppTheme.onVividFill)
                     .padding(.horizontal, 12)
@@ -928,7 +928,7 @@ private struct ScanningProgressView: View {
                 // Cycling status message + secondary cancel for convenience
                 VStack(spacing: 12) {
                     Text(messages[messageIndex])
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.system(.footnote, weight: .semibold))
                         .foregroundStyle(.white)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 8)
@@ -940,7 +940,7 @@ private struct ScanningProgressView: View {
                         onCancel()
                     } label: {
                         Text(loc("common.cancel"))
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(.system(.subheadline, weight: .semibold))
                             .foregroundStyle(.white)
                             .padding(.horizontal, 22)
                             .padding(.vertical, 10)
@@ -975,7 +975,7 @@ private struct ScanBackdrop: View {
                 .font(.system(size: 40))
                 .foregroundStyle(AppTheme.accent.opacity(0.6))
             Text(loc("receipt.scan_complete"))
-                .font(.system(size: 13))
+                .font(.system(.footnote))
                 .foregroundStyle(AppTheme.textSecondary)
         }
     }
@@ -994,10 +994,10 @@ private struct ScanErrorView: View {
                 .font(.system(size: 40))
                 .foregroundStyle(AppTheme.orange)
             Text(loc("receipt.error.title"))
-                .font(.system(size: 18, weight: .semibold))
+                .font(.system(.body, weight: .semibold))
                 .foregroundStyle(AppTheme.textPrimary)
             Text(error.errorDescription ?? loc("receipt.error.generic"))
-                .font(.system(size: 13))
+                .font(.system(.footnote))
                 .foregroundStyle(AppTheme.textSecondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 30)
@@ -1008,7 +1008,7 @@ private struct ScanErrorView: View {
                         onRetry()
                     } label: {
                         Text(loc("receipt.error.retry"))
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(.system(.subheadline, weight: .semibold))
                             .foregroundStyle(AppTheme.onVividFill)
                             .padding(.horizontal, 22).padding(.vertical, 11)
                             .background(AppTheme.accentFill, in: Capsule())
@@ -1020,7 +1020,7 @@ private struct ScanErrorView: View {
                     onDismiss()
                 } label: {
                     Text(loc("common.cancel"))
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.system(.subheadline, weight: .semibold))
                         .foregroundStyle(AppTheme.textSecondary)
                         .padding(.horizontal, 22).padding(.vertical, 11)
                         .background(AppTheme.cardDark, in: Capsule())

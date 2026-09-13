@@ -95,7 +95,7 @@ struct ContactAdminSheet: View {
                         showNewTicket = true
                     } label: {
                         Text(loc("support.new"))
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(.system(.subheadline, weight: .semibold))
                             .foregroundStyle(AppTheme.accent)
                             .padding(.horizontal, 10).padding(.vertical, 5)
                             .background(AppTheme.accent.opacity(0.12), in: Capsule())
@@ -150,18 +150,18 @@ struct ContactAdminSheet: View {
                     ZStack {
                         Circle().fill(AppTheme.red.opacity(0.08)).frame(width: 72, height: 72)
                         Image(systemName: "wifi.exclamationmark")
-                            .font(.system(size: 30)).foregroundStyle(AppTheme.red.opacity(0.7))
+                            .font(.system(.title)).foregroundStyle(AppTheme.red.opacity(0.7))
                     }
                     VStack(spacing: 6) {
                         Text(loc("support.load_error"))
-                            .font(.system(size: 17, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
+                            .font(.system(.body, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
                         Text(err)
-                            .font(.system(size: 12, weight: .medium))
+                            .font(.system(.caption, weight: .medium))
                             .foregroundStyle(AppTheme.red.opacity(0.8))
                             .multilineTextAlignment(.center)
                             .padding(.horizontal, 32)
                         Text(loc("support.firestore_error"))
-                            .font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
+                            .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                             .multilineTextAlignment(.center).padding(.horizontal, 32)
                     }
                     Button {
@@ -169,8 +169,8 @@ struct ContactAdminSheet: View {
                         Task { await svc.fetchTickets() }
                     } label: {
                         HStack(spacing: 8) {
-                            Image(systemName: "arrow.clockwise").font(.system(size: 14))
-                            Text(loc("common.retry")).font(.system(size: 15, weight: .semibold))
+                            Image(systemName: "arrow.clockwise").font(.system(.subheadline))
+                            Text(loc("common.retry")).font(.system(.subheadline, weight: .semibold))
                         }
                         .foregroundStyle(AppTheme.accent)
                         .padding(.horizontal, 24).padding(.vertical, 10)
@@ -187,9 +187,9 @@ struct ContactAdminSheet: View {
                 }
                 VStack(spacing: 8) {
                     Text(loc("support.no_tickets"))
-                        .font(.system(size: 18, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
+                        .font(.system(.body, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
                     Text(loc("support.no_tickets_sub"))
-                        .font(.system(size: 14)).foregroundStyle(AppTheme.textSecondary)
+                        .font(.system(.subheadline)).foregroundStyle(AppTheme.textSecondary)
                         .multilineTextAlignment(.center).lineSpacing(3)
                         .padding(.horizontal, 32)
                 }
@@ -204,22 +204,22 @@ struct ContactAdminSheet: View {
             ZStack {
                 Circle().fill(AppTheme.accent.opacity(0.12)).frame(width: 44, height: 44)
                 Image(systemName: "headphones.circle.fill")
-                    .font(.system(size: 22)).foregroundStyle(AppTheme.accent)
+                    .font(.system(.title2)).foregroundStyle(AppTheme.accent)
             }
             VStack(alignment: .leading, spacing: 3) {
                 Text(loc("support.your_tickets"))
-                    .font(.system(size: 15, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                    .font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
                 Text(String(format: loc("support.tickets_summary"),
                             svc.tickets.count,
                             svc.tickets.filter { $0.status == "open" }.count))
-                    .font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
+                    .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
             }
             Spacer()
             // Unread indicator
             let unreadCount = svc.tickets.filter { $0.hasUnreadReply }.count
             if unreadCount > 0 {
                 Text(String(format: loc("support.unread_count"), unreadCount))
-                    .font(.system(size: 11, weight: .bold))
+                    .font(.system(.caption2, weight: .bold))
                     .foregroundStyle(AppTheme.accent)
                     .padding(.horizontal, 8).padding(.vertical, 4)
                     .background(AppTheme.accent.opacity(0.12), in: Capsule())
@@ -242,13 +242,13 @@ struct ContactAdminSheet: View {
             HStack(spacing: 12) {
                 ZStack {
                     Circle().fill(cat.color.opacity(0.15)).frame(width: 42, height: 42)
-                    Image(systemName: cat.icon).font(.system(size: 17)).foregroundStyle(cat.color)
+                    Image(systemName: cat.icon).font(.system(.body)).foregroundStyle(cat.color)
                 }
 
                 VStack(alignment: .leading, spacing: 4) {
                     HStack {
                         Text(ticket.subject)
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(.system(.subheadline, weight: .semibold))
                             .foregroundStyle(AppTheme.textPrimary)
                             .lineLimit(1)
                         Spacer()
@@ -256,27 +256,27 @@ struct ContactAdminSheet: View {
                             HStack(spacing: 4) {
                                 Circle().fill(AppTheme.accent).frame(width: 6, height: 6)
                                 Text(loc("support.new_reply"))
-                                    .font(.system(size: 10, weight: .bold))
+                                    .font(.system(.caption2, weight: .bold))
                                     .foregroundStyle(AppTheme.accent)
                             }
                         }
                     }
                     HStack(spacing: 6) {
                         Text(cat.displayLabel)
-                            .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                            .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                         Text("·")
-                            .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                            .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                         Text(ticket.updatedAt.formatted(date: .abbreviated, time: .omitted))
-                            .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                            .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                         if !ticket.mediaBase64.isEmpty {
                             Image(systemName: "photo.fill")
-                                .font(.system(size: 9)).foregroundStyle(AppTheme.textSecondary)
+                                .font(.system(.caption2)).imageScale(.small).foregroundStyle(AppTheme.textSecondary)
                         }
                     }
                 }
 
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 11, weight: .medium)).foregroundStyle(AppTheme.textSecondary.opacity(0.5))
+                    .font(.system(.caption2, weight: .medium)).foregroundStyle(AppTheme.textSecondary.opacity(0.5))
             }
             .padding(14)
 
@@ -307,7 +307,7 @@ struct ContactAdminSheet: View {
                             .fill(step.active ? AppTheme.accent : AppTheme.cardMid)
                             .frame(width: 18, height: 18)
                         Image(systemName: step.icon)
-                            .font(.system(size: 8, weight: .bold))
+                            .font(.system(.caption2, weight: .bold)).imageScale(.small)
                             .foregroundStyle(step.active ? AppTheme.onVividFill : AppTheme.textSecondary.opacity(0.5))
                     }
                     Text(step.label)
@@ -332,7 +332,7 @@ struct ContactAdminSheet: View {
     private var loadingView: some View {
         VStack(spacing: 14) {
             ProgressView().tint(AppTheme.accent)
-            Text(loc("support.loading")).font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
+            Text(loc("support.loading")).font(.system(.footnote)).foregroundStyle(AppTheme.textSecondary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -398,12 +398,12 @@ struct NewTicketForm: View {
     private var formHeader: some View {
         HStack(spacing: 12) {
             Image(systemName: "headphones.circle.fill")
-                .font(.system(size: 32)).foregroundStyle(AppTheme.accent)
+                .font(.system(.largeTitle)).foregroundStyle(AppTheme.accent)
             VStack(alignment: .leading, spacing: 3) {
                 Text(loc("support.help"))
-                    .font(.system(size: 15, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                    .font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
                 Text(loc("support.response_time"))
-                    .font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
+                    .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
             }
             Spacer()
         }
@@ -435,8 +435,8 @@ struct NewTicketForm: View {
             withAnimation { category = cat }
         } label: {
             HStack(spacing: 7) {
-                Image(systemName: cat.icon).font(.system(size: 12))
-                Text(cat.displayLabel).font(.system(size: 13, weight: .medium))
+                Image(systemName: cat.icon).font(.system(.caption))
+                Text(cat.displayLabel).font(.system(.footnote, weight: .medium))
             }
             .foregroundStyle(fg)
             .padding(.horizontal, 14).padding(.vertical, 9)
@@ -449,9 +449,9 @@ struct NewTicketForm: View {
     private var formSubjectField: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(loc("support.subject"))
-                .font(.system(size: 13, weight: .semibold)).foregroundStyle(AppTheme.textSecondary)
+                .font(.system(.footnote, weight: .semibold)).foregroundStyle(AppTheme.textSecondary)
             TextField(loc("support.subject_placeholder"), text: $subject)
-                .font(.system(size: 15)).foregroundStyle(AppTheme.textPrimary)
+                .font(.system(.subheadline)).foregroundStyle(AppTheme.textPrimary)
                 .padding(14).background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
         }
         .padding(.horizontal, 22)
@@ -461,15 +461,15 @@ struct NewTicketForm: View {
     private var formMessageField: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(loc("support.message"))
-                .font(.system(size: 13, weight: .semibold)).foregroundStyle(AppTheme.textSecondary)
+                .font(.system(.footnote, weight: .semibold)).foregroundStyle(AppTheme.textSecondary)
             ZStack(alignment: .topLeading) {
                 TextEditor(text: $message)
-                    .font(.system(size: 15)).foregroundStyle(AppTheme.textPrimary)
+                    .font(.system(.subheadline)).foregroundStyle(AppTheme.textPrimary)
                     .frame(minHeight: 120).padding(10)
                     .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
                 if message.isEmpty {
                     Text(loc("support.message_placeholder"))
-                        .font(.system(size: 15)).foregroundStyle(AppTheme.textSecondary.opacity(0.5))
+                        .font(.system(.subheadline)).foregroundStyle(AppTheme.textSecondary.opacity(0.5))
                         .padding(18).allowsHitTesting(false)
                 }
             }
@@ -483,13 +483,13 @@ struct NewTicketForm: View {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(loc("support.attach"))
-                        .font(.system(size: 13, weight: .semibold)).foregroundStyle(AppTheme.textSecondary)
+                        .font(.system(.footnote, weight: .semibold)).foregroundStyle(AppTheme.textSecondary)
                     Text(loc("support.attach_sub"))
-                        .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary.opacity(0.6))
+                        .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary.opacity(0.6))
                 }
                 Spacer()
                 Text("\(selectedImages.count)/3")
-                    .font(.system(size: 12, weight: .medium)).foregroundStyle(AppTheme.textSecondary)
+                    .font(.system(.caption, weight: .medium)).foregroundStyle(AppTheme.textSecondary)
             }
             mediaThumbnailRow
         }
@@ -520,7 +520,7 @@ struct NewTicketForm: View {
             } label: {
                 ZStack {
                     Circle().fill(Color.black.opacity(0.55)).frame(width: 22, height: 22)
-                    Image(systemName: "xmark").font(.system(size: 9, weight: .bold)).foregroundStyle(.white)
+                    Image(systemName: "xmark").font(.system(.caption2, weight: .bold)).imageScale(.small).foregroundStyle(.white)
                 }
             }
 .accessibilityLabel(loc("a11y.remove_image"))
@@ -532,8 +532,8 @@ struct NewTicketForm: View {
         let dashPattern: [CGFloat] = [5]
         return PhotosPicker(selection: $pickerItems, maxSelectionCount: 3 - selectedImages.count, matching: .images) {
             VStack(spacing: 6) {
-                Image(systemName: "camera.fill").font(.system(size: 18)).foregroundStyle(AppTheme.accent)
-                Text(loc("support.add_photo")).font(.system(size: 10, weight: .medium)).foregroundStyle(AppTheme.accent)
+                Image(systemName: "camera.fill").font(.system(.body)).foregroundStyle(AppTheme.accent)
+                Text(loc("support.add_photo")).font(.system(.caption2, weight: .medium)).foregroundStyle(AppTheme.accent)
             }
             .frame(width: 80, height: 80)
             .background(AppTheme.accent.opacity(0.06), in: RoundedRectangle(cornerRadius: 10))
@@ -559,8 +559,8 @@ struct NewTicketForm: View {
     private var sendButtonLabel: some View {
         HStack(spacing: 10) {
             if isSubmitting { ProgressView().tint(.white).scaleEffect(0.9) }
-            else { Image(systemName: "paperplane.fill").font(.system(size: 16)) }
-            Text(isSubmitting ? loc("support.sending") : loc("support.send")).font(.system(size: 16, weight: .bold))
+            else { Image(systemName: "paperplane.fill").font(.system(.callout)) }
+            Text(isSubmitting ? loc("support.sending") : loc("support.send")).font(.system(.callout, weight: .bold))
         }
         .foregroundStyle(.white).frame(maxWidth: .infinity).padding(.vertical, 16)
     }
@@ -573,13 +573,13 @@ struct NewTicketForm: View {
                 Image(systemName: "checkmark.circle.fill").font(.system(size: 44)).foregroundStyle(AppTheme.accent)
             }
             VStack(spacing: 10) {
-                Text(loc("support.submitted")).font(.system(size: 24, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
+                Text(loc("support.submitted")).font(.system(.title2, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
                 Text(loc("support.submitted_sub"))
-                    .font(.system(size: 15)).foregroundStyle(AppTheme.textSecondary)
+                    .font(.system(.subheadline)).foregroundStyle(AppTheme.textSecondary)
                     .multilineTextAlignment(.center).padding(.horizontal, 32)
             }
             Button { onDone() } label: {
-                Text(loc("common.done")).font(.system(size: 16, weight: .semibold)).foregroundStyle(AppTheme.onVividFill)
+                Text(loc("common.done")).font(.system(.callout, weight: .semibold)).foregroundStyle(AppTheme.onVividFill)
                     .frame(maxWidth: .infinity).padding(.vertical, 16)
                     .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: 18))
             }
@@ -717,13 +717,13 @@ struct TicketThreadView: View {
                     ZStack(alignment: .topLeading) {
                         if replyText.isEmpty {
                             Text(loc("support.write_reply"))
-                                .font(.system(size: 14))
+                                .font(.system(.subheadline))
                                 .foregroundStyle(AppTheme.textSecondary.opacity(0.5))
                                 .padding(.horizontal, 14)
                                 .padding(.vertical, 10)
                         }
                         TextEditor(text: $replyText)
-                            .font(.system(size: 14))
+                            .font(.system(.subheadline))
                             .foregroundStyle(AppTheme.textPrimary)
                             .scrollContentBackground(.hidden)
                             .frame(minHeight: 38, maxHeight: 100)
@@ -746,7 +746,7 @@ struct TicketThreadView: View {
                                 ProgressView().tint(.white).scaleEffect(0.7)
                             } else {
                                 Image(systemName: "arrow.up")
-                                    .font(.system(size: 15, weight: .bold))
+                                    .font(.system(.subheadline, weight: .bold))
                                     .foregroundStyle(.white)
                             }
                         }
@@ -789,12 +789,12 @@ struct TicketThreadView: View {
             HStack(spacing: 12) {
                 ZStack {
                     Circle().fill(cat.color.opacity(0.12)).frame(width: 40, height: 40)
-                    Image(systemName: cat.icon).font(.system(size: 16)).foregroundStyle(cat.color)
+                    Image(systemName: cat.icon).font(.system(.callout)).foregroundStyle(cat.color)
                 }
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 8) {
                         Text(cat.displayLabel)
-                            .font(.system(size: 13, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                            .font(.system(.footnote, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
                         Spacer()
                         // Live status badge — pulses when it just changed
                         HStack(spacing: 4) {
@@ -802,7 +802,7 @@ struct TicketThreadView: View {
                                 .scaleEffect(statusChangeAnim ? 1.5 : 1)
                                 .animation(.easeInOut(duration: 0.4).repeatCount(3, autoreverses: true), value: statusChangeAnim)
                             Text(status.label)
-                                .font(.system(size: 11, weight: .semibold)).foregroundStyle(status.color)
+                                .font(.system(.caption2, weight: .semibold)).foregroundStyle(status.color)
                         }
                         .padding(.horizontal, 9).padding(.vertical, 4)
                         .background(status.color.opacity(0.12), in: Capsule())
@@ -810,9 +810,9 @@ struct TicketThreadView: View {
                         .animation(.spring(response: 0.4), value: statusChangeAnim)
                     }
                     HStack(spacing: 4) {
-                        Image(systemName: "calendar").font(.system(size: 10))
+                        Image(systemName: "calendar").font(.system(.caption2)).imageScale(.small)
                         Text(String(format: loc("support.opened"), ticket.createdAt.displayDateShort))
-                            .font(.system(size: 11))
+                            .font(.system(.caption2))
                     }
                     .foregroundStyle(AppTheme.textSecondary)
                 }
@@ -853,7 +853,7 @@ struct TicketThreadView: View {
                                 .frame(width: 28, height: 28)
                         }
                         Image(systemName: s.icon)
-                            .font(.system(size: 9, weight: .bold))
+                            .font(.system(.caption2, weight: .bold)).imageScale(.small)
                             .foregroundStyle(active ? .white : AppTheme.textSecondary.opacity(0.4))
                     }
                     Text(s.label)
@@ -894,8 +894,8 @@ struct TicketThreadView: View {
             icon    = "clock"
         }
         return HStack(spacing: 8) {
-            Image(systemName: icon).font(.system(size: 12)).foregroundStyle(status.color)
-            Text(message).font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+            Image(systemName: icon).font(.system(.caption)).foregroundStyle(status.color)
+            Text(message).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
         }
         .padding(.horizontal, 22)
         .animation(.spring(response: 0.4), value: currentStatus)
@@ -910,11 +910,11 @@ struct TicketThreadView: View {
                 Spacer(minLength: 50)
                 VStack(alignment: .trailing, spacing: 8) {
                     HStack(spacing: 6) {
-                        Text(loc("support.you")).font(.system(size: 11, weight: .semibold)).foregroundStyle(AppTheme.textSecondary)
+                        Text(loc("support.you")).font(.system(.caption2, weight: .semibold)).foregroundStyle(AppTheme.textSecondary)
                         Text(date.displayDateTimeShort)
-                            .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                            .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                     }
-                    Text(text).font(.system(size: 14)).foregroundStyle(AppTheme.onVividFill).lineSpacing(4)
+                    Text(text).font(.system(.subheadline)).foregroundStyle(AppTheme.onVividFill).lineSpacing(4)
                         .padding(14)
                         .background(category.color, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                     if !mediaBase64.isEmpty {
@@ -940,7 +940,7 @@ struct TicketThreadView: View {
                 .onTapGesture { fullscreenBase64 = IdentifiableString(value: base64) }
         } else {
             RoundedRectangle(cornerRadius: 10).fill(AppTheme.cardMid).frame(width: 80, height: 80)
-                .overlay(Image(systemName: "photo.badge.exclamationmark").font(.system(size: 22)).foregroundStyle(AppTheme.textSecondary))
+                .overlay(Image(systemName: "photo.badge.exclamationmark").font(.system(.title2)).foregroundStyle(AppTheme.textSecondary))
         }
     }
 
@@ -949,16 +949,16 @@ struct TicketThreadView: View {
         HStack(alignment: .top, spacing: 10) {
             ZStack {
                 Circle().fill(AppTheme.accent.opacity(0.15)).frame(width: 36, height: 36)
-                Image(systemName: "headphones").font(.system(size: 15)).foregroundStyle(AppTheme.accent)
+                Image(systemName: "headphones").font(.system(.subheadline)).foregroundStyle(AppTheme.accent)
             }
             VStack(alignment: .leading, spacing: 5) {
                 HStack(spacing: 6) {
-                    Text(loc("support.staff")).font(.system(size: 11, weight: .semibold)).foregroundStyle(AppTheme.accent)
+                    Text(loc("support.staff")).font(.system(.caption2, weight: .semibold)).foregroundStyle(AppTheme.accent)
                     Text(reply.createdAt.displayDateTimeShort)
-                        .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                        .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                     if !reply.isReadByUser { Circle().fill(AppTheme.accent).frame(width: 6, height: 6) }
                 }
-                Text(reply.message).font(.system(size: 14)).foregroundStyle(AppTheme.textPrimary).lineSpacing(4)
+                Text(reply.message).font(.system(.subheadline)).foregroundStyle(AppTheme.textPrimary).lineSpacing(4)
                     .padding(14)
                     .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                     .overlay(RoundedRectangle(cornerRadius: 16).stroke(AppTheme.accent.opacity(0.2), lineWidth: 1))
@@ -974,8 +974,8 @@ struct TicketThreadView: View {
             Spacer(minLength: 50)
             VStack(alignment: .trailing, spacing: 4) {
                 Text(reply.createdAt.formatted(date: .abbreviated, time: .shortened))
-                    .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
-                Text(reply.message).font(.system(size: 14)).foregroundStyle(AppTheme.onVividFill).lineSpacing(4)
+                    .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
+                Text(reply.message).font(.system(.subheadline)).foregroundStyle(AppTheme.onVividFill).lineSpacing(4)
                     .padding(14)
                     .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
             }
@@ -1008,7 +1008,7 @@ struct FullscreenImageView: View {
             Button { dismiss() } label: {
                 ZStack {
                     Circle().fill(Color.white.opacity(0.15)).frame(width: 36, height: 36)
-                    Image(systemName: "xmark").font(.system(size: 13, weight: .semibold)).foregroundStyle(.white)
+                    Image(systemName: "xmark").font(.system(.footnote, weight: .semibold)).foregroundStyle(.white)
                 }
             }
 .accessibilityLabel(loc("a11y.close"))

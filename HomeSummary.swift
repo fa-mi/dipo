@@ -56,16 +56,16 @@ struct MonthFlowCard: View {
                     .fill(tint)
                     .frame(width: 34, height: 34)
                 Image(systemName: icon)
-                    .font(.system(size: 14, weight: .bold))
+                    .font(.system(.subheadline, weight: .bold))
                     .foregroundStyle(AppTheme.onVividFill)
             }
             VStack(alignment: .leading, spacing: 2) {
                 Text(label)
-                    .font(.system(size: 12))
+                    .font(.system(.caption))
                     .foregroundStyle(AppTheme.textSecondary)
                 Text(isHidden ? "••••••"
                               : CurrencyManager.shared.formatted(amount, currency: currency))
-                    .font(.system(size: 16, weight: .bold))
+                    .font(.system(.callout, weight: .bold))
                     .foregroundStyle(tint)
                     .lineLimit(1)
                     .minimumScaleFactor(0.65)
@@ -78,7 +78,7 @@ struct MonthFlowCard: View {
                 // for text this small. Size already makes it subordinate;
                 // fading it as well only made it hard to read.
                 Text(periodLabel)
-                    .font(.system(size: 10))
+                    .font(.system(.caption2))
                     .foregroundStyle(AppTheme.textSecondary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
@@ -120,17 +120,17 @@ struct DeleteTransactionSheet: View {
                     .fill(AppTheme.flowOut)
                     .frame(width: 56, height: 56)
                 Image(systemName: "trash.fill")
-                    .font(.system(size: 22, weight: .semibold))
+                    .font(.system(.title2, weight: .semibold))
                     .foregroundStyle(AppTheme.onVividFill)
             }
             .padding(.top, 8)
 
             VStack(spacing: 6) {
                 Text(loc("tx.delete_prompt"))
-                    .font(.system(size: 19, weight: .bold))
+                    .font(.system(.title3, weight: .bold))
                     .foregroundStyle(AppTheme.textPrimary)
                 Text(loc("tx.delete_confirm"))
-                    .font(.system(size: 13))
+                    .font(.system(.footnote))
                     .foregroundStyle(AppTheme.textSecondary)
             }
             .multilineTextAlignment(.center)
@@ -147,10 +147,10 @@ struct DeleteTransactionSheet: View {
             if isGoalDeposit {
                 HStack(alignment: .top, spacing: 8) {
                     Image(systemName: "target")
-                        .font(.system(size: 13))
+                        .font(.system(.footnote))
                         .foregroundStyle(AppTheme.textSecondary)
                     Text(loc("tx.delete_goal_note"))
-                        .font(.system(size: 12))
+                        .font(.system(.caption))
                         .foregroundStyle(AppTheme.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 0)
@@ -162,7 +162,7 @@ struct DeleteTransactionSheet: View {
                     onConfirm()
                 } label: {
                     Text(loc("common.delete"))
-                        .font(.system(size: 16, weight: .bold))
+                        .font(.system(.callout, weight: .bold))
                         .foregroundStyle(AppTheme.onVividFill)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
@@ -177,7 +177,7 @@ struct DeleteTransactionSheet: View {
                     onCancel()
                 } label: {
                     Text(loc("tx.delete_keep"))
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.system(.callout, weight: .semibold))
                         .foregroundStyle(AppTheme.textPrimary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
@@ -229,11 +229,11 @@ struct DeleteTransactionSheet: View {
                 let delta = counts ? -v : 0
                 VStack(alignment: .leading, spacing: 2) {
                     Text(CardLabel.title(card))
-                        .font(.system(size: 12))
+                        .font(.system(.caption))
                         .foregroundStyle(AppTheme.textSecondary)
                     Text(String(format: loc(delta <= 0 ? "tx.delete_owed_down" : "tx.delete_owed_up"),
                                 cm.formatted(Swift.abs(delta), currency: cur)))
-                        .font(.system(size: 15, weight: .bold))
+                        .font(.system(.subheadline, weight: .bold))
                         .foregroundStyle(delta <= 0 ? AppTheme.flowIn : AppTheme.flowOut)
                 }
             } else {
@@ -242,18 +242,18 @@ struct DeleteTransactionSheet: View {
                 let signed = { (x: Double) in (x < 0 ? "-" : "") + cm.formatted(Swift.abs(x), currency: cur) }
                 VStack(alignment: .leading, spacing: 2) {
                     Text(String(format: loc("tx.delete_balance_of"), CardLabel.title(card)))
-                        .font(.system(size: 12))
+                        .font(.system(.caption))
                         .foregroundStyle(AppTheme.textSecondary)
                     HStack(spacing: 6) {
                         Text(signed(before))
-                            .font(.system(size: 13))
+                            .font(.system(.footnote))
                             .foregroundStyle(AppTheme.textSecondary)
                             .strikethrough(color: AppTheme.textSecondary)
                         Image(systemName: "arrow.right")
-                            .font(.system(size: 10, weight: .bold))
+                            .font(.system(.caption2, weight: .bold)).imageScale(.small)
                             .foregroundStyle(AppTheme.textSecondary)
                         Text(signed(after))
-                            .font(.system(size: 15, weight: .bold))
+                            .font(.system(.subheadline, weight: .bold))
                             .foregroundStyle(after >= before ? AppTheme.flowIn : AppTheme.flowOut)
                     }
                     .lineLimit(1)

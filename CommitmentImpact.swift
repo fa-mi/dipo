@@ -105,7 +105,7 @@ struct CommitmentImpactPreview: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(loc("impact.title"))
-                .font(.system(size: 10, weight: .bold))
+                .font(.system(.caption2, weight: .bold))
                 .foregroundStyle(AppTheme.textSecondary)
                 .tracking(0.6)
 
@@ -113,16 +113,16 @@ struct CommitmentImpactPreview: View {
             // figure tells you where you'd land but not what this choice moved.
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(pct(impact.shareBefore))
-                    .font(.system(size: 15, weight: .medium))
+                    .font(.system(.subheadline, weight: .medium))
                     .foregroundStyle(AppTheme.textSecondary)
                 Image(systemName: "arrow.right")
-                    .font(.system(size: 10, weight: .bold))
+                    .font(.system(.caption2, weight: .bold)).imageScale(.small)
                     .foregroundStyle(AppTheme.textSecondary)
                 Text(pct(impact.shareAfter))
-                    .font(.system(size: 22, weight: .bold))
+                    .font(.system(.title2, weight: .bold))
                     .foregroundStyle(tint)
                 Text(loc("impact.of_bucket"))
-                    .font(.system(size: 11))
+                    .font(.system(.caption2))
                     .foregroundStyle(AppTheme.textSecondary)
                 Spacer(minLength: 0)
             }
@@ -148,13 +148,13 @@ struct CommitmentImpactPreview: View {
                         impact.group.label,
                         money(impact.committedAfter),
                         money(impact.allowance)))
-                .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
 
             if impact.overflows {
                 Label(String(format: loc("impact.overflow"), money(impact.spillover)),
                       systemImage: "exclamationmark.triangle.fill")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.system(.caption2, weight: .medium))
                     .foregroundStyle(AppTheme.red)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -164,7 +164,7 @@ struct CommitmentImpactPreview: View {
                 Divider().overlay(AppTheme.cardMid)
                 Text(String(format: loc("impact.goal_cost"),
                             months(impact.goalMonthsPerYear), goal))
-                    .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                    .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }

@@ -42,7 +42,7 @@ struct CycleIntentView: View {
                             intentCard(kind)
                         }
                         Text(loc("intent.footer"))
-                            .font(.system(size: 11))
+                            .font(.system(.caption2))
                             .foregroundStyle(AppTheme.textSecondary.opacity(0.75))
                             .fixedSize(horizontal: false, vertical: true)
                             .lineSpacing(2)
@@ -70,11 +70,11 @@ struct CycleIntentView: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(loc("intent.subtitle"))
-                .font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
+                .font(.system(.footnote)).foregroundStyle(AppTheme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true).lineSpacing(2)
             HStack(spacing: 5) {
-                Image(systemName: "calendar").font(.system(size: 10, weight: .semibold))
-                Text(cycleLabel).font(.system(size: 11, weight: .semibold))
+                Image(systemName: "calendar").font(.system(.caption2, weight: .semibold)).imageScale(.small)
+                Text(cycleLabel).font(.system(.caption2, weight: .semibold))
             }
             .foregroundStyle(AppTheme.purple)
             .padding(.horizontal, 9).padding(.vertical, 4)
@@ -97,21 +97,21 @@ struct CycleIntentView: View {
                     ZStack {
                         Circle().fill(kind.tint.opacity(on ? 0.9 : 0.15)).frame(width: 34, height: 34)
                         Image(systemName: kind.icon)
-                            .font(.system(size: 15, weight: .semibold))
+                            .font(.system(.subheadline, weight: .semibold))
                             .foregroundStyle(on ? .white : kind.tint)
                     }
                     VStack(alignment: .leading, spacing: 2) {
                         Text(kind.label)
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(.system(.subheadline, weight: .semibold))
                             .foregroundStyle(AppTheme.textPrimary)
                             .fixedSize(horizontal: false, vertical: true)
                         Text(kind.summary)
-                            .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                            .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     Spacer(minLength: 6)
                     Image(systemName: isOpen ? "chevron.up" : "chevron.down")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.system(.caption2, weight: .semibold))
                         .foregroundStyle(AppTheme.textSecondary)
                 }
             }
@@ -131,7 +131,7 @@ struct CycleIntentView: View {
                           text: Binding(
                             get: { noteDrafts[kind.rawValue] ?? row(for: kind)?.note ?? "" },
                             set: { noteDrafts[kind.rawValue] = $0 }))
-                    .font(.system(size: 12))
+                    .font(.system(.caption))
                     .padding(.horizontal, 12).padding(.vertical, 9)
                     .background(AppTheme.bg.opacity(0.6), in: RoundedRectangle(cornerRadius: 10))
 
@@ -141,7 +141,7 @@ struct CycleIntentView: View {
                         toggle(kind, recurring: false)
                     } label: {
                         Text(loc(on ? "intent.turn_off" : "intent.apply_cycle"))
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(.system(.caption, weight: .semibold))
                             .foregroundStyle(on ? AppTheme.red : .white)
                             .frame(maxWidth: .infinity).padding(.vertical, 10)
                             .background(on ? AppTheme.red.opacity(0.14) : kind.tint, in: Capsule())
@@ -154,7 +154,7 @@ struct CycleIntentView: View {
                             toggle(kind, recurring: true)
                         } label: {
                             Text(loc("intent.apply_ongoing"))
-                                .font(.system(size: 12, weight: .semibold))
+                                .font(.system(.caption, weight: .semibold))
                                 .foregroundStyle(kind.tint)
                                 .frame(maxWidth: .infinity).padding(.vertical, 10)
                                 .background(kind.tint.opacity(0.12), in: Capsule())
@@ -166,9 +166,9 @@ struct CycleIntentView: View {
             } else if on {
                 // Collapsed but active — say so, and say which scope.
                 HStack(spacing: 5) {
-                    Image(systemName: "checkmark.seal.fill").font(.system(size: 10))
+                    Image(systemName: "checkmark.seal.fill").font(.system(.caption2)).imageScale(.small)
                     Text(loc(row(for: kind)?.isRecurring == true ? "intent.active_ongoing" : "intent.active_cycle"))
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(.system(.caption2, weight: .semibold))
                 }
                 .foregroundStyle(kind.tint)
             }
@@ -182,10 +182,10 @@ struct CycleIntentView: View {
 
     private func effectLine(_ icon: String, _ tint: Color, _ label: String, _ text: String) -> some View {
         HStack(alignment: .top, spacing: 7) {
-            Image(systemName: icon).font(.system(size: 11)).foregroundStyle(tint).padding(.top, 1)
+            Image(systemName: icon).font(.system(.caption2)).foregroundStyle(tint).padding(.top, 1)
             VStack(alignment: .leading, spacing: 1) {
-                Text(label).font(.system(size: 10.5, weight: .semibold)).foregroundStyle(tint)
-                Text(text).font(.system(size: 11.5)).foregroundStyle(AppTheme.textSecondary)
+                Text(label).font(.system(.caption2, weight: .semibold)).foregroundStyle(tint)
+                Text(text).font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                     .fixedSize(horizontal: false, vertical: true).lineSpacing(1.5)
             }
         }

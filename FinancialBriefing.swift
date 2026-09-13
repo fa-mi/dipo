@@ -561,9 +561,9 @@ struct FinancialBriefingView: View {
                             // of their life the numbers describe.
                             HStack(spacing: 6) {
                                 Image(systemName: "calendar")
-                                    .font(.system(size: 11, weight: .semibold))
+                                    .font(.system(.caption2, weight: .semibold))
                                 Text(b.periodLabel)
-                                    .font(.system(size: 12, weight: .semibold))
+                                    .font(.system(.caption, weight: .semibold))
                             }
                             .foregroundStyle(AppTheme.purple)
                             .padding(.horizontal, 10).padding(.vertical, 5)
@@ -572,7 +572,7 @@ struct FinancialBriefingView: View {
 
                             // Headline
                             Text(b.headline)
-                                .font(.system(size: 20, weight: .bold))
+                                .font(.system(.title3, weight: .bold))
                                 .foregroundStyle(AppTheme.textPrimary)
                                 .fixedSize(horizontal: false, vertical: true)
                                 .padding(.horizontal, 22)
@@ -596,12 +596,12 @@ struct FinancialBriefingView: View {
                             if !b.allocation.isEmpty {
                                 VStack(alignment: .leading, spacing: 14) {
                                     Text(loc("brief.alloc_header"))
-                                        .font(.system(size: 14, weight: .semibold))
+                                        .font(.system(.subheadline, weight: .semibold))
                                         .foregroundStyle(AppTheme.textPrimary)
                                     ForEach(b.allocation) { rec in allocationRow(rec) }
                                     if let note = b.allocationNote {
                                         Text(note)
-                                            .font(.system(size: 11))
+                                            .font(.system(.caption2))
                                             .foregroundStyle(AppTheme.textSecondary.opacity(0.8))
                                             .fixedSize(horizontal: false, vertical: true)
                                     }
@@ -616,16 +616,16 @@ struct FinancialBriefingView: View {
                                 VStack(alignment: .leading, spacing: 8) {
                                     HStack(spacing: 8) {
                                         Image(systemName: f.severity.icon)
-                                            .font(.system(size: 14)).foregroundStyle(f.severity.color)
-                                        Text(f.title).font(.system(size: 14, weight: .semibold))
+                                            .font(.system(.subheadline)).foregroundStyle(f.severity.color)
+                                        Text(f.title).font(.system(.subheadline, weight: .semibold))
                                             .foregroundStyle(AppTheme.textPrimary)
                                     }
-                                    Text(f.body).font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
+                                    Text(f.body).font(.system(.footnote)).foregroundStyle(AppTheme.textSecondary)
                                         .fixedSize(horizontal: false, vertical: true).lineSpacing(2)
                                     if let action = f.action {
                                         HStack(spacing: 6) {
-                                            Image(systemName: "arrow.turn.down.right").font(.system(size: 11))
-                                            Text(action).font(.system(size: 12, weight: .medium))
+                                            Image(systemName: "arrow.turn.down.right").font(.system(.caption2))
+                                            Text(action).font(.system(.caption, weight: .medium))
                                         }
                                         .foregroundStyle(f.severity.color)
                                     }
@@ -641,12 +641,12 @@ struct FinancialBriefingView: View {
                             if !b.outlook.isEmpty {
                                 VStack(alignment: .leading, spacing: 10) {
                                     Text(loc("brief.outlook_header"))
-                                        .font(.system(size: 14, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                                        .font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
                                     ForEach(b.outlook, id: \.self) { line in
                                         HStack(alignment: .top, spacing: 8) {
                                             Image(systemName: "binoculars.fill")
-                                                .font(.system(size: 11)).foregroundStyle(AppTheme.purple).padding(.top, 2)
-                                            Text(line).font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
+                                                .font(.system(.caption2)).foregroundStyle(AppTheme.purple).padding(.top, 2)
+                                            Text(line).font(.system(.footnote)).foregroundStyle(AppTheme.textSecondary)
                                                 .fixedSize(horizontal: false, vertical: true)
                                         }
                                     }
@@ -657,7 +657,7 @@ struct FinancialBriefingView: View {
                             }
 
                             Text(loc("brief.disclaimer"))
-                                .font(.system(size: 10)).foregroundStyle(AppTheme.textSecondary.opacity(0.7))
+                                .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary.opacity(0.7))
                                 .padding(.horizontal, 22)
 
                             Spacer(minLength: 30)
@@ -703,7 +703,7 @@ struct FinancialBriefingView: View {
             }
             if let caption = row.caption {
                 Text(caption)
-                    .font(.system(size: 11))
+                    .font(.system(.caption2))
                     .foregroundStyle(AppTheme.textSecondary.opacity(0.7))
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -719,14 +719,14 @@ struct FinancialBriefingView: View {
             HStack(alignment: .firstTextBaseline) {
                 Circle().fill(rec.color).frame(width: 8, height: 8)
                 Text(rec.label)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.system(.footnote, weight: .semibold))
                     .foregroundStyle(AppTheme.textPrimary)
                 Spacer()
                 Text("\(rec.pct)%")
-                    .font(.system(size: 16, weight: .bold))
+                    .font(.system(.callout, weight: .bold))
                     .foregroundStyle(rec.color)
                 Text(cm.formatted(rec.amount, currency: cm.preferredCurrency))
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(.caption, weight: .semibold))
                     .foregroundStyle(AppTheme.textSecondary)
             }
             // The FILLED bar is what actually happened; the marker is the
@@ -748,15 +748,15 @@ struct FinancialBriefingView: View {
             HStack(spacing: 6) {
                 Text(String(format: loc(isOver ? "brief.alloc.over" : "brief.alloc.under"),
                             rec.currentPct, abs(rec.currentPct - rec.pct)))
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.system(.caption2, weight: .medium))
                     .foregroundStyle(isOver ? AppTheme.orange : AppTheme.accent)
                 Spacer()
                 Text(loc("brief.alloc.marker_legend"))
-                    .font(.system(size: 10))
+                    .font(.system(.caption2))
                     .foregroundStyle(AppTheme.textSecondary.opacity(0.7))
             }
             Text(rec.detail)
-                .font(.system(size: 11.5))
+                .font(.system(.caption))
                 .foregroundStyle(AppTheme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
                 .lineSpacing(1.5)

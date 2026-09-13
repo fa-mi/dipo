@@ -480,11 +480,11 @@ struct HomeView: View {
                             let fmt = { (v: Double) in CurrencyManager.shared.formatted(v, currency: CurrencyManager.shared.preferredCurrency) }
                             VStack(alignment: .leading, spacing: 5) {
                                 HStack(spacing: 10) {
-                                    Image(systemName: "chart.pie.fill").font(.system(size: 13)).foregroundStyle(AppTheme.purple)
-                                    Text(loc("home.net_worth")).font(.system(size: 12, weight: .medium)).foregroundStyle(AppTheme.textSecondary)
+                                    Image(systemName: "chart.pie.fill").font(.system(.footnote)).foregroundStyle(AppTheme.purple)
+                                    Text(loc("home.net_worth")).font(.system(.caption, weight: .medium)).foregroundStyle(AppTheme.textSecondary)
                                     Spacer()
                                     Text((netWorth < 0 ? "-" : "") + fmt(Swift.abs(netWorth)))
-                                        .font(.system(size: 14, weight: .bold))
+                                        .font(.system(.subheadline, weight: .bold))
                                         .foregroundStyle(netWorth >= 0 ? AppTheme.textPrimary : AppTheme.red)
                                         // Roll the digits when a transaction
                                         // moves this. Seeing the figure change
@@ -501,7 +501,7 @@ struct HomeView: View {
                                               fmt(totalBalance), fmt(goalSavings), fmt(totalLiabilities))
                                      : String(format: loc("home.net_worth_breakdown"),
                                               fmt(totalBalance), fmt(totalLiabilities)))
-                                    .font(.system(size: 10))
+                                    .font(.system(.caption2))
                                     .foregroundStyle(AppTheme.textSecondary.opacity(0.75))
                                     .fixedSize(horizontal: false, vertical: true)
                             }
@@ -707,9 +707,9 @@ struct NoCardState: View {
             }
 
             VStack(spacing: 6) {
-                Text(loc("home.get_started")).font(.system(size: 24, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
+                Text(loc("home.get_started")).font(.system(.title2, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
                 Text(loc("home.get_started_sub"))
-                    .font(.system(size: 14)).foregroundStyle(AppTheme.textSecondary)
+                    .font(.system(.subheadline)).foregroundStyle(AppTheme.textSecondary)
                     .multilineTextAlignment(.center).lineSpacing(3)
             }
 
@@ -723,7 +723,7 @@ struct NoCardState: View {
             .frame(height: 6)
             .padding(.horizontal, 32)
 
-            Text(loc("home.step1")).font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
+            Text(loc("home.step1")).font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
 
             // Tappable step rows
             VStack(spacing: 10) {
@@ -746,8 +746,8 @@ struct NoCardState: View {
 
             Button { HapticManager.shared.success(); showAddCard = true } label: {
                 HStack(spacing: 10) {
-                    Image(systemName: "plus.circle.fill").font(.system(size: 18))
-                    Text(loc("home.add_first_card")).font(.system(size: 16, weight: .bold))
+                    Image(systemName: "plus.circle.fill").font(.system(.body))
+                    Text(loc("home.add_first_card")).font(.system(.callout, weight: .bold))
                 }
                 .foregroundStyle(AppTheme.bg)
                 .padding(.horizontal, 36).padding(.vertical, 16)
@@ -777,30 +777,30 @@ struct TappableSetupStep: View {
                     .frame(width: 36, height: 36)
                     .overlay(Circle().stroke(isActive || isDone ? AppTheme.accent.opacity(0.5) : AppTheme.cardMid, lineWidth: 1))
                 if isDone {
-                    Image(systemName: "checkmark").font(.system(size: 13, weight: .bold)).foregroundStyle(AppTheme.bg)
+                    Image(systemName: "checkmark").font(.system(.footnote, weight: .bold)).foregroundStyle(AppTheme.bg)
                 } else {
-                    Image(systemName: icon).font(.system(size: 14))
+                    Image(systemName: icon).font(.system(.subheadline))
                         .foregroundStyle(isActive ? AppTheme.accent : AppTheme.textSecondary.opacity(0.5))
                 }
             }
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.system(size: 14, weight: .semibold))
+                Text(title).font(.system(.subheadline, weight: .semibold))
                     .foregroundStyle(isActive ? AppTheme.textPrimary : AppTheme.textSecondary.opacity(0.5))
-                Text(subtitle).font(.system(size: 12))
+                Text(subtitle).font(.system(.caption))
                     .foregroundStyle(AppTheme.textSecondary.opacity(isActive ? 0.8 : 0.4))
             }
             Spacer()
             if isActive {
                 ZStack {
                     Circle().fill(AppTheme.accentFill).frame(width: 28, height: 28)
-                    Image(systemName: "chevron.right").font(.system(size: 11, weight: .bold)).foregroundStyle(AppTheme.bg)
+                    Image(systemName: "chevron.right").font(.system(.caption2, weight: .bold)).foregroundStyle(AppTheme.bg)
                 }
             } else if isDone {
-                Image(systemName: "checkmark.circle.fill").font(.system(size: 22)).foregroundStyle(AppTheme.accent)
+                Image(systemName: "checkmark.circle.fill").font(.system(.title2)).foregroundStyle(AppTheme.accent)
             } else {
                 Circle().fill(AppTheme.cardMid).frame(width: 28, height: 28)
-                    .overlay(Image(systemName: "lock.fill").font(.system(size: 10)).foregroundStyle(AppTheme.textSecondary.opacity(0.4)))
+                    .overlay(Image(systemName: "lock.fill").font(.system(.caption2)).imageScale(.small).foregroundStyle(AppTheme.textSecondary.opacity(0.4)))
             }
         }
         .padding(14)
@@ -835,13 +835,13 @@ struct SmartInsightBanner: View {
                 ZStack {
                     Circle().fill(insight.color.opacity(0.15)).frame(width: 40, height: 40)
                     Image(systemName: insight.icon)
-                        .font(.system(size: 16))
+                        .font(.system(.callout))
                         .foregroundStyle(insight.color)
                 }
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 6) {
                         Text(loc("home.smart_insight"))
-                            .font(.system(size: 10, weight: .semibold))
+                            .font(.system(.caption2, weight: .semibold))
                             .foregroundStyle(insight.color)
                             .padding(.horizontal, 6).padding(.vertical, 2)
                             .background(insight.color.opacity(0.15), in: Capsule())
@@ -852,11 +852,11 @@ struct SmartInsightBanner: View {
                         if insight.confidence != .high {
                             HStack(spacing: 3) {
                                 Image(systemName: "info.circle")
-                                    .font(.system(size: 9))
+                                    .font(.system(.caption2)).imageScale(.small)
                                 Text(insight.confidence == .low
                                      ? loc("insight.confidence.low")
                                      : loc("insight.confidence.medium"))
-                                    .font(.system(size: 9, weight: .semibold))
+                                    .font(.system(.caption2, weight: .semibold))
                             }
                             .foregroundStyle(AppTheme.textSecondary)
                             .padding(.horizontal, 6).padding(.vertical, 2)
@@ -864,10 +864,10 @@ struct SmartInsightBanner: View {
                         }
                     }
                     Text(insight.title)
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.system(.footnote, weight: .semibold))
                         .foregroundStyle(AppTheme.textPrimary)
                     Text(insight.body)
-                        .font(.system(size: 11))
+                        .font(.system(.caption2))
                         .foregroundStyle(AppTheme.textSecondary)
                         .lineSpacing(1)
                 }
@@ -876,7 +876,7 @@ struct SmartInsightBanner: View {
                     // Chevron only when the whole banner is tappable AND
                     // there's no action button — otherwise the banner shows
                     // its own primary action (less ambiguous).
-                    Image(systemName: "chevron.right").font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
+                    Image(systemName: "chevron.right").font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                 }
             }
             // First-time coaching — explains what the insight category
@@ -886,11 +886,11 @@ struct SmartInsightBanner: View {
             if let topic = coachingTopic {
                 HStack(alignment: .top, spacing: 8) {
                     Image(systemName: "lightbulb.fill")
-                        .font(.system(size: 11))
+                        .font(.system(.caption2))
                         .foregroundStyle(AppTheme.orange)
                     VStack(alignment: .leading, spacing: 6) {
                         Text(loc("coaching.\(topic).body"))
-                            .font(.system(size: 11))
+                            .font(.system(.caption2))
                             .foregroundStyle(AppTheme.textSecondary)
                             .lineSpacing(2)
                         Button {
@@ -899,7 +899,7 @@ struct SmartInsightBanner: View {
                             withAnimation { coachingTopic = nil }
                         } label: {
                             Text(loc("coaching.got_it"))
-                                .font(.system(size: 11, weight: .semibold))
+                                .font(.system(.caption2, weight: .semibold))
                                 .foregroundStyle(AppTheme.orange)
                         }
                         .buttonStyle(.plain)
@@ -922,9 +922,9 @@ struct SmartInsightBanner: View {
                 } label: {
                     HStack(spacing: 6) {
                         Text(action.label)
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(.system(.caption, weight: .semibold))
                         Image(systemName: "arrow.right")
-                            .font(.system(size: 10, weight: .bold))
+                            .font(.system(.caption2, weight: .bold)).imageScale(.small)
                     }
                     .foregroundStyle(insight.color)
                     .padding(.horizontal, 12).padding(.vertical, 7)
@@ -985,28 +985,28 @@ struct DeclaredRecurringBanner: View {
             ZStack {
                 Circle().fill(expense.category.color.opacity(0.15)).frame(width: 40, height: 40)
                 Image(systemName: expense.category.icon)
-                    .font(.system(size: 16)).foregroundStyle(expense.category.color)
+                    .font(.system(.callout)).foregroundStyle(expense.category.color)
             }
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     Text(loc("home.declared_recurring_badge"))
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(.system(.caption2, weight: .semibold))
                         .foregroundStyle(expense.category.color)
                         .padding(.horizontal, 6).padding(.vertical, 2)
                         .background(expense.category.color.opacity(0.15), in: Capsule())
                     if days <= 0 {
                         Text(loc("tx.due_today"))
-                            .font(.system(size: 10, weight: .semibold))
+                            .font(.system(.caption2, weight: .semibold))
                             .foregroundStyle(AppTheme.red)
                             .padding(.horizontal, 6).padding(.vertical, 2)
                             .background(AppTheme.red.opacity(0.15), in: Capsule())
                     }
                 }
                 Text("\(expense.label) · \(CurrencyManager.shared.formatted(expense.amount, currency: expense.currency))")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.system(.footnote, weight: .semibold))
                     .foregroundStyle(AppTheme.textPrimary).lineLimit(1)
                 Text("\(whenText) · " + loc(expense.autoRecord ? "home.declared_auto_on" : "home.declared_auto_off"))
-                    .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                    .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
             }
             Spacer()
         }
@@ -1042,23 +1042,23 @@ struct RecurringReminderBanner: View {
             ZStack {
                 Circle().fill(tint.opacity(0.15)).frame(width: 40, height: 40)
                 Image(systemName: iconName)
-                    .font(.system(size: 18)).foregroundStyle(tint)
+                    .font(.system(.body)).foregroundStyle(tint)
             }
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     Text(badgeText)
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(.system(.caption2, weight: .semibold))
                         .foregroundStyle(tint)
                         .padding(.horizontal, 6).padding(.vertical, 2)
                         .background(tint.opacity(0.15), in: Capsule())
                     Text(pattern.frequencyLabel)
-                        .font(.system(size: 10, weight: .medium))
+                        .font(.system(.caption2, weight: .medium))
                         .foregroundStyle(AppTheme.textSecondary)
                         .lineLimit(1)
                     // "Due today" only makes sense for a bill — a habit isn't due.
                     if isBill && daysUntil == 0 {
                         Text(loc("tx.due_today"))
-                            .font(.system(size: 10, weight: .semibold))
+                            .font(.system(.caption2, weight: .semibold))
                             .foregroundStyle(AppTheme.red)
                             .padding(.horizontal, 6).padding(.vertical, 2)
                             .background(AppTheme.red.opacity(0.15), in: Capsule())
@@ -1069,14 +1069,14 @@ struct RecurringReminderBanner: View {
                 // nashville · ti…"), hiding the very thing that explains the
                 // flag — so the cadence moved up beside the badge instead.
                 Text(pattern.name)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.system(.footnote, weight: .semibold))
                     .foregroundStyle(AppTheme.textPrimary)
                     .lineLimit(1).truncationMode(.tail)
                 // Detail — bills get a "due" prediction; habits are framed as an
                 // average spend, no due-date pressure.
                 let amountStr = CurrencyManager.shared.formatted(pattern.amount, currency: pattern.currency)
                 Text(detailText(amountStr))
-                    .font(.system(size: 11))
+                    .font(.system(.caption2))
                     .foregroundStyle(AppTheme.textSecondary)
                 // One-line explainer so first-time users aren't confused.
                 // The evidence behind the claim, stated plainly: how many
@@ -1084,11 +1084,11 @@ struct RecurringReminderBanner: View {
                 // an assertion the user has no way to check.
                 Text(String(format: loc("recurring.evidence"),
                             pattern.occurrences, evidenceRange))
-                    .font(.system(size: 10))
+                    .font(.system(.caption2))
                     .foregroundStyle(AppTheme.textSecondary.opacity(0.8))
 
                 Text(isBill ? loc("recurring.help.bill") : loc("recurring.help.habit"))
-                    .font(.system(size: 10))
+                    .font(.system(.caption2))
                     .foregroundStyle(AppTheme.textSecondary.opacity(0.7))
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -1103,7 +1103,7 @@ struct RecurringReminderBanner: View {
                     withAnimation(.spring(response: 0.4)) { onDismiss() }
                 } label: {
                     Image(systemName: "xmark")
-                        .font(.system(size: 12, weight: .bold))
+                        .font(.system(.caption, weight: .bold))
                         .foregroundStyle(AppTheme.textSecondary)
                         .frame(width: 26, height: 26)
                         .background(AppTheme.cardMid, in: Circle())
@@ -1150,13 +1150,13 @@ struct SetupSalaryBanner: View {
         HStack(spacing: 14) {
             ZStack {
                 Circle().fill(AppTheme.blue.opacity(0.15)).frame(width: 42, height: 42)
-                Image(systemName: "banknote").font(.system(size: 18)).foregroundStyle(AppTheme.blue)
+                Image(systemName: "banknote").font(.system(.body)).foregroundStyle(AppTheme.blue)
             }
             VStack(alignment: .leading, spacing: 3) {
                 Text(loc("home.setup_salary"))
-                    .font(.system(size: 14, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                    .font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
                 Text(loc("home.setup_salary_sub"))
-                    .font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
+                    .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
             }
             Spacer()
             Button {
@@ -1164,7 +1164,7 @@ struct SetupSalaryBanner: View {
                 showAddSalary = true
             } label: {
                 Text(loc("home.set_up"))
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(.caption, weight: .semibold))
                     .foregroundStyle(AppTheme.bg)
                     .padding(.horizontal, 12).padding(.vertical, 6)
                     .background(AppTheme.blue, in: Capsule())
@@ -1202,22 +1202,22 @@ struct PinnedGoalBanner: View {
                         .frame(width: 44, height: 44)
                         .rotationEffect(.degrees(-90))
                         .animation(AppMotion.appear, value: appeared)
-                    Text(goal.emoji).font(.system(size: 20))
+                    Text(goal.emoji).font(.system(.title3))
                 }
 
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 6) {
                         Text(goal.name)
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(.system(.subheadline, weight: .semibold))
                             .foregroundStyle(AppTheme.textPrimary)
                         Image(systemName: "pin.fill")
-                            .font(.system(size: 10))
+                            .font(.system(.caption2)).imageScale(.small)
                             .foregroundStyle(AppTheme.accent.opacity(0.7))
                     }
                     Text(String(format: loc("home.progress_to_go"),
                                 Int(progress * 100),
                                 CurrencyManager.shared.formatted(remaining, currency: goal.currency)))
-                        .font(.system(size: 12))
+                        .font(.system(.caption))
                         .foregroundStyle(AppTheme.textSecondary)
                 }
 
@@ -1225,10 +1225,10 @@ struct PinnedGoalBanner: View {
 
                 HStack(spacing: 6) {
                     Text("\(CurrencyManager.shared.formatted(goal.savedAmount, currency: goal.currency))")
-                        .font(.system(size: 13, weight: .bold))
+                        .font(.system(.footnote, weight: .bold))
                         .foregroundStyle(AppTheme.accent)
                     if tappable {
-                        Image(systemName: "chevron.right").font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
+                        Image(systemName: "chevron.right").font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                     }
                 }
             }
@@ -1265,11 +1265,11 @@ struct NegativeBalanceBanner: View {
             ZStack {
                 Circle().fill(AppTheme.red.opacity(0.15)).frame(width: 42, height: 42)
                 Image(systemName: "exclamationmark.triangle.fill")
-                    .font(.system(size: 18)).foregroundStyle(AppTheme.red)
+                    .font(.system(.body)).foregroundStyle(AppTheme.red)
             }
             VStack(alignment: .leading, spacing: 3) {
                 Text(loc("home.negative"))
-                    .font(.system(size: 14, weight: .semibold)).foregroundStyle(AppTheme.red)
+                    .font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.red)
                 Text(String(
                     format: loc("balance.review"),
                     CurrencyManager.shared.formatted(
@@ -1277,7 +1277,7 @@ struct NegativeBalanceBanner: View {
                         currency: currency
                     )
                 ))
-                    .font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
+                    .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
             }
             Spacer()
         }
@@ -1352,19 +1352,19 @@ struct SalaryReminderBanner: View {
                         .animation(.easeOut(duration: 1.5).repeatForever(autoreverses: false), value: pulsing)
                 }
                 Circle().fill(urgency.color.opacity(0.15)).frame(width: 40, height: 40)
-                Image(systemName: urgency.icon).font(.system(size: 18)).foregroundStyle(urgency.color)
+                Image(systemName: urgency.icon).font(.system(.body)).foregroundStyle(urgency.color)
             }
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
-                    Text(daysLabel).font(.system(size: 14, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                    Text(daysLabel).font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
                     if adjusted {
-                        Text(loc("home.adjusted")).font(.system(size: 10, weight: .semibold))
+                        Text(loc("home.adjusted")).font(.system(.caption2, weight: .semibold))
                             .foregroundStyle(AppTheme.orange)
                             .padding(.horizontal, 6).padding(.vertical, 2)
                             .background(AppTheme.orange.opacity(0.15), in: Capsule())
                     }
                 }
-                Text("\(schedule.label) - \(formattedAmount)").font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
+                Text("\(schedule.label) - \(formattedAmount)").font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                 let df: DateFormatter = {
                     let f = DateFormatter()
                     f.locale = LanguageManager.shared.currentLocale
@@ -1372,7 +1372,7 @@ struct SalaryReminderBanner: View {
                     return f
                 }()
                 Text(df.string(from: nextDate))
-                    .font(.system(size: 12, weight: .medium)).foregroundStyle(urgency.color)
+                    .font(.system(.caption, weight: .medium)).foregroundStyle(urgency.color)
             }
             Spacer()
             HStack(spacing: 6) {
@@ -1380,13 +1380,13 @@ struct SalaryReminderBanner: View {
                     if daysLeft == 0 {
                         Text(loc("home.now")).font(.system(size: 11, weight: .black)).foregroundStyle(urgency.color)
                     } else {
-                        Text("\(daysLeft)").font(.system(size: 20, weight: .bold)).foregroundStyle(urgency.color)
-                        Text(loc("home.days")).font(.system(size: 9, weight: .medium)).foregroundStyle(AppTheme.textSecondary)
+                        Text("\(daysLeft)").font(.system(.title3, weight: .bold)).foregroundStyle(urgency.color)
+                        Text(loc("home.days")).font(.system(.caption2, weight: .medium)).foregroundStyle(AppTheme.textSecondary)
                     }
                 }
                 .frame(width: 44)
                 if tappable {
-                    Image(systemName: "chevron.right").font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
+                    Image(systemName: "chevron.right").font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                 }
             }
         }
@@ -1421,11 +1421,11 @@ struct MoreAttentionRow: View {
     var body: some View {
         HStack(spacing: 8) {
             Image(systemName: expanded ? "chevron.up" : "chevron.down")
-                .font(.system(size: 11, weight: .semibold))
+                .font(.system(.caption2, weight: .semibold))
                 .foregroundStyle(AppTheme.textSecondary)
             Text(expanded ? loc("home.attention_less")
                           : String(format: loc("home.attention_more"), count))
-                .font(.system(size: 13))
+                .font(.system(.footnote))
                 .foregroundStyle(AppTheme.textSecondary)
             Spacer()
         }
@@ -1484,15 +1484,15 @@ struct HomeHeader: View {
 
                     VStack(alignment: .leading, spacing: 1) {
                         Text(loc("home.greeting") + ",")
-                            .font(.system(size: 12))
+                            .font(.system(.caption))
                             .foregroundStyle(AppTheme.textSecondary)
                         HStack(spacing: 4) {
                             Text(name)
-                                .font(.system(size: 16, weight: .bold))
+                                .font(.system(.callout, weight: .bold))
                                 .foregroundStyle(AppTheme.textPrimary)
                                 .lineLimit(1)
                             Image(systemName: "chevron.right")
-                                .font(.system(size: 10, weight: .semibold))
+                                .font(.system(.caption2, weight: .semibold)).imageScale(.small)
                                 .foregroundStyle(AppTheme.textSecondary)
                         }
                     }
@@ -1506,7 +1506,7 @@ struct HomeHeader: View {
                 Button { HapticManager.shared.tap(); showSearch = true } label: {
                     ZStack {
                         Circle().fill(AppTheme.cardDark).frame(width: 42, height: 42)
-                        Image(systemName: "magnifyingglass").font(.system(size: 17)).foregroundStyle(AppTheme.textSecondary)
+                        Image(systemName: "magnifyingglass").font(.system(.body)).foregroundStyle(AppTheme.textSecondary)
                     }
                 }
 .accessibilityLabel(loc("a11y.search"))
@@ -1517,14 +1517,14 @@ struct HomeHeader: View {
                         ZStack {
                             Circle().fill(AppTheme.cardDark).frame(width: 42, height: 42)
                             Image(systemName: notifMgr.hasUnread ? "bell.badge.fill" : "bell")
-                                .font(.system(size: 17))
+                                .font(.system(.body))
                                 .foregroundStyle(notifMgr.hasUnread ? AppTheme.accent : AppTheme.textSecondary)
                         }
                         if notifMgr.unreadCount > 0 {
                             ZStack {
                                 Circle().fill(AppTheme.redFill).frame(width: 18, height: 18)
                                 Text(notifMgr.unreadCount > 9 ? "9+" : "\(notifMgr.unreadCount)")
-                                    .font(.system(size: 9, weight: .bold)).foregroundStyle(AppTheme.onVividFill)
+                                    .font(.system(.caption2, weight: .bold)).foregroundStyle(AppTheme.onVividFill)
                             }
                             .offset(x: 4, y: -4)
                         }
@@ -1666,14 +1666,14 @@ struct BankCardView: View {
                 HStack(alignment: .top) {
                     HStack(spacing: 8) {
                         Text(card.isCreditCard ? loc("cc.owed") : loc("home.balance_total"))
-                            .font(.system(size: 11, weight: .medium))
+                            .font(.system(.caption2, weight: .medium))
                             .foregroundStyle(.white.opacity(0.75))
                         Button {
                             HapticManager.shared.tap()
                             card.isHidden.toggle()
                         } label: {
                             Image(systemName: card.isHidden ? "eye.slash" : "eye")
-                                .font(.system(size: 12, weight: .medium))
+                                .font(.system(.caption, weight: .medium))
                                 .foregroundStyle(.white.opacity(0.7))
                         }
 .accessibilityLabel(loc(card.isHidden ? "a11y.show_balance" : "a11y.hide_balance"))
@@ -1683,10 +1683,10 @@ struct BankCardView: View {
                     if card.isDigitalWallet, let wp = WalletProvider(rawValue: card.walletProvider) {
                         HStack(spacing: 4) {
                             Image(systemName: wp.icon)
-                                .font(.system(size: 12, weight: .semibold))
+                                .font(.system(.caption, weight: .semibold))
                                 .foregroundStyle(.white.opacity(0.9))
                             Text(loc("cards.digital_wallet"))
-                                .font(.system(size: 10, weight: .medium))
+                                .font(.system(.caption2, weight: .medium))
                                 .foregroundStyle(.white.opacity(0.7))
                         }
                     } else {
@@ -1703,7 +1703,7 @@ struct BankCardView: View {
                         CountUpText(value: animatedBalance, currency: cardCurrency)
                     }
                 }
-                .font(.system(size: 30, weight: .bold))
+                .font(.system(.title, weight: .bold))
                 .foregroundStyle(totalBalance < 0 ? AppTheme.red : .white)
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
@@ -1717,7 +1717,7 @@ struct BankCardView: View {
 
                 if totalBalance < 0 && !card.isHidden {
                     Text(loc("home.negative"))
-                        .font(.system(size: 9, weight: .semibold))
+                        .font(.system(.caption2, weight: .semibold))
                         .foregroundStyle(AppTheme.red.opacity(0.9))
                         .padding(.top, 2)
                 }
@@ -1727,7 +1727,7 @@ struct BankCardView: View {
                 HStack(alignment: .bottom) {
                     VStack(alignment: .leading, spacing: 3) {
                         Text(card.holderName)
-                            .font(.system(size: 12, weight: .medium))
+                            .font(.system(.caption, weight: .medium))
                             .foregroundStyle(.white.opacity(0.92))
                             .lineLimit(1)
                         // Currency joins the number. On a single-currency
@@ -1735,7 +1735,7 @@ struct BankCardView: View {
                         // exists it is the difference between two cards whose
                         // digits look alike.
                         Text("\(cardCurrency) · \(card.isDigitalWallet ? card.displayPhone : card.displayNumber)")
-                            .font(.system(size: 11))
+                            .font(.system(.caption2))
                             .foregroundStyle(.white.opacity(0.65))
                             .lineLimit(1)
                     }
@@ -1743,9 +1743,9 @@ struct BankCardView: View {
                     if !card.isDigitalWallet {
                         VStack(alignment: .trailing, spacing: 2) {
                             Text(loc("cards.expires"))
-                                .font(.system(size: 10)).foregroundStyle(.white.opacity(0.6))
+                                .font(.system(.caption2)).foregroundStyle(.white.opacity(0.6))
                             Text(card.expireDate)
-                                .font(.system(size: 13, weight: .semibold)).foregroundStyle(.white)
+                                .font(.system(.footnote, weight: .semibold)).foregroundStyle(.white)
                         }
                     }
                 }
@@ -1849,7 +1849,7 @@ struct CategoryFilterBar: View {
                         // reads as grime, not elevation.
                         .shadow(color: .black.opacity(0.10), radius: 6, y: 3)
                     Image(systemName: cat.icon)
-                        .font(.system(size: 22))
+                        .font(.system(.title2))
                         .foregroundStyle(isActive ? cat.color : AppTheme.textPrimary)
                         .scaleEffect(isActive ? 1.1 : 1)
                 }
@@ -1984,7 +1984,7 @@ struct TransactionSection: View {
 
             HStack {
                 Text(loc("home.transactions"))
-                    .font(.system(size: 17, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                    .font(.system(.body, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
                 Spacer()
                 HStack(spacing: 12) {
                     // Names the window it switches to, rather than "See more"
@@ -1998,7 +1998,7 @@ struct TransactionSection: View {
                             withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) { showAll.toggle() }
                         } label: {
                             Text(showAll ? loc("home.window_3days") : loc("home.window_week"))
-                                .font(.system(size: 13, weight: .medium)).foregroundStyle(AppTheme.textSecondary)
+                                .font(.system(.footnote, weight: .medium)).foregroundStyle(AppTheme.textSecondary)
                         }
                     }
                 }
@@ -2008,16 +2008,16 @@ struct TransactionSection: View {
             // Active filter chip with clear button
             if let filter = categoryFilter {
                 HStack(spacing: 8) {
-                    Image(systemName: filter.icon).font(.system(size: 12)).foregroundStyle(filter.color)
+                    Image(systemName: filter.icon).font(.system(.caption)).foregroundStyle(filter.color)
                     Text(String(format: loc("home.filtered_month"), filter.displayLabel))
-                        .font(.system(size: 12, weight: .medium)).foregroundStyle(filter.color)
+                        .font(.system(.caption, weight: .medium)).foregroundStyle(filter.color)
                     Spacer()
                     Button {
                         HapticManager.shared.tap()
                         onClearFilter?()
                     } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 16)).foregroundStyle(AppTheme.textSecondary)
+                            .font(.system(.callout)).foregroundStyle(AppTheme.textSecondary)
                     }
 .accessibilityLabel(loc("a11y.clear_filter"))
                 }
@@ -2031,20 +2031,20 @@ struct TransactionSection: View {
             if d.groups.isEmpty {
                 VStack(spacing: 14) {
                     Image(systemName: categoryFilter != nil ? "line.3.horizontal.decrease.circle" : "tray")
-                        .font(.system(size: 32)).foregroundStyle(AppTheme.textSecondary)
+                        .font(.system(.largeTitle)).foregroundStyle(AppTheme.textSecondary)
                     Text(categoryFilter != nil
                          ? String(format: loc("home.no_cat_tx_month"), categoryFilter!.displayLabel)
                          : (d.hasOlderOutsideWindow
                             ? loc("home.quiet_window")
                             : loc("home.no_tx_card")))
-                        .font(.system(size: 14)).foregroundStyle(AppTheme.textSecondary)
+                        .font(.system(.subheadline)).foregroundStyle(AppTheme.textSecondary)
                         .multilineTextAlignment(.center)
                     Text(categoryFilter != nil
                          ? loc("home.older_in_search")
                          : (d.hasOlderOutsideWindow
                             ? loc("home.quiet_window_hint")
                             : loc("home.tap_plus")))
-                        .font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary.opacity(0.7))
+                        .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary.opacity(0.7))
                         .multilineTextAlignment(.center)
 
                     // The filter only looks at this month, so an empty result
@@ -2055,8 +2055,8 @@ struct TransactionSection: View {
                             onOpenSearch()
                         } label: {
                             HStack(spacing: 8) {
-                                Image(systemName: "magnifyingglass").font(.system(size: 14))
-                                Text(loc("home.search_older")).font(.system(size: 13, weight: .semibold))
+                                Image(systemName: "magnifyingglass").font(.system(.subheadline))
+                                Text(loc("home.search_older")).font(.system(.footnote, weight: .semibold))
                             }
                             .foregroundStyle(AppTheme.accent)
                             .padding(.horizontal, 16).padding(.vertical, 9)
@@ -2078,8 +2078,8 @@ struct TransactionSection: View {
                             NotificationCenter.default.post(name: .requestOpenAddTransaction, object: nil)
                         } label: {
                             HStack(spacing: 8) {
-                                Image(systemName: "plus.circle.fill").font(.system(size: 14))
-                                Text(loc("home.add_first_tx")).font(.system(size: 13, weight: .semibold))
+                                Image(systemName: "plus.circle.fill").font(.system(.subheadline))
+                                Text(loc("home.add_first_tx")).font(.system(.footnote, weight: .semibold))
                             }
                             .foregroundStyle(AppTheme.accent)
                             .padding(.horizontal, 16).padding(.vertical, 9)
@@ -2100,13 +2100,13 @@ struct TransactionSection: View {
                             let dayTotal = group.total
                             HStack {
                                 Text(group.key)
-                                    .font(.system(size: 13, weight: .semibold))
+                                    .font(.system(.footnote, weight: .semibold))
                                     .foregroundStyle(AppTheme.textSecondary)
                                 Spacer()
                                 Text(dayTotal >= 0
                                      ? "+\(CurrencyManager.shared.formatted(dayTotal, currency: group.txs.first?.currency ?? CurrencyManager.shared.preferredCurrency))"
                                      : CurrencyManager.shared.formatted(dayTotal, currency: group.txs.first?.currency ?? CurrencyManager.shared.preferredCurrency))
-                                    .font(.system(size: 12, weight: .medium))
+                                    .font(.system(.caption, weight: .medium))
                                     .foregroundStyle(dayTotal >= 0 ? AppTheme.accent.opacity(0.7) : AppTheme.red.opacity(0.7))
                             }
 
@@ -2219,11 +2219,11 @@ struct SwipeToDeleteRow<Content: View>: View {
                                 .frame(width: 44, height: 44)
                                 .shadow(color: AppTheme.red.opacity(0.22), radius: 4, y: 2)
                             Image(systemName: "trash.fill")
-                                .font(.system(size: 16, weight: .semibold))
+                                .font(.system(.callout, weight: .semibold))
                                 .foregroundStyle(AppTheme.onVividFill)
                         }
                         Text(loc("common.delete"))
-                            .font(.system(size: 11, weight: .semibold))
+                            .font(.system(.caption2, weight: .semibold))
                             .foregroundStyle(AppTheme.red)
                     }
                     .scaleEffect(isFullSwipe ? 1.15 : max(revealProgress, 0.4))
@@ -2325,7 +2325,7 @@ struct TxRow: View {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     Text(tx.name)
-                        .font(.system(size: 15, weight: .medium)).foregroundStyle(AppTheme.textPrimary)
+                        .font(.system(.subheadline, weight: .medium)).foregroundStyle(AppTheme.textPrimary)
                     // Subtype badge — small inline marker showing this tx is
                     // a refund or transfer. Without this, users can't tell
                     // at a glance which tx is treated specially by the
@@ -2335,9 +2335,9 @@ struct TxRow: View {
                     if tx.txSubtype != .normal {
                         HStack(spacing: 3) {
                             Image(systemName: tx.txSubtype.icon)
-                                .font(.system(size: 8, weight: .semibold))
+                                .font(.system(.caption2, weight: .semibold)).imageScale(.small)
                             Text(tx.txSubtype.displayLabel)
-                                .font(.system(size: 9, weight: .bold))
+                                .font(.system(.caption2, weight: .bold))
                         }
                         .foregroundStyle(AppTheme.orange)
                         .padding(.horizontal, 5).padding(.vertical, 2)
@@ -2350,9 +2350,9 @@ struct TxRow: View {
                         let isSalary = tx.notes == "tx.note.salary_auto"
                         HStack(spacing: 3) {
                             Image(systemName: isSalary ? "banknote" : "arrow.clockwise")
-                                .font(.system(size: 8, weight: .semibold))
+                                .font(.system(.caption2, weight: .semibold)).imageScale(.small)
                             Text(loc(isSalary ? "tx.badge.auto_salary" : "tx.badge.auto_recurring"))
-                                .font(.system(size: 9, weight: .bold))
+                                .font(.system(.caption2, weight: .bold))
                         }
                         .foregroundStyle(isSalary ? AppTheme.accent : AppTheme.blue)
                         .padding(.horizontal, 5).padding(.vertical, 2)
@@ -2361,7 +2361,7 @@ struct TxRow: View {
                 }
                 HStack(spacing: 6) {
                     Text(timeOnly)
-                        .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                        .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                     // Source of fund badge — shown when user has multiple cards
                     if showCard, let card = sourceCard {
                         HStack(spacing: 3) {
@@ -2371,7 +2371,7 @@ struct TxRow: View {
                                     startPoint: .leading, endPoint: .trailing))
                                 .frame(width: 12, height: 8)
                             Text("••\(card.cardNumber.suffix(2))")
-                                .font(.system(size: 10, weight: .medium))
+                                .font(.system(.caption2, weight: .medium))
                                 .foregroundStyle(AppTheme.textSecondary)
                         }
                         .padding(.horizontal, 6).padding(.vertical, 2)
@@ -2386,10 +2386,10 @@ struct TxRow: View {
                 Text(tx.amount >= 0
                      ? "+\(CurrencyManager.shared.formatted(tx.amount, currency: tx.currency))"
                      : CurrencyManager.shared.formatted(tx.amount, currency: tx.currency))
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.system(.subheadline, weight: .semibold))
                     .foregroundStyle(tx.amount >= 0 ? AppTheme.green : AppTheme.textPrimary)
                 Text(tx.displayType)
-                    .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                    .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
             }
         }
         .opacity(animateEntrance ? (appeared ? 1 : 0) : 1)

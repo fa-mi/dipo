@@ -213,7 +213,7 @@ struct PlannerView: View {
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 18) {
                         Text(loc(tools.contains(.takeHome) ? "planner.intro_income" : "planner.intro"))
-                            .font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
+                            .font(.system(.footnote)).foregroundStyle(AppTheme.textSecondary)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.horizontal, 22)
 
@@ -228,7 +228,7 @@ struct PlannerView: View {
                         .padding(.horizontal, 22)
 
                         Text(loc(tools.contains(.takeHome) ? "planner.disclaimer_income" : "planner.disclaimer"))
-                            .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary.opacity(0.8))
+                            .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary.opacity(0.8))
                             .fixedSize(horizontal: false, vertical: true)
                             .padding(.horizontal, 22).padding(.top, 4)
                         Spacer(minLength: 30)
@@ -246,12 +246,12 @@ struct PlannerView: View {
     private func card(_ tool: Tool) -> some View {
         VStack(spacing: 8) {
             Image(systemName: tool.icon)
-                .font(.system(size: 24)).foregroundStyle(tool.tint)
+                .font(.system(.title2)).foregroundStyle(tool.tint)
                 .frame(height: 34)
             Text(loc(tool.titleKey))
-                .font(.system(size: 14, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                .font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
             Text(loc(tool.subtitleKey))
-                .font(.system(size: 10)).foregroundStyle(AppTheme.textSecondary)
+                .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -314,14 +314,14 @@ struct CalculatorSheet: View {
 
     private func numberField(_ labelKey: String, _ binding: Binding<String>, suffix: String? = nil) -> some View {
         VStack(spacing: 6) {
-            Text(loc(labelKey)).font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
+            Text(loc(labelKey)).font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
             HStack(spacing: 8) {
                 TextField("0", text: binding)
-                    .font(.system(size: 18, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                    .font(.system(.body, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
                     .keyboardType(.decimalPad)
                 if let suffix {
-                    Text(suffix).font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
+                    Text(suffix).font(.system(.footnote)).foregroundStyle(AppTheme.textSecondary)
                 }
             }
             .padding(.horizontal, 14).padding(.vertical, 12)
@@ -343,11 +343,11 @@ struct CalculatorSheet: View {
             numberField("planner.gross", $grossPay, suffix: pref)
             VStack(spacing: 10) {
                 Toggle(isOn: $married) {
-                    Text(loc("planner.married")).font(.system(size: 14)).foregroundStyle(AppTheme.textPrimary)
+                    Text(loc("planner.married")).font(.system(.subheadline)).foregroundStyle(AppTheme.textPrimary)
                 }
                 .tint(AppTheme.accent)
                 HStack {
-                    Text(loc("planner.dependants")).font(.system(size: 14))
+                    Text(loc("planner.dependants")).font(.system(.subheadline))
                         .foregroundStyle(AppTheme.textPrimary)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 10)
@@ -358,7 +358,7 @@ struct CalculatorSheet: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Text(loc("planner.dependants_hint"))
-                    .font(.system(size: 10)).foregroundStyle(AppTheme.textSecondary)
+                    .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             .padding(.horizontal, 22)
@@ -380,16 +380,16 @@ struct CalculatorSheet: View {
                             rows: [(String, String)], accent: Color) -> some View {
         VStack(spacing: 14) {
             VStack(spacing: 4) {
-                Text(loc(headlineKey)).font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
-                Text(headline).font(.system(size: 28, weight: .bold)).foregroundStyle(accent)
+                Text(loc(headlineKey)).font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
+                Text(headline).font(.system(.title, weight: .bold)).foregroundStyle(accent)
             }
             Divider().overlay(AppTheme.cardMid)
             VStack(spacing: 9) {
                 ForEach(rows, id: \.0) { row in
                     HStack {
-                        Text(row.0).font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
+                        Text(row.0).font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                         Spacer()
-                        Text(row.1).font(.system(size: 12, weight: .semibold))
+                        Text(row.1).font(.system(.caption, weight: .semibold))
                             .foregroundStyle(AppTheme.textPrimary)
                     }
                 }
@@ -425,7 +425,7 @@ struct CalculatorSheet: View {
         if let load, load.monthlyIncome > 0 {
             VStack(alignment: .leading, spacing: 8) {
                 Text(loc("planner.impact_title"))
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.system(.caption2, weight: .semibold))
                     .foregroundStyle(AppTheme.textSecondary)
                     .padding(.horizontal, 22)
                 ObligationLoadCard(load: load, projected: load.adding(instalment: instalment))
@@ -448,11 +448,11 @@ struct CalculatorSheet: View {
             // The single most useful number here. A flat quote looks cheap next
             // to a KPR rate until it's restated on the same basis.
             HStack(alignment: .top, spacing: 8) {
-                Image(systemName: "info.circle.fill").font(.system(size: 12))
+                Image(systemName: "info.circle.fill").font(.system(.caption))
                     .foregroundStyle(AppTheme.orange)
                 Text(String(format: loc("planner.flat_equivalent"),
                             String(format: "%.1f", r), String(format: "%.1f", equivalent)))
-                    .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                    .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 0)
             }

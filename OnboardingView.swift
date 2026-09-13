@@ -31,7 +31,7 @@ struct OnboardingView: View {
                         HapticManager.shared.tap()
                         finish()
                     }
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.system(.subheadline, weight: .medium))
                     .foregroundStyle(AppTheme.textSecondary)
                     .padding(.horizontal, 24)
                     .padding(.top, 16)
@@ -76,10 +76,10 @@ struct OnboardingView: View {
                             Text(currentPage < pages.count - 1
                                  ? loc("onboard.next")
                                  : loc("onboard.get_started"))
-                                .font(.system(size: 17, weight: .bold))
+                                .font(.system(.body, weight: .bold))
                             Image(systemName: currentPage < pages.count - 1
                                   ? "arrow.right" : "checkmark")
-                                .font(.system(size: 14, weight: .bold))
+                                .font(.system(.subheadline, weight: .bold))
                         }
                         .foregroundStyle(AppTheme.bg)
                         .frame(maxWidth: .infinity)
@@ -138,7 +138,7 @@ struct OnboardingPageView: View {
 
             // Title
             Text(title)
-                .font(.system(size: 28, weight: .bold))
+                .font(.system(.title, weight: .bold))
                 .foregroundStyle(AppTheme.textPrimary)
                 .multilineTextAlignment(.center)
                 .opacity(appeared ? 1 : 0)
@@ -148,7 +148,7 @@ struct OnboardingPageView: View {
 
             // Body
             Text(description)
-                .font(.system(size: 16))
+                .font(.system(.callout))
                 .foregroundStyle(AppTheme.textSecondary)
                 .multilineTextAlignment(.center)
                 .lineSpacing(4)
@@ -162,10 +162,10 @@ struct OnboardingPageView: View {
             if let tip {
                 HStack(spacing: 8) {
                     Image(systemName: "lightbulb.fill")
-                        .font(.system(size: 11))
+                        .font(.system(.caption2))
                         .foregroundStyle(color)
                     Text(tip)
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.system(.caption, weight: .medium))
                         .foregroundStyle(AppTheme.textSecondary)
                 }
                 .padding(.horizontal, 14).padding(.vertical, 8)

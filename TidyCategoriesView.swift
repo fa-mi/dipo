@@ -85,7 +85,7 @@ struct TidyCategoriesView: View {
         VStack(alignment: .leading, spacing: 6) {
             Text(String(format: loc("tidy.found"), suggestions.count,
                         CurrencyManager.shared.formatted(totalReclassified, currency: CurrencyManager.shared.preferredCurrency)))
-                .font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
+                .font(.system(.footnote)).foregroundStyle(AppTheme.textSecondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(.horizontal, 22).padding(.bottom, 4)
@@ -95,12 +95,12 @@ struct TidyCategoriesView: View {
         HStack(spacing: 12) {
             ZStack {
                 RoundedRectangle(cornerRadius: 11).fill(s.wrappedValue.category.color.opacity(0.14)).frame(width: 40, height: 40)
-                Image(systemName: s.wrappedValue.category.icon).font(.system(size: 16)).foregroundStyle(s.wrappedValue.category.color)
+                Image(systemName: s.wrappedValue.category.icon).font(.system(.callout)).foregroundStyle(s.wrappedValue.category.color)
             }
             VStack(alignment: .leading, spacing: 3) {
-                Text(s.wrappedValue.tx.name).font(.system(size: 14, weight: .medium)).foregroundStyle(AppTheme.textPrimary).lineLimit(1)
+                Text(s.wrappedValue.tx.name).font(.system(.subheadline, weight: .medium)).foregroundStyle(AppTheme.textPrimary).lineLimit(1)
                 Text(CurrencyManager.shared.formatted(s.wrappedValue.amount, currency: s.wrappedValue.currency))
-                    .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                    .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
             }
             Spacer(minLength: 6)
             // Tap to override the suggested category.
@@ -112,8 +112,8 @@ struct TidyCategoriesView: View {
                 }
             } label: {
                 HStack(spacing: 5) {
-                    Text(s.wrappedValue.category.displayLabel).font(.system(size: 12, weight: .semibold)).foregroundStyle(s.wrappedValue.category.color)
-                    Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold)).foregroundStyle(s.wrappedValue.category.color)
+                    Text(s.wrappedValue.category.displayLabel).font(.system(.caption, weight: .semibold)).foregroundStyle(s.wrappedValue.category.color)
+                    Image(systemName: "chevron.down").font(.system(.caption2, weight: .bold)).imageScale(.small).foregroundStyle(s.wrappedValue.category.color)
                 }
                 .padding(.horizontal, 10).padding(.vertical, 7)
                 .background(s.wrappedValue.category.color.opacity(0.12), in: Capsule())
@@ -135,7 +135,7 @@ struct TidyCategoriesView: View {
             dismiss()
         } label: {
             Text(String(format: loc("tidy.apply"), suggestions.count))
-                .font(.system(size: 16, weight: .bold)).foregroundStyle(AppTheme.bg)
+                .font(.system(.callout, weight: .bold)).foregroundStyle(AppTheme.bg)
                 .frame(maxWidth: .infinity).padding(.vertical, 16)
                 .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: 16))
         }
@@ -149,8 +149,8 @@ struct TidyCategoriesView: View {
                 Circle().fill(AppTheme.accent.opacity(0.12)).frame(width: 84, height: 84)
                 Image(systemName: "checkmark.seal.fill").font(.system(size: 36)).foregroundStyle(AppTheme.accent)
             }
-            Text(loc("tidy.none_title")).font(.system(size: 18, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
-            Text(loc("tidy.none_sub")).font(.system(size: 14)).foregroundStyle(AppTheme.textSecondary)
+            Text(loc("tidy.none_title")).font(.system(.body, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+            Text(loc("tidy.none_sub")).font(.system(.subheadline)).foregroundStyle(AppTheme.textSecondary)
                 .multilineTextAlignment(.center).padding(.horizontal, 40)
         }
     }

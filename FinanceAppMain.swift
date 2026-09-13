@@ -268,6 +268,12 @@ struct DiPoApp: App {
     var body: some Scene {
         WindowGroup {
             RootView()
+                // Text now follows the iPhone's text size setting (every size is
+                // an iOS text style). Capped at xxLarge — body 21pt — because the
+                // layouts still have fixed-height pieces (card faces, category
+                // tiles, the tab bar) that clip past that. Raise the cap as those
+                // are made to grow.
+                .dynamicTypeSize(...DynamicTypeSize.xxLarge)
                 // ✅ Force full re-render when language switches so all Text() updates instantly
                 .id(LanguageManager.shared.renderID)
                 .preferredColorScheme(resolvedColorScheme)

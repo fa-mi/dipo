@@ -337,7 +337,7 @@ struct VoiceCaptureView: View {
                 header
 
                 Text(statusText)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.system(.footnote, weight: .medium))
                     .foregroundStyle(AppTheme.textSecondary)
                     .lineLimit(1)
                     .frame(height: 18)
@@ -405,7 +405,7 @@ struct VoiceCaptureView: View {
                 dismiss()
             } label: {
                 Image(systemName: "chevron.left")
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.system(.subheadline, weight: .semibold))
                     .foregroundStyle(AppTheme.textPrimary)
                     .frame(width: 38, height: 38)
                     .background(AppTheme.cardDark, in: Circle())
@@ -413,7 +413,7 @@ struct VoiceCaptureView: View {
 .accessibilityLabel(loc("a11y.back"))
             Spacer()
             Text(loc("voice.title"))
-                .font(.system(size: 16, weight: .semibold))
+                .font(.system(.callout, weight: .semibold))
                 .foregroundStyle(AppTheme.textPrimary)
             Spacer()
             // Balances the back button so the title sits centred.
@@ -435,12 +435,12 @@ struct VoiceCaptureView: View {
             // An example rather than an empty void: the parser understands a
             // whole sentence, and nothing on screen would otherwise say so.
             Text(loc("voice.example"))
-                .font(.system(size: 20, weight: .medium))
+                .font(.system(.title3, weight: .medium))
                 .foregroundStyle(AppTheme.textSecondary.opacity(0.45))
                 .fixedSize(horizontal: false, vertical: true)
         } else {
             Text(voice.transcript)
-                .font(.system(size: 26, weight: .semibold))
+                .font(.system(.title, weight: .semibold))
                 .foregroundStyle(AppTheme.textPrimary)
                 .fixedSize(horizontal: false, vertical: true)
                 .animation(.easeOut(duration: 0.15), value: voice.transcript)
@@ -482,7 +482,7 @@ struct VoiceCaptureView: View {
                             .shadow(color: (isListening ? AppTheme.redFill : AppTheme.accentFill).opacity(0.35),
                                     radius: 16, y: 6)
                         Image(systemName: isListening ? "stop.fill" : "mic.fill")
-                            .font(.system(size: 30, weight: .semibold))
+                            .font(.system(.title, weight: .semibold))
                             .foregroundStyle(AppTheme.onVividFill)
                     }
                 }
@@ -490,7 +490,7 @@ struct VoiceCaptureView: View {
                 .buttonStyle(ScaleButtonStyle())
 
                 Text(isListening ? loc("voice.tap_stop") : loc("voice.tap_speak"))
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.system(.caption2, weight: .medium))
                     .foregroundStyle(AppTheme.textSecondary)
             }
 
@@ -507,7 +507,7 @@ struct VoiceCaptureView: View {
             HapticManager.shared.tap(); action()
         } label: {
             Image(systemName: icon)
-                .font(.system(size: 16, weight: .semibold))
+                .font(.system(.callout, weight: .semibold))
                 .foregroundStyle(enabled ? AppTheme.textPrimary : AppTheme.textSecondary.opacity(0.35))
                 .frame(width: 52, height: 52)
                 .background(AppTheme.cardDark, in: Circle())

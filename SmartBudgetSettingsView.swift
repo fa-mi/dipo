@@ -206,11 +206,11 @@ struct SmartBudgetSettingsSheet: View {
                     HStack(spacing: 14) {
                         ZStack {
                             RoundedRectangle(cornerRadius: 12).fill(AppTheme.purple.opacity(0.15)).frame(width: 46, height: 46)
-                            Image(systemName: "brain.fill").font(.system(size: 20)).foregroundStyle(AppTheme.purple)
+                            Image(systemName: "brain.fill").font(.system(.title3)).foregroundStyle(AppTheme.purple)
                         }
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(loc("profile.budget")).font(.system(size: 15, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
-                            Text(loc("budget.sub")).font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
+                            Text(loc("profile.budget")).font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                            Text(loc("budget.sub")).font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                         }
                         Spacer()
                         Toggle("", isOn: $isEnabled).tint(AppTheme.purple).labelsHidden()
@@ -239,13 +239,13 @@ struct SmartBudgetSettingsSheet: View {
                                 HStack(spacing: 12) {
                                     ZStack {
                                         Circle().fill(AppTheme.red.opacity(0.15)).frame(width: 36, height: 36)
-                                        Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 15)).foregroundStyle(AppTheme.red)
+                                        Image(systemName: "exclamationmark.triangle.fill").font(.system(.subheadline)).foregroundStyle(AppTheme.red)
                                     }
                                     VStack(alignment: .leading, spacing: 3) {
                                         Text(String(format: loc("budget.over_budget"), item.group.label))
-                                            .font(.system(size: 13, weight: .bold)).foregroundStyle(AppTheme.red)
+                                            .font(.system(.footnote, weight: .bold)).foregroundStyle(AppTheme.red)
                                         Text(String(format: loc("budget.over_detail"), actualPct, overPct, targetPct))
-                                            .font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
+                                            .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                                     }
                                     Spacer()
                                 }
@@ -334,7 +334,7 @@ struct SmartBudgetSettingsSheet: View {
                         HapticManager.shared.success()
                         dismiss()
                     }
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.system(.subheadline, weight: .semibold))
                     .foregroundStyle(canSave ? AppTheme.accent : AppTheme.textSecondary.opacity(0.4))
                     .disabled(!canSave)
                 }
@@ -418,10 +418,10 @@ struct SmartBudgetSettingsSheet: View {
                     .font(.system(size: 44))
                     .foregroundStyle(AppTheme.orange)
                 Text(loc("budget.choose_card"))
-                    .font(.system(size: 17, weight: .semibold))
+                    .font(.system(.body, weight: .semibold))
                     .foregroundStyle(AppTheme.textPrimary)
                 Text(loc("budget.card_hint"))
-                    .font(.system(size: 14))
+                    .font(.system(.subheadline))
                     .foregroundStyle(AppTheme.textSecondary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 32)
@@ -430,8 +430,8 @@ struct SmartBudgetSettingsSheet: View {
                     withAnimation(.spring(response: 0.3)) { selectedTab = .settings }
                 } label: {
                     HStack(spacing: 8) {
-                        Image(systemName: "slider.horizontal.3").font(.system(size: 14))
-                        Text(loc("budget.go_settings")).font(.system(size: 15, weight: .semibold))
+                        Image(systemName: "slider.horizontal.3").font(.system(.subheadline))
+                        Text(loc("budget.go_settings")).font(.system(.subheadline, weight: .semibold))
                     }
                     .foregroundStyle(AppTheme.onVividFill)
                     .padding(.horizontal, 28).padding(.vertical, 14)
@@ -446,21 +446,21 @@ struct SmartBudgetSettingsSheet: View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
                 Text(usesPayCycle ? loc("stats.period.pay_cycle") : loc("budget.this_month"))
-                    .font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
+                    .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                 Text(periodLabel)
-                    .font(.system(size: 15, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                    .font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
             }
             Spacer()
             if monthlyIncome > 0 {
                 VStack(alignment: .trailing, spacing: 2) {
-                    Text(incomeIsFromTransactions ? loc("budget.from_tx") : loc("budget.from_salary")).font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                    Text(incomeIsFromTransactions ? loc("budget.from_tx") : loc("budget.from_salary")).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                     Text(CurrencyManager.shared.formatted(monthlyIncome, currency: primary))
-                        .font(.system(size: 15, weight: .semibold)).foregroundStyle(AppTheme.accent)
+                        .font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.accent)
                 }
             } else {
                 HStack(spacing: 4) {
-                    Image(systemName: "exclamationmark.circle").font(.system(size: 12)).foregroundStyle(AppTheme.orange)
-                    Text(loc("budget.log_income")).font(.system(size: 12)).foregroundStyle(AppTheme.orange)
+                    Image(systemName: "exclamationmark.circle").font(.system(.caption)).foregroundStyle(AppTheme.orange)
+                    Text(loc("budget.log_income")).font(.system(.caption)).foregroundStyle(AppTheme.orange)
                 }
             }
         }
@@ -496,15 +496,15 @@ struct SmartBudgetSettingsSheet: View {
             HStack(spacing: 12) {
                 ZStack {
                     RoundedRectangle(cornerRadius: 12).fill(.white.opacity(0.18)).frame(width: 42, height: 42)
-                    Image(systemName: "sparkles").font(.system(size: 19, weight: .semibold)).foregroundStyle(.white)
+                    Image(systemName: "sparkles").font(.system(.title3, weight: .semibold)).foregroundStyle(.white)
                 }
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(loc("reco.cta_title")).font(.system(size: 15, weight: .bold)).foregroundStyle(.white)
-                    Text(loc("reco.cta_sub")).font(.system(size: 11)).foregroundStyle(.white.opacity(0.85))
+                    Text(loc("reco.cta_title")).font(.system(.subheadline, weight: .bold)).foregroundStyle(.white)
+                    Text(loc("reco.cta_sub")).font(.system(.caption2)).foregroundStyle(.white.opacity(0.85))
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: 4)
-                Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(.white.opacity(0.9))
+                Image(systemName: "chevron.right").font(.system(.footnote, weight: .semibold)).foregroundStyle(.white.opacity(0.9))
             }
             .padding(14)
             .background(
@@ -527,16 +527,16 @@ struct SmartBudgetSettingsSheet: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 6) {
                 Image(systemName: "sparkles")
-                    .font(.system(size: 12))
+                    .font(.system(.caption))
                     .foregroundStyle(AppTheme.purple)
                 Text(loc("budget.preset.section_title"))
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.system(.footnote, weight: .semibold))
                     .foregroundStyle(AppTheme.textSecondary)
             }
             .padding(.horizontal, 22)
 
             Text(loc("budget.preset.section_sub"))
-                .font(.system(size: 11))
+                .font(.system(.caption2))
                 .foregroundStyle(AppTheme.textSecondary.opacity(0.7))
                 .padding(.horizontal, 22)
 
@@ -573,19 +573,19 @@ struct SmartBudgetSettingsSheet: View {
                     .clipShape(Capsule())
                 VStack(alignment: .leading, spacing: 2) {
                     Text(loc("budget.applies_to"))
-                        .font(.system(size: 10, weight: .bold))
+                        .font(.system(.caption2, weight: .bold))
                         .foregroundStyle(AppTheme.textSecondary)
                         .tracking(0.5)
                     Text(main.isDigitalWallet && !main.walletProvider.isEmpty
                          ? main.walletProvider
                          : (main.holderName.isEmpty ? loc("wallet.untitled") : main.holderName))
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.system(.subheadline, weight: .semibold))
                         .foregroundStyle(AppTheme.textPrimary)
                         .lineLimit(1)
                 }
                 Spacer(minLength: 0)
                 Text(loc("main.badge"))
-                    .font(.system(size: 9, weight: .bold))
+                    .font(.system(.caption2, weight: .bold))
                     .foregroundStyle(AppTheme.accent)
                     .padding(.horizontal, 6).padding(.vertical, 2)
                     .background(AppTheme.accent.opacity(0.15), in: Capsule())
@@ -599,14 +599,14 @@ struct SmartBudgetSettingsSheet: View {
         // ── Budget Allocation ─────────────────────────────────────────────
         VStack(spacing: 6) {
             HStack {
-                Text(loc("budget.allocation")).font(.system(size: 15, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                Text(loc("budget.allocation")).font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
                 Spacer()
-                Text("\(totalPct)% / 100%").font(.system(size: 13, weight: .bold)).foregroundStyle(isBalanced ? AppTheme.accent : AppTheme.red)
+                Text("\(totalPct)% / 100%").font(.system(.footnote, weight: .bold)).foregroundStyle(isBalanced ? AppTheme.accent : AppTheme.red)
             }.padding(.horizontal, 22)
             if !isBalanced {
                 HStack(spacing: 6) {
-                    Image(systemName: "exclamationmark.circle.fill").font(.system(size: 12)).foregroundStyle(AppTheme.orange)
-                    Text(String(format: loc("budget.ratio_warning"), totalPct)).font(.system(size: 12)).foregroundStyle(AppTheme.orange)
+                    Image(systemName: "exclamationmark.circle.fill").font(.system(.caption)).foregroundStyle(AppTheme.orange)
+                    Text(String(format: loc("budget.ratio_warning"), totalPct)).font(.system(.caption)).foregroundStyle(AppTheme.orange)
                 }.padding(.horizontal, 22)
             }
         }
@@ -620,15 +620,15 @@ struct SmartBudgetSettingsSheet: View {
         // one screen left the user unsure which one was authoritative.
 
         VStack(alignment: .leading, spacing: 10) {
-            Text(loc("budget.whats_in")).font(.system(size: 13, weight: .semibold)).foregroundStyle(AppTheme.textSecondary).padding(.horizontal, 22)
+            Text(loc("budget.whats_in")).font(.system(.footnote, weight: .semibold)).foregroundStyle(AppTheme.textSecondary).padding(.horizontal, 22)
             ForEach(BudgetGroup.allCases, id: \.rawValue) { grp in
                 HStack(spacing: 10) {
-                    Image(systemName: grp.icon).font(.system(size: 14)).foregroundStyle(grp.color).frame(width: 28)
-                    Text(grp.label).font(.system(size: 13, weight: .medium)).foregroundStyle(AppTheme.textPrimary)
+                    Image(systemName: grp.icon).font(.system(.subheadline)).foregroundStyle(grp.color).frame(width: 28)
+                    Text(grp.label).font(.system(.footnote, weight: .medium)).foregroundStyle(AppTheme.textPrimary)
                     Spacer()
                     // Use displayLabel (localized) instead of rawValue (English-only)
                     Text(SmartBudgetManager.shared.categories(for: grp).map { $0.displayLabel }.joined(separator: ", "))
-                        .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary).multilineTextAlignment(.trailing)
+                        .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary).multilineTextAlignment(.trailing)
                 }.padding(.horizontal, 22)
             }
         }
@@ -648,9 +648,9 @@ struct SmartBudgetSettingsSheet: View {
                 investPct     = Self.pct(SmartBudgetManager.shared.investDebtRatio)
             } label: {
                 HStack(spacing: 8) {
-                    Image(systemName: "arrow.uturn.backward.circle").font(.system(size: 14))
+                    Image(systemName: "arrow.uturn.backward.circle").font(.system(.subheadline))
                     Text(loc("budget.reset_to_default"))
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.system(.subheadline, weight: .semibold))
                 }
                 .foregroundStyle(AppTheme.red)
                 .frame(maxWidth: .infinity)
@@ -726,25 +726,25 @@ struct BudgetPresetCard: View {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 8) {
                     Image(systemName: preset.icon)
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.system(.subheadline, weight: .semibold))
                         .foregroundStyle(preset.color)
                     Spacer()
                     if isSelected {
                         Image(systemName: "checkmark.circle.fill")
-                            .font(.system(size: 14))
+                            .font(.system(.subheadline))
                             .foregroundStyle(preset.color)
                     }
                 }
                 Text(preset.displayName)
-                    .font(.system(size: 13, weight: .bold))
+                    .font(.system(.footnote, weight: .bold))
                     .foregroundStyle(AppTheme.textPrimary)
                     .lineLimit(1)
                 // Ratio summary — at a glance "this preset is 50/30/20"
                 Text("\(Int(preset.ratios.daily * 100))/\(Int(preset.ratios.lifestyle * 100))/\(Int(preset.ratios.investDebt * 100))")
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.system(.caption2, weight: .semibold))
                     .foregroundStyle(preset.color)
                 Text(preset.tagline)
-                    .font(.system(size: 10))
+                    .font(.system(.caption2))
                     .foregroundStyle(AppTheme.textSecondary)
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)
@@ -778,10 +778,10 @@ struct BudgetRatioCard: View {
             HStack {
                 HStack(spacing: 8) {
                     Image(systemName: group.icon)
-                        .font(.system(size: 14))
+                        .font(.system(.subheadline))
                         .foregroundStyle(group.color)
                     Text(group.label)
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.system(.subheadline, weight: .semibold))
                         .foregroundStyle(AppTheme.textPrimary)
                 }
                 Spacer()
@@ -790,14 +790,14 @@ struct BudgetRatioCard: View {
                         if pct > 0 { pct -= 5; HapticManager.shared.tap() }
                     } label: {
                         Image(systemName: "minus")
-                            .font(.system(size: 12, weight: .bold))
+                            .font(.system(.caption, weight: .bold))
                             .foregroundStyle(AppTheme.textPrimary)
                             .frame(width: 32, height: 32)
                             .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: 8))
                     }
 .accessibilityLabel(loc("a11y.decrease"))
                     Text("\(pct)%")
-                        .font(.system(size: 18, weight: .bold))
+                        .font(.system(.body, weight: .bold))
                         .foregroundStyle(group.color)
                         .frame(width: 50, alignment: .center)
                         .contentTransition(.numericText())
@@ -805,7 +805,7 @@ struct BudgetRatioCard: View {
                         if pct < maxAllowed { pct += 5; HapticManager.shared.tap() }
                     } label: {
                         Image(systemName: "plus")
-                            .font(.system(size: 12, weight: .bold))
+                            .font(.system(.caption, weight: .bold))
                             .foregroundStyle(AppTheme.textPrimary)
                             .frame(width: 32, height: 32)
                             .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: 8))
@@ -866,17 +866,17 @@ struct BudgetGroupCard: View {
             VStack(spacing: 12) {
                 HStack {
                     HStack(spacing: 8) {
-                        Image(systemName: group.icon).font(.system(size: 14)).foregroundStyle(group.color)
-                        Text(group.label).font(.system(size: 14, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                        Image(systemName: group.icon).font(.system(.subheadline)).foregroundStyle(group.color)
+                        Text(group.label).font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
                     }
                     Spacer()
                     if isOver {
                         Text("\(actualPct)% / \(targetPct)%")
-                            .font(.system(size: 10, weight: .bold)).foregroundStyle(AppTheme.red)
+                            .font(.system(.caption2, weight: .bold)).foregroundStyle(AppTheme.red)
                             .padding(.horizontal, 8).padding(.vertical, 3)
                             .background(AppTheme.red.opacity(0.12), in: Capsule())
                     }
-                    Image(systemName: "chevron.right").font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
+                    Image(systemName: "chevron.right").font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                 }
                 GeometryReader { g in
                     ZStack(alignment: .leading) {
@@ -887,16 +887,16 @@ struct BudgetGroupCard: View {
                 }.frame(height: 7)
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(loc("budget.spent")).font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                        Text(loc("budget.spent")).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                         Text(CurrencyManager.shared.formatted(spent, currency: currency))
-                            .font(.system(size: 15, weight: .bold)).foregroundStyle(isOver ? AppTheme.red : AppTheme.textPrimary)
+                            .font(.system(.subheadline, weight: .bold)).foregroundStyle(isOver ? AppTheme.red : AppTheme.textPrimary)
                     }
                     Spacer()
                     if limit > 0 {
                         VStack(alignment: .trailing, spacing: 2) {
-                            Text(String(format: loc("budget.target_label"), targetPct)).font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                            Text(String(format: loc("budget.target_label"), targetPct)).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                             Text(CurrencyManager.shared.formatted(limit, currency: currency))
-                                .font(.system(size: 15, weight: .bold)).foregroundStyle(group.color)
+                                .font(.system(.subheadline, weight: .bold)).foregroundStyle(group.color)
                         }
                     }
                 }
@@ -909,18 +909,18 @@ struct BudgetGroupCard: View {
                                     RoundedRectangle(cornerRadius: 9).fill(tx.displayIconBg).frame(width: 30, height: 30)
                                     Text(tx.icon).font(.system(size: tx.icon.count == 1 ? 12 : 15)).foregroundStyle(.white)
                                 }
-                                Text(tx.name).font(.system(size: 12, weight: .medium)).foregroundStyle(AppTheme.textPrimary).lineLimit(1)
+                                Text(tx.name).font(.system(.caption, weight: .medium)).foregroundStyle(AppTheme.textPrimary).lineLimit(1)
                                 Spacer()
                                 Text(CurrencyManager.shared.formatted(abs(tx.amount), currency: tx.currency))
-                                    .font(.system(size: 12, weight: .semibold)).foregroundStyle(AppTheme.textSecondary)
+                                    .font(.system(.caption, weight: .semibold)).foregroundStyle(AppTheme.textSecondary)
                             }
                         }
-                        if groupTx.count > 2 { Text(String(format: loc("common.plus_more"), groupTx.count - 2)).font(.system(size: 11)).foregroundStyle(group.color).frame(maxWidth: .infinity, alignment: .leading) }
+                        if groupTx.count > 2 { Text(String(format: loc("common.plus_more"), groupTx.count - 2)).font(.system(.caption2)).foregroundStyle(group.color).frame(maxWidth: .infinity, alignment: .leading) }
                     }
                 } else {
                     HStack(spacing: 6) {
-                        Image(systemName: "checkmark.circle").font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
-                        Text(loc("tx.no_spending")).font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
+                        Image(systemName: "checkmark.circle").font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
+                        Text(loc("tx.no_spending")).font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                     }
                 }
             }
@@ -1050,7 +1050,7 @@ struct BudgetGroupDetailView: View {
                 if isOver {
                     GeometryReader { g in
                         Text(loc("budget.limit_marker"))
-                            .font(.system(size: 9, weight: .bold))
+                            .font(.system(.caption2, weight: .bold))
                             .foregroundStyle(AppTheme.textSecondary)
                             .offset(x: max(min(g.size.width * CGFloat(limitFraction) - 12, g.size.width - 30), 0))
                     }
@@ -1058,7 +1058,7 @@ struct BudgetGroupDetailView: View {
                 }
             }
             Text("\(usedOfBudgetPct)%")
-                .font(.system(size: 15, weight: .heavy))
+                .font(.system(.subheadline, weight: .heavy))
                 .foregroundStyle(isOver ? AppTheme.red : group.color)
                 .lineLimit(1).minimumScaleFactor(0.7)
                 .frame(width: 46, alignment: .trailing)
@@ -1093,17 +1093,17 @@ struct BudgetGroupDetailView: View {
                         HStack(spacing: 14) {
                             ZStack {
                                 RoundedRectangle(cornerRadius: 14).fill(isOver ? AppTheme.red.opacity(0.12) : group.color.opacity(0.12)).frame(width: 52, height: 52)
-                                Image(systemName: group.icon).font(.system(size: 24)).foregroundStyle(isOver ? AppTheme.red : group.color)
+                                Image(systemName: group.icon).font(.system(.title2)).foregroundStyle(isOver ? AppTheme.red : group.color)
                             }
                             VStack(alignment: .leading, spacing: 4) {
-                                Text(group.label).font(.system(size: 18, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
-                                Text(SmartBudgetManager.shared.categories(for: group).map { $0.rawValue }.joined(separator: " · ")).font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
+                                Text(group.label).font(.system(.body, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
+                                Text(SmartBudgetManager.shared.categories(for: group).map { $0.rawValue }.joined(separator: " · ")).font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                             }
                             Spacer()
                             if isOver {
                                 VStack(spacing: 2) {
-                                    Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 12)).foregroundStyle(AppTheme.red)
-                                    Text(loc("debt.over")).font(.system(size: 10, weight: .bold)).foregroundStyle(AppTheme.red)
+                                    Image(systemName: "exclamationmark.triangle.fill").font(.system(.caption)).foregroundStyle(AppTheme.red)
+                                    Text(loc("debt.over")).font(.system(.caption2, weight: .bold)).foregroundStyle(AppTheme.red)
                                 }
                                 .padding(.horizontal, 10).padding(.vertical, 6)
                                 .background(AppTheme.red.opacity(0.1), in: RoundedRectangle(cornerRadius: 10))
@@ -1120,7 +1120,7 @@ struct BudgetGroupDetailView: View {
                                 Text(isOver
                                      ? String(format: loc("budget.over_detail"), actualPct, overPct, targetPct)
                                      : String(format: loc("budget.under_detail"), actualPct, targetPct))
-                                    .font(.system(size: 11, weight: .medium))
+                                    .font(.system(.caption2, weight: .medium))
                                     .foregroundStyle(isOver ? AppTheme.red : AppTheme.textSecondary)
                                     .fixedSize(horizontal: false, vertical: true)
                             }
@@ -1128,7 +1128,7 @@ struct BudgetGroupDetailView: View {
                             Text(groupTx.count == 1
                                  ? loc("budget.tx_count_one")
                                  : String(format: loc("budget.tx_count"), groupTx.count))
-                                .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                                .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                                 // Was a bare .fixedSize(), which locks BOTH axes:
                                 // the text refused to wrap AND refused to shrink.
                                 // Next to the long left-hand sentence that pushed
@@ -1147,21 +1147,21 @@ struct BudgetGroupDetailView: View {
 
                         HStack(spacing: 0) {
                             VStack(spacing: 5) {
-                                HStack(spacing: 4) { Circle().fill(isOver ? AppTheme.red : AppTheme.textSecondary).frame(width: 6, height: 6); Text(loc("budget.spent")).font(.system(size: 11, weight: .medium)).foregroundStyle(AppTheme.textSecondary) }
-                                Text(fmt(spent)).font(.system(size: 14, weight: .bold)).foregroundStyle(isOver ? AppTheme.red : AppTheme.textPrimary).minimumScaleFactor(0.6).lineLimit(1)
-                                Text(String(format: loc("budget.pct_income"), actualPct)).font(.system(size: 10)).foregroundStyle(AppTheme.textSecondary)
+                                HStack(spacing: 4) { Circle().fill(isOver ? AppTheme.red : AppTheme.textSecondary).frame(width: 6, height: 6); Text(loc("budget.spent")).font(.system(.caption2, weight: .medium)).foregroundStyle(AppTheme.textSecondary) }
+                                Text(fmt(spent)).font(.system(.subheadline, weight: .bold)).foregroundStyle(isOver ? AppTheme.red : AppTheme.textPrimary).minimumScaleFactor(0.6).lineLimit(1)
+                                Text(String(format: loc("budget.pct_income"), actualPct)).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                             }.frame(maxWidth: .infinity).padding(.vertical, 4)
                             Rectangle().fill(AppTheme.cardMid).frame(width: 1, height: 52)
                             VStack(spacing: 5) {
-                                HStack(spacing: 4) { Circle().fill(group.color).frame(width: 6, height: 6); Text(loc("debt.budget")).font(.system(size: 11, weight: .medium)).foregroundStyle(AppTheme.textSecondary) }
-                                Text(limit > 0 ? fmt(limit) : "—").font(.system(size: 14, weight: .bold)).foregroundStyle(group.color).minimumScaleFactor(0.6).lineLimit(1)
-                                Text(String(format: loc("budget.pct_income"), targetPct)).font(.system(size: 10)).foregroundStyle(AppTheme.textSecondary)
+                                HStack(spacing: 4) { Circle().fill(group.color).frame(width: 6, height: 6); Text(loc("debt.budget")).font(.system(.caption2, weight: .medium)).foregroundStyle(AppTheme.textSecondary) }
+                                Text(limit > 0 ? fmt(limit) : "—").font(.system(.subheadline, weight: .bold)).foregroundStyle(group.color).minimumScaleFactor(0.6).lineLimit(1)
+                                Text(String(format: loc("budget.pct_income"), targetPct)).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                             }.frame(maxWidth: .infinity).padding(.vertical, 4)
                             Rectangle().fill(AppTheme.cardMid).frame(width: 1, height: 52)
                             VStack(spacing: 5) {
-                                HStack(spacing: 4) { Circle().fill(isOver ? AppTheme.red : AppTheme.accent).frame(width: 6, height: 6); Text(isOver ? loc("budget.over_by") : loc("budget.left")).font(.system(size: 11, weight: .medium)).foregroundStyle(AppTheme.textSecondary) }
-                                Text(isOver ? fmt(overAmt) : fmt(remaining)).font(.system(size: 14, weight: .bold)).foregroundStyle(isOver ? AppTheme.red : AppTheme.accent).minimumScaleFactor(0.6).lineLimit(1)
-                                Text(isOver ? "+\(overPct)%" : String(format: loc("budget.pct_income"), income > 0 ? Int((remaining/income)*100) : 0)).font(.system(size: 10)).foregroundStyle(AppTheme.textSecondary)
+                                HStack(spacing: 4) { Circle().fill(isOver ? AppTheme.red : AppTheme.accent).frame(width: 6, height: 6); Text(isOver ? loc("budget.over_by") : loc("budget.left")).font(.system(.caption2, weight: .medium)).foregroundStyle(AppTheme.textSecondary) }
+                                Text(isOver ? fmt(overAmt) : fmt(remaining)).font(.system(.subheadline, weight: .bold)).foregroundStyle(isOver ? AppTheme.red : AppTheme.accent).minimumScaleFactor(0.6).lineLimit(1)
+                                Text(isOver ? "+\(overPct)%" : String(format: loc("budget.pct_income"), income > 0 ? Int((remaining/income)*100) : 0)).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                             }.frame(maxWidth: .infinity).padding(.vertical, 4)
                         }
                         .padding(.horizontal, 10).padding(.bottom, 14)
@@ -1169,9 +1169,9 @@ struct BudgetGroupDetailView: View {
                         if !isOver && remaining > 0 && daysLeft > 0 && limit > 0 {
                             Divider().background(AppTheme.cardMid).padding(.horizontal, 18)
                             HStack(spacing: 8) {
-                                Image(systemName: "calendar").font(.system(size: 12)).foregroundStyle(group.color)
+                                Image(systemName: "calendar").font(.system(.caption)).foregroundStyle(group.color)
                                 Text(String(format: loc("budget.pace_hint"), fmt(remaining / Double(daysLeft)), daysLeft, targetPct))
-                                    .font(.system(size: 12, weight: .medium)).foregroundStyle(AppTheme.textSecondary)
+                                    .font(.system(.caption, weight: .medium)).foregroundStyle(AppTheme.textSecondary)
                                 Spacer()
                             }.padding(.horizontal, 18).padding(.vertical, 12)
                         }
@@ -1186,7 +1186,7 @@ struct BudgetGroupDetailView: View {
                     // group's spending, so the bars and the % labels agree.
                     if !catBreakdown.isEmpty && income > 0 {
                         VStack(alignment: .leading, spacing: 14) {
-                            Text(loc("tx.by_category")).font(.system(size: 14, weight: .semibold)).foregroundStyle(AppTheme.textPrimary).padding(.horizontal, 22)
+                            Text(loc("tx.by_category")).font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.textPrimary).padding(.horizontal, 22)
 
                             compositionStrip.padding(.horizontal, 22)
 
@@ -1196,15 +1196,15 @@ struct BudgetGroupDetailView: View {
                                     HStack(spacing: 12) {
                                         ZStack {
                                             RoundedRectangle(cornerRadius: 9).fill(item.cat.color.opacity(0.14)).frame(width: 36, height: 36)
-                                            Image(systemName: item.cat.icon).font(.system(size: 15)).foregroundStyle(item.cat.color)
+                                            Image(systemName: item.cat.icon).font(.system(.subheadline)).foregroundStyle(item.cat.color)
                                         }
                                         VStack(alignment: .leading, spacing: 6) {
                                             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                                                Text(item.cat.rawValue).font(.system(size: 13, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                                                Text(item.cat.rawValue).font(.system(.footnote, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
                                                 Text("\(Int((share * 100).rounded()))%")
-                                                    .font(.system(size: 11, weight: .bold)).foregroundStyle(item.cat.color)
+                                                    .font(.system(.caption2, weight: .bold)).foregroundStyle(item.cat.color)
                                                 Spacer(minLength: 6)
-                                                Text(fmt(item.amount)).font(.system(size: 13, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                                                Text(fmt(item.amount)).font(.system(.footnote, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
                                                     .lineLimit(1).minimumScaleFactor(0.7)
                                             }
                                             GeometryReader { g in
@@ -1232,15 +1232,15 @@ struct BudgetGroupDetailView: View {
                         let currencyCode = primary
                         
                         VStack(alignment: .leading, spacing: 16) {
-                            Text(loc("home.transactions")).font(.system(size: 14, weight: .semibold)).foregroundStyle(AppTheme.textPrimary).padding(.horizontal, 22)
+                            Text(loc("home.transactions")).font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.textPrimary).padding(.horizontal, 22)
                             VStack(spacing: 12) {
                                 ForEach(grouped, id: \.date) { grp in
                                     VStack(alignment: .leading, spacing: 8) {
                                         let dayTotal = grp.txs.reduce(0) { $0 + CurrencyManager.shared.convert(abs($1.amount), from: $1.currency, to: currency) }
                                         HStack {
-                                            Text(grp.label).font(.system(size: 12, weight: .semibold)).foregroundStyle(AppTheme.textSecondary)
+                                            Text(grp.label).font(.system(.caption, weight: .semibold)).foregroundStyle(AppTheme.textSecondary)
                                             Spacer()
-                                            Text(CurrencyManager.shared.formatted(dayTotal, currency: currencyCode)).font(.system(size: 12, weight: .medium)).foregroundStyle(AppTheme.red.opacity(0.7))
+                                            Text(CurrencyManager.shared.formatted(dayTotal, currency: currencyCode)).font(.system(.caption, weight: .medium)).foregroundStyle(AppTheme.red.opacity(0.7))
                                         }.padding(.horizontal, 22)
                                         VStack(spacing: 0) {
                                             ForEach(grp.txs) { tx in
@@ -1251,18 +1251,18 @@ struct BudgetGroupDetailView: View {
                                                         Text(tx.icon).font(.system(size: tx.icon.count == 1 ? 16 : 20)).foregroundStyle(.white)
                                                     }
                                                     VStack(alignment: .leading, spacing: 3) {
-                                                        Text(tx.name).font(.system(size: 14, weight: .medium)).foregroundStyle(AppTheme.textPrimary)
+                                                        Text(tx.name).font(.system(.subheadline, weight: .medium)).foregroundStyle(AppTheme.textPrimary)
                                                         HStack(spacing: 6) {
-                                                            Text(tx.date.formatted(date: .omitted, time: .shortened)).font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
-                                                            Text(tx.category.rawValue).font(.system(size: 10, weight: .semibold)).foregroundStyle(tx.category.color)
+                                                            Text(tx.date.formatted(date: .omitted, time: .shortened)).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
+                                                            Text(tx.category.rawValue).font(.system(.caption2, weight: .semibold)).foregroundStyle(tx.category.color)
                                                                 .padding(.horizontal, 7).padding(.vertical, 2).background(tx.category.color.opacity(0.12), in: Capsule())
                                                         }
                                                     }
                                                     Spacer()
                                                     VStack(alignment: .trailing, spacing: 2) {
-                                                        Text(CurrencyManager.shared.formatted(abs(tx.amount), currency: tx.currency)).font(.system(size: 14, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                                                        Text(CurrencyManager.shared.formatted(abs(tx.amount), currency: tx.currency)).font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
                                                         if tx.currency.uppercased() != currencyCode.uppercased() {
-                                                            Text("≈ \(CurrencyManager.shared.formatted(converted, currency: currencyCode))").font(.system(size: 10)).foregroundStyle(AppTheme.textSecondary)
+                                                            Text("≈ \(CurrencyManager.shared.formatted(converted, currency: currencyCode))").font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                                                         }
                                                         // Per-transaction "% of income" removed — a single tx is a
                                                         // tiny fraction of monthly income, so it always rounded to
@@ -1284,7 +1284,7 @@ struct BudgetGroupDetailView: View {
                     } else {
                         VStack(spacing: 12) {
                             Image(systemName: "tray").font(.system(size: 36)).foregroundStyle(AppTheme.textSecondary)
-                            Text(String(format: loc("budget.no_spending"), group.label.lowercased())).font(.system(size: 15)).foregroundStyle(AppTheme.textSecondary)
+                            Text(String(format: loc("budget.no_spending"), group.label.lowercased())).font(.system(.subheadline)).foregroundStyle(AppTheme.textSecondary)
                         }.padding(.top, 32)
                     }
                     Spacer(minLength: 40)

@@ -904,7 +904,7 @@ struct NotificationCenterView: View {
                     if !mgr.items.isEmpty {
                         Button(loc("common.clear")) { mgr.clearAll() }
                             .foregroundStyle(AppTheme.red)
-                            .font(.system(size: 13))
+                            .font(.system(.footnote))
                     }
                 }
             }
@@ -926,7 +926,7 @@ struct NotificationCenterView: View {
             HStack(spacing: 14) {
                 ZStack {
                     Circle().fill(item.iconColor.opacity(0.15)).frame(width: 44, height: 44)
-                    Image(systemName: item.icon).font(.system(size: 20)).foregroundStyle(item.iconColor)
+                    Image(systemName: item.icon).font(.system(.title3)).foregroundStyle(item.iconColor)
                 }
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 6) {
@@ -936,7 +936,7 @@ struct NotificationCenterView: View {
                         // Distinguish support replies at a glance with a small tag.
                         if item.isTicketReply {
                             Text(loc("notif.tag.support"))
-                                .font(.system(size: 9, weight: .bold))
+                                .font(.system(.caption2, weight: .bold))
                                 .tracking(0.4)
                                 .foregroundStyle(item.iconColor)
                                 .padding(.horizontal, 6).padding(.vertical, 2)
@@ -946,14 +946,14 @@ struct NotificationCenterView: View {
                         if !item.isRead {
                             Circle().fill(item.iconColor).frame(width: 8, height: 8)
                         }
-                        Text(item.relativeTime).font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                        Text(item.relativeTime).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                     }
                     // Ticket replies stay concise in the list (one truncated
                     // line) — the full reply is shown when the row is tapped
                     // (detail view) and lives in the support ticket thread.
                     // Other notifications keep their full body.
                     Text(item.body)
-                        .font(.system(size: 13))
+                        .font(.system(.footnote))
                         .foregroundStyle(AppTheme.textSecondary)
                         .lineSpacing(2)
                         .lineLimit(item.isTicketReply ? 1 : nil)
@@ -991,9 +991,9 @@ struct NotificationCenterView: View {
         VStack(spacing: 14) {
             Image(systemName: "bell.slash").font(.system(size: 40)).foregroundStyle(AppTheme.textSecondary)
                 .gentleFloat()
-            Text(loc("notif.empty")).font(.system(size: 16, weight: .medium)).foregroundStyle(AppTheme.textSecondary)
+            Text(loc("notif.empty")).font(.system(.callout, weight: .medium)).foregroundStyle(AppTheme.textSecondary)
             Text(loc("notif.info"))
-                .font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary.opacity(0.7))
+                .font(.system(.footnote)).foregroundStyle(AppTheme.textSecondary.opacity(0.7))
                 .multilineTextAlignment(.center)
         }
     }
@@ -1042,16 +1042,16 @@ struct NotificationDetailView: View {
                                     .fill(item.iconColor.opacity(0.15))
                                     .frame(width: 54, height: 54)
                                 Image(systemName: item.icon)
-                                    .font(.system(size: 24))
+                                    .font(.system(.title2))
                                     .foregroundStyle(item.iconColor)
                             }
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(item.title)
-                                    .font(.system(size: 20, weight: .bold))
+                                    .font(.system(.title3, weight: .bold))
                                     .foregroundStyle(AppTheme.textPrimary)
                                     .fixedSize(horizontal: false, vertical: true)
                                 Text(item.relativeTime)
-                                    .font(.system(size: 12))
+                                    .font(.system(.caption))
                                     .foregroundStyle(AppTheme.textSecondary)
                             }
                             Spacer(minLength: 0)
@@ -1073,9 +1073,9 @@ struct NotificationDetailView: View {
                                         .overlay(
                                             VStack(spacing: 6) {
                                                 Image(systemName: "photo")
-                                                    .font(.system(size: 26))
+                                                    .font(.system(.title))
                                                 Text(loc("notif.image_failed"))
-                                                    .font(.system(size: 12))
+                                                    .font(.system(.caption))
                                             }
                                             .foregroundStyle(AppTheme.textSecondary)
                                         )
@@ -1093,7 +1093,7 @@ struct NotificationDetailView: View {
                         // codes / details the admin sends.
                         if !item.body.isEmpty {
                             Text(item.body)
-                                .font(.system(size: 15))
+                                .font(.system(.subheadline))
                                 .foregroundStyle(AppTheme.textPrimary)
                                 .lineSpacing(4)
                                 .fixedSize(horizontal: false, vertical: true)
@@ -1109,14 +1109,14 @@ struct NotificationDetailView: View {
                             VStack(alignment: .leading, spacing: 8) {
                                 HStack(spacing: 7) {
                                     Image(systemName: "lightbulb.fill")
-                                        .font(.system(size: 13))
+                                        .font(.system(.footnote))
                                         .foregroundStyle(AppTheme.orange)
                                     Text(loc("notif.advice_title"))
-                                        .font(.system(size: 13, weight: .semibold))
+                                        .font(.system(.footnote, weight: .semibold))
                                         .foregroundStyle(AppTheme.textPrimary)
                                 }
                                 Text(advice)
-                                    .font(.system(size: 14))
+                                    .font(.system(.subheadline))
                                     .foregroundStyle(AppTheme.textSecondary)
                                     .lineSpacing(3)
                                     .fixedSize(horizontal: false, vertical: true)
@@ -1135,9 +1135,9 @@ struct NotificationDetailView: View {
                                     } label: {
                                         HStack(spacing: 8) {
                                             Text(route.actionLabel)
-                                                .font(.system(size: 14, weight: .semibold))
+                                                .font(.system(.subheadline, weight: .semibold))
                                             Image(systemName: "arrow.right")
-                                                .font(.system(size: 12, weight: .semibold))
+                                                .font(.system(.caption, weight: .semibold))
                                         }
                                         .foregroundStyle(AppTheme.onVividFill)
                                         .frame(maxWidth: .infinity)
@@ -1163,12 +1163,12 @@ struct NotificationDetailView: View {
                             } label: {
                                 HStack(spacing: 8) {
                                     Image(systemName: item.isTicketReply ? "bubble.left.and.bubble.right.fill" : "safari.fill")
-                                        .font(.system(size: 15))
+                                        .font(.system(.subheadline))
                                     Text(item.isTicketReply ? loc("notif.view_ticket") : loc("notif.learn_more"))
-                                        .font(.system(size: 15, weight: .semibold))
+                                        .font(.system(.subheadline, weight: .semibold))
                                     Spacer()
                                     Image(systemName: "arrow.up.right")
-                                        .font(.system(size: 13, weight: .semibold))
+                                        .font(.system(.footnote, weight: .semibold))
                                 }
                                 .foregroundStyle(.white)
                                 .padding(.vertical, 15)
