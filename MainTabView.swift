@@ -29,6 +29,8 @@ struct MainTabView: View {
     /// Screenshot from the Back Tap shortcut, presented straight to the scanner.
     @State private var shortcutScan: ScanPayload? = nil
     @Environment(\.scenePhase) private var scenePhase
+    /// Tabs the user has opened this session. Home is always mounted.
+    @State private var visitedTabs: Set<AppTab> = [.home]
 
     /// Observed so the gate reacts the moment a main card is chosen or cleared.
     @State private var sb = SmartBudgetManager.shared
@@ -84,20 +86,32 @@ struct MainTabView: View {
         ZStack(alignment: .bottom) {
             ZStack {
                 ForEach(AppTab.allCases, id: \.self) { tab in
-                    Group {
-                        switch tab {
-                        case .home:    HomeView(vm: vm)
-                        case .stats:   StatisticsView(statsVM: StatsViewModel(), appVM: vm)
-                        case .add:     Color.clear
-                        case .cards:   CardListView(vm: vm)
-                        case .profile: ProfileView(authVM: authVM)
+                    // Mounted on first visit, then kept. All five used to mount at
+                    // launch and stay live behind Home at opacity 0, so every
+                    // transaction added on Home also re-evaluated Statistics (the
+                    // largest screen in the app) and Profile. Kept after the first
+                    // visit so scroll position and choices survive switching back.
+                    if vm.activeTab == tab || visitedTabs.contains(tab) {
+                        Group {
+                            switch tab {
+                            case .home:    HomeView(vm: vm)
+                            case .stats:   StatisticsView(statsVM: StatsViewModel(), appVM: vm)
+                            case .add:     Color.clear
+                            case .cards:   CardListView(vm: vm)
+                            case .profile: ProfileView(authVM: authVM)
+                            }
                         }
+                        .opacity(vm.activeTab == tab ? 1 : 0)
+                        .scaleEffect(vm.activeTab == tab ? 1 : 0.97)
+                        .animation(.spring(response: 0.4, dampingFraction: 0.85), value: vm.activeTab)
+                        // A tab at opacity 0 is still in the tree; without this,
+                        // VoiceOver could land on buttons of a screen nobody can see.
+                        .accessibilityHidden(vm.activeTab != tab)
+                        .allowsHitTesting(vm.activeTab == tab)
                     }
-                    .opacity(vm.activeTab == tab ? 1 : 0)
-                    .scaleEffect(vm.activeTab == tab ? 1 : 0.97)
-                    .animation(.spring(response: 0.4, dampingFraction: 0.85), value: vm.activeTab)
                 }
             }
+            .onChange(of: vm.activeTab) { _, tab in visitedTabs.insert(tab) }
 
             // No-card toast banner
             if showNoCardBanner {
