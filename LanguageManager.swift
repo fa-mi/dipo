@@ -525,11 +525,13 @@ final class LanguageManager {
         // mirrored into App Group UserDefaults so the widget extension
         // (which can't access LanguageManager) can render in the user's
         // chosen language.
-        "widget.label.expenses":     "Money out",
-        "widget.label.income":       "Money in",
+        "widget.label.expenses":     "Expense",
+        "widget.label.income":       "Income",
         "widget.label.quickAdd":     "Add\nTransaction",
         "widget.label.topCategory":  "Biggest",
-        "widget.label.weeklyAvg":    "Spending / week",
+        "widget.label.weeklyAvg":    "per week",
+        "widget.label.insights":     "Spending insights",
+        "widget.label.upgrade":      "Unlock with Royal",
         // Backup preview — shown after file pick, before destructive confirm
         "backup.preview.title":      "Review Backup File",
         "backup.preview.subtitle":   "Check the contents below before replacing your current data.",
@@ -2778,11 +2780,13 @@ final class LanguageManager {
         // Widget Home Screen — di-resolve di main app, dikirim via App Group
         // UserDefaults supaya widget extension bisa render dalam bahasa
         // yang dipilih user (extension tidak bisa akses LanguageManager).
-        "widget.label.expenses":     "Uang keluar",
-        "widget.label.income":       "Uang masuk",
+        "widget.label.expenses":     "Pengeluaran",
+        "widget.label.income":       "Pemasukan",
         "widget.label.quickAdd":     "Tambah\nTransaksi",
         "widget.label.topCategory":  "Terbesar",
-        "widget.label.weeklyAvg":    "Jajan / minggu",
+        "widget.label.weeklyAvg":    "per minggu",
+        "widget.label.insights":     "Ringkasan belanja",
+        "widget.label.upgrade":      "Buka dengan Royal",
         // Backup preview (ID)
         "backup.preview.title":      "Tinjau File Cadangan",
         "backup.preview.subtitle":   "Cek isi file ini sebelum mengganti datamu sekarang.",

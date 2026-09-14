@@ -53,6 +53,8 @@ enum WidgetDataSync {
         static let labelQuickAdd            = "widget.label.quickAdd"
         static let labelTopCategory         = "widget.label.topCategory"
         static let labelWeeklyAvg           = "widget.label.weeklyAvg"
+        static let labelInsights            = "widget.label.insights"
+        static let labelUpgrade             = "widget.label.upgrade"
     }
 
     /// Returns nil if the App Group capability isn't enabled yet — fail
@@ -98,6 +100,7 @@ enum WidgetDataSync {
             Key.topCategoryPercent, Key.weeklyAvgFormatted,
             Key.labelExpenses, Key.labelIncome, Key.labelQuickAdd,
             Key.labelTopCategory, Key.labelWeeklyAvg,
+            Key.labelInsights, Key.labelUpgrade,
         ]
         for key in keys { store.removeObject(forKey: key) }
         WidgetCenter.shared.reloadAllTimelines()
@@ -203,15 +206,20 @@ enum WidgetDataSync {
         let expensesFormatted = CurrencyManager.shared.formatted(expenses, currency: preferred)
         let incomeFormatted   = CurrencyManager.shared.formatted(income,   currency: preferred)
 
-        // Localized month label like "Mei 2026" — follows in-app language.
-        let monthFmt = DateFormatter()
-        monthFmt.locale = LanguageManager.shared.currentLocale
-        monthFmt.dateFormat = DateFormatter.dateFormat(
-            fromTemplate: "MMMMyyyy",
-            options: 0,
-            locale: monthFmt.locale
-        )
-        let monthLabel = monthFmt.string(from: monthStart)
+        // The window the total covers, in the words Home uses for the same
+        // figure. This printed the MONTH NAME of the window's start, so with a
+        // payday on the 25th the widget said "August 2026" all through
+        // September, over a total that was September's spending.
+        let periodFmt = DateFormatter()
+        periodFmt.locale = LanguageManager.shared.currentLocale
+        let monthLabel: String
+        if MainCard.payDay(schedules) != nil {
+            periodFmt.setLocalizedDateFormatFromTemplate("d MMM")
+            monthLabel = String(format: loc("home.since_payday"), periodFmt.string(from: monthStart))
+        } else {
+            periodFmt.setLocalizedDateFormatFromTemplate("MMMMyyyy")
+            monthLabel = periodFmt.string(from: monthStart)
+        }
 
         // ── Royal-only insights ────────────────────────────────────────
         // Top category by spend in the current month + its % share.
@@ -265,6 +273,8 @@ enum WidgetDataSync {
         let labelQuickAdd    = loc("widget.label.quickAdd")
         let labelTopCategory = loc("widget.label.topCategory")
         let labelWeeklyAvg   = loc("widget.label.weeklyAvg")
+        let labelInsights    = loc("widget.label.insights")
+        let labelUpgrade     = loc("widget.label.upgrade")
 
         // ── Write everything ───────────────────────────────────────────
         store.set(expenses,             forKey: Key.monthlyExpenses)
@@ -286,6 +296,8 @@ enum WidgetDataSync {
         store.set(labelQuickAdd,    forKey: Key.labelQuickAdd)
         store.set(labelTopCategory, forKey: Key.labelTopCategory)
         store.set(labelWeeklyAvg,   forKey: Key.labelWeeklyAvg)
+        store.set(labelInsights,    forKey: Key.labelInsights)
+        store.set(labelUpgrade,     forKey: Key.labelUpgrade)
 
         WidgetCenter.shared.reloadAllTimelines()
     }
@@ -314,6 +326,16 @@ struct RootView: View {
     // those events. We only need the count for change detection, not the
     // rows themselves, so the read cost is trivial.
     @Query private var liveTxs: [TxRecord]
+    /// Salary schedules decide the window the widget totals (the pay cycle).
+    @Query private var liveSalaries: [SalarySchedule]
+
+    /// Everything about the schedules that moves the widget's window or its
+    /// income: a change to any of it re-renders the Home Screen widget.
+    private var salarySignature: String {
+        liveSalaries.map {
+            "\($0.id)|\($0.dayOfMonth)|\($0.amount)|\($0.currency)|\($0.isActive)|\($0.isPinned)|\($0.cardID?.uuidString ?? "")"
+        }.joined(separator: ",")
+    }
 
     @State private var appVM  = AppViewModel()
     @State private var authVM = AuthViewModel()
@@ -396,6 +418,19 @@ struct RootView: View {
         // Refresh widget whenever a tx is added/edited/deleted. We key on
         // `count` so we don't churn on every field edit — the widget only
         // cares about totals, not individual row mutations.
+        // The widget's labels are written by the app, so a language switch has
+        // to rewrite them — otherwise the Home Screen kept the old language
+        // until something else happened to refresh it.
+        .onChange(of: LanguageManager.shared.current) { _, _ in
+            WidgetDataSync.refresh(context: context)
+        }
+        // The window and the account the widget reads: pay cycle and main card.
+        .onChange(of: salarySignature) { _, _ in
+            WidgetDataSync.refresh(context: context)
+        }
+        .onChange(of: SmartBudgetManager.shared.budgetCardID) { _, _ in
+            WidgetDataSync.refresh(context: context)
+        }
         .onChange(of: liveTxs.count) { _, _ in
             WidgetDataSync.refresh(context: context)
             // A new/removed transaction shifts the weekly/monthly totals
@@ -439,6 +474,12 @@ struct RootView: View {
 
         .onChange(of: scenePhase) { _, newPhase in
             authVM.handleScenePhase(newPhase)
+            // Leaving the app is when the Home Screen is about to be seen, and
+            // it catches every edit the count-based trigger misses (an amount
+            // or a category changed, a transaction moved to another day).
+            if newPhase == .background {
+                WidgetDataSync.refresh(context: context)
+            }
             if newPhase == .active {
                 appVM.cards = liveCards
                 SalaryCreditEngine.processIfNeeded(context: context)
