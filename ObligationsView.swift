@@ -223,7 +223,6 @@ struct ObligationLoadCard: View {
         }
         .padding(16)
         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
-        .overlay(RoundedRectangle(cornerRadius: AppRadius.lg).stroke(shown.verdict.tint.opacity(0.22), lineWidth: 1))
     }
 
     /// Obligations against the Smart Budget allocation, drawn to the same
@@ -245,10 +244,14 @@ struct ObligationLoadCard: View {
     }
 
     private func line(_ label: String, _ value: String, tint: Color = AppTheme.textPrimary) -> some View {
-        HStack {
-            Text(label).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
-            Spacer()
-            Text(value).font(.system(.caption2, weight: .semibold)).foregroundStyle(tint)
+        // Label wraps, figure never does — "x / y" split across two lines
+        // was unreadable, and English labels run longer than Indonesian ones.
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            Text(label).font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 8)
+            Text(value).font(.system(.caption, weight: .semibold)).foregroundStyle(tint)
+                .fixedSize()
         }
     }
 }

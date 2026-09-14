@@ -248,17 +248,24 @@ struct PlannerView: View {
             Image(systemName: tool.icon)
                 .font(.system(.title2)).foregroundStyle(tool.tint)
                 .frame(height: 34)
+            // Centred like the icon above it. English titles run longer than
+            // Indonesian ones and wrap; a wrapped title fell back to leading
+            // alignment inside a centred card.
             Text(loc(tool.titleKey))
                 .font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
-            Text(loc(tool.subtitleKey))
-                .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
+            Text(loc(tool.subtitleKey))
+                .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 20).padding(.horizontal, 10)
+        // Both cards in a row take the taller one's height, so a title that
+        // wraps in one language no longer leaves its neighbour shorter.
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .padding(.vertical, 20).padding(.horizontal, 12)
         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
-        .overlay(RoundedRectangle(cornerRadius: AppRadius.lg).stroke(tool.tint.opacity(0.18), lineWidth: 1))
     }
 }
 
@@ -386,11 +393,15 @@ struct CalculatorSheet: View {
             Divider().overlay(AppTheme.cardMid)
             VStack(spacing: 9) {
                 ForEach(rows, id: \.0) { row in
-                    HStack {
+                    // The label wraps and the figure never does: English labels
+                    // now spell out what the Indonesian acronyms stand for.
+                    HStack(alignment: .firstTextBaseline, spacing: 12) {
                         Text(row.0).font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
-                        Spacer()
+                            .fixedSize(horizontal: false, vertical: true)
+                        Spacer(minLength: 8)
                         Text(row.1).font(.system(.caption, weight: .semibold))
                             .foregroundStyle(AppTheme.textPrimary)
+                            .fixedSize()
                     }
                 }
             }
@@ -467,10 +478,12 @@ struct CalculatorSheet: View {
         let t = PlannerMath.takeHomePay(monthlyGross: g, married: married, dependants: dependants)
         return resultCard("planner.net_monthly", money(t.net), rows: [
             (loc("planner.gross"), money(t.gross)),
-            ("BPJS JHT (2%)", "− " + money(t.jht)),
-            ("BPJS JP (1%)", "− " + money(t.jp)),
+            // These were hardcoded Indonesian acronyms, so English showed
+            // "BPJS JP (1%)" and "PPh 21" with nothing saying what they are.
+            (loc("planner.row_jht"), "− " + money(t.jht)),
+            (loc("planner.row_jp"), "− " + money(t.jp)),
             (loc("planner.health"), "− " + money(t.health)),
-            ("PPh 21", "− " + money(t.taxMonthly)),
+            (loc("planner.row_tax"), "− " + money(t.taxMonthly)),
             (loc("planner.ptkp"), money(PlannerMath.ptkp(married: married, dependants: dependants))),
             (loc("planner.taxable_annual"), money(t.taxableAnnual)),
         ], accent: AppTheme.accent)
@@ -486,7 +499,7 @@ struct CalculatorSheet: View {
         return resultCard("planner.projected_value", money(fv), rows: [
             (loc("planner.total_contributed"), money(contributed)),
             (loc("planner.growth"), money(max(fv - contributed, 0))),
-            (loc("planner.jht_years"), String(format: "%.0f", yrs)),
+            (loc("planner.jht_years"), String(format: "%.0f %@", yrs, loc("planner.years"))),
         ], accent: AppTheme.teal)
     }
 }
