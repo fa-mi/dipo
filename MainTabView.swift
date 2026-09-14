@@ -349,7 +349,9 @@ struct MainTabView: View {
                 }
                 return
             }
-            // Switch to Home so the user sees the new tx land after save.
+            // Switch to Home's root so the user actually sees the new tx land —
+            // popping Profile if it happened to be pushed on the Home stack.
+            vm.homePath.removeAll()
             vm.activeTab = .home
             showAddSheet = true
         }

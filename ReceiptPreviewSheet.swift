@@ -404,6 +404,11 @@ struct ReceiptPreviewSheet: View {
         do {
             try context.save()
             HapticManager.shared.success()
+            // Confirm the result, exactly like a typed transaction does —
+            // a scanned receipt used to save with no on-screen confirmation.
+            ActionFeedbackCenter.shared.transactionSaved(
+                amount: tx.amount, currency: storedCurrency,
+                category: scan.category, cardLabel: card.pickerLabel)
             onSaved()
             dismiss()
         } catch {

@@ -60,6 +60,18 @@ final class AppViewModel {
 
     func selectTab(_ tab: AppTab) {
         HapticManager.shared.select()
+        // A tab tap always lands on that tab's ROOT. Without this, a deep link
+        // that pushed a feature onto a tab while you were on another one would
+        // leave that path in place — and since the tab bar hides inside a
+        // feature, tapping the tab would drop you into a screen you never
+        // opened, with no tab bar to leave by.
+        switch tab {
+        case .home:  homePath.removeAll()
+        case .cards: walletPath.removeAll()
+        case .plan:  planPath.removeAll()
+        case .stats: statsPath.removeAll()
+        default:     break
+        }
         activeTab = tab
     }
 
