@@ -181,10 +181,11 @@ enum DebtType: String, CaseIterable {
 
     var label: String {
         switch self {
-        case .creditCard:  return "Credit Card"
-        case .loan:        return "Loan"
-        case .installment: return "Installment"
-        case .other:       return "Other"
+        // Was hardcoded English on every debt card, in both languages.
+        case .creditCard:  return loc("debt.type.credit_card")
+        case .loan:        return loc("debt.type.loan")
+        case .installment: return loc("debt.type.installment")
+        case .other:       return loc("debt.type.other")
         }
     }
 
