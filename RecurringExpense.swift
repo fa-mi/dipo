@@ -316,6 +316,80 @@ final class RecurringExpenseViewModel {
     }
 }
 
+// MARK: - Charging rules that protect the balance
+
+extension RecurringExpense {
+    /// Mark every due date up to today as handled, so the next charge is the
+    /// next one that falls due — never a catch-up.
+    ///
+    /// The engine charges each month since `lastCharged`, up to twelve. That is
+    /// right for an app that simply was not opened; it was wrong for a bill the
+    /// user had PAUSED. Resuming a bill paused for three months posted three
+    /// back-dated charges the moment the app next ran, and turning auto-record
+    /// off and on again did the same. Call this whenever charging restarts.
+    func markCaughtUp(now: Date = .now) {
+        let cal = Calendar.current
+        let m = cal.component(.month, from: now)
+        let y = cal.component(.year, from: now)
+        let dueThisMonth = RecurringDateEngine.dueDate(dayOfMonth: dayOfMonth, month: m, year: y)
+        // Due later this month (or today) → it still gets charged: stamp last
+        // month. Already past → it passed while charging was off: stamp this one.
+        let stamp: (Int, Int)
+        if cal.startOfDay(for: dueThisMonth) >= cal.startOfDay(for: now) {
+            stamp = m == 1 ? (12, y - 1) : (m - 1, y)
+        } else {
+            stamp = (m, y)
+        }
+        // Never move the stamp backwards: that would re-open a charged month.
+        if stamp.1 * 12 + stamp.0 > lastChargedYear * 12 + lastChargedMonth {
+            lastChargedMonth = stamp.0
+            lastChargedYear  = stamp.1
+        }
+    }
+
+    /// True when the charge for this calendar month has already been posted.
+    var chargedThisMonth: Bool {
+        let cal = Calendar.current
+        let now = Date()
+        return autoRecord
+            && lastChargedMonth == cal.component(.month, from: now)
+            && lastChargedYear  == cal.component(.year,  from: now)
+    }
+}
+
+/// Transactions the engine posted for a bill, found the only way they can be:
+/// by the auto-charge marker and the bill's name.
+enum RecurringHistory {
+    static func normalized(_ s: String) -> String {
+        s.trimmingCharacters(in: .whitespaces).lowercased()
+    }
+
+    static func charges(named label: String, in cards: [BankCard]) -> [(tx: TxRecord, card: BankCard)] {
+        let key = normalized(label)
+        return cards.flatMap { card in
+            card.transactions
+                .filter { $0.notes == "tx.note.recurring_auto" && normalized($0.name) == key }
+                .map { ($0, card) }
+        }
+    }
+
+    /// Names of deleted bills whose recorded payments the user chose to KEEP.
+    /// Without this the clean-up banner reappeared right after the delete and
+    /// offered, pre-selected, to erase payments the user had just said were real.
+    private static let keptKey = "recurring.keptHistoryLabels"
+    static var keptLabels: Set<String> {
+        Set(UserDefaults.standard.stringArray(forKey: keptKey) ?? [])
+    }
+    static func keep(_ label: String) {
+        var s = keptLabels; s.insert(normalized(label))
+        UserDefaults.standard.set(Array(s), forKey: keptKey)
+    }
+    static func forget(_ label: String) {
+        var s = keptLabels; s.remove(normalized(label))
+        UserDefaults.standard.set(Array(s), forKey: keptKey)
+    }
+}
+
 // MARK: - Main View
 
 struct RecurringExpensesView: View {
@@ -329,19 +403,19 @@ struct RecurringExpensesView: View {
     @State private var appeared = false
     @State private var showOrphanCleanup = false
     @State private var showPhantomCleanup = false
+    @State private var actionsFor: RecurringExpense? = nil
 
     /// Max rows shown inline before collapsing behind "See all".
-    static let previewLimit = 5
+    static let previewLimit = 6
 
-    /// Transactions the engine auto-posted (`notes == tx.note.recurring_auto`)
-    /// whose schedule has since been deleted — deleting the schedule never
-    /// removed them, so they linger and quietly inflate the budget. Matched by
-    /// name against surviving schedules; anything without a match is orphaned.
+    /// Auto-posted payments whose bill no longer exists, minus the ones the
+    /// user already chose to keep when deleting that bill.
     private var orphanedAutoCharges: [TxRecord] {
-        let liveLabels = Set(expenses.map { $0.label.trimmingCharacters(in: .whitespaces).lowercased() })
+        let liveLabels = Set(expenses.map { RecurringHistory.normalized($0.label) })
+        let kept = RecurringHistory.keptLabels
         return cards.flatMap { $0.transactions }.filter { tx in
-            tx.notes == "tx.note.recurring_auto"
-            && !liveLabels.contains(tx.name.trimmingCharacters(in: .whitespaces).lowercased())
+            let name = RecurringHistory.normalized(tx.name)
+            return tx.notes == "tx.note.recurring_auto" && !liveLabels.contains(name) && !kept.contains(name)
         }
         .sorted { $0.date > $1.date }
     }
@@ -354,117 +428,90 @@ struct RecurringExpensesView: View {
 
     private var activeExpenses: [RecurringExpense] { expenses.filter { $0.isActive } }
 
-    /// Sum of active expenses converted to the user's preferred currency.
-    private var monthlyTotal: Double {
-        let pref = CurrencyManager.shared.preferredCurrency
-        return activeExpenses.reduce(0) {
-            $0 + CurrencyManager.shared.convert($1.amount, from: $1.currency, to: pref)
+    /// Active bills soonest first, then paused ones — the list answers "what
+    /// is coming", not "what did I add first".
+    private var sortedExpenses: [RecurringExpense] {
+        expenses.sorted { a, b in
+            if a.isActive != b.isActive { return a.isActive }
+            return RecurringDateEngine.daysUntil(dayOfMonth: a.dayOfMonth)
+                 < RecurringDateEngine.daysUntil(dayOfMonth: b.dayOfMonth)
         }
     }
 
-    private var nextDue: RecurringExpense? {
-        activeExpenses.min {
-            RecurringDateEngine.daysUntil(dayOfMonth: $0.dayOfMonth)
-              < RecurringDateEngine.daysUntil(dayOfMonth: $1.dayOfMonth)
-        }
+    private var pref: String { CurrencyManager.shared.preferredCurrency }
+    private func inPref(_ e: RecurringExpense) -> Double {
+        CurrencyManager.shared.convert(e.amount, from: e.currency, to: pref)
     }
+
+    private var monthlyTotal: Double { activeExpenses.reduce(0) { $0 + inPref($1) } }
+
+    /// What will still leave this calendar month: active bills whose due date
+    /// is today or later and that have not posted yet.
+    private var remainingThisMonth: Double {
+        let cal = Calendar.current
+        let now = Date()
+        let m = cal.component(.month, from: now), y = cal.component(.year, from: now)
+        return activeExpenses.filter { e in
+            let due = RecurringDateEngine.dueDate(dayOfMonth: e.dayOfMonth, month: m, year: y)
+            return cal.startOfDay(for: due) >= cal.startOfDay(for: now) && !e.chargedThisMonth
+        }
+        .reduce(0) { $0 + inPref($1) }
+    }
+
+    private var nextDue: RecurringExpense? { sortedExpenses.first(where: \.isActive) }
 
     var body: some View {
         NavigationStack {
             ZStack {
                 AppTheme.bg.ignoresSafeArea()
                 ScrollView(showsIndicators: false) {
-                    VStack(spacing: 0) {
-                        navBar
-                            .padding(.horizontal, 22).padding(.top, 20)
-                            .opacity(appeared ? 1 : 0).offset(y: appeared ? 0 : -12)
-
-                        // Orphaned auto-charge cleanup — surfaces only when there
-                        // are leftover transactions from deleted schedules.
-                        if !orphanedAutoCharges.isEmpty {
-                            Button {
-                                HapticManager.shared.tap(); showOrphanCleanup = true
-                            } label: {
-                                HStack(spacing: 10) {
-                                    Image(systemName: "wand.and.stars.inverse").font(.system(.callout)).foregroundStyle(AppTheme.orange)
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(String(format: loc("recurring.orphan_title"), orphanedAutoCharges.count))
-                                            .font(.system(.footnote, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
-                                        Text(loc("recurring.orphan_sub"))
-                                            .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
-                                    }
-                                    Spacer()
-                                    Image(systemName: "chevron.right").font(.system(.caption2, weight: .semibold)).foregroundStyle(AppTheme.textSecondary)
-                                }
-                                .padding(14)
-                                .background(AppTheme.orange.opacity(0.10), in: RoundedRectangle(cornerRadius: AppRadius.md))
-                                .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.orange.opacity(0.25), lineWidth: 1))
-                            }
-                            .buttonStyle(ScaleButtonStyle())
-                            .padding(.horizontal, 22).padding(.top, 14)
-                        }
-
-                        // Back-dated auto-charges — rows the engines wrote for
-                        // dates before their schedule existed. Separate banner
-                        // from the orphan one above: different cause, different
-                        // fix, and a user can have both at once.
-                        if !phantomAutoCharges.isEmpty {
-                            Button {
-                                HapticManager.shared.tap(); showPhantomCleanup = true
-                            } label: {
-                                HStack(spacing: 10) {
-                                    Image(systemName: "calendar.badge.exclamationmark")
-                                        .font(.system(.callout)).foregroundStyle(AppTheme.red)
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(String(format: loc("recurring.phantom_title"), phantomAutoCharges.count))
-                                            .font(.system(.footnote, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
-                                        Text(loc("recurring.phantom_sub"))
-                                            .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
-                                    }
-                                    Spacer()
-                                    Image(systemName: "chevron.right").font(.system(.caption2, weight: .semibold)).foregroundStyle(AppTheme.textSecondary)
-                                }
-                                .padding(14)
-                                .background(AppTheme.red.opacity(0.10), in: RoundedRectangle(cornerRadius: AppRadius.md))
-                                .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.red.opacity(0.25), lineWidth: 1))
-                            }
-                            .buttonStyle(ScaleButtonStyle())
-                            .padding(.horizontal, 22).padding(.top, 14)
-                        }
+                    VStack(spacing: 18) {
+                        header
+                            .padding(.top, 20)
 
                         if !activeExpenses.isEmpty {
                             summaryCard
-                                .padding(.horizontal, 22).padding(.top, 20)
-                                .opacity(appeared ? 1 : 0).offset(y: appeared ? 0 : 16)
-                                .animation(AppMotion.appear, value: appeared)
+                        }
+
+                        if !orphanedAutoCharges.isEmpty {
+                            cleanupRow(icon: "tray.full.fill", tint: AppTheme.orange,
+                                       title: String(format: loc("recurring.orphan_title"), orphanedAutoCharges.count),
+                                       detail: loc("recurring.orphan_sub")) { showOrphanCleanup = true }
+                        }
+                        if !phantomAutoCharges.isEmpty {
+                            cleanupRow(icon: "calendar.badge.exclamationmark", tint: AppTheme.red,
+                                       title: String(format: loc("recurring.phantom_title"), phantomAutoCharges.count),
+                                       detail: loc("recurring.phantom_sub")) { showPhantomCleanup = true }
                         }
 
                         if expenses.isEmpty {
-                            emptyState.padding(.top, 56).opacity(appeared ? 1 : 0)
+                            emptyState.padding(.top, 36)
                         } else {
-                            VStack(spacing: 14) {
-                                // Overview shows at most `previewLimit`; the rest
-                                // move to a dedicated full-list page.
-                                ForEach(Array(expenses.prefix(Self.previewLimit).enumerated()), id: \.element.id) { i, e in
-                                    RecurringExpenseRow(expense: e, cards: cards, vm: vm, context: context)
-                                        .opacity(appeared ? 1 : 0).offset(y: appeared ? 0 : 20)
-                                        .animation(.spring(response: 0.55, dampingFraction: 0.8).delay(Double(i) * 0.06), value: appeared)
-                                }
+                            VStack(alignment: .leading, spacing: 10) {
+                                Text(loc("recurring.list_title"))
+                                    .font(.system(.body, weight: .bold))
+                                    .foregroundStyle(AppTheme.textPrimary)
+                                RecurringList(expenses: Array(sortedExpenses.prefix(Self.previewLimit)),
+                                              onEdit: { vm.loadForEdit($0, cards: cards) },
+                                              onMore: { HapticManager.shared.tap(); actionsFor = $0 })
                                 if expenses.count > Self.previewLimit {
                                     NavigationLink {
-                                        AllRecurringExpensesView(expenses: expenses, cards: cards, vm: vm)
+                                        AllRecurringExpensesView(expenses: sortedExpenses, cards: cards, vm: vm)
                                     } label: {
                                         SeeAllLabel(count: expenses.count)
                                     }
                                 }
                             }
-                            .padding(.horizontal, 22).padding(.top, 20)
                         }
-                        Spacer(minLength: 120)
+                        Spacer(minLength: 100)
                     }
+                    .padding(.horizontal, 22)
+                    .opacity(appeared ? 1 : 0)
+                    .offset(y: appeared ? 0 : 16)
                 }
             }
-            .onAppear { withAnimation(.spring(response: 0.55, dampingFraction: 0.8)) { appeared = true } }
+            .toolbar(.hidden, for: .navigationBar)
+            .onAppear { withAnimation(.spring(response: 0.55, dampingFraction: 0.85)) { appeared = true } }
             .sheet(isPresented: $vm.showAddSheet, onDismiss: { vm.resetForm() }) {
                 RecurringFormSheet(vm: vm, context: context)
                     .presentationDetents([.large])
@@ -472,6 +519,7 @@ struct RecurringExpensesView: View {
                     .presentationBackground(AppTheme.bg)
                     .preferredColorScheme(appColorScheme())
             }
+            .recurringActions(for: $actionsFor, vm: vm, cards: cards)
             .sheet(isPresented: $showOrphanCleanup) {
                 OrphanedAutoChargesView(orphans: orphanedAutoCharges)
                     .presentationDetents([.large])
@@ -489,72 +537,140 @@ struct RecurringExpensesView: View {
         }
     }
 
-    private var navBar: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(loc("recurring.title")).font(.system(.title2, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
-                Text(loc("recurring.sub")).font(.system(.footnote)).foregroundStyle(AppTheme.textSecondary)
+    private var header: some View {
+        HStack(alignment: .center) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(loc("recurring.title"))
+                    .font(.system(.title, weight: .bold))
+                    .foregroundStyle(AppTheme.textPrimary)
+                Text(loc("recurring.sub"))
+                    .font(.system(.footnote))
+                    .foregroundStyle(AppTheme.textSecondary)
             }
             Spacer()
-            Button {
-                HapticManager.shared.tap(); vm.resetForm(); vm.showAddSheet = true
-            } label: {
-                ZStack {
-                    Circle().fill(cards.isEmpty ? AppTheme.cardMid : AppTheme.accent)
-                        .frame(width: 42, height: 42)
-                    Image(systemName: "plus").font(.system(.body, weight: .semibold))
-                        .foregroundStyle(cards.isEmpty ? AppTheme.textSecondary : AppTheme.bg)
+            if !expenses.isEmpty {
+                Button {
+                    HapticManager.shared.tap(); vm.resetForm(); vm.showAddSheet = true
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.system(.body, weight: .bold))
+                        .foregroundStyle(cards.isEmpty ? AppTheme.textSecondary : AppTheme.onVividFill)
+                        .frame(width: 44, height: 44)
+                        .background(cards.isEmpty ? AppTheme.cardMid : AppTheme.accentFill, in: Circle())
                 }
+                .accessibilityLabel(loc("a11y.add_recurring"))
+                .disabled(cards.isEmpty)
+                .buttonStyle(ScaleButtonStyle())
             }
-.accessibilityLabel(loc("a11y.add_recurring"))
-            .disabled(cards.isEmpty).buttonStyle(ScaleButtonStyle())
         }
     }
 
+    /// The month at a glance: what bills cost, what is still to leave this
+    /// month, and what is next.
     private var summaryCard: some View {
-        VStack(spacing: 0) {
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(loc("recurring.total")).font(.system(.caption, weight: .semibold)).foregroundStyle(AppTheme.textSecondary)
-                    Text(CurrencyManager.shared.formatted(monthlyTotal, currency: CurrencyManager.shared.preferredCurrency))
-                        .font(.system(.title, weight: .heavy)).foregroundStyle(AppTheme.textPrimary)
-                        .minimumScaleFactor(0.6).lineLimit(1)
-                }
-                Spacer()
-                ZStack {
-                    RoundedRectangle(cornerRadius: AppRadius.md).fill(AppTheme.accent.opacity(0.12)).frame(width: 52, height: 52)
-                    Image(systemName: "arrow.triangle.2.circlepath").font(.system(.title2)).foregroundStyle(AppTheme.accent)
-                }
+        let cm = CurrencyManager.shared
+        return VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(loc("recurring.total"))
+                    .font(.system(.footnote, weight: .semibold))
+                    .foregroundStyle(AppTheme.textSecondary)
+                Text(cm.formatted(monthlyTotal, currency: pref))
+                    .font(.system(.largeTitle, weight: .bold))
+                    .foregroundStyle(AppTheme.textPrimary)
+                    .lineLimit(1).minimumScaleFactor(0.6)
+                    .contentTransition(.numericText())
+                Text(String(format: loc("recurring.active_count"), activeExpenses.count))
+                    .font(.system(.footnote))
+                    .foregroundStyle(AppTheme.textSecondary)
             }
-            .padding(18)
 
-            if let n = nextDue {
-                Divider().background(AppTheme.cardMid).padding(.horizontal, 18)
-                HStack(spacing: 10) {
-                    Image(systemName: "calendar").font(.system(.footnote)).foregroundStyle(AppTheme.accent)
-                    Text(loc("recurring.next")).font(.system(.caption, weight: .medium)).foregroundStyle(AppTheme.textSecondary)
-                    Text(n.label).font(.system(.caption, weight: .semibold)).foregroundStyle(AppTheme.textPrimary).lineLimit(1)
-                    Spacer()
-                    Text(dueLabel(for: n.dayOfMonth)).font(.system(.caption, weight: .semibold)).foregroundStyle(AppTheme.accent)
+            HStack(spacing: 10) {
+                statTile(label: loc("recurring.remaining_month"),
+                         value: cm.formatted(remainingThisMonth, currency: pref),
+                         icon: "hourglass", tint: AppTheme.orange)
+                if let n = nextDue {
+                    statTile(label: loc("recurring.next"),
+                             value: n.label,
+                             caption: RecurringRowFormat.dueLabel(n),
+                             icon: "calendar", tint: AppTheme.blue)
                 }
-                .padding(.horizontal, 18).padding(.vertical, 13)
             }
         }
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
-        .overlay(RoundedRectangle(cornerRadius: AppRadius.lg).stroke(AppTheme.accent.opacity(0.18), lineWidth: 1))
+        .padding(18)
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.xl))
+    }
+
+    private func statTile(label: String, value: String, caption: String? = nil,
+                          icon: String, tint: Color) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Label(label, systemImage: icon)
+                .font(.system(.caption, weight: .medium))
+                .foregroundStyle(AppTheme.textSecondary)
+                .labelStyle(TintedIconLabelStyle(tint: tint))
+            Text(value)
+                .font(.system(.subheadline, weight: .bold))
+                .foregroundStyle(AppTheme.textPrimary)
+                .lineLimit(1).minimumScaleFactor(0.75)
+            if let caption {
+                Text(caption)
+                    .font(.system(.caption))
+                    .foregroundStyle(AppTheme.textSecondary)
+                    .lineLimit(1)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .padding(12)
+        .background(tint.opacity(0.10), in: RoundedRectangle(cornerRadius: AppRadius.md))
+    }
+
+    private func cleanupRow(icon: String, tint: Color, title: String, detail: String,
+                            action: @escaping () -> Void) -> some View {
+        Button {
+            HapticManager.shared.tap(); action()
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: icon)
+                    .font(.system(.subheadline, weight: .semibold))
+                    .foregroundStyle(tint)
+                    .frame(width: 36, height: 36)
+                    .background(tint.opacity(0.14), in: RoundedRectangle(cornerRadius: AppRadius.sm))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.system(.subheadline, weight: .semibold))
+                        .foregroundStyle(AppTheme.textPrimary)
+                        .multilineTextAlignment(.leading)
+                    Text(detail)
+                        .font(.system(.caption))
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .multilineTextAlignment(.leading)
+                }
+                Spacer(minLength: 6)
+                Image(systemName: "chevron.right")
+                    .font(.system(.caption, weight: .semibold))
+                    .foregroundStyle(AppTheme.textSecondary)
+            }
+            .padding(14)
+            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+        }
+        .buttonStyle(ScaleButtonStyle())
     }
 
     private var emptyState: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: 22) {
             ZStack {
-                Circle().fill(AppTheme.cardDark).frame(width: 88, height: 88)
-                    .overlay(Circle().stroke(AppTheme.accent.opacity(0.2), lineWidth: 1))
-                Image(systemName: "arrow.triangle.2.circlepath").font(.system(.largeTitle)).foregroundStyle(AppTheme.accent)
+                Circle().fill(AppTheme.accent.opacity(0.14)).frame(width: 120, height: 120)
+                Circle().fill(AppTheme.accentFill).frame(width: 76, height: 76)
+                Image(systemName: "arrow.triangle.2.circlepath")
+                    .font(.system(.title, weight: .semibold))
+                    .foregroundStyle(AppTheme.onVividFill)
             }
             VStack(spacing: 8) {
-                Text(loc("recurring.none_title")).font(.system(.body, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                Text(loc("recurring.none_title"))
+                    .font(.system(.title3, weight: .bold))
+                    .foregroundStyle(AppTheme.textPrimary)
                 Text(cards.isEmpty ? loc("recurring.none_needs_card") : loc("recurring.none_sub"))
-                    .font(.system(.subheadline)).foregroundStyle(AppTheme.textSecondary)
+                    .font(.system(.subheadline))
+                    .foregroundStyle(AppTheme.textSecondary)
                     .multilineTextAlignment(.center).lineSpacing(3)
             }
             if !cards.isEmpty {
@@ -562,110 +678,350 @@ struct RecurringExpensesView: View {
                     HapticManager.shared.tap(); vm.resetForm(); vm.showAddSheet = true
                 } label: {
                     HStack(spacing: 8) {
-                        Image(systemName: "plus").font(.system(.subheadline, weight: .semibold))
-                        Text(loc("recurring.add")).font(.system(.subheadline, weight: .semibold))
+                        Image(systemName: "plus.circle.fill").font(.system(.body))
+                        Text(loc("recurring.add")).font(.system(.callout, weight: .bold))
                     }
-                    .foregroundStyle(AppTheme.bg).padding(.horizontal, 32).padding(.vertical, 14)
-                    .background(AppTheme.accentFill, in: Capsule())
+                    .foregroundStyle(AppTheme.onVividFill)
+                    .frame(maxWidth: .infinity).padding(.vertical, 16)
+                    .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: AppRadius.lg))
                 }
                 .buttonStyle(ScaleButtonStyle())
             }
         }
-        .padding(.horizontal, 40)
+        .padding(.horizontal, 12)
     }
+}
 
-    /// "Today" / "Tomorrow" / "in N days" for the summary + rows.
-    func dueLabel(for day: Int) -> String {
-        let d = RecurringDateEngine.daysUntil(dayOfMonth: day)
+/// A label whose icon takes a colour of its own while the text keeps the
+/// label's foreground style.
+private struct TintedIconLabelStyle: LabelStyle {
+    let tint: Color
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: 5) {
+            configuration.icon.foregroundStyle(tint)
+            configuration.title
+        }
+    }
+}
+
+// MARK: - Row
+
+enum RecurringRowFormat {
+    static func dueLabel(_ e: RecurringExpense) -> String {
+        let d = RecurringDateEngine.daysUntil(dayOfMonth: e.dayOfMonth)
         if d <= 0 { return loc("recurring.due_today") }
         if d == 1 { return loc("recurring.due_tomorrow") }
         return String(format: loc("recurring.due_in"), d)
     }
 }
 
-// MARK: - Row
+/// Bills as one grouped list. Each row was its own bordered card with a
+/// 28pt ⋯ menu squeezed under the amount.
+struct RecurringList: View {
+    let expenses: [RecurringExpense]
+    let onEdit: (RecurringExpense) -> Void
+    let onMore: (RecurringExpense) -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ForEach(Array(expenses.enumerated()), id: \.element.id) { i, e in
+                if i > 0 {
+                    Rectangle().fill(AppTheme.cardMid.opacity(0.7)).frame(height: 1).padding(.leading, 66)
+                }
+                RecurringExpenseRow(expense: e, onEdit: { onEdit(e) }, onMore: { onMore(e) })
+            }
+        }
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+    }
+}
 
 struct RecurringExpenseRow: View {
     let expense: RecurringExpense
-    let cards: [BankCard]
-    @Bindable var vm: RecurringExpenseViewModel
-    let context: ModelContext
+    let onEdit: () -> Void
+    let onMore: () -> Void
 
-    private var due: Int { RecurringDateEngine.daysUntil(dayOfMonth: expense.dayOfMonth) }
-    private var dueLabel: String {
-        if due <= 0 { return loc("recurring.due_today") }
-        if due == 1 { return loc("recurring.due_tomorrow") }
-        return String(format: loc("recurring.due_in"), due)
+    var body: some View {
+        let active = expense.isActive
+        let days = RecurringDateEngine.daysUntil(dayOfMonth: expense.dayOfMonth)
+        HStack(spacing: 12) {
+            Button {
+                HapticManager.shared.tap(); onEdit()
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: expense.category.icon)
+                        .font(.system(.callout, weight: .semibold))
+                        .foregroundStyle(active ? expense.category.color : AppTheme.textSecondary)
+                        .frame(width: 40, height: 40)
+                        .background((active ? expense.category.color : AppTheme.textSecondary).opacity(0.14),
+                                    in: RoundedRectangle(cornerRadius: AppRadius.sm))
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(expense.label)
+                            .font(.system(.subheadline, weight: .semibold))
+                            .foregroundStyle(active ? AppTheme.textPrimary : AppTheme.textSecondary)
+                            .lineLimit(1)
+                        HStack(spacing: 5) {
+                            Text(String(format: loc("recurring.day_of"), expense.dayOfMonth))
+                            Text("·")
+                            if !active {
+                                Text(loc("recurring.paused"))
+                            } else {
+                                Text(RecurringRowFormat.dueLabel(expense))
+                                    .foregroundStyle(days <= 0 ? AppTheme.accent : days <= 3 ? AppTheme.orange : AppTheme.textSecondary)
+                                    .fontWeight(days <= 3 ? .semibold : .regular)
+                            }
+                            if !expense.autoRecord {
+                                Text(loc("recurring.manual_badge"))
+                                    .font(.system(.caption2, weight: .semibold))
+                                    .padding(.horizontal, 6).padding(.vertical, 1)
+                                    .background(AppTheme.cardMid.opacity(0.8), in: Capsule())
+                            }
+                        }
+                        .font(.system(.caption))
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .lineLimit(1)
+                    }
+                    Spacer(minLength: 6)
+                    VStack(alignment: .trailing, spacing: 3) {
+                        Text(CurrencyManager.shared.formatted(expense.amount, currency: expense.currency))
+                            .font(.system(.subheadline, weight: .bold))
+                            .foregroundStyle(active ? AppTheme.textPrimary : AppTheme.textSecondary)
+                            .lineLimit(1).minimumScaleFactor(0.7)
+                        if active && expense.chargedThisMonth {
+                            Label(loc("recurring.charged_this_month"), systemImage: "checkmark.circle.fill")
+                                .font(.system(.caption2, weight: .medium))
+                                .foregroundStyle(AppTheme.textSecondary)
+                                .labelStyle(TintedIconLabelStyle(tint: AppTheme.accent))
+                        }
+                    }
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            Button(action: onMore) {
+                Image(systemName: "ellipsis")
+                    .font(.system(.subheadline, weight: .bold))
+                    .foregroundStyle(AppTheme.textPrimary)
+                    .frame(width: 32, height: 32)
+                    .background(AppTheme.cardMid.opacity(0.7), in: Circle())
+            }
+            .accessibilityLabel(loc("a11y.more_actions"))
+            .hitTarget(32)
+            .buttonStyle(ScaleButtonStyle())
+        }
+        .padding(14)
+    }
+}
+
+// MARK: - Actions & delete
+
+extension View {
+    /// The ⋯ sheet and the delete confirmation for a bill, shared by the
+    /// overview and the full list so both behave identically.
+    func recurringActions(for target: Binding<RecurringExpense?>,
+                          vm: RecurringExpenseViewModel,
+                          cards: [BankCard]) -> some View {
+        modifier(RecurringActionsModifier(target: target, vm: vm, cards: cards))
+    }
+}
+
+private struct RecurringActionsModifier: ViewModifier {
+    @Binding var target: RecurringExpense?
+    let vm: RecurringExpenseViewModel
+    let cards: [BankCard]
+    @Environment(\.modelContext) private var context
+    @Query private var allExpenses: [RecurringExpense]
+    @State private var deleting: RecurringExpense? = nil
+
+    func body(content: Content) -> some View {
+        content
+            .sheet(item: $target) { e in
+                ActionListSheet(
+                    icon: e.category.icon,
+                    iconTint: e.category.color,
+                    title: e.label,
+                    subtitle: CurrencyManager.shared.formatted(e.amount, currency: e.currency)
+                        + " · " + String(format: loc("recurring.day_of"), e.dayOfMonth),
+                    items: [
+                        ActionItem(icon: "pencil", title: loc("common.edit"), tint: AppTheme.blue) {
+                            vm.loadForEdit(e, cards: cards)
+                        },
+                        ActionItem(icon: e.isActive ? "pause.fill" : "play.fill",
+                                   title: loc(e.isActive ? "recurring.pause" : "recurring.resume"),
+                                   detail: loc(e.isActive ? "recurring.act_pause_sub" : "recurring.act_resume_sub"),
+                                   tint: AppTheme.orange) {
+                            if !e.isActive { e.markCaughtUp() }
+                            e.isActive.toggle()
+                            try? context.save()
+                            HapticManager.shared.success()
+                        },
+                        ActionItem(icon: "trash.fill", title: loc("recurring.delete"),
+                                   detail: loc("recurring.act_delete_sub"), destructive: true) {
+                            deleting = e
+                        },
+                    ])
+                .preferredColorScheme(appColorScheme())
+            }
+            .sheet(item: $deleting) { e in
+                let otherTotal = allExpenses
+                    .filter { $0.isActive && $0.id != e.id }
+                    .reduce(0.0) { $0 + CurrencyManager.shared.convert($1.amount, from: $1.currency,
+                                                                      to: CurrencyManager.shared.preferredCurrency) }
+                RecurringDeleteSheet(expense: e,
+                                     charges: RecurringHistory.charges(named: e.label, in: cards).map(\.tx),
+                                     newMonthlyTotal: otherTotal) { removeHistory in
+                    let label = e.label
+                    let history = RecurringHistory.charges(named: label, in: cards)
+                    deleting = nil
+                    // After the sheet has gone: it is still reading this model.
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                        if removeHistory {
+                            for (tx, card) in history {
+                                card.transactions.removeAll { $0.id == tx.id }
+                                context.delete(tx)
+                            }
+                        } else if !history.isEmpty {
+                            RecurringHistory.keep(label)
+                        }
+                        context.delete(e)
+                        try? context.save()
+                        HapticManager.shared.success()
+                        ActionFeedbackCenter.shared.removed(loc("recurring.deleted_toast"), detail: label)
+                    }
+                } onCancel: {
+                    deleting = nil
+                }
+                .preferredColorScheme(appColorScheme())
+            }
+    }
+}
+
+/// Says, before anything is removed, what deleting a bill changes and what it
+/// does not.
+///
+/// The answer to "does this affect my balance" is: not by itself. Payments
+/// already recorded stay, because they happened. Only if the bill was never
+/// really paid should they go too — and then the balance goes back up. That is
+/// the user's call to make, so it is a switch here, off by default, rather
+/// than a clean-up banner that appeared afterwards with every payment already
+/// selected for deletion.
+struct RecurringDeleteSheet: View {
+    let expense: RecurringExpense
+    let charges: [TxRecord]
+    let newMonthlyTotal: Double
+    let onConfirm: (_ removeHistory: Bool) -> Void
+    let onCancel: () -> Void
+
+    @State private var removeHistory = false
+    @State private var contentHeight: CGFloat = 460
+
+    private var cm: CurrencyManager { CurrencyManager.shared }
+    private var pref: String { cm.preferredCurrency }
+    private var historyTotal: Double {
+        charges.reduce(0) { $0 + cm.convert(abs($1.amount), from: $1.currency.isEmpty ? pref : $1.currency, to: pref) }
     }
 
     var body: some View {
-        Button {
-            HapticManager.shared.tap()
-            vm.loadForEdit(expense, cards: cards)
-        } label: {
-            HStack(spacing: 14) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: AppRadius.md).fill(expense.category.color.opacity(0.14)).frame(width: 46, height: 46)
-                    Image(systemName: expense.category.icon).font(.system(.title3)).foregroundStyle(expense.category.color)
+        VStack(spacing: 18) {
+            Image(systemName: "trash.fill")
+                .font(.system(.title2, weight: .semibold))
+                .foregroundStyle(AppTheme.onVividFill)
+                .frame(width: 56, height: 56)
+                .background(AppTheme.red, in: Circle())
+                .padding(.top, 8)
+
+            Text(String(format: loc("recurring.delete_title"), expense.label))
+                .font(.system(.title3, weight: .bold))
+                .foregroundStyle(AppTheme.textPrimary)
+                .multilineTextAlignment(.center)
+
+            VStack(alignment: .leading, spacing: 12) {
+                note("calendar.badge.minus", AppTheme.orange,
+                     expense.isActive && expense.autoRecord
+                        ? String(format: loc("recurring.del_next"),
+                                 RecurringDateEngine.nextDueDate(dayOfMonth: expense.dayOfMonth)
+                                    .formatted(.dateTime.day().month(.abbreviated)))
+                        : loc("recurring.del_next_manual"))
+                if expense.isActive {
+                    note("chart.bar.fill", AppTheme.blue,
+                         String(format: loc("recurring.del_total"), cm.formatted(newMonthlyTotal, currency: pref)))
                 }
-                VStack(alignment: .leading, spacing: 5) {
-                    HStack(spacing: 8) {
-                        Text(expense.label).font(.system(.subheadline, weight: .semibold))
-                            .foregroundStyle(expense.isActive ? AppTheme.textPrimary : AppTheme.textSecondary)
-                            .lineLimit(1)
-                        if !expense.autoRecord {
-                            Text(loc("recurring.manual_badge")).font(.system(.caption2, weight: .bold))
-                                .foregroundStyle(AppTheme.textSecondary)
-                                .padding(.horizontal, 7).padding(.vertical, 2)
-                                .background(AppTheme.cardMid, in: Capsule())
-                        }
-                    }
-                    HStack(spacing: 8) {
-                        Text(String(format: loc("recurring.day_of"), expense.dayOfMonth))
-                            .font(.system(.caption2, weight: .medium)).foregroundStyle(AppTheme.textSecondary)
-                        Circle().fill(AppTheme.textSecondary.opacity(0.4)).frame(width: 3, height: 3)
-                        Text(expense.isActive ? dueLabel : loc("recurring.paused"))
-                            .font(.system(.caption2, weight: .medium))
-                            .foregroundStyle(expense.isActive ? AppTheme.accent : AppTheme.textSecondary)
-                    }
-                }
-                Spacer(minLength: 6)
-                VStack(alignment: .trailing, spacing: 5) {
-                    Text(CurrencyManager.shared.formatted(expense.amount, currency: expense.currency))
-                        .font(.system(.subheadline, weight: .bold))
-                        .foregroundStyle(expense.isActive ? AppTheme.textPrimary : AppTheme.textSecondary)
-                        .lineLimit(1).minimumScaleFactor(0.7)
-                    Menu {
-                        Button { HapticManager.shared.tap(); vm.loadForEdit(expense, cards: cards) } label: {
-                            Label(loc("common.edit"), systemImage: "pencil")
-                        }
-                        Button {
-                            HapticManager.shared.tap()
-                            expense.isActive.toggle(); try? context.save()
-                        } label: {
-                            Label(expense.isActive ? loc("recurring.pause") : loc("recurring.resume"),
-                                  systemImage: expense.isActive ? "pause.circle" : "play.circle")
-                        }
-                        Button(role: .destructive) {
-                            HapticManager.shared.tap()
-                            context.delete(expense); try? context.save()
-                        } label: {
-                            Label(loc("recurring.delete"), systemImage: "trash")
-                        }
-                    } label: {
-                        Image(systemName: "ellipsis").font(.system(.subheadline, weight: .semibold))
-                            .foregroundStyle(AppTheme.textSecondary)
-                            .frame(width: 28, height: 28)
-                            .background(AppTheme.cardMid, in: Circle())
-                    }
+                if charges.isEmpty {
+                    note("checkmark.circle.fill", AppTheme.accent, loc("recurring.del_no_history"))
+                } else if removeHistory {
+                    note("arrow.uturn.backward.circle.fill", AppTheme.red,
+                         String(format: loc("recurring.del_remove"), charges.count, cm.formatted(historyTotal, currency: pref)))
+                } else {
+                    note("checkmark.circle.fill", AppTheme.accent,
+                         String(format: loc("recurring.del_keep"), charges.count))
                 }
             }
             .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
-            .overlay(RoundedRectangle(cornerRadius: AppRadius.lg).stroke(AppTheme.cardMid.opacity(0.5), lineWidth: 1))
-            .opacity(expense.isActive ? 1 : 0.7)
+            .animation(.easeOut(duration: 0.2), value: removeHistory)
+
+            if !charges.isEmpty {
+                Toggle(isOn: $removeHistory) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(String(format: loc("recurring.del_toggle"), charges.count))
+                            .font(.system(.subheadline, weight: .semibold))
+                            .foregroundStyle(AppTheme.textPrimary)
+                        Text(loc("recurring.del_toggle_sub"))
+                            .font(.system(.caption))
+                            .foregroundStyle(AppTheme.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .tint(AppTheme.red)
+                .padding(14)
+                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+            }
+
+            VStack(spacing: 10) {
+                Button {
+                    onConfirm(removeHistory)
+                } label: {
+                    Text(loc("common.delete"))
+                        .font(.system(.callout, weight: .bold))
+                        .foregroundStyle(AppTheme.onVividFill)
+                        .frame(maxWidth: .infinity).padding(.vertical, 16)
+                        .background(AppTheme.red, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+                }
+                .buttonStyle(ScaleButtonStyle())
+                Button {
+                    HapticManager.shared.tap(); onCancel()
+                } label: {
+                    Text(loc("tx.delete_keep"))
+                        .font(.system(.callout, weight: .semibold))
+                        .foregroundStyle(AppTheme.textPrimary)
+                        .frame(maxWidth: .infinity).padding(.vertical, 16)
+                        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+                }
+                .buttonStyle(ScaleButtonStyle())
+            }
         }
-        .buttonStyle(ScaleButtonStyle())
+        .padding(.horizontal, 22)
+        .padding(.top, 14)
+        .padding(.bottom, 10)
+        .fixedSize(horizontal: false, vertical: true)
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { contentHeight = $0 + 24 }
+        .presentationDetents([.height(contentHeight)])
+        .presentationDragIndicator(.visible)
+        .presentationBackground(AppTheme.bg)
+        .presentationCornerRadius(28)
+        .onAppear { HapticManager.shared.warning() }
+    }
+
+    private func note(_ icon: String, _ tint: Color, _ text: String) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: icon).font(.system(.subheadline)).foregroundStyle(tint)
+                .frame(width: 20)
+            Text(text)
+                .font(.system(.footnote))
+                .foregroundStyle(AppTheme.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
     }
 }
 
@@ -701,16 +1057,13 @@ struct RecurringFormSheet: View {
     }
 
     /// "≈ Rp 158.000 · $1 = Rp 15.800" when the bill's currency differs from
-    /// the card it is charged to. nil when they match, when no card is chosen
-    /// yet, or when the amount isn't a usable number — nothing meaningful to
-    /// preview in those cases.
+    /// the card it is paid from. nil when they match or nothing is usable yet.
     private var fxPreview: String? {
         guard let cardID = vm.formCardID,
               let card = cards.first(where: { $0.id == cardID }) else { return nil }
         let target = card.resolvedCurrency
         guard !vm.formCurrency.isEmpty, vm.formCurrency != target else { return nil }
         guard let amount = Double(vm.formAmount), amount > 0 else { return nil }
-
         let cm = CurrencyManager.shared
         let converted = cm.convert(amount, from: vm.formCurrency, to: target)
         let unitRate  = cm.convert(1, from: vm.formCurrency, to: target)
@@ -720,170 +1073,54 @@ struct RecurringFormSheet: View {
                       cm.formatted(unitRate, currency: target))
     }
 
+    private var dueThisMonth: Date {
+        let cal = Calendar.current
+        return RecurringDateEngine.dueDate(dayOfMonth: vm.formDay,
+                                           month: cal.component(.month, from: .now),
+                                           year: cal.component(.year, from: .now))
+    }
+
+    private var cardIndex: Binding<Int> {
+        Binding(get: { cards.firstIndex { $0.id == vm.formCardID } ?? 0 },
+                set: { i in if cards.indices.contains(i) { vm.formCardID = cards[i].id } })
+    }
+
     var body: some View {
         NavigationStack {
             ZStack {
                 AppTheme.bg.ignoresSafeArea()
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 22) {
-                        SheetField(label: loc("recurring.label"),
-                                   placeholder: loc("recurring.label_ph"),
-                                   text: $vm.formLabel)
-
-                        // Amount + currency. The currency is free to differ from
-                        // the card's — a USD subscription paid from an IDR card
-                        // is the common case, and it used to be inexpressible
-                        // because this control locked itself the moment a card
-                        // was picked. Choosing a card still DEFAULTS the currency
-                        // to that card's (see .onChange below); it just no longer
-                        // forbids changing it afterwards.
-                        VStack(spacing: 8) {
-                            Text(loc("recurring.amount")).font(.system(.footnote)).foregroundStyle(AppTheme.textSecondary)
-                                .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 22)
-                            HStack(spacing: 10) {
-                                Menu {
-                                    ForEach(vm.currencies, id: \.self) { c in
-                                        Button(c) { HapticManager.shared.tap(); vm.formCurrency = c }
-                                    }
-                                } label: {
-                                    HStack(spacing: 6) {
-                                        Text(vm.formCurrency).font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
-                                        Image(systemName: "chevron.up.chevron.down").font(.system(.caption2)).imageScale(.small).foregroundStyle(AppTheme.textSecondary)
-                                    }
-                                    .padding(.horizontal, 14).padding(.vertical, 14)
-                                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
-                                }
-                                TextField("0", text: $vm.formAmount)
-                                    .font(.system(.title2, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
-                                    .keyboardType(.decimalPad)
-                                    .padding(.horizontal, 16).padding(.vertical, 14)
-                                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
-                                    .frame(maxWidth: .infinity)
-                            }
+                        amountSection
+                        IconField(label: loc("recurring.label"),
+                                  icon: "text.cursor",
+                                  placeholder: loc("recurring.label_ph"),
+                                  text: $vm.formLabel)
                             .padding(.horizontal, 22)
 
-                            // Estimate at today's rate, so signing up for "$10"
-                            // isn't a blind commitment. Deliberately worded as an
-                            // estimate: the figure that lands in the ledger is the
-                            // one computed on the charge day, not this one.
-                            // Shown before Save, not after — the decision is
-                            // still open here, and this is the only moment the
-                            // number can change anything.
-                            if let impact {
-                                CommitmentImpactPreview(impact: impact,
-                                                        currency: CurrencyManager.shared.preferredCurrency)
-                                    .padding(.horizontal, 22)
-                                    .transition(.opacity)
-                            }
-
-                            if let preview = fxPreview {
-                                HStack(spacing: 6) {
-                                    Image(systemName: "arrow.left.arrow.right")
-                                        .font(.system(.caption2)).imageScale(.small).foregroundStyle(AppTheme.textSecondary)
-                                    Text(preview)
-                                        .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
-                                }
-                                .frame(maxWidth: .infinity, alignment: .leading)
+                        VStack(alignment: .leading, spacing: 10) {
+                            FormSectionLabel(text: loc("recurring.category"))
                                 .padding(.horizontal, 22)
-                            }
+                            CategoryTilePicker(categories: RecurringExpenseViewModel.categories,
+                                               selection: $vm.formCategory)
                         }
 
-                        // Category picker
-                        VStack(spacing: 8) {
-                            Text(loc("recurring.category")).font(.system(.footnote)).foregroundStyle(AppTheme.textSecondary)
-                                .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 22)
-                            ScrollView(.horizontal, showsIndicators: false) {
-                                HStack(spacing: 10) {
-                                    ForEach(RecurringExpenseViewModel.categories, id: \.self) { cat in
-                                        let selected = vm.formCategory == cat
-                                        Button {
-                                            HapticManager.shared.tap(); vm.formCategory = cat
-                                        } label: {
-                                            HStack(spacing: 7) {
-                                                Image(systemName: cat.icon).font(.system(.footnote))
-                                                Text(cat.displayLabel).font(.system(.footnote, weight: .semibold))
-                                            }
-                                            .foregroundStyle(selected ? AppTheme.bg : cat.color)
-                                            .padding(.horizontal, 14).padding(.vertical, 10)
-                                            .background(selected ? cat.color : cat.color.opacity(0.12), in: Capsule())
-                                        }
-                                        .buttonStyle(ScaleButtonStyle())
-                                    }
-                                }
-                                .padding(.horizontal, 22)
-                            }
-                        }
-
-                        // Charge day stepper
-                        VStack(spacing: 8) {
-                            Text(loc("recurring.due_day")).font(.system(.footnote)).foregroundStyle(AppTheme.textSecondary)
-                                .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 22)
-                            HStack {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(String(format: loc("recurring.day_of"), vm.formDay))
-                                        .font(.system(.body, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
-                                    Text(loc("recurring.due_day_sub")).font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
-                                }
-                                Spacer()
-                                HStack(spacing: 0) {
-                                    Button { HapticManager.shared.tap(); if vm.formDay > 1 { vm.formDay -= 1 } } label: {
-                                        Image(systemName: "minus").font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.textPrimary).frame(width: 40, height: 40)
-                                    }
-.accessibilityLabel(loc("a11y.earlier_day"))
-                                    Text("\(vm.formDay)").font(.system(.title3, weight: .bold)).foregroundStyle(AppTheme.accent).frame(width: 44).contentTransition(.numericText())
-                                    Button { HapticManager.shared.tap(); if vm.formDay < 31 { vm.formDay += 1 } } label: {
-                                        Image(systemName: "plus").font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.textPrimary).frame(width: 40, height: 40)
-                                    }
-.accessibilityLabel(loc("a11y.later_day"))
-                                }
-                                .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: AppRadius.sm))
-                            }
-                            .padding(16)
-                            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
-                            .padding(.horizontal, 22)
-                        }
-
-                        // Card picker — REQUIRED: which card gets charged
-                        VStack(spacing: 8) {
-                            HStack(spacing: 6) {
-                                Image(systemName: "exclamationmark.circle.fill").font(.system(.caption)).foregroundStyle(AppTheme.orange)
-                                Text(loc("recurring.choose_card")).font(.system(.caption, weight: .medium)).foregroundStyle(AppTheme.orange)
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 22)
-                            CardPickerSection(selectedCardID: $vm.formCardID, titleKey: "recurring.charge_to")
-                        }
-                        .onChange(of: vm.formCardID) { _, newID in
-                            if let id = newID, let card = cards.first(where: { $0.id == id }) { vm.formCurrency = card.currency }
-                        }
-
-                        // Auto-record toggle
-                        HStack(spacing: 12) {
-                            Image(systemName: "wand.and.stars").font(.system(.callout)).foregroundStyle(AppTheme.accent)
-                                .frame(width: 36, height: 36).background(AppTheme.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: AppRadius.sm))
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(loc("recurring.autorecord_label")).font(.system(.subheadline, weight: .medium)).foregroundStyle(AppTheme.textPrimary)
-                                Text(loc("recurring.autorecord_sub")).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
-                            }
-                            Spacer()
-                            Toggle("", isOn: $vm.formAutoRecord).labelsHidden().tint(AppTheme.accent)
-                        }
-                        .padding(14)
-                        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
-                        .padding(.horizontal, 22)
+                        daySection
+                        cardSection
+                        autoRecordSection
 
                         if let err = vm.formError {
-                            HStack(spacing: 8) {
-                                Image(systemName: "exclamationmark.triangle.fill").font(.system(.footnote))
-                                Text(err).font(.system(.footnote, weight: .medium))
-                            }
-                            .foregroundStyle(AppTheme.red)
-                            .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 22)
+                            InlineBanner(tone: .error, message: err)
+                                .padding(.horizontal, 22)
                         }
 
                         saveButton.padding(.top, 4)
-                        Spacer(minLength: 40)
+                        Spacer(minLength: 30)
                     }
-                    .padding(.top, 12)
+                    .padding(.top, 8)
+                    .opacity(appeared ? 1 : 0)
+                    .offset(y: appeared ? 0 : 16)
+                    .animation(AppMotion.appear, value: appeared)
                 }
             }
             .navigationTitle(isEditing ? loc("recurring.edit_title") : loc("recurring.new_title"))
@@ -894,8 +1131,145 @@ struct RecurringFormSheet: View {
                     Button(loc("common.cancel")) { dismiss() }.foregroundStyle(AppTheme.textSecondary)
                 }
             }
-            .onAppear { withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) { appeared = true } }
+            .onAppear {
+                // The pager always shows a card, so something must be selected
+                // to match it. Currency defaults to that card's for a new bill.
+                if vm.formCardID == nil, let first = cards.first {
+                    vm.formCardID = first.id
+                    if !isEditing { vm.formCurrency = first.currency }
+                }
+                withAnimation { appeared = true }
+            }
+            .onChange(of: vm.formCardID) { _, newID in
+                // Default only — a USD subscription paid from an IDR card is
+                // normal, so the currency stays changeable afterwards.
+                if !isEditing, let id = newID, let card = cards.first(where: { $0.id == id }) {
+                    vm.formCurrency = card.currency
+                }
+            }
         }
+    }
+
+    private var amountSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 12) {
+                Menu {
+                    ForEach(vm.currencies, id: \.self) { c in
+                        Button(c) { HapticManager.shared.tap(); vm.formCurrency = c }
+                    }
+                } label: {
+                    HStack(spacing: 6) {
+                        Text(CurrencyManager.symbol(for: vm.formCurrency))
+                            .font(.system(.subheadline, weight: .bold))
+                            .foregroundStyle(AppTheme.textPrimary)
+                        Text(vm.formCurrency)
+                            .font(.system(.footnote, weight: .medium))
+                            .foregroundStyle(AppTheme.textSecondary)
+                        Image(systemName: "chevron.up.chevron.down")
+                            .font(.system(.caption2)).imageScale(.small)
+                            .foregroundStyle(AppTheme.textSecondary)
+                    }
+                    .padding(.horizontal, 13).padding(.vertical, 12)
+                    .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: AppRadius.sm))
+                }
+                TextField("0", text: $vm.formAmount)
+                    .font(.system(.largeTitle, weight: .bold))
+                    .foregroundStyle(AppTheme.textPrimary)
+                    .keyboardType(.decimalPad)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(14)
+            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+
+            if let preview = fxPreview {
+                Label(preview, systemImage: "arrow.left.arrow.right")
+                    .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
+            } else if let p = AmountInputHelper.preview(vm.formAmount, currency: vm.formCurrency) {
+                Text(p).font(.system(.caption, weight: .medium)).foregroundStyle(AppTheme.textSecondary)
+            }
+
+            // What saving this does to the plan — shown before Save, while the
+            // decision is still open.
+            if let impact {
+                CommitmentImpactPreview(impact: impact, currency: CurrencyManager.shared.preferredCurrency)
+                    .padding(.top, 4)
+                    .transition(.opacity)
+            }
+        }
+        .padding(.horizontal, 22)
+    }
+
+    private var daySection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            FormSectionLabel(text: loc("recurring.due_day"))
+            VStack(spacing: 12) {
+                PaydayGrid(day: $vm.formDay)
+                Rectangle().fill(AppTheme.cardMid.opacity(0.7)).frame(height: 1)
+                HStack(spacing: 12) {
+                    Image(systemName: "calendar")
+                        .font(.system(.subheadline, weight: .bold))
+                        .foregroundStyle(AppTheme.onVividFill)
+                        .frame(width: 32, height: 32)
+                        .background(AppTheme.accentFill, in: Circle())
+                    Text(String(format: loc("recurring.this_month_on"),
+                                dueThisMonth.formatted(.dateTime.weekday(.wide).day().month(.abbreviated))))
+                        .font(.system(.subheadline, weight: .semibold))
+                        .foregroundStyle(AppTheme.textPrimary)
+                    Spacer(minLength: 0)
+                }
+                if vm.formDay >= 29 {
+                    Label(loc("recurring.short_month_hint"), systemImage: "info.circle")
+                        .font(.system(.caption))
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+            .padding(14)
+            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+        }
+        .padding(.horizontal, 22)
+    }
+
+    @ViewBuilder
+    private var cardSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            FormSectionLabel(text: loc("recurring.charge_to"))
+                .padding(.horizontal, 22)
+            if cards.isEmpty {
+                InlineBanner(tone: .warning, message: loc("recurring.none_needs_card"))
+                    .padding(.horizontal, 22)
+            } else {
+                CardSwipePicker(cards: cards, selectedIndex: cardIndex) { card in
+                    card.isCreditCard
+                        ? (loc("cc.available"), card.formattedAvailable)
+                        : (loc("home.balance_total"), card.formattedBalance)
+                }
+            }
+        }
+    }
+
+    private var autoRecordSection: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "wand.and.stars")
+                .font(.system(.subheadline, weight: .semibold))
+                .foregroundStyle(AppTheme.onVividFill)
+                .frame(width: 36, height: 36)
+                .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: AppRadius.sm))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(loc("recurring.autorecord_label"))
+                    .font(.system(.subheadline, weight: .semibold))
+                    .foregroundStyle(AppTheme.textPrimary)
+                Text(loc("recurring.autorecord_sub"))
+                    .font(.system(.caption))
+                    .foregroundStyle(AppTheme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 6)
+            Toggle("", isOn: $vm.formAutoRecord).labelsHidden().tint(AppTheme.accentFill)
+        }
+        .padding(14)
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+        .padding(.horizontal, 22)
     }
 
     private var saveButton: some View {
@@ -903,9 +1277,13 @@ struct RecurringFormSheet: View {
             guard vm.validate() else { HapticManager.shared.error(); return }
             save()
         } label: {
-            Text(loc("recurring.save")).font(.system(.callout, weight: .bold))
-                .foregroundStyle(AppTheme.bg).frame(maxWidth: .infinity).padding(.vertical, 17)
-                .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: AppRadius.md))
+            HStack(spacing: 10) {
+                Image(systemName: "checkmark.circle.fill").font(.system(.body))
+                Text(loc("recurring.save")).font(.system(.callout, weight: .bold))
+            }
+            .foregroundStyle(AppTheme.onVividFill)
+            .frame(maxWidth: .infinity).padding(.vertical, 17)
+            .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: AppRadius.lg))
         }
         .buttonStyle(ScaleButtonStyle())
         .padding(.horizontal, 22)
@@ -913,8 +1291,19 @@ struct RecurringFormSheet: View {
 
     private func save() {
         let amount = Double(vm.formAmount) ?? 0
+        let newLabel = vm.formLabel.trimmingCharacters(in: .whitespaces)
         if let e = vm.editing {
-            e.label = vm.formLabel.trimmingCharacters(in: .whitespaces)
+            // A rename carries the bill's recorded payments with it. They are
+            // tied to the bill only by name, so renaming "Kos" to "Kos Jakarta"
+            // used to leave every past payment looking like a leftover from a
+            // deleted bill — and offered, pre-selected, for deletion.
+            if RecurringHistory.normalized(e.label) != RecurringHistory.normalized(newLabel) {
+                for (tx, _) in RecurringHistory.charges(named: e.label, in: cards) { tx.name = newLabel }
+            }
+            // Turning auto-record back on restarts charging from the next due
+            // date. Otherwise every month it was off got charged at once.
+            if !e.autoRecord && vm.formAutoRecord { e.markCaughtUp() }
+            e.label = newLabel
             e.amount = amount
             e.dayOfMonth = vm.formDay
             e.category = vm.formCategory
@@ -922,48 +1311,45 @@ struct RecurringFormSheet: View {
             e.cardID = vm.formCardID
             e.autoRecord = vm.formAutoRecord
         } else {
-            let e = RecurringExpense(
-                label: vm.formLabel.trimmingCharacters(in: .whitespaces),
-                amount: amount, dayOfMonth: vm.formDay,
-                category: vm.formCategory, currency: vm.formCurrency, cardID: vm.formCardID)
+            let e = RecurringExpense(label: newLabel, amount: amount, dayOfMonth: vm.formDay,
+                                     category: vm.formCategory, currency: vm.formCurrency, cardID: vm.formCardID)
             e.autoRecord = vm.formAutoRecord
             context.insert(e)
+            // A bill with this name is live again, so its payments are not
+            // leftovers of a deleted one any more.
+            RecurringHistory.forget(newLabel)
         }
         try? context.save()
         HapticManager.shared.success()
-        ActionFeedbackCenter.shared.recurringSaved(
-            name: vm.formLabel.trimmingCharacters(in: .whitespaces),
-            amount: amount, currency: vm.formCurrency, day: vm.formDay)
+        ActionFeedbackCenter.shared.recurringSaved(name: newLabel, amount: amount,
+                                                   currency: vm.formCurrency, day: vm.formDay)
         dismiss()
     }
 }
 
 // MARK: - All Recurring Expenses (full-list page)
-//
-// Reached from the "See all" row when there are more than a few recurring
-// expenses. Rows are self-contained (they drive edit/pause/delete via the
-// shared view-model), so this page just lays them all out in a lazy stack.
+
 struct AllRecurringExpensesView: View {
     let expenses: [RecurringExpense]
     let cards: [BankCard]
     @Bindable var vm: RecurringExpenseViewModel
-    @Environment(\.modelContext) private var context
+    @State private var actionsFor: RecurringExpense? = nil
 
     var body: some View {
         ZStack {
             AppTheme.bg.ignoresSafeArea()
             ScrollView(showsIndicators: false) {
-                LazyVStack(spacing: 14) {
-                    ForEach(expenses) { e in
-                        RecurringExpenseRow(expense: e, cards: cards, vm: vm, context: context)
-                    }
-                }
-                .padding(.horizontal, 22)
-                .padding(.vertical, 16)
+                RecurringList(expenses: expenses,
+                              onEdit: { vm.loadForEdit($0, cards: cards) },
+                              onMore: { HapticManager.shared.tap(); actionsFor = $0 })
+                    .padding(.horizontal, 22)
+                    .padding(.vertical, 16)
             }
         }
+        .recurringActions(for: $actionsFor, vm: vm, cards: cards)
         .navigationTitle(loc("recurring.title"))
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.visible, for: .navigationBar)
     }
 }
 
@@ -1019,7 +1405,10 @@ struct OrphanedAutoChargesView: View {
             .toolbarBackground(AppTheme.bg, for: .navigationBar)
             .doneToolbar { dismiss() }
             .onAppear {
-                if !appeared { selected = Set(orphans.map(\.id)); appeared = true }  // pre-select all
+                // Nothing pre-selected. These are payments DiPo recorded for a
+                // real bill; most of them happened. Pre-selecting all of them
+                // made "restore my balance" the default, which overstates it.
+                if !appeared { appeared = true }
             }
         }
     }
