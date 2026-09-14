@@ -30,59 +30,23 @@ struct SmartRecommendationView: View {
     @State private var showBriefing = false
     @State private var showIntents = false
 
-    /// Entry to the cross-feature "advisor" analysis (transactions + debts +
-    /// credit cards + goals + recurring, with the WHY spelled out).
-    private var deepAnalysisButton: some View {
-        Button {
-            HapticManager.shared.tap(); showBriefing = true
-        } label: {
-            HStack(spacing: 10) {
-                Image(systemName: "text.magnifyingglass")
-                    .font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.purple)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(loc("brief.title")).font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
-                    Text(loc("brief.entry_sub")).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
-                }
-                Spacer()
-                Image(systemName: "chevron.right").font(.system(.caption, weight: .semibold)).foregroundStyle(AppTheme.textSecondary)
-            }
-            .padding(14)
-            .background(AppTheme.purple.opacity(0.08), in: RoundedRectangle(cornerRadius: AppRadius.md))
-            .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.purple.opacity(0.22), lineWidth: 1))
-        }
-        .buttonStyle(ScaleButtonStyle())
-    }
+    /// The analysis, computed once and held.
+    ///
+    /// `body` used to call the engine directly — and `integrityFindings` and
+    /// `windfallReview` twice each — so every redraw (a score count-up tick, a
+    /// row expanding) re-ran the full analysis over the whole history. It is
+    /// recomputed only when its inputs change: on appear, and after the user
+    /// marks planned spending.
+    @State private var analysis: SmartRecommendation? = nil
+    @State private var findings: [IntegrityFinding] = []
+    @State private var windfall: WindfallReview? = nil
 
-    /// Entry to declaring deliberate choices. Shows what's already respected,
-    /// so the user can see the engine isn't judging them for it.
-    private func intentButton(_ r: SmartRecommendation) -> some View {
-        Button {
-            HapticManager.shared.tap(); showIntents = true
-        } label: {
-            HStack(spacing: 10) {
-                Image(systemName: r.declaredIntents.isEmpty ? "hand.raised.fill" : "checkmark.seal.fill")
-                    .font(.system(.subheadline, weight: .semibold))
-                    .foregroundStyle(r.declaredIntents.isEmpty ? AppTheme.blue : AppTheme.accent)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(loc(r.declaredIntents.isEmpty ? "reco.intent_cta" : "reco.intent_active"))
-                        .font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
-                    Text(r.declaredIntents.isEmpty
-                         ? loc("reco.intent_cta_sub")
-                         : r.declaredIntents.map(\.label).joined(separator: " · "))
-                        .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                Spacer(minLength: 0)
-                Image(systemName: "chevron.right").font(.system(.caption, weight: .semibold))
-                    .foregroundStyle(AppTheme.textSecondary)
-            }
-            .padding(14)
-            .background((r.declaredIntents.isEmpty ? AppTheme.blue : AppTheme.accent).opacity(0.08),
-                        in: RoundedRectangle(cornerRadius: AppRadius.md))
-            .overlay(RoundedRectangle(cornerRadius: AppRadius.md)
-                .stroke((r.declaredIntents.isEmpty ? AppTheme.blue : AppTheme.accent).opacity(0.22), lineWidth: 1))
-        }
-        .buttonStyle(ScaleButtonStyle())
+    private func refresh() {
+        let r = reco
+        analysis = r
+        findings = integrityFindings
+        windfall = windfallReview
+        withAnimation(.easeOut(duration: 1.0)) { animatedScore = r.smartScore }
     }
 
     private var currency: String { CurrencyManager.shared.preferredCurrency }
@@ -326,48 +290,48 @@ struct SmartRecommendationView: View {
     }
 
     var body: some View {
-        let r = reco
         ZStack {
             AppTheme.bg.ignoresSafeArea()
-            ScrollView(showsIndicators: false) {
-                VStack(spacing: 18) {
-                    header
-                    titleBlock(r)
-                    scoreCard(r)
-                    analyzedBanner(r)
+            if let r = analysis {
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 22) {
+                        header
+                        verdictCard(r)
 
-                    // Directly under the "analyzed N transactions" claim, which
-                    // is exactly where a caveat about that data belongs.
-                    if !integrityFindings.isEmpty {
-                        DataIntegrityCard(findings: integrityFindings)
-                            .padding(.horizontal, 22)
-                    }
+                        // Right under the score, because the score is built on
+                        // these records. (Both cards used to add their own 22pt
+                        // on top of this stack's 20pt, so they sat visibly
+                        // narrower than every other card on the screen.)
+                        if !findings.isEmpty {
+                            DataIntegrityCard(findings: findings)
+                        }
+                        if let w = windfall, w.isRelevant {
+                            WindfallCard(review: w)
+                        }
 
-                    // Only when there WAS extra income. Otherwise there is no
-                    // windfall to review and the card would be noise.
-                    if let w = windfallReview, w.isRelevant {
-                        WindfallCard(review: w).padding(.horizontal, 22)
+                        actionsSection(r)
+                        planCard(r)
+                        moreSection(r)
+                        if !r.reasons.isEmpty { whySection(r) }
+                        privacyNote
                     }
-                    deepAnalysisButton
-                    intentButton(r)
-                    recommendationsSection(r)
-                    if !r.reasons.isEmpty { whySection(r) }
-                    privacyNote
-                    Spacer(minLength: 20)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 8)
+                    .padding(.bottom, 30)
+                    .opacity(appeared ? 1 : 0)
+                    .offset(y: appeared ? 0 : 12)
                 }
-                .padding(.horizontal, 20)
-                .padding(.top, 8)
-                .padding(.bottom, 30)
+            } else {
+                ProgressView().tint(AppTheme.accent)
             }
         }
         .onAppear {
+            if analysis == nil { refresh() }
             withAnimation(.spring(response: 0.6, dampingFraction: 0.85)) { appeared = true }
-            // Count the score up on first display.
-            let target = r.smartScore
-            withAnimation(.easeOut(duration: 1.0)) { animatedScore = target }
         }
-        .sheet(isPresented: $showIntents) {
-            CycleIntentView(cycleKey: judgedCycleKey, cycleLabel: reco.periodLabel)
+        .onChange(of: cycleIntents.count) { _, _ in refresh() }
+        .sheet(isPresented: $showIntents, onDismiss: { refresh() }) {
+            CycleIntentView(cycleKey: judgedCycleKey, cycleLabel: analysis?.periodLabel ?? "")
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
                 .presentationBackground(AppTheme.bg)
@@ -399,6 +363,9 @@ struct SmartRecommendationView: View {
 
     // MARK: Header
 
+    /// Just the screen's name. The "AI Powered" badge and the headline "DiPo
+    /// recommends a smarter way for you" filled the first screen with claims;
+    /// the verdict card below says something about the user instead.
     private var header: some View {
         HStack {
             Button { HapticManager.shared.tap(); dismiss() } label: {
@@ -406,53 +373,21 @@ struct SmartRecommendationView: View {
                     .foregroundStyle(AppTheme.textPrimary)
                     .frame(width: 36, height: 36).background(AppTheme.cardDark, in: Circle())
             }
-.accessibilityLabel(loc("a11y.back"))
-.hitTarget(36)
+            .accessibilityLabel(loc("a11y.back"))
+            .hitTarget(36)
             Spacer()
-            Text(loc("profile.budget")).font(.system(.callout, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
-            HStack(spacing: 4) {
-                Image(systemName: "sparkles").font(.system(.caption2, weight: .bold)).imageScale(.small)
-                Text(loc("reco.ai_powered")).font(.system(.caption2, weight: .bold))
-            }
-            .foregroundStyle(AppTheme.purple)
-            .padding(.horizontal, 8).padding(.vertical, 4)
-            .background(AppTheme.purple.opacity(0.12), in: Capsule())
-            Spacer()
-            Color.clear.frame(width: 36, height: 36) // balances the back button
-        }
-    }
-
-    private func titleBlock(_ r: SmartRecommendation) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(loc("reco.title"))
-                .font(.system(.title2, weight: .bold))
+            Text(loc("profile.budget"))
+                .font(.system(.body, weight: .bold))
                 .foregroundStyle(AppTheme.textPrimary)
-                .fixedSize(horizontal: false, vertical: true)
-            Text(r.isPreliminary
-                 ? loc("reco.subtitle_preliminary")
-                 : String(format: loc(r.dataMonths == 1 ? "reco.subtitle_one" : "reco.subtitle"), r.dataMonths))
-                .font(.system(.footnote))
-                .foregroundStyle(AppTheme.textSecondary)
-            // Exact analysis window, pay-cycle aligned — the user should never
-            // wonder WHICH month of their life these numbers describe.
-            if !r.periodLabel.isEmpty {
-                HStack(spacing: 5) {
-                    Image(systemName: "calendar").font(.system(.caption2, weight: .semibold)).imageScale(.small)
-                    Text(r.periodLabel).font(.system(.caption2, weight: .semibold))
-                }
-                .foregroundStyle(AppTheme.purple)
-                .padding(.horizontal, 9).padding(.vertical, 4)
-                .background(AppTheme.purple.opacity(0.12), in: Capsule())
-                .padding(.top, 2)
-            }
+            Spacer()
+            Color.clear.frame(width: 36, height: 36)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    // MARK: Score card
+    // MARK: Verdict
 
-    /// Ring/label colour must MATCH the score. A 34 drawn in the same green as
-    /// a 92 tells the user they're fine when they aren't.
+    /// Ring and verdict share one colour, and it must MATCH the score — a 27
+    /// drawn in the same green as a 92 tells the user they are fine.
     private func scoreTint(_ score: Int) -> Color {
         switch score {
         case 80...:   return AppTheme.accent
@@ -462,68 +397,82 @@ struct SmartRecommendationView: View {
         }
     }
 
-    private func scoreCard(_ r: SmartRecommendation) -> some View {
+    /// Where the user stands, in one card: the score, the verdict in words,
+    /// what it was measured on, and the three parts it is made of.
+    private func verdictCard(_ r: SmartRecommendation) -> some View {
         let tint = scoreTint(r.smartScore)
-        return HStack(alignment: .center, spacing: 16) {
-            ZStack {
-                Circle().stroke(AppTheme.cardMid, lineWidth: 9)
-                Circle()
-                    .trim(from: 0, to: appeared ? CGFloat(r.smartScore) / 100 : 0)
-                    .stroke(tint, style: StrokeStyle(lineWidth: 9, lineCap: .round))
-                    .rotationEffect(.degrees(-90))
-                    .animation(.spring(response: 1.0, dampingFraction: 0.85), value: appeared)
-                VStack(spacing: 0) {
-                    Text("\(animatedScore)")
-                        .font(.system(.largeTitle, design: .rounded, weight: .bold))
-                        .foregroundStyle(AppTheme.textPrimary)
-                        .contentTransition(.numericText())
-                        .monospacedDigit()          // digits never shift the centre
-                    Text(loc("reco.score_label"))
-                        .font(.system(.caption2, weight: .medium))
-                        .foregroundStyle(AppTheme.textSecondary)
-                        .textCase(.uppercase)
-                        .kerning(0.4)
+        return VStack(alignment: .leading, spacing: 18) {
+            HStack(spacing: 18) {
+                ZStack {
+                    Circle().stroke(AppTheme.cardMid, lineWidth: 10)
+                    Circle()
+                        .trim(from: 0, to: appeared ? CGFloat(r.smartScore) / 100 : 0)
+                        .stroke(tint, style: StrokeStyle(lineWidth: 10, lineCap: .round))
+                        .rotationEffect(.degrees(-90))
+                        .animation(.spring(response: 1.0, dampingFraction: 0.85), value: appeared)
+                    VStack(spacing: -2) {
+                        Text("\(animatedScore)")
+                            .font(.system(.title, design: .rounded, weight: .bold))
+                            .foregroundStyle(AppTheme.textPrimary)
+                            .contentTransition(.numericText())
+                            .monospacedDigit()
+                        Text("/100")
+                            .font(.system(.caption2, weight: .semibold))
+                            .foregroundStyle(AppTheme.textSecondary)
+                    }
                 }
-            }
-            // Fixed square: the ring is the visual anchor, so its size must not
-            // depend on the label text inside it.
-            .frame(width: 104, height: 104)
+                .frame(width: 92, height: 92)
 
-            VStack(alignment: .leading, spacing: 0) {
-                // Verdict lives OUTSIDE the ring — inside, a long label like
-                // "Perlu perbaikan" wrapped and pushed the number off-centre.
-                HStack(spacing: 6) {
-                    Text(r.scoreLabel)
-                        .font(.system(.footnote, weight: .bold))
-                        .foregroundStyle(tint)
-                        .lineLimit(1).minimumScaleFactor(0.8)
-                    Spacer(minLength: 4)
-                    Image(systemName: "info.circle")
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(loc("reco.score_label"))
                         .font(.system(.caption, weight: .semibold))
                         .foregroundStyle(AppTheme.textSecondary)
+                    Text(r.scoreLabel)
+                        .font(.system(.title2, weight: .bold))
+                        .foregroundStyle(tint)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text(r.isPreliminary
+                         ? loc("reco.subtitle_preliminary")
+                         : String(format: loc("reco.based_on"), r.transactionsAnalyzed))
+                        .font(.system(.footnote))
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                .padding(.bottom, 10)
+                Spacer(minLength: 0)
+            }
 
-                // Short labels: the full names ("Kebiasaan Menabung") could not
-                // fit beside a verdict without truncating, so the compact card
-                // shows the short form and the tap target explains the rest.
-                ForEach(Array(metricDetails(r).enumerated()), id: \.element.id) { idx, m in
-                    if idx > 0 {
-                        Divider().background(AppTheme.cardMid.opacity(0.6)).padding(.vertical, 7)
+            HStack(spacing: 8) {
+                ForEach(metricDetails(r)) { m in metricTile(m) }
+            }
+
+            VStack(alignment: .leading, spacing: 10) {
+                if !r.periodLabel.isEmpty {
+                    Label(r.periodLabel, systemImage: "calendar")
+                        .font(.system(.caption, weight: .medium))
+                        .foregroundStyle(AppTheme.textSecondary)
+                }
+                HStack {
+                    ConfidenceBadge(confidence: r.confidence)
+                    Spacer()
+                    HStack(spacing: 3) {
+                        Text(loc("reco.score_detail_title"))
+                            .font(.system(.footnote, weight: .semibold))
+                        Image(systemName: "chevron.right")
+                            .font(.system(.caption2, weight: .bold)).imageScale(.small)
                     }
-                    metricRow(m)
+                    .foregroundStyle(AppTheme.textPrimary)
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(18)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
-        .overlay(RoundedRectangle(cornerRadius: AppRadius.lg).stroke(AppTheme.cardMid.opacity(0.5), lineWidth: 1))
-        .contentShape(RoundedRectangle(cornerRadius: AppRadius.lg))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.xl))
+        .contentShape(RoundedRectangle(cornerRadius: AppRadius.xl))
         .onTapGesture {
             HapticManager.shared.tap()
             scoreDetail = r
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isButton)
         .accessibilityHint(loc("reco.tap_for_detail"))
     }
 
@@ -544,191 +493,274 @@ struct SmartRecommendationView: View {
         ]
     }
 
-    /// One health metric: short label left, verdict right. Both fit on a single
-    /// line at full size now that the labels are short, so nothing truncates.
-    private func metricRow(_ m: RecoMetricDetail) -> some View {
-        HStack(spacing: 8) {
+    /// One part of the score as a tile: what it is, and how it did. Three
+    /// equal tiles read as three parts of one whole; the old divided list read
+    /// as a table to be parsed.
+    private func metricTile(_ m: RecoMetricDetail) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
             Image(systemName: m.icon)
-                .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
-                .frame(width: 16, alignment: .center)
-            Text(m.shortLabel)
-                .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
-                .lineLimit(1)
-            Spacer(minLength: 8)
-            Text(m.rating.label)
-                .font(.system(.caption, weight: .bold)).foregroundStyle(m.rating.color)
-                .lineLimit(1)
-        }
-        .frame(height: 18)
-    }
-
-    // MARK: Analyzed banner
-
-    private func analyzedBanner(_ r: SmartRecommendation) -> some View {
-        HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(r.isPreliminary
-                     ? loc("reco.analyzed_preliminary")
-                     : String(format: loc("reco.analyzed"), r.transactionsAnalyzed))
-                    .font(.system(.footnote))
-                    .foregroundStyle(AppTheme.textPrimary)
-                    .fixedSize(horizontal: false, vertical: true)
-                ConfidenceBadge(confidence: r.confidence)
-            }
-            Spacer(minLength: 0)
-            Image(systemName: "brain.head.profile")
-                .font(.system(.title)).foregroundStyle(AppTheme.purple)
-        }
-        .padding(14)
-        .background(AppTheme.purple.opacity(0.10), in: RoundedRectangle(cornerRadius: AppRadius.md))
-    }
-
-    // MARK: Recommendations
-
-    private func recommendationsSection(_ r: SmartRecommendation) -> some View {
-        VStack(spacing: 12) {
-            HStack {
-                Text(loc("reco.top_recommendations")).font(.system(.subheadline, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
-                Spacer()
-                Button {
-                    HapticManager.shared.tap()
-                    detailReco = r
-                } label: {
-                    HStack(spacing: 3) {
-                        Text(loc("reco.view_details")).font(.system(.caption, weight: .semibold))
-                        Image(systemName: "chevron.right").font(.system(.caption2, weight: .semibold)).imageScale(.small)
-                    }
-                    .foregroundStyle(AppTheme.purple)
-                }
-            }
-            ForEach(r.topItems) { item in
-                HStack(spacing: 12) {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: AppRadius.sm).fill(item.tint.opacity(0.15)).frame(width: 40, height: 40)
-                        Image(systemName: item.icon).font(.system(.callout)).foregroundStyle(item.tint)
-                    }
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(item.title).font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
-                            .fixedSize(horizontal: false, vertical: true)
-                        Text(item.subtitle).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    Spacer(minLength: 6)
-                    Text(item.badge)
-                        .font(.system(.caption2, weight: .bold)).foregroundStyle(item.badgeTint)
-                        .padding(.horizontal, 8).padding(.vertical, 5)
-                        .background(item.badgeTint.opacity(0.12), in: Capsule())
-                }
-                .padding(12)
-                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
-                .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.cardMid.opacity(0.4), lineWidth: 1))
-            }
-
-            // What "Apply" will actually set — the recommended split, visible
-            // BEFORE the button instead of silently written after the tap.
-            ratioPreview(r)
-
-            // Apply / Customize
-            Button {
-                HapticManager.shared.success()
-                apply(r)
-            } label: {
-                Text(loc("reco.apply"))
-                    .font(.system(.callout, weight: .bold)).foregroundStyle(.white)
-                    .frame(maxWidth: .infinity).padding(.vertical, 16)
-                    .background(
-                        LinearGradient(colors: [AppTheme.purple, AppTheme.purple.opacity(0.75)],
-                                       startPoint: .leading, endPoint: .trailing),
-                        in: RoundedRectangle(cornerRadius: AppRadius.md))
-            }
-            .buttonStyle(ScaleButtonStyle())
-            .padding(.top, 4)
-
-            Button {
-                HapticManager.shared.tap(); dismiss()
-            } label: {
-                Text(loc("reco.customize"))
-                    .font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.purple)
-            }
-        }
-    }
-
-    /// The recommended daily/lifestyle/invest-debt split as a segmented bar
-    /// with per-bucket % and Rp amounts. This is exactly what Apply writes.
-    private func ratioPreview(_ r: SmartRecommendation) -> some View {
-        let cm = CurrencyManager.shared
-        let buckets: [(String, Double, Color)] = [
-            (loc("brief.alloc.daily"),      r.recommendedRatios.daily,      AppTheme.accent),
-            (loc("brief.alloc.lifestyle"),  r.recommendedRatios.lifestyle,  AppTheme.orange),
-            (loc("brief.alloc.investdebt"), r.recommendedRatios.investDebt, AppTheme.purple),
-        ]
-        return VStack(alignment: .leading, spacing: 10) {
-            Text(loc("reco.split_header"))
                 .font(.system(.footnote, weight: .semibold))
+                .foregroundStyle(m.rating.color)
+            Text(m.shortLabel)
+                .font(.system(.caption))
+                .foregroundStyle(AppTheme.textSecondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+            Text(m.rating.label)
+                .font(.system(.subheadline, weight: .bold))
                 .foregroundStyle(AppTheme.textPrimary)
-            GeometryReader { geo in
-                HStack(spacing: 3) {
-                    ForEach(Array(buckets.enumerated()), id: \.offset) { _, b in
-                        RoundedRectangle(cornerRadius: 4)
-                            .fill(b.2.opacity(0.85))
-                            .frame(width: max(geo.size.width * b.1 - 3, 8))
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(12)
+        .background(m.rating.color.opacity(0.10), in: RoundedRectangle(cornerRadius: AppRadius.md))
+    }
+
+    // MARK: What to do
+
+    private func sectionTitle(_ text: String) -> some View {
+        Text(text)
+            .font(.system(.body, weight: .bold))
+            .foregroundStyle(AppTheme.textPrimary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// The recommendations as one list, in the engine's priority order. They
+    /// were separate bordered cards, which gave four suggestions the visual
+    /// weight of four unrelated alerts.
+    private func actionsSection(_ r: SmartRecommendation) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            sectionTitle(loc("reco.top_recommendations"))
+            VStack(spacing: 0) {
+                ForEach(Array(r.topItems.enumerated()), id: \.element.id) { i, item in
+                    if i > 0 {
+                        Rectangle().fill(AppTheme.cardMid.opacity(0.7)).frame(height: 1).padding(.leading, 66)
                     }
-                }
-            }
-            .frame(height: 10)
-            VStack(spacing: 6) {
-                ForEach(Array(buckets.enumerated()), id: \.offset) { _, b in
-                    HStack(spacing: 8) {
-                        Circle().fill(b.2).frame(width: 7, height: 7)
-                        Text(b.0).font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
-                        Spacer()
-                        Text("\(Int((b.1 * 100).rounded()))%")
-                            .font(.system(.caption, weight: .bold)).foregroundStyle(b.2)
-                        if r.monthlyIncome > 0 {
-                            Text(cm.formatted(r.monthlyIncome * b.1, currency: r.currency))
-                                .font(.system(.caption2, weight: .semibold))
+                    HStack(alignment: .top, spacing: 12) {
+                        Image(systemName: item.icon)
+                            .font(.system(.callout, weight: .semibold))
+                            .foregroundStyle(item.tint)
+                            .frame(width: 40, height: 40)
+                            .background(item.tint.opacity(0.14), in: RoundedRectangle(cornerRadius: AppRadius.sm))
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(item.title)
+                                .font(.system(.subheadline, weight: .semibold))
+                                .foregroundStyle(AppTheme.textPrimary)
+                                .fixedSize(horizontal: false, vertical: true)
+                            Text(item.subtitle)
+                                .font(.system(.caption))
                                 .foregroundStyle(AppTheme.textSecondary)
-                                .frame(minWidth: 86, alignment: .trailing)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        Spacer(minLength: 6)
+                        if !item.badge.isEmpty {
+                            Text(item.badge)
+                                .font(.system(.caption2, weight: .bold))
+                                .foregroundStyle(item.badgeTint)
+                                .padding(.horizontal, 8).padding(.vertical, 4)
+                                .background(item.badgeTint.opacity(0.12), in: Capsule())
+                                .fixedSize()
                         }
                     }
+                    .padding(14)
                 }
             }
+            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
         }
-        .padding(14)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
-        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.cardMid.opacity(0.4), lineWidth: 1))
-        .padding(.top, 4)
+    }
+
+    // MARK: Plan
+
+    /// What "Use this plan" will set, shown before the button rather than
+    /// silently written after it — and the buttons live on the same card, so
+    /// the choice is made looking at what is being chosen.
+    ///
+    /// Bucket colours come from `BudgetGroup.color`, the same as the Smart
+    /// Budget screen. This card had its own mapping (green/orange/purple) for
+    /// buckets that are blue/purple/green one screen back.
+    private func planCard(_ r: SmartRecommendation) -> some View {
+        let cm = CurrencyManager.shared
+        let buckets: [(BudgetGroup, Double)] = [
+            (.daily, r.recommendedRatios.daily),
+            (.lifestyle, r.recommendedRatios.lifestyle),
+            (.investDebt, r.recommendedRatios.investDebt),
+        ]
+        return VStack(alignment: .leading, spacing: 14) {
+            sectionTitle(loc("reco.split_header"))
+
+            GeometryReader { geo in
+                HStack(spacing: 4) {
+                    ForEach(buckets, id: \.0.rawValue) { b in
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(b.0.color)
+                            .frame(width: max((geo.size.width - 8) * b.1, 8))
+                    }
+                }
+            }
+            .frame(height: 12)
+
+            VStack(spacing: 10) {
+                ForEach(buckets, id: \.0.rawValue) { b in
+                    HStack(spacing: 10) {
+                        Circle().fill(b.0.color).frame(width: 9, height: 9)
+                        Text(b.0.label)
+                            .font(.system(.subheadline))
+                            .foregroundStyle(AppTheme.textPrimary)
+                        Spacer()
+                        if r.monthlyIncome > 0 {
+                            Text(cm.formatted(r.monthlyIncome * b.1, currency: r.currency))
+                                .font(.system(.subheadline, weight: .semibold))
+                                .foregroundStyle(AppTheme.textPrimary)
+                        }
+                        Text("\(Int((b.1 * 100).rounded()))%")
+                            .font(.system(.footnote, weight: .bold))
+                            .foregroundStyle(AppTheme.textSecondary)
+                            .frame(minWidth: 40, alignment: .trailing)
+                    }
+                }
+            }
+
+            VStack(spacing: 4) {
+                Button {
+                    HapticManager.shared.success()
+                    apply(r)
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: "checkmark.circle.fill").font(.system(.body))
+                        Text(loc("reco.apply")).font(.system(.callout, weight: .bold))
+                    }
+                    .foregroundStyle(AppTheme.onVividFill)
+                    .frame(maxWidth: .infinity).padding(.vertical, 16)
+                    .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+                }
+                .buttonStyle(ScaleButtonStyle())
+
+                Button {
+                    HapticManager.shared.tap(); dismiss()
+                } label: {
+                    Text(loc("reco.customize"))
+                        .font(.system(.subheadline, weight: .semibold))
+                        .foregroundStyle(AppTheme.textPrimary)
+                        .frame(maxWidth: .infinity).padding(.vertical, 12)
+                }
+            }
+            .padding(.top, 4)
+        }
+        .padding(18)
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.xl))
+    }
+
+    // MARK: More
+
+    /// Three ways to go deeper, as one list. They were three stacked banners,
+    /// each in its own colour (purple, blue or green) with its own border.
+    private func moreSection(_ r: SmartRecommendation) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            sectionTitle(loc("reco.more_title"))
+            VStack(spacing: 0) {
+                linkRow(icon: "list.bullet.rectangle.portrait", tint: AppTheme.blue,
+                        title: loc("reco.view_details"), detail: nil) {
+                    detailReco = r
+                }
+                divider
+                linkRow(icon: "text.magnifyingglass", tint: AppTheme.purple,
+                        title: loc("brief.title"), detail: loc("brief.entry_sub")) {
+                    showBriefing = true
+                }
+                divider
+                linkRow(icon: r.declaredIntents.isEmpty ? "hand.raised.fill" : "checkmark.seal.fill",
+                        tint: r.declaredIntents.isEmpty ? AppTheme.orange : AppTheme.accent,
+                        title: loc(r.declaredIntents.isEmpty ? "reco.intent_cta" : "reco.intent_active"),
+                        detail: r.declaredIntents.isEmpty
+                            ? loc("reco.intent_cta_sub")
+                            : r.declaredIntents.map(\.label).joined(separator: " · ")) {
+                    showIntents = true
+                }
+            }
+            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+        }
+    }
+
+    private var divider: some View {
+        Rectangle().fill(AppTheme.cardMid.opacity(0.7)).frame(height: 1).padding(.leading, 62)
+    }
+
+    private func linkRow(icon: String, tint: Color, title: String, detail: String?,
+                         action: @escaping () -> Void) -> some View {
+        Button {
+            HapticManager.shared.tap(); action()
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: icon)
+                    .font(.system(.subheadline, weight: .semibold))
+                    .foregroundStyle(tint)
+                    .frame(width: 36, height: 36)
+                    .background(tint.opacity(0.14), in: RoundedRectangle(cornerRadius: AppRadius.sm))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.system(.subheadline, weight: .semibold))
+                        .foregroundStyle(AppTheme.textPrimary)
+                        .multilineTextAlignment(.leading)
+                    if let detail {
+                        Text(detail)
+                            .font(.system(.caption))
+                            .foregroundStyle(AppTheme.textSecondary)
+                            .multilineTextAlignment(.leading)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                Spacer(minLength: 6)
+                Image(systemName: "chevron.right")
+                    .font(.system(.caption, weight: .semibold))
+                    .foregroundStyle(AppTheme.textSecondary)
+            }
+            .padding(.horizontal, 14).padding(.vertical, 12)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     private func whySection(_ r: SmartRecommendation) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(loc("reco.why_title")).font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
-            ForEach(Array(r.reasons.enumerated()), id: \.offset) { _, reason in
-                HStack(alignment: .top, spacing: 8) {
-                    Image(systemName: "sparkle").font(.system(.caption2)).foregroundStyle(AppTheme.purple).padding(.top, 2)
-                    Text(reason).font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Spacer(minLength: 0)
+            sectionTitle(loc("reco.why_title"))
+            VStack(alignment: .leading, spacing: 12) {
+                ForEach(Array(r.reasons.enumerated()), id: \.offset) { _, reason in
+                    HStack(alignment: .firstTextBaseline, spacing: 10) {
+                        Circle().fill(AppTheme.textSecondary.opacity(0.6)).frame(width: 5, height: 5)
+                            .alignmentGuide(.firstTextBaseline) { d in d[.bottom] + 4 }
+                        Text(reason)
+                            .font(.system(.footnote))
+                            .foregroundStyle(AppTheme.textPrimary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Spacer(minLength: 0)
+                    }
                 }
             }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
         }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
     }
 
+    /// A footnote, not a card: it reassures, it is not a feature to look at.
     private var privacyNote: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "lock.shield.fill").font(.system(.callout)).foregroundStyle(AppTheme.accent)
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "lock.fill")
+                .font(.system(.caption2))
+                .foregroundStyle(AppTheme.textSecondary)
             VStack(alignment: .leading, spacing: 2) {
-                Text(loc("reco.privacy_title")).font(.system(.caption, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
-                Text(loc("reco.privacy_body")).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
+                Text(loc("reco.privacy_title"))
+                    .font(.system(.caption, weight: .semibold))
+                    .foregroundStyle(AppTheme.textSecondary)
+                Text(loc("reco.privacy_body"))
+                    .font(.system(.caption2))
+                    .foregroundStyle(AppTheme.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 0)
         }
-        .padding(12)
-        .background(AppTheme.accent.opacity(0.08), in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .padding(.horizontal, 4)
     }
 
     // MARK: Apply
@@ -855,11 +887,11 @@ struct ScoreDetailSheet: View {
                             .multilineTextAlignment(.center)
                             .fixedSize(horizontal: false, vertical: true)
                         if !reco.periodLabel.isEmpty {
-                            Text(reco.periodLabel)
+                            Label(reco.periodLabel, systemImage: "calendar")
                                 .font(.system(.caption2, weight: .semibold))
-                                .foregroundStyle(AppTheme.purple)
+                                .foregroundStyle(AppTheme.textSecondary)
                                 .padding(.horizontal, 10).padding(.vertical, 4)
-                                .background(AppTheme.purple.opacity(0.12), in: Capsule())
+                                .background(AppTheme.cardMid.opacity(0.7), in: Capsule())
                                 .padding(.top, 2)
                         }
                     }

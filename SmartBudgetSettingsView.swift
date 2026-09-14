@@ -204,16 +204,21 @@ struct SmartBudgetSettingsSheet: View {
 
                     // Master toggle
                     HStack(spacing: 14) {
-                        ZStack {
-                            RoundedRectangle(cornerRadius: AppRadius.sm).fill(AppTheme.purple.opacity(0.15)).frame(width: 46, height: 46)
-                            Image(systemName: "brain.fill").font(.system(.title3)).foregroundStyle(AppTheme.purple)
-                        }
+                        // The app's green, like every other on/off feature. A
+                        // purple brain made this read as a separate AI product
+                        // bolted on, not DiPo's own budget.
+                        Image(systemName: "chart.pie.fill")
+                            .font(.system(.title3, weight: .semibold))
+                            .foregroundStyle(isEnabled ? AppTheme.onVividFill : AppTheme.textSecondary)
+                            .frame(width: 46, height: 46)
+                            .background(isEnabled ? AppTheme.accentFill : AppTheme.cardMid,
+                                        in: RoundedRectangle(cornerRadius: AppRadius.sm))
                         VStack(alignment: .leading, spacing: 2) {
                             Text(loc("profile.budget")).font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
                             Text(loc("budget.sub")).font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                         }
                         Spacer()
-                        Toggle("", isOn: $isEnabled).tint(AppTheme.purple).labelsHidden()
+                        Toggle("", isOn: $isEnabled).tint(AppTheme.accentFill).labelsHidden()
                             .onChange(of: isEnabled) { _, on in
                                 HapticManager.shared.tap()
                                 if on {
@@ -226,8 +231,7 @@ struct SmartBudgetSettingsSheet: View {
                     }
                     .padding(16)
                     .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
-                    .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(isEnabled ? AppTheme.purple.opacity(0.35) : Color.clear, lineWidth: 1.5))
-                    .padding(.horizontal, 22).padding(.top, 16)
+                                        .padding(.horizontal, 22).padding(.top, 16)
 
                     // Over-budget alerts
                     if isEnabled && !overGroups.isEmpty {
@@ -492,24 +496,24 @@ struct SmartBudgetSettingsSheet: View {
             HapticManager.shared.tap()
             showRecommendation = true
         } label: {
+            // A green-tinted card rather than a purple gradient: it is the most
+            // useful thing on this tab, and it should look like DiPo, not an ad.
             HStack(spacing: 12) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: AppRadius.sm).fill(.white.opacity(0.18)).frame(width: 42, height: 42)
-                    Image(systemName: "sparkles").font(.system(.title3, weight: .semibold)).foregroundStyle(.white)
-                }
+                Image(systemName: "sparkles")
+                    .font(.system(.title3, weight: .semibold))
+                    .foregroundStyle(AppTheme.onVividFill)
+                    .frame(width: 44, height: 44)
+                    .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: AppRadius.sm))
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(loc("reco.cta_title")).font(.system(.subheadline, weight: .bold)).foregroundStyle(.white)
-                    Text(loc("reco.cta_sub")).font(.system(.caption2)).foregroundStyle(.white.opacity(0.85))
+                    Text(loc("reco.cta_title")).font(.system(.subheadline, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
+                    Text(loc("reco.cta_sub")).font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: 4)
-                Image(systemName: "chevron.right").font(.system(.footnote, weight: .semibold)).foregroundStyle(.white.opacity(0.9))
+                Image(systemName: "chevron.right").font(.system(.footnote, weight: .semibold)).foregroundStyle(AppTheme.textSecondary)
             }
             .padding(14)
-            .background(
-                LinearGradient(colors: [AppTheme.purple, AppTheme.purple.opacity(0.72)],
-                               startPoint: .topLeading, endPoint: .bottomTrailing),
-                in: RoundedRectangle(cornerRadius: AppRadius.md))
+            .background(AppTheme.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: AppRadius.lg))
         }
         .buttonStyle(ScaleButtonStyle())
         .padding(.horizontal, 22)
@@ -524,18 +528,15 @@ struct SmartBudgetSettingsSheet: View {
         // as the fallback for users who want to tune manually.
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 6) {
-                Image(systemName: "sparkles")
-                    .font(.system(.caption))
-                    .foregroundStyle(AppTheme.purple)
                 Text(loc("budget.preset.section_title"))
-                    .font(.system(.footnote, weight: .semibold))
-                    .foregroundStyle(AppTheme.textSecondary)
+                    .font(.system(.subheadline, weight: .semibold))
+                    .foregroundStyle(AppTheme.textPrimary)
             }
             .padding(.horizontal, 22)
 
             Text(loc("budget.preset.section_sub"))
-                .font(.system(.caption2))
-                .foregroundStyle(AppTheme.textSecondary.opacity(0.7))
+                .font(.system(.caption))
+                .foregroundStyle(AppTheme.textSecondary)
                 .padding(.horizontal, 22)
 
             ScrollView(.horizontal, showsIndicators: false) {
@@ -824,8 +825,9 @@ struct BudgetRatioCard: View {
             .frame(height: 8)
         }
         .padding(14)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
-        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(group.color.opacity(0.2), lineWidth: 1))
+        // No tinted border: the group's colour is already on its icon, figure
+        // and bar. A coloured outline on every card said nothing new.
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
     }
 }
 
@@ -922,8 +924,9 @@ struct BudgetGroupCard: View {
                 }
             }
             .padding(14)
-            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
-            .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(isOver ? AppTheme.red.opacity(0.35) : group.color.opacity(0.15), lineWidth: isOver ? 1.5 : 1))
+            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+            // Outlined only when over budget — the one state worth a border.
+            .overlay(RoundedRectangle(cornerRadius: AppRadius.lg).stroke(isOver ? AppTheme.red.opacity(0.35) : Color.clear, lineWidth: 1.5))
         }
         .buttonStyle(.plain)
         .onAppear { withAnimation(.easeInOut(duration: 1.0).delay(0.15)) { animatedProgress = progress } }
@@ -1174,7 +1177,7 @@ struct BudgetGroupDetailView: View {
                         }
                     }
                     .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
-                    .overlay(RoundedRectangle(cornerRadius: AppRadius.lg).stroke(isOver ? AppTheme.red.opacity(0.3) : group.color.opacity(0.18), lineWidth: isOver ? 1.5 : 1))
+                    .overlay(RoundedRectangle(cornerRadius: AppRadius.lg).stroke(isOver ? AppTheme.red.opacity(0.3) : Color.clear, lineWidth: 1.5))
                     .padding(.horizontal, 22)
                     .opacity(appeared ? 1 : 0).offset(y: appeared ? 0 : 20)
                     .animation(AppMotion.appear, value: appeared)

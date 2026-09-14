@@ -75,10 +75,10 @@ struct SmartRecommendationDetailView: View {
                     withAnimation(.spring(response: 0.3)) { tab = t }
                 } label: {
                     Text(t.title)
-                        .font(.system(size: 12, weight: tab == t ? .bold : .medium))
+                        .font(.system(.caption, weight: tab == t ? .bold : .medium))
                         .foregroundStyle(tab == t ? AppTheme.onVividFill : AppTheme.textSecondary)
                         .frame(maxWidth: .infinity).padding(.vertical, 9)
-                        .background(tab == t ? AppTheme.purple : AppTheme.cardDark, in: Capsule())
+                        .background(tab == t ? AppTheme.accentFill : AppTheme.cardDark, in: Capsule())
                 }
                 .buttonStyle(.plain)
             }
@@ -108,9 +108,9 @@ struct SmartRecommendationDetailView: View {
                 .font(.system(.caption)).foregroundStyle(AppTheme.textPrimary)
                 .fixedSize(horizontal: false, vertical: true).lineSpacing(2)
             if !reco.periodLabel.isEmpty {
-                Text(reco.periodLabel)
+                Label(reco.periodLabel, systemImage: "calendar")
                     .font(.system(.caption2, weight: .semibold))
-                    .foregroundStyle(AppTheme.purple)
+                    .foregroundStyle(AppTheme.textSecondary)
             }
         }
         .padding(16)
@@ -210,7 +210,7 @@ struct SmartRecommendationDetailView: View {
                     Text(loc("reco.why_title")).font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
                     ForEach(Array(reco.reasons.enumerated()), id: \.offset) { _, reason in
                         HStack(alignment: .top, spacing: 8) {
-                            Image(systemName: "sparkle").font(.system(.caption2)).foregroundStyle(AppTheme.purple).padding(.top, 2)
+                            Circle().fill(AppTheme.textSecondary.opacity(0.6)).frame(width: 5, height: 5).padding(.top, 6)
                             Text(reason).font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                                 .fixedSize(horizontal: false, vertical: true)
                             Spacer(minLength: 0)
@@ -280,7 +280,7 @@ struct SmartRecommendationDetailView: View {
             if let cur = reco.goalCurrentMonths, let new = reco.goalNewMonths, let name = reco.topGoalName {
                 card {
                     Text(loc("reco.goal_accel")).font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
-                    Text(name).font(.system(.caption, weight: .semibold)).foregroundStyle(AppTheme.purple)
+                    Text(name).font(.system(.caption, weight: .semibold)).foregroundStyle(AppTheme.textSecondary)
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(loc("reco.goal_new")).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
@@ -311,7 +311,7 @@ struct SmartRecommendationDetailView: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     Spacer(minLength: 8)
-                    Toggle("", isOn: $autoSaveOn).labelsHidden().tint(AppTheme.purple)
+                    Toggle("", isOn: $autoSaveOn).labelsHidden().tint(AppTheme.accentFill)
                 }
             }
         }
