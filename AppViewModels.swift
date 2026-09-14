@@ -16,6 +16,7 @@ final class AppViewModel {
     var homePath: [HomeRoute] = []
     var walletPath: [WalletRoute] = []
     var planPath: [PlanRoute] = []
+    var statsPath: [StatsRoute] = []
 
     /// The active tab has a feature pushed on it. The tab bar steps aside then,
     /// like `hidesBottomBarWhenPushed`, so it never covers a feature's content.
@@ -24,6 +25,7 @@ final class AppViewModel {
         case .home:  return !homePath.isEmpty
         case .cards: return !walletPath.isEmpty
         case .plan:  return !planPath.isEmpty
+        case .stats: return !statsPath.isEmpty
         default:     return false
         }
     }
@@ -177,3 +179,4 @@ enum AppTab: Int, CaseIterable {
 enum HomeRoute: Hashable { case profile }
 enum WalletRoute: Hashable { case obligations }
 enum PlanRoute: Hashable { case budget, salary, bills, goals }
+enum StatsRoute: Hashable { case analysis }
