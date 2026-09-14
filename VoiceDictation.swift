@@ -4,6 +4,48 @@ import Speech
 import AVFoundation
 import Observation
 
+// MARK: - Voice language
+
+/// The language dictation listens for — chosen apart from the app's text
+/// language. Plenty of people keep their phone in English and still say
+/// "makan siang 45rb" out loud; tying the recogniser to the text setting made
+/// them pick between reading comfortably and being understood.
+enum VoiceLanguage: String, CaseIterable, Identifiable {
+    /// Follow the app's text language (the old behaviour, and the default).
+    case app
+    case indonesian = "id"
+    case english = "en"
+
+    var id: String { rawValue }
+
+    private static let storageKey = "voice_language"
+
+    static var saved: VoiceLanguage {
+        get { VoiceLanguage(rawValue: UserDefaults.standard.string(forKey: storageKey) ?? "") ?? .app }
+        set { UserDefaults.standard.set(newValue.rawValue, forKey: storageKey) }
+    }
+
+    /// The language actually spoken, with `.app` resolved.
+    var spoken: LanguageManager.Language {
+        switch self {
+        case .app:        return LanguageManager.shared.current
+        case .indonesian: return .indonesian
+        case .english:    return .english
+        }
+    }
+
+    var label: String {
+        switch self {
+        case .app:        return String(format: loc("voice.lang_app"), LanguageManager.shared.current.nativeName)
+        case .indonesian: return LanguageManager.Language.indonesian.nativeName
+        case .english:    return LanguageManager.Language.english.nativeName
+        }
+    }
+
+    /// Two letters for the chip on the voice screen.
+    var code: String { spoken == .indonesian ? "ID" : "EN" }
+}
+
 // MARK: - Voice Dictation
 //
 // Live speech-to-text for Ask DiPo. Streams microphone audio into
@@ -19,9 +61,9 @@ import Observation
 //     it locally. Falls back to server recognition when unavailable, since a
 //     transcript the user can review beats no transcript at all.
 //
-//   • Recognition locale follows the in-app language, not the system's. A user
-//     reading DiPo in Indonesian is going to say "dua puluh lima ribu", and an
-//     en-US recogniser turns that into nonsense.
+//   • Recognition locale follows the voice language the user picked
+//     (`VoiceLanguage`, by default the in-app language), never the system's. A
+//     user saying "dua puluh lima ribu" to an en-US recogniser gets nonsense.
 @Observable
 @MainActor
 final class VoiceDictation {
@@ -65,10 +107,10 @@ final class VoiceDictation {
 
     // MARK: - Locale
 
-    /// The app language mapped to a recogniser locale, falling back to en-US
-    /// when Speech has nothing installed for it.
+    /// The chosen voice language mapped to a recogniser locale, falling back to
+    /// en-US when Speech has nothing installed for it.
     private static func preferredLocale() -> Locale {
-        let appLocale = LanguageManager.shared.currentLocale
+        let appLocale = Locale(identifier: VoiceLanguage.saved.spoken == .indonesian ? "id_ID" : "en_US")
         let supported = SFSpeechRecognizer.supportedLocales()
         if supported.contains(where: { $0.identifier == appLocale.identifier }) {
             return appLocale
@@ -326,8 +368,32 @@ struct VoiceCaptureView: View {
     @State private var voice = VoiceDictation()
     @State private var notice: String? = nil
     @State private var appeared = false
+    /// The sentence is in: the orb draws in for a beat before the screen closes.
+    @State private var finishing = false
+    @State private var lastWordTick: Date = .distantPast
+    @State private var voiceLanguage = VoiceLanguage.saved
 
     private var isListening: Bool { voice.isListening }
+
+    private var orbMode: VoiceOrb.Mode {
+        finishing ? .finishing : isListening ? .listening : .idle
+    }
+
+    private var wordCount: Int {
+        voice.transcript.split(whereSeparator: \.isWhitespace).count
+    }
+
+    /// Same as the mic button: stop while listening, otherwise start over.
+    private func toggleListening() {
+        guard !finishing else { return }
+        HapticManager.shared.tap()
+        if isListening {
+            voice.stop()
+        } else {
+            voice.reset()
+            Task { await voice.start() }
+        }
+    }
 
     var body: some View {
         ZStack {
@@ -348,7 +414,8 @@ struct VoiceCaptureView: View {
 
                 Spacer(minLength: 12)
 
-                VoiceOrb(level: voice.level, active: isListening)
+                VoiceOrb(level: voice.level, mode: orbMode, wordCount: wordCount,
+                         onTap: toggleListening)
                     .frame(width: 220, height: 220)
                     .opacity(appeared ? 1 : 0)
                     .scaleEffect(appeared ? 1 : 0.9)
@@ -377,13 +444,26 @@ struct VoiceCaptureView: View {
                 let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !trimmed.isEmpty else { return }
                 HapticManager.shared.success()
-                onCaptured(trimmed)
-                dismiss()
+                // Let the orb draw the sentence in before the hand-off, so the
+                // screen closing reads as "got it", not as being cut off.
+                finishing = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
+                    onCaptured(trimmed)
+                    dismiss()
+                }
             }
             appeared = true
             // Start listening immediately. Reaching this screen — by gesture or
             // by tapping Record — has already said what the user wants.
             await voice.start()
+        }
+        // A faint tick as each word is recognised — the orb kicks at the same
+        // moment, so hand and eye both feel the app hearing. Throttled, since
+        // a fast talker's words would otherwise buzz.
+        .onChange(of: wordCount) { old, new in
+            guard new > old, isListening, Date().timeIntervalSince(lastWordTick) > 0.18 else { return }
+            lastWordTick = Date()
+            HapticManager.shared.pulse(0.35)
         }
         .onChange(of: voice.state) { _, s in
             switch s {
@@ -410,17 +490,58 @@ struct VoiceCaptureView: View {
                     .frame(width: 38, height: 38)
                     .background(AppTheme.cardDark, in: Circle())
             }
-.accessibilityLabel(loc("a11y.back"))
+            .accessibilityLabel(loc("a11y.back"))
+            .frame(width: 72, alignment: .leading)
             Spacer()
             Text(loc("voice.title"))
                 .font(.system(.callout, weight: .semibold))
                 .foregroundStyle(AppTheme.textPrimary)
             Spacer()
-            // Balances the back button so the title sits centred.
-            Color.clear.frame(width: 38, height: 38)
+            languageMenu
+                .frame(width: 72, alignment: .trailing)
         }
         .padding(.horizontal, 20)
         .padding(.top, 14)
+    }
+
+    /// The language being listened for, switchable mid-sentence: picking a new
+    /// one restarts listening in it, since a recogniser cannot change language
+    /// while it runs.
+    private var languageMenu: some View {
+        Menu {
+            Picker(loc("voice.lang_title"), selection: Binding(
+                get: { voiceLanguage },
+                set: { switchLanguage(to: $0) }
+            )) {
+                ForEach(VoiceLanguage.allCases) { Text($0.label).tag($0) }
+            }
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: "waveform")
+                    .font(.system(.caption, weight: .bold))
+                Text(voiceLanguage.code)
+                    .font(.system(.footnote, weight: .bold))
+            }
+            .foregroundStyle(AppTheme.textPrimary)
+            .padding(.horizontal, 12)
+            .frame(height: 38)
+            .background(AppTheme.cardDark, in: Capsule())
+        }
+        .accessibilityLabel(loc("voice.lang_title"))
+        .accessibilityValue(voiceLanguage.label)
+    }
+
+    private func switchLanguage(to language: VoiceLanguage) {
+        guard language != voiceLanguage, !finishing else { return }
+        HapticManager.shared.select()
+        voiceLanguage = language
+        VoiceLanguage.saved = language
+        if isListening {
+            // Drop what was heard in the old language rather than sending it.
+            voice.cancel()
+            voice.reset()
+            Task { await voice.start() }
+        }
     }
 
     private var statusText: String {
@@ -434,7 +555,9 @@ struct VoiceCaptureView: View {
         if voice.transcript.isEmpty {
             // An example rather than an empty void: the parser understands a
             // whole sentence, and nothing on screen would otherwise say so.
-            Text(loc("voice.example"))
+            // In the language being listened for, so the example is something
+            // the recogniser will actually understand.
+            Text(LanguageManager.shared.withLanguage(voiceLanguage.spoken) { loc("voice.example") })
                 .font(.system(.title3, weight: .medium))
                 .foregroundStyle(AppTheme.textSecondary.opacity(0.45))
                 .fixedSize(horizontal: false, vertical: true)
@@ -459,13 +582,7 @@ struct VoiceCaptureView: View {
 
             VStack(spacing: 9) {
                 Button {
-                    HapticManager.shared.tap()
-                    if isListening {
-                        voice.stop()
-                    } else {
-                        voice.reset()
-                        Task { await voice.start() }
-                    }
+                    toggleListening()
                 } label: {
                     ZStack {
                         if isListening {
@@ -518,28 +635,44 @@ struct VoiceCaptureView: View {
     }
 }
 
-/// The listening indicator.
+/// The listening indicator — and a control: tap it to start or stop, press it
+/// and it gives, drag it and it leans toward your finger.
 ///
-/// Two conic gradients turning at different speeds and in opposite directions,
-/// heavily blurred and then clipped to a circle. Blur first, clip second: that
-/// order is what gives a soft, liquid interior behind a crisp edge — blurring
-/// after the clip would fray the silhouette into a smudge.
+/// Built from the same blurred, counter-rotating conic gradients as before (two
+/// layers crossing at different speeds never repeat, so the surface reads as
+/// moving rather than spinning), with four things added so it answers the user
+/// instead of just looping:
 ///
-/// The counter-rotation is the whole trick. One turning gradient just spins;
-/// two crossing each other at different rates never repeat the same way twice,
-/// so the surface reads as moving rather than rotating.
+///   • The silhouette is a living blob, not a circle. Three sine harmonics push
+///     the edge in and out; quiet, it barely stirs, speaking, it ripples.
+///   • Every new word lands as a kick: a quick swell of size and wobble that
+///     decays over a quarter second, so recognised speech visibly arrives.
+///   • Speed follows the voice. Swirl, wobble and the sound rings accumulate
+///     phase at a rate set by the level, so talking speeds the orb up and a
+///     pause lets it settle — without the jump backwards you get from
+///     multiplying the clock by a changing speed.
+///   • Rings travel outward while it listens, like sound leaving the orb, and
+///     brighten with the voice.
 ///
-/// Voice drives scale, blur and the weight of the second layer together — a
-/// single one of those on its own reads as a pulse, which is a heartbeat, not
-/// a voice. It keeps breathing while the room is quiet, because an orb frozen
-/// at rest reads as a hung screen.
-///
-/// Hues stay inside DiPo's palette — green through teal to sky — rather than
-/// the blue-to-pink of the reference. They are analogous, so they blend into
-/// iridescence instead of mud.
+/// When the sentence is done it draws in and swirls fast before the screen
+/// closes, so the hand-off to Ask DiPo is felt rather than cut. Reduce Motion
+/// keeps the colour and the level response and drops the rings, sparks, lean
+/// and speed-up.
 private struct VoiceOrb: View {
+    enum Mode: Equatable { case idle, listening, finishing }
+
     let level: Double
-    let active: Bool
+    let mode: Mode
+    /// Words recognised so far. Each increase kicks the orb.
+    let wordCount: Int
+    var onTap: () -> Void
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var motion = OrbMotion()
+    @State private var kickAt: TimeInterval = 0
+    @State private var tapAt: TimeInterval = 0
+    @State private var lean: CGSize = .zero
+    @State private var pressed = false
 
     /// Gradient stops. First and last match so the conic seam is invisible.
     private var warm: [Color] {
@@ -552,48 +685,233 @@ private struct VoiceOrb: View {
     }
 
     var body: some View {
-        TimelineView(.animation) { timeline in
-            let t = timeline.date.timeIntervalSinceReferenceDate
-            let amp = active ? min(level * 1.8, 1.0) : 0
-            // Never fully still.
-            let breathe = 1 + sin(t * 0.9) * 0.012
-
-            ZStack {
-                // Bloom escaping the silhouette, so the orb sits IN the screen
-                // rather than on top of it.
-                Circle()
-                    .fill(AppTheme.voiceGlow.opacity(active ? 0.20 + amp * 0.18 : 0.10))
-                    .blur(radius: 34)
-                    .scaleEffect(1.06 + amp * 0.10)
-
-                ZStack {
-                    Circle()
-                        .fill(AngularGradient(colors: warm, center: .center,
-                                              angle: .degrees(t * 17)))
-                    Circle()
-                        .fill(AngularGradient(colors: cool, center: .center,
-                                              angle: .degrees(-t * 26 + 140)))
-                        .blendMode(.screen)
-                        .opacity(0.52 + amp * 0.30)
-
-                    // Off-centre highlight. Without it the disc is evenly lit
-                    // and reads flat; a light source gives it a near side.
-                    RadialGradient(colors: [.white.opacity(0.55), .clear],
-                                   center: UnitPoint(x: 0.34, y: 0.28),
-                                   startRadius: 2, endRadius: 150)
-                        .blendMode(.softLight)
-                }
-                // Oversized before the blur so the soft edge falls OUTSIDE the
-                // clip. Blurring at the exact clip size pulls transparency
-                // inward and frays the silhouette into a smudge.
-                .scaleEffect(1.34)
-                .blur(radius: 26 - amp * 7)     // tightens as the voice rises
-                .clipShape(Circle())
-                .scaleEffect(breathe * (1 + amp * 0.055))
-                .shadow(color: AppTheme.voiceGlow.opacity(0.30), radius: 22)
+        GeometryReader { geo in
+            let size = min(geo.size.width, geo.size.height)
+            TimelineView(.animation) { timeline in
+                let t = timeline.date.timeIntervalSinceReferenceDate
+                let target = mode == .listening ? min(level * 1.8, 1) : (mode == .finishing ? 0.85 : 0)
+                let m = motion.step(at: t, toward: target,
+                                    boost: mode == .finishing ? 5 : 0,
+                                    calm: reduceMotion)
+                orb(size: size, t: t, m: m)
+                    .frame(width: geo.size.width, height: geo.size.height)
             }
-            .animation(.easeOut(duration: 0.14), value: amp)
         }
+        .scaleEffect(pressed ? 0.93 : 1)
+        .scaleEffect(mode == .finishing ? 0.86 : 1)
+        .animation(.spring(response: 0.28, dampingFraction: 0.55), value: pressed)
+        .animation(.spring(response: 0.42, dampingFraction: 0.6), value: mode)
+        .contentShape(Circle())
+        .gesture(pressAndLean)
+        .onChange(of: wordCount) { old, new in
+            if new > old { kickAt = Date().timeIntervalSinceReferenceDate }
+        }
+        .accessibilityElement()
+        .accessibilityLabel(loc(mode == .listening ? "voice.stop" : "voice.start"))
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction { onTap() }
+    }
+
+    // MARK: Layers
+
+    private func orb(size: CGFloat, t: TimeInterval, m: OrbMotion.Frame) -> some View {
+        let live: Bool = mode != .idle
+        // A word arriving: a swell that decays in about a quarter second.
+        let kick: Double = reduceMotion ? 0 : exp(-max(t - kickAt, 0) * 6)
+        // A tap: one damped bounce, so the orb answers the finger.
+        let since: Double = max(t - tapAt, 0)
+        let bounce: Double = since < 1 ? exp(-since * 7) * sin(since * 26) * 0.045 : 0
+        var wobble: Double = reduceMotion ? 0.006 : 0.016
+        wobble += m.amp * 0.05 + kick * 0.045
+        if mode == .finishing { wobble += 0.03 }
+        let breathe: Double = 1 + sin(t * 0.9) * 0.012
+        let grow: Double = breathe * (1 + m.amp * 0.06 + kick * 0.04 + bounce)
+
+        return ZStack {
+            if live && !reduceMotion { ripples(m: m, wobble: wobble) }
+            bloom(size: size, live: live, amp: m.amp, kick: kick)
+            if live && !reduceMotion { sparks(size: size, t: t, m: m) }
+            core(size: size, m: m, kick: kick, wobble: wobble)
+                .saturation(live ? 1 : 0.6)
+                .scaleEffect(grow)
+                .shadow(color: AppTheme.voiceGlow.opacity(0.28 + m.amp * 0.22), radius: 22)
+                .offset(lean)
+        }
+    }
+
+    /// Sound leaving the orb: blob-shaped echoes travelling outward.
+    private func ripples(m: OrbMotion.Frame, wobble: Double) -> some View {
+        ZStack {
+            ForEach(0..<3, id: \.self) { i in
+                let p: Double = (m.ripple + Double(i) / 3).truncatingRemainder(dividingBy: 1)
+                let alpha: Double = (1 - p) * (0.10 + m.amp * 0.45)
+                let width: CGFloat = CGFloat(1 + (1 - p) * 2.5)
+                OrbBlob(phase: m.wobble + Double(i) * 1.7, amount: wobble * 0.7)
+                    .stroke(AppTheme.voiceGlow.opacity(alpha), lineWidth: width)
+                    .scaleEffect(CGFloat(0.94 + p * 0.46))
+            }
+        }
+    }
+
+    /// Bloom escaping the silhouette, so the orb sits IN the screen.
+    private func bloom(size: CGFloat, live: Bool, amp: Double, kick: Double) -> some View {
+        let alpha: Double = live ? 0.20 + amp * 0.20 + kick * 0.08 : 0.08
+        let scale: CGFloat = CGFloat(1.06 + amp * 0.12 + kick * 0.05)
+        return Circle()
+            .fill(AppTheme.voiceGlow.opacity(alpha))
+            .blur(radius: size * 0.155)
+            .scaleEffect(scale)
+    }
+
+    /// Sparks orbiting just outside the edge, quickening with the swirl.
+    private func sparks(size: CGFloat, t: TimeInterval, m: OrbMotion.Frame) -> some View {
+        ZStack {
+            ForEach(0..<7, id: \.self) { i in
+                let seed: Double = Double(i) * 0.9
+                let turn: Double = 0.30 + 0.07 * Double(i % 3)
+                let angle: Double = m.spinA * .pi / 180 * turn + seed * 2.3
+                let reach: Double = 0.54 + 0.04 * sin(t * 1.3 + seed * 2) + m.amp * 0.07
+                let radius: Double = Double(size) * reach
+                let twinkle: Double = 0.55 + 0.45 * sin(t * 2.1 + seed * 3)
+                let dot: CGFloat = CGFloat(3 + i % 3)
+                Circle()
+                    .fill(AppTheme.voiceGlow)
+                    .frame(width: dot, height: dot)
+                    .blur(radius: 0.6)
+                    .opacity((0.22 + m.amp * 0.6) * twinkle)
+                    .offset(x: CGFloat(cos(angle) * radius), y: CGFloat(sin(angle) * radius))
+            }
+        }
+    }
+
+    /// The liquid interior, clipped to the living blob.
+    private func core(size: CGFloat, m: OrbMotion.Frame, kick: Double, wobble: Double) -> some View {
+        let lobe: CGFloat = size * 0.44
+        let lobeX: CGFloat = CGFloat(cos(m.wobble * 0.73)) * size * 0.19
+        let lobeY: CGFloat = CGFloat(sin(m.wobble * 0.91 + 0.6)) * size * 0.17
+        let light = UnitPoint(x: 0.34 + lean.width / size * 0.9,
+                              y: 0.28 + lean.height / size * 0.9)
+        let blur: CGFloat = size * CGFloat(0.118 - m.amp * 0.03)   // tightens as the voice rises
+        let shape = OrbBlob(phase: m.wobble, amount: wobble)
+        let rim = LinearGradient(colors: [.white.opacity(0.55), .clear, .white.opacity(0.15)],
+                                 startPoint: .topLeading, endPoint: .bottomTrailing)
+
+        return ZStack {
+            Circle()
+                .fill(AngularGradient(colors: warm, center: .center, angle: .degrees(m.spinA)))
+            Circle()
+                .fill(AngularGradient(colors: cool, center: .center, angle: .degrees(-m.spinB + 140)))
+                .blendMode(.screen)
+                .opacity(0.50 + m.amp * 0.32)
+            // A bright lobe drifting inside, so the interior moves on its own
+            // path instead of only turning with the gradients.
+            Circle()
+                .fill(AppTheme.voiceGlow.opacity(0.45 + m.amp * 0.35))
+                .frame(width: lobe, height: lobe)
+                .offset(x: lobeX, y: lobeY)
+                .blendMode(.screen)
+            // Off-centre highlight that follows the lean, so the orb seems to
+            // turn its lit side toward the finger.
+            RadialGradient(colors: [.white.opacity(0.55 + kick * 0.15), .clear],
+                           center: light, startRadius: 2, endRadius: size * 0.68)
+                .blendMode(.softLight)
+        }
+        // Oversized before the blur so the soft edge falls OUTSIDE the clip;
+        // blurring at the clip size frays the silhouette into a smudge.
+        .scaleEffect(1.34)
+        .blur(radius: blur)
+        .clipShape(shape)
+        // Rim light: gives the blob a surface instead of a cut-out edge.
+        .overlay(shape.stroke(rim, lineWidth: 1.2).blendMode(.softLight))
+    }
+
+    // MARK: Touch
+
+    /// Press squeezes, drag leans (a little, with resistance), release springs
+    /// back. A release that barely moved counts as a tap.
+    private var pressAndLean: some Gesture {
+        DragGesture(minimumDistance: 0)
+            .onChanged { value in
+                if !pressed { pressed = true }
+                guard !reduceMotion else { return }
+                let pull = { (d: CGFloat) in max(min(d * 0.18, 18), -18) }
+                lean = CGSize(width: pull(value.translation.width), height: pull(value.translation.height))
+            }
+            .onEnded { value in
+                let moved = hypot(value.translation.width, value.translation.height)
+                withAnimation(.spring(response: 0.45, dampingFraction: 0.5)) {
+                    pressed = false
+                    lean = .zero
+                }
+                if moved < 12 {
+                    tapAt = Date().timeIntervalSinceReferenceDate
+                    onTap()
+                }
+            }
+    }
+}
+
+/// Phase the orb accumulates frame by frame. A reference type in `@State`:
+/// TimelineView redraws every frame, and a speed that follows the voice has to
+/// be integrated — the clock times a changing speed would jump backwards
+/// whenever the level dropped.
+private final class OrbMotion {
+    struct Frame {
+        let amp: Double
+        let spinA: Double
+        let spinB: Double
+        let wobble: Double
+        let ripple: Double
+    }
+
+    private var last: TimeInterval = 0
+    private var amp: Double = 0
+    private var spinA: Double = 0
+    private var spinB: Double = 140
+    private var wobble: Double = 0
+    private var ripple: Double = 0
+
+    func step(at t: TimeInterval, toward target: Double, boost: Double, calm: Bool) -> Frame {
+        // Capped so a frame that arrives late (app returning from background)
+        // does not fling the swirl half a turn.
+        let dt = last == 0 ? 0 : min(max(t - last, 0), 1.0 / 20)
+        last = t
+        // Fast attack, slow release: syllables land at once, silence eases in.
+        let rate = target > amp ? 16.0 : 3.5
+        amp += (target - amp) * (1 - exp(-rate * dt))
+
+        let speed = calm ? 1 : 1 + amp * 2.4 + boost
+        spinA = (spinA + dt * 17 * speed).truncatingRemainder(dividingBy: 360 * 100)
+        spinB = (spinB + dt * 26 * speed).truncatingRemainder(dividingBy: 360 * 100)
+        wobble += dt * (calm ? 0.6 : 0.9 + amp * 3.2 + boost * 0.8)
+        ripple = (ripple + dt * (0.32 + amp * 0.85 + boost * 0.2)).truncatingRemainder(dividingBy: 1)
+        return Frame(amp: amp, spinA: spinA, spinB: spinB, wobble: wobble, ripple: ripple)
+    }
+}
+
+/// A circle whose radius is nudged by three sine harmonics. The sum of their
+/// weights is 1 and the base radius shrinks by `amount`, so the deformed edge
+/// never leaves the frame it was given.
+private struct OrbBlob: Shape {
+    var phase: Double
+    var amount: Double
+
+    func path(in rect: CGRect) -> Path {
+        let c = CGPoint(x: rect.midX, y: rect.midY)
+        let base = Double(min(rect.width, rect.height)) / 2 * (1 - amount)
+        let steps = 96
+        var path = Path()
+        for i in 0...steps {
+            let a = Double(i) / Double(steps) * 2 * .pi
+            let d = sin(2 * a + phase * 1.3) * 0.45
+                  + sin(3 * a - phase * 1.7 + 1.1) * 0.35
+                  + sin(5 * a + phase * 2.3 + 2.4) * 0.20
+            let r = base * (1 + amount * d)
+            let point = CGPoint(x: Double(c.x) + cos(a) * r, y: Double(c.y) + sin(a) * r)
+            if i == 0 { path.move(to: point) } else { path.addLine(to: point) }
+        }
+        path.closeSubpath()
+        return path
     }
 }
 

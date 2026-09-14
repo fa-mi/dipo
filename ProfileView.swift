@@ -152,6 +152,7 @@ struct ProfileView: View {
     @State private var showWebSync        = false
     @State private var showPaywall        = false
     @State private var appearanceMode: String = UserDefaults.standard.string(forKey: "appearance_mode") ?? "system"
+    @State private var voiceLanguage = VoiceLanguage.saved
     @State private var premiumMgr  = PremiumManager.shared
     @State private var session     = UserSession.shared
     @State private var showSignOut = false
@@ -984,6 +985,45 @@ struct ProfileView: View {
             }
             .padding(4)
             .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: AppRadius.md))
+
+            Divider().background(AppTheme.cardMid).padding(.vertical, 12)
+
+            // Voice has its own language: reading in English and speaking in
+            // Indonesian is a normal way to use a phone here.
+            HStack(spacing: 12) {
+                Image(systemName: "waveform")
+                    .font(.system(.body)).foregroundStyle(AppTheme.textPrimary)
+                    .frame(width: 36, height: 36)
+                    .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: AppRadius.sm))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(loc("voice.lang_title"))
+                        .font(.system(.subheadline, weight: .medium)).foregroundStyle(AppTheme.textPrimary)
+                    Text(loc("voice.lang_sub"))
+                        .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 8)
+                Menu {
+                    Picker(loc("voice.lang_title"), selection: Binding(
+                        get: { voiceLanguage },
+                        set: { new in
+                            HapticManager.shared.select()
+                            voiceLanguage = new
+                            VoiceLanguage.saved = new
+                        }
+                    )) {
+                        ForEach(VoiceLanguage.allCases) { Text($0.label).tag($0) }
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        Text(voiceLanguage == .app ? voiceLanguage.code : voiceLanguage.label)
+                            .lineLimit(1)
+                        Image(systemName: "chevron.up.chevron.down").imageScale(.small)
+                    }
+                    .font(.system(.footnote, weight: .semibold))
+                    .foregroundStyle(AppTheme.accent)
+                }
+            }
         }
         .padding(16)
         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
