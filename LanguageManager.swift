@@ -1292,10 +1292,12 @@ final class LanguageManager {
         "stats.categories":     "categories",
         "stats.top_categories": "Top Spending Categories",
         "stats.export_title":   "Export Statistics",
-        "stats.export_preview": "Report Preview",
+        "stats.export_preview": "Share report",
+        "stats.report_title": "Spending report",
+        "stats.export_hint": "This is the image that will be shared. It follows the app's light or dark look.",
         "stats.export_csv":     "Export as CSV",
         "stats.export_summary": "Export Summary Report",
-        "stats.export_image":   "Save as Image",
+        "stats.export_image":   "Share image",
 
         // Statistics period filter pills
         "stats.period.this_month":  "This Month",
@@ -3581,10 +3583,12 @@ final class LanguageManager {
         "stats.categories":     "kategori",
         "stats.top_categories": "Kategori Pengeluaran Teratas",
         "stats.export_title":   "Ekspor Statistik",
-        "stats.export_preview": "Pratinjau Laporan",
+        "stats.export_preview": "Bagikan laporan",
+        "stats.report_title": "Laporan belanja",
+        "stats.export_hint": "Ini gambar yang akan dibagikan. Tampilannya mengikuti mode terang atau gelap aplikasi.",
         "stats.export_csv":     "Ekspor sebagai CSV",
         "stats.export_summary": "Ekspor Laporan Ringkas",
-        "stats.export_image":   "Simpan sebagai Gambar",
+        "stats.export_image":   "Bagikan gambar",
 
         // Statistics period filter pills
         "stats.period.this_month":  "Bulan Ini",
