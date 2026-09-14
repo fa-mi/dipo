@@ -689,7 +689,7 @@ struct UnitySavingsSection: View {
             // Pending invitations inbox (F3) — shown above the goals list.
             if !unity.pendingInvites.isEmpty {
                 Text(String(format: loc("unity.invites_header"), unity.pendingInvites.count))
-                    .font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.purple)
+                    .font(.system(.body, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
                     .padding(.horizontal, 22)
                 ForEach(unity.pendingInvites) { invite in
                     InviteInboxRow(invite: invite)
@@ -697,15 +697,14 @@ struct UnitySavingsSection: View {
                 }
             }
 
-            HStack(spacing: 6) {
-                Image(systemName: "person.2.fill")
-                    .font(.system(.caption)).foregroundStyle(AppTheme.purple)
-                Text(loc("unity.title"))
-                    .font(.system(.subheadline, weight: .semibold))
-                    .foregroundStyle(AppTheme.textSecondary)
-                Spacer()
-            }
-            .padding(.horizontal, 22)
+            // Same heading style as "In progress" above, so the screen reads as
+            // one list of sections rather than a second, differently-coloured app.
+            Text(loc("unity.title"))
+                .font(.system(.body, weight: .bold))
+                .foregroundStyle(AppTheme.textPrimary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 22)
+                .padding(.top, 4)
 
             if unity.goals.isEmpty {
                 UnityEmptyCard { onCreate() }
@@ -719,7 +718,7 @@ struct UnitySavingsSection: View {
                 }
                 if unity.goals.count > Self.previewLimit {
                     NavigationLink { AllSharedGoalsView() } label: {
-                        SeeAllLabel(count: unity.goals.count, tint: AppTheme.purple)
+                        SeeAllLabel(count: unity.goals.count)
                     }
                     .padding(.horizontal, 22)
                 }
@@ -742,11 +741,11 @@ struct SeeAllLabel: View {
             Text(String(format: loc("savings.see_all"), count))
                 .font(.system(.subheadline, weight: .semibold)).foregroundStyle(tint)
             Spacer()
-            Image(systemName: "chevron.right").font(.system(.caption, weight: .semibold)).foregroundStyle(tint)
+            Image(systemName: "chevron.right").font(.system(.caption, weight: .semibold))
+                .foregroundStyle(AppTheme.textSecondary)
         }
         .padding(.vertical, 14).padding(.horizontal, 16)
-        .background(tint.opacity(0.08), in: RoundedRectangle(cornerRadius: AppRadius.md))
-        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(tint.opacity(0.2), lineWidth: 1))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
     }
 }
 
@@ -794,7 +793,7 @@ struct GoalTypeChooserView: View {
                                title: loc("savings.personal_goal"),
                                subtitle: loc("goal.chooser_personal_sub"),
                                action: onPersonal)
-                    optionCard(icon: "person.2.fill", tint: AppTheme.purple,
+                    optionCard(icon: "person.2.fill", tint: AppTheme.blue,
                                title: loc("unity.title"),
                                subtitle: loc("goal.chooser_shared_sub"),
                                action: onShared)
@@ -825,7 +824,6 @@ struct GoalTypeChooserView: View {
             }
             .padding(16)
             .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
-            .overlay(RoundedRectangle(cornerRadius: AppRadius.lg).stroke(tint.opacity(0.2), lineWidth: 1))
         }
         .buttonStyle(ScaleButtonStyle())
         .padding(.horizontal, 22)
@@ -844,17 +842,16 @@ private struct UnityEmptyCard: View {
                 HapticManager.shared.tap(); onCreate()
             } label: {
                 Text(loc("unity.create")).font(.system(.footnote, weight: .semibold))
-                    .foregroundStyle(AppTheme.onVividFill)
-                    .padding(.horizontal, 18).padding(.vertical, 9)
-                    .background(AppTheme.purple, in: Capsule())
+                    .foregroundStyle(AppTheme.textPrimary)
+                    .padding(.horizontal, 18).padding(.vertical, 10)
+                    .background(AppTheme.cardMid, in: Capsule())
             }
             .buttonStyle(ScaleButtonStyle())
             .padding(.top, 2)
         }
         .frame(maxWidth: .infinity)
         .padding(18)
-        .background(AppTheme.purple.opacity(0.06), in: RoundedRectangle(cornerRadius: AppRadius.md))
-        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.purple.opacity(0.18), lineWidth: 1))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.xl))
     }
 }
 
@@ -868,7 +865,7 @@ struct InviteInboxRow: View {
     var body: some View {
         HStack(spacing: 12) {
             ZStack {
-                RoundedRectangle(cornerRadius: AppRadius.sm).fill(AppTheme.purple.opacity(0.15)).frame(width: 42, height: 42)
+                RoundedRectangle(cornerRadius: AppRadius.sm).fill(AppTheme.cardMid.opacity(0.7)).frame(width: 42, height: 42)
                 Text(invite.goalEmoji).font(.system(.title3))
             }
             VStack(alignment: .leading, spacing: 2) {
@@ -878,7 +875,7 @@ struct InviteInboxRow: View {
             }
             Spacer(minLength: 6)
             if busy {
-                ProgressView().tint(AppTheme.purple)
+                ProgressView().tint(AppTheme.accent)
             } else {
                 HStack(spacing: 8) {
                     Button {
@@ -900,15 +897,14 @@ struct InviteInboxRow: View {
                     } label: {
                         Image(systemName: "checkmark").font(.system(.footnote, weight: .bold))
                             .foregroundStyle(AppTheme.onVividFill)
-                            .frame(width: 34, height: 34).background(AppTheme.purple, in: Circle())
+                            .frame(width: 34, height: 34).background(AppTheme.accentFill, in: Circle())
                     }
 .accessibilityLabel(loc("a11y.accept_invite")).buttonStyle(ScaleButtonStyle())
                 }
             }
         }
         .padding(12)
-        .background(AppTheme.purple.opacity(0.08), in: RoundedRectangle(cornerRadius: AppRadius.md))
-        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.purple.opacity(0.25), lineWidth: 1))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
     }
 }
 
@@ -923,22 +919,22 @@ struct SharedGoalCard: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 12) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: AppRadius.sm).fill(AppTheme.purple.opacity(0.15)).frame(width: 44, height: 44)
+                    RoundedRectangle(cornerRadius: AppRadius.sm).fill(AppTheme.cardMid.opacity(0.7)).frame(width: 48, height: 48)
                     Text(goal.emoji).font(.system(.title2))
                 }
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 6) {
-                        Text(goal.title).font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.textPrimary).lineLimit(1)
-                        Text(loc("unity.badge")).font(.system(.caption2, weight: .bold)).foregroundStyle(AppTheme.purple)
+                        Text(goal.title).font(.system(.body, weight: .bold)).foregroundStyle(AppTheme.textPrimary).lineLimit(1)
+                        Text(loc("unity.badge")).font(.system(.caption2, weight: .bold)).foregroundStyle(AppTheme.blue)
                             .padding(.horizontal, 6).padding(.vertical, 2)
-                            .background(AppTheme.purple.opacity(0.15), in: Capsule())
+                            .background(AppTheme.blue.opacity(0.14), in: Capsule())
                     }
                     HStack(spacing: 6) {
                         Image(systemName: "person.2.fill").font(.system(.caption2)).imageScale(.small).foregroundStyle(AppTheme.textSecondary)
                         Text(String(format: loc("unity.members"), goal.memberCount, goal.maxMembers))
                             .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                         if goal.isOwner {
-                            Text("· \(loc("unity.you_owner"))").font(.system(.caption2)).foregroundStyle(AppTheme.purple)
+                            Text("· \(loc("unity.you_owner"))").font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                         }
                     }
                 }
@@ -946,21 +942,21 @@ struct SharedGoalCard: View {
             }
 
             // Collective progress
-            GeometryReader { g in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(AppTheme.cardMid).frame(height: 7)
-                    Capsule().fill(LinearGradient(colors: [AppTheme.purple, AppTheme.blue], startPoint: .leading, endPoint: .trailing))
-                        .frame(width: g.size.width * goal.progress, height: 7)
+            // Same figures-then-bar layout as a personal goal card.
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(CurrencyManager.shared.formatted(goal.savedAmount, currency: goal.currency))
+                        .font(.system(.title2, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
+                        .lineLimit(1).minimumScaleFactor(0.7)
+                    Text(String(format: loc("savings.of_target"),
+                                CurrencyManager.shared.formatted(goal.targetAmount, currency: goal.currency)))
+                        .font(.system(.footnote)).foregroundStyle(AppTheme.textSecondary)
+                        .lineLimit(1).minimumScaleFactor(0.8)
+                    Spacer(minLength: 4)
+                    Text("\(Int((goal.progress * 100).rounded()))%")
+                        .font(.system(.footnote, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
                 }
-            }.frame(height: 7)
-
-            HStack {
-                Text(CurrencyManager.shared.formatted(goal.savedAmount, currency: goal.currency))
-                    .font(.system(.subheadline, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
-                Text("/ \(CurrencyManager.shared.formatted(goal.targetAmount, currency: goal.currency))")
-                    .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
-                Spacer()
-                Text("\(Int(goal.progress * 100))%").font(.system(.footnote, weight: .bold)).foregroundStyle(AppTheme.purple)
+                SavingsProgressBar(progress: goal.progress)
             }
 
             // Owner can invite members until the goal is full.
@@ -972,16 +968,15 @@ struct SharedGoalCard: View {
                         Image(systemName: "person.badge.plus").font(.system(.footnote, weight: .semibold))
                         Text(loc("unity.invite")).font(.system(.footnote, weight: .semibold))
                     }
-                    .foregroundStyle(AppTheme.purple)
-                    .frame(maxWidth: .infinity).padding(.vertical, 9)
-                    .background(AppTheme.purple.opacity(0.12), in: RoundedRectangle(cornerRadius: AppRadius.sm))
+                    .foregroundStyle(AppTheme.textPrimary)
+                    .frame(maxWidth: .infinity).padding(.vertical, 12)
+                    .background(AppTheme.cardMid.opacity(0.7), in: RoundedRectangle(cornerRadius: AppRadius.md))
                 }
                 .buttonStyle(ScaleButtonStyle())
             }
         }
         .padding(16)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
-        .overlay(RoundedRectangle(cornerRadius: AppRadius.lg).stroke(AppTheme.purple.opacity(0.18), lineWidth: 1))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.xl))
         .contentShape(Rectangle())
         .onTapGesture { HapticManager.shared.tap(); showDetail = true }
         .sheet(isPresented: $showInvite) {
