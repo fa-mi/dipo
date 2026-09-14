@@ -1414,6 +1414,36 @@ struct HomeHeader: View {
     /// never, so that work was pure cost on the one screen that must stay smooth.
     @State private var avatar: UIImage? = nil
     @State private var name: String = ""
+    /// Observed so the ring changes the moment the plan does.
+    @State private var premium = PremiumManager.shared
+
+    private var isRoyal: Bool { premium.plan == .royal }
+
+    /// Royal wears its colour as a ring — purple running into a warm gold, the
+    /// crown's own pairing — with the crown tucked at the edge. Free keeps a
+    /// quiet hairline, so the difference is a badge, not a demotion.
+    private var avatarRing: some View {
+        ZStack(alignment: .bottomTrailing) {
+            if isRoyal {
+                Circle()
+                    .strokeBorder(AngularGradient(colors: [PremiumPlan.royal.color, Color(hex: "#E879F9"),
+                                                           Color(hex: "#FBBF24"), PremiumPlan.royal.color],
+                                                  center: .center, angle: .degrees(-60)),
+                                  lineWidth: 2.5)
+                Image(systemName: "crown.fill")
+                    .font(.system(size: 8, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 18, height: 18)
+                    .background(PremiumPlan.royal.color, in: Circle())
+                    .overlay(Circle().stroke(AppTheme.bg, lineWidth: 2))
+                    .offset(x: 3, y: 3)
+                    .accessibilityHidden(true)
+            } else {
+                Circle().strokeBorder(AppTheme.cardMid, lineWidth: 1.5)
+            }
+        }
+        .frame(width: 54, height: 54)
+    }
 
     var body: some View {
         HStack(spacing: 12) {
@@ -1429,22 +1459,24 @@ struct HomeHeader: View {
                         Circle()
                             .fill(LinearGradient(colors: [AppTheme.cardMid, AppTheme.cardDark],
                                                 startPoint: .topLeading, endPoint: .bottomTrailing))
-                            .frame(width: 46, height: 46)
-                            .overlay(Circle().stroke(AppTheme.accent.opacity(0.25), lineWidth: 1))
+                            .frame(width: 45, height: 45)
                         if let avatar {
                             Image(uiImage: avatar)
                                 .resizable()
                                 .scaledToFill()
-                                .frame(width: 46, height: 46)
+                                .frame(width: 45, height: 45)
                                 .clipShape(Circle())
                         } else {
                             Image("DiPoMascot")
                                 .resizable()
                                 .scaledToFill()
-                                .frame(width: 50, height: 50)
+                                .frame(width: 49, height: 49)
+                                .frame(width: 45, height: 45)
                                 .clipShape(Circle())
                         }
+                        avatarRing
                     }
+                    .frame(width: 54, height: 54)
 
                     VStack(alignment: .leading, spacing: 1) {
                         Text(loc("home.greeting") + ",")
@@ -1527,7 +1559,7 @@ struct CardCarousel: View {
     @Bindable var vm: AppViewModel
 
     var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 2) {
             TabView(selection: Binding(
                 get: { vm.selectedCardIndex },
                 set: { vm.selectCard($0) }
@@ -1535,11 +1567,16 @@ struct CardCarousel: View {
                 ForEach(Array(vm.cards.enumerated()), id: \.element.id) { index, card in
                     BankCardView(card: card)
                         .padding(.horizontal, 22)
+                        // The page clips its content, so the glow under the card
+                        // needs room inside it — the old black shadow was cut
+                        // off flat along the bottom edge.
+                        .padding(.top, 4)
+                        .padding(.bottom, 30)
                         .tag(index)
                 }
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
-            .frame(height: 190)
+            .frame(height: 216)
 
             HStack(spacing: 5) {
                 ForEach(0..<max(vm.cards.count, 1), id: \.self) { i in
@@ -1557,6 +1594,7 @@ struct CardCarousel: View {
 
 struct BankCardView: View {
     @Bindable var card: BankCard
+    @Environment(\.colorScheme) private var colorScheme
     @State private var isPressed = false
     /// Drives the balance count-up. Starts at 0 and animates to the real
     /// balance on appear; re-counts smoothly whenever the balance changes.
@@ -1591,36 +1629,64 @@ struct BankCardView: View {
         return (totalBalance < 0 ? "-" : "") + CurrencyManager.shared.formatted(abs, currency: cardCurrency)
     }
 
-    var body: some View {
-        ZStack(alignment: .topLeading) {
-            RoundedRectangle(cornerRadius: AppRadius.xl)
-                .fill(LinearGradient(
-                    colors: [Color(hex: card.gradientStart), Color(hex: card.gradientEnd)],
-                    startPoint: .topLeading, endPoint: .bottomTrailing
-                ))
+    private var gradient: LinearGradient {
+        LinearGradient(colors: [Color(hex: card.gradientStart), Color(hex: card.gradientEnd)],
+                       startPoint: .topLeading, endPoint: .bottomTrailing)
+    }
+
+    /// The face: the card's own gradient, lit like a surface rather than
+    /// painted flat — a soft glow from the top right, depth pooling at the
+    /// bottom left, a light sheen across the top and a hairline edge that
+    /// catches it. The network's colour still tints the corner curve.
+    ///
+    /// Gone: a black drop shadow (it clipped flat against the carousel page
+    /// and read as a smudge in dark mode) and a sparkline drawn from a fixed
+    /// array of numbers — a chart of nothing, on the card showing real money.
+    private var face: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: AppRadius.xl).fill(gradient)
 
             GeometryReader { g in
-                Path { p in
-                    p.move(to: .init(x: g.size.width * 0.32, y: 0))
-                    p.addCurve(
-                        to: .init(x: g.size.width, y: g.size.height * 0.7),
-                        control1: .init(x: g.size.width * 0.74, y: -12),
-                        control2: .init(x: g.size.width + 8, y: g.size.height * 0.32)
-                    )
-                    p.addLine(to: .init(x: g.size.width, y: 0))
-                    p.closeSubpath()
+                let w = g.size.width, h = g.size.height
+                ZStack {
+                    Circle()
+                        .fill(Color.white.opacity(0.22))
+                        .frame(width: w * 0.75, height: w * 0.75)
+                        .blur(radius: 38)
+                        .offset(x: w * 0.42, y: -h * 0.55)
+                    Circle()
+                        .fill(Color.black.opacity(0.22))
+                        .frame(width: w * 0.7, height: w * 0.7)
+                        .blur(radius: 44)
+                        .offset(x: -w * 0.42, y: h * 0.62)
+                    Path { p in
+                        p.move(to: .init(x: w * 0.46, y: 0))
+                        p.addCurve(to: .init(x: w, y: h * 0.62),
+                                   control1: .init(x: w * 0.8, y: -8),
+                                   control2: .init(x: w + 6, y: h * 0.3))
+                        p.addLine(to: .init(x: w, y: 0))
+                        p.closeSubpath()
+                    }
+                    .fill(LinearGradient(colors: [network.accentColor.opacity(0.28), network.accentColor.opacity(0.02)],
+                                         startPoint: .top, endPoint: .bottom))
+                    LinearGradient(colors: [Color.white.opacity(0.16), .clear],
+                                   startPoint: .top, endPoint: .center)
                 }
-                .fill(LinearGradient(
-                    colors: [network.accentColor.opacity(0.3), network.accentColor.opacity(0.05)],
-                    startPoint: .top, endPoint: .bottom
-                ))
+                .frame(width: w, height: h)
             }
             .clipShape(RoundedRectangle(cornerRadius: AppRadius.xl))
 
-            // Sits in the gap the reordered face opened between the balance
-            // and the identity line — at y: 72 it now ran straight through the
-            // balance digits.
-            SparklineView().frame(width: 100, height: 28).offset(x: 18, y: 98).opacity(0.45)
+            RoundedRectangle(cornerRadius: AppRadius.xl)
+                .strokeBorder(LinearGradient(colors: [Color.white.opacity(0.45), Color.white.opacity(0.06),
+                                                      Color.white.opacity(0.18)],
+                                             startPoint: .topLeading, endPoint: .bottomTrailing),
+                              lineWidth: 1)
+        }
+    }
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            face
 
             // Mockup order, and the right order: the balance is the reason
             // anyone looks at this card, so it sits at the top where the eye
@@ -1644,6 +1710,14 @@ struct BankCardView: View {
                         .buttonStyle(ScaleButtonStyle())
                     }
                     Spacer()
+                    if !card.isDigitalWallet {
+                        Image(systemName: "wave.3.right")
+                            .font(.system(.caption, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.7))
+                            .padding(.trailing, 8)
+                            .padding(.top, 3)
+                            .accessibilityHidden(true)
+                    }
                     if card.isDigitalWallet, let wp = WalletProvider(rawValue: card.walletProvider) {
                         HStack(spacing: 4) {
                             Image(systemName: wp.icon)
@@ -1717,41 +1791,23 @@ struct BankCardView: View {
             .padding(20)
         }
         .frame(height: 182)
-        .shadow(color: .black.opacity(0.35), radius: 20, y: 10)
+        // A glow in the card's own colours, not a black shadow: it lifts the
+        // card off the page in both themes and belongs to the card it sits under.
+        .background(alignment: .bottom) {
+            RoundedRectangle(cornerRadius: AppRadius.xl)
+                .fill(gradient)
+                .frame(height: 150)
+                .padding(.horizontal, 20)
+                .offset(y: 14)
+                .blur(radius: 20)
+                .opacity(colorScheme == .dark ? 0.55 : 0.45)
+        }
         .scaleEffect(isPressed ? 0.97 : 1)
         .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isPressed)
         .onLongPressGesture(minimumDuration: .infinity, pressing: { p in
             isPressed = p
             if p { HapticManager.shared.tap() }
         }, perform: {})
-    }
-}
-
-// MARK: - Sparkline
-
-struct SparklineView: View {
-    private let points: [Double] = [0.3, 0.5, 0.4, 0.7, 0.55, 0.8, 0.65]
-    @State private var progress: Double = 0
-    var body: some View {
-        GeometryReader { g in
-            let w = g.size.width, h = g.size.height
-            let step = w / Double(points.count - 1)
-            Path { path in
-                for (i, pt) in points.enumerated() {
-                    let x = Double(i) * step; let y = h - pt * h
-                    if i == 0 { path.move(to: .init(x: x, y: y)) }
-                    else {
-                        let prev = points[i-1]; let px = Double(i-1) * step; let py = h - prev * h
-                        path.addCurve(to: .init(x: x, y: y),
-                                      control1: .init(x: px + step*0.5, y: py),
-                                      control2: .init(x: x - step*0.5, y: y))
-                    }
-                }
-            }
-            .trim(from: 0, to: progress)
-            .stroke(AppTheme.accent, style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
-        }
-        .onAppear { withAnimation(.easeOut(duration: 1.2).delay(0.4)) { progress = 1 } }
     }
 }
 
