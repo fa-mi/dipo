@@ -32,6 +32,8 @@ struct WalletCard: View {
     /// say which card this is, and the figures belong in the label beneath it.
     var compact: Bool = false
 
+    @Environment(\.colorScheme) private var colorScheme
+
     /// Real card proportions, standing up.
     static let aspect: CGFloat = 53.98 / 85.6
     /// 3.18 mm corner on a 53.98 mm width — the ISO/IEC 7810 ID-1 radius.
@@ -161,11 +163,24 @@ struct WalletCard: View {
         .aspectRatio(Self.aspect, contentMode: .fit)
         .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
         .overlay(
+            // A hairline that catches the light, like the Home card's edge, so
+            // the two surfaces read as one family.
             RoundedRectangle(cornerRadius: radius, style: .continuous)
-                .stroke(.white.opacity(0.22), lineWidth: 0.8)
+                .stroke(LinearGradient(colors: [.white.opacity(0.5), .white.opacity(0.08), .white.opacity(0.2)],
+                                       startPoint: .topLeading, endPoint: .bottomTrailing),
+                        lineWidth: 0.8)
         )
-        // Depth: the centred card sits forward, its neighbours recede.
-        .shadow(color: .black.opacity(0.25 * prominence), radius: 18 * prominence, y: 10 * prominence)
+        // Depth as a glow in the card's OWN colours — the neon lift the Home
+        // card has — instead of a flat black shadow. The small thumbnail keeps
+        // a plain contact shadow so its glow can't bleed past its neighbours.
+        .background {
+            RoundedRectangle(cornerRadius: radius, style: .continuous)
+                .fill(compact ? AnyShapeStyle(Color.black) : AnyShapeStyle(gradient))
+                .scaleEffect(compact ? 1 : 0.94)
+                .offset(y: (compact ? 3 : 12) * prominence)
+                .blur(radius: (compact ? 6 : 20) * prominence)
+                .opacity((compact ? 0.18 : (colorScheme == .dark ? 0.6 : 0.45)) * prominence)
+        }
     }
 
     private var displayNumber: String {
@@ -271,7 +286,7 @@ struct WalletCarousel: View {
         }
         .scrollTargetBehavior(.viewAligned)
         .scrollPosition(id: $selectedID)
-        .frame(height: cardWidth / WalletCard.aspect + 24)
+        .frame(height: cardWidth / WalletCard.aspect + 40)
         .background {
             GeometryReader { g in
                 Color.clear
