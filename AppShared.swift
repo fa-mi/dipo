@@ -826,6 +826,61 @@ struct DoneToolbar: ViewModifier {
     }
 }
 
+// MARK: - Feature screens: pushed from a tab, or presented as a sheet
+
+private struct PushedFeatureKey: EnvironmentKey { static let defaultValue = false }
+
+extension EnvironmentValues {
+    /// Set on a feature screen pushed onto a tab's NavigationStack.
+    var pushedFeature: Bool {
+        get { self[PushedFeatureKey.self] }
+        set { self[PushedFeatureKey.self] = newValue }
+    }
+}
+
+/// The root of a feature screen (Salary, Bills, Savings Goals, Budget, Debts).
+///
+/// The same screen is pushed from its tab and, from a few shortcuts, still
+/// presented as a sheet. Pushed, it must not open a NavigationStack of its own
+/// — a stack inside a stack breaks back navigation — and it keeps the system
+/// bar for the back button. Presented, it needs its own stack for its titles
+/// and toolbars. `pushed` is handed to the content so it can pick its bar and
+/// drop its Done/Cancel button, and the flag is cleared below this point so a
+/// sheet the screen opens is treated as a sheet again.
+struct FeatureStack<Content: View>: View {
+    @Environment(\.pushedFeature) private var pushed
+    @ViewBuilder let content: (_ pushed: Bool) -> Content
+
+    var body: some View {
+        if pushed {
+            content(true).environment(\.pushedFeature, false)
+        } else {
+            NavigationStack { content(false) }
+        }
+    }
+}
+
+extension View {
+    /// Bar for a feature screen that draws its own large header. As a sheet the
+    /// system bar is hidden; pushed, it stays for the back button and nothing
+    /// else, so the header below is not repeated in it.
+    @ViewBuilder
+    func featureBar(pushed: Bool) -> some View {
+        if pushed {
+            self.navigationTitle("")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbarBackground(AppTheme.bg, for: .navigationBar)
+        } else {
+            self.toolbar(.hidden, for: .navigationBar)
+        }
+    }
+
+    /// Marks a destination as pushed from a tab. See `FeatureStack`.
+    func pushedFeature() -> some View {
+        environment(\.pushedFeature, true)
+    }
+}
+
 extension View {
     /// Standard top-right "Done" for a sheet. See `DoneToolbar`.
     func doneToolbar(_ action: @escaping () -> Void) -> some View {

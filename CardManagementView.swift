@@ -138,11 +138,12 @@ struct CardListView: View {
     @Query private var allSchedules: [SalarySchedule]
     @Query private var allRecurrings: [RecurringExpense]
     @Query private var allBudgetConfigs: [CardBudgetConfig]
+    @Query private var debts: [DebtRecord]
     @State private var showAddCard    = false
     @State private var editingCard: BankCard? = nil
     @State private var appeared       = false
     @State private var showTransfer        = false
-    @State private var showTransferPaywall = false
+    @State private var showPaywall = false
     @State private var pm = PremiumManager.shared
     /// Which card the carousel is centred on. Drives the actions beneath it.
     @State private var carouselID: UUID? = nil
@@ -191,6 +192,26 @@ struct CardListView: View {
         carouselID = nextID
     }
 
+    /// Debts & Credits, next to the accounts they are paid from. It used to be
+    /// a sheet inside Profile, the one place nobody looks for what they owe.
+    private var debtsRow: some View {
+        let locked = !pm.canAccess(.smartDebt)
+        let active = debts.filter(\.isActive).count
+        return Button {
+            HapticManager.shared.tap()
+            if locked { showPaywall = true } else { vm.walletPath.append(.obligations) }
+        } label: {
+            PlanRowLabel(icon: "scalemass.fill", tint: AppTheme.teal,
+                         title: loc("oblig.nav"),
+                         status: locked ? loc("profile.requires_royal")
+                             : active > 0 ? String(format: loc("wallet.debts_status"), active)
+                             : loc("oblig.entry_sub"),
+                         lockedPlan: locked ? PremiumFeature.smartDebt.requiredPlan : nil)
+                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+        }
+        .buttonStyle(ScaleButtonStyle())
+    }
+
     var body: some View {
         ZStack {
             AppTheme.bg.ignoresSafeArea()
@@ -218,7 +239,7 @@ struct CardListView: View {
                                     if pm.canAccess(.cardTransfer) {
                                         showTransfer = true
                                     } else {
-                                        showTransferPaywall = true
+                                        showPaywall = true
                                     }
                                 } label: {
                                     ZStack {
@@ -331,6 +352,11 @@ struct CardListView: View {
                         .padding(.horizontal, 22)
                         .padding(.top, 24)
                         .opacity(appeared ? 1 : 0)
+
+                        debtsRow
+                            .padding(.horizontal, 22)
+                            .padding(.top, 14)
+                            .opacity(appeared ? 1 : 0)
                     }
 
                     Spacer(minLength: 110)
@@ -407,7 +433,7 @@ struct CardListView: View {
                 .presentationBackground(AppTheme.bg)
                 .preferredColorScheme(appColorScheme())
         }
-        .sheet(isPresented: $showTransferPaywall) {
+        .sheet(isPresented: $showPaywall) {
             PaywallView()
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)

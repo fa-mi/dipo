@@ -143,18 +143,11 @@ struct ProfileView: View {
 
     @State private var appeared           = false
     @State private var showResetConfirm   = false
-    @State private var showSalary         = false
-    @State private var showRecurring      = false
-    @State private var showAIChat         = false
-    @State private var showWishlist       = false
-    @State private var showCardManager    = false
-    @State private var showBudgetSettings = false
     @State private var isEditingName      = false
     @State private var editNameText       = ""
     @State private var showEmailEdit      = false
     @State private var idCopied           = false
     @State private var emailText          = ""
-    @State private var showObligations = false
     @State private var showBackTapGuide = false
     @State private var showWebSync        = false
     @State private var showPaywall        = false
@@ -258,7 +251,7 @@ struct ProfileView: View {
             AppTheme.bg.ignoresSafeArea()
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 24) {
-                    Spacer(minLength: 20)
+                    Spacer(minLength: 4)
                     avatarSection
                     nameSection
                     securityCard
@@ -276,6 +269,10 @@ struct ProfileView: View {
                 }
             }
         }
+        // Pushed from the avatar on Home: the bar carries the back button.
+        .navigationTitle(loc("tab.profile"))
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(AppTheme.bg, for: .navigationBar)
         // Backup busy overlay — shown over the entire profile while export
         // or import is running. Disables interaction with all sheets and
         // buttons so the user can't double-tap or cancel mid-write.
@@ -325,14 +322,6 @@ struct ProfileView: View {
             .presentationCornerRadius(28)
             .preferredColorScheme(appColorScheme())
         }
-        .sheet(isPresented: $showSalary) {
-            SalaryView().presentationDetents([.large]).presentationDragIndicator(.visible)
-                .presentationBackground(AppTheme.bg).preferredColorScheme(appColorScheme())
-        }
-        .sheet(isPresented: $showRecurring) {
-            RecurringExpensesView().presentationDetents([.large]).presentationDragIndicator(.visible)
-                .presentationBackground(AppTheme.bg).preferredColorScheme(appColorScheme())
-        }
         .sheet(isPresented: $showDeleteAccount) {
             DangerConfirmSheet(
                 icon: "trash.fill",
@@ -365,14 +354,6 @@ struct ProfileView: View {
                 }
                 .transition(.opacity)
             }
-        }
-        .sheet(isPresented: $showAIChat) {
-            AIChatView().presentationDetents([.large]).presentationDragIndicator(.visible)
-                .presentationBackground(AppTheme.bg).preferredColorScheme(appColorScheme())
-        }
-        .sheet(isPresented: $showWishlist) {
-            WishlistView().presentationDetents([.large]).presentationDragIndicator(.visible)
-                .presentationBackground(AppTheme.bg).preferredColorScheme(appColorScheme())
         }
         // Backup share sheet — fires when export succeeds.
         .sheet(item: $backupShareItem) { item in
@@ -450,15 +431,6 @@ struct ProfileView: View {
             .presentationBackground(AppTheme.bg)
             .presentationCornerRadius(28)
             .preferredColorScheme(appColorScheme())
-        }
-        .sheet(isPresented: $showBudgetSettings) {
-            SmartBudgetSettingsSheet().presentationDetents([.large]).presentationDragIndicator(.visible)
-                .presentationBackground(AppTheme.bg).preferredColorScheme(appColorScheme())
-        }
-        .sheet(isPresented: $showObligations) {
-            ObligationsView()
-                .presentationDetents([.large]).presentationDragIndicator(.visible)
-                .presentationBackground(AppTheme.bg).preferredColorScheme(appColorScheme())
         }
         .sheet(isPresented: $showBackTapGuide) {
             BackTapGuideView()
@@ -866,42 +838,10 @@ struct ProfileView: View {
 
     @ViewBuilder
     private var featureLinksCard: some View {
+        // Money features (budget, salary, bills, savings, Ask DiPo) moved to the
+        // Plan tab and Debts & Credits to Wallet. What stays is how DiPo
+        // connects to things outside the app.
         VStack(spacing: 12) {
-            PremiumLockedFeatureLink(
-                feature: .aiAdvisor, title: loc("profile.ai_advisor"),
-                subtitle: premiumMgr.canAccess(.aiAdvisor)
-                    ? loc("profile.ai_advisor_sub")
-                    : loc("profile.requires_royal"),
-                showPaywall: $showPaywall) { showAIChat = true }
-            ProfileFeatureLink(icon: "banknote.fill", color: AppTheme.accent,
-                               title: loc("profile.salary"),
-                               subtitle: loc("profile.salary_sub")) { showSalary = true }
-            ProfileFeatureLink(icon: "arrow.triangle.2.circlepath", color: AppTheme.orange,
-                               title: loc("profile.recurring"),
-                               subtitle: loc("profile.recurring_sub")) { showRecurring = true }
-            PremiumLockedFeatureLink(
-                feature: .savingsGoals, title: loc("profile.savings"),
-                // Savings Goals moved from Premium-tier to Royal-tier when
-                // the Premium plan was removed, so the locked-state copy
-                // points at Royal now (same key the other paid features
-                // already use).
-                subtitle: premiumMgr.canAccess(.savingsGoals) ? loc("profile.savings_sub") : loc("profile.requires_royal"),
-                showPaywall: $showPaywall) { showWishlist = true }
-            PremiumLockedFeatureLink(
-                feature: .smartBudget, title: loc("profile.budget"),
-                subtitle: premiumMgr.canAccess(.smartBudget)
-                    ? (SmartBudgetManager.shared.isEnabled ? loc("profile.budget_active") : loc("budget.off"))
-                    : loc("profile.requires_royal"),
-                showPaywall: $showPaywall) { showBudgetSettings = true }
-            // One door for everything owed, owing, or being considered. These
-            // were three separate rows; they answer the same question from
-            // three sides, and splitting them hid the only number that matters
-            // — what all of it adds up to against income.
-            PremiumLockedFeatureLink(
-                feature: .smartDebt, title: loc("oblig.nav"),
-                subtitle: premiumMgr.canAccess(.smartDebt) ? loc("oblig.entry_sub") : loc("profile.requires_royal"),
-                iconOverride: "scalemass.fill",
-                showPaywall: $showPaywall) { showObligations = true }
             // Gated on .smartBudget — the same entitlement the Worker checks
             // before serving the dashboard, so the button can't offer something
             // the server will refuse.

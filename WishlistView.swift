@@ -214,7 +214,7 @@ struct WishlistView: View {
 
     var body: some View {
         PremiumGate(feature: .savingsGoals) {
-        NavigationStack {
+        FeatureStack { pushed in
         ZStack {
             AppTheme.bg.ignoresSafeArea()
 
@@ -295,7 +295,7 @@ struct WishlistView: View {
                 .zIndex(999)
             }
         }
-        .toolbar(.hidden, for: .navigationBar)
+        .featureBar(pushed: pushed)
         .onAppear {
             withAnimation(.spring(response: 0.55, dampingFraction: 0.85)) { appeared = true }
         }
@@ -353,7 +353,7 @@ struct WishlistView: View {
                       confirmLabel: loc("common.delete")) { goal in
             deleteGoal(goal)
         }
-        } // end NavigationStack
+        } // end FeatureStack
         } // end PremiumGate
     }
 

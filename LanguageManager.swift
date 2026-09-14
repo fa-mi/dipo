@@ -147,6 +147,13 @@ final class LanguageManager {
         "tab.stats":   "Stats",
         "tab.cards":   "Wallet",
         "tab.profile": "Profile",
+        "tab.plan": "Plan",
+        "plan.sub": "Decide where your money goes before you spend it",
+        "plan.section_month": "Every month",
+        "plan.section_goals": "Saving for something",
+        "plan.section_help": "Help",
+        "plan.bills_status": "%d bills · %@ a month",
+        "wallet.debts_status": "%d active debts",
 
         // Common actions
         "action.add":     "Add",
@@ -2395,6 +2402,13 @@ final class LanguageManager {
         "tab.stats":   "Statistik",
         "tab.cards":   "Dompet",
         "tab.profile": "Profil",
+        "tab.plan": "Rencana",
+        "plan.sub": "Atur ke mana uangmu pergi sebelum dipakai",
+        "plan.section_month": "Tiap bulan",
+        "plan.section_goals": "Menabung untuk sesuatu",
+        "plan.section_help": "Bantuan",
+        "plan.bills_status": "%d tagihan · %@ per bulan",
+        "wallet.debts_status": "%d utang aktif",
 
         // Common actions
         "action.add":     "Tambah",
@@ -2560,7 +2574,7 @@ final class LanguageManager {
         "profile.all_features": "Semua fitur terbuka",
         "profile.upgrade":    "Tingkatkan",
         "profile.requires_premium": "Anggota Premium",
-        "profile.requires_royal":   "Anggita Royal",
+        "profile.requires_royal":   "Khusus Royal",
         "profile.budget_active":    "Aktif — pembagian anggaran sudah diatur",
         "profile.signin_support":   "Masuk untuk Menghubungi Dukungan",
         "support.login_required":   "Silakan masuk untuk menghubungi dukungan.",

@@ -198,7 +198,7 @@ struct SmartBudgetSettingsSheet: View {
 
     var body: some View {
         PremiumGate(feature: .smartBudget) {
-        NavigationStack {
+        FeatureStack { pushed in
             ZStack { AppTheme.bg.ignoresSafeArea()
                 VStack(spacing: 0) {
 
@@ -293,6 +293,9 @@ struct SmartBudgetSettingsSheet: View {
             .navigationTitle(loc("profile.budget")).navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(AppTheme.bg, for: .navigationBar)
             .toolbar {
+                // Pushed, the back button is the way out: unsaved edits live only
+                // in this screen's state and leave with it.
+                if !pushed {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(loc("common.cancel")) {
                         // Revert local state to whatever was the active baseline
@@ -305,6 +308,7 @@ struct SmartBudgetSettingsSheet: View {
                         dismiss()
                     }
                     .foregroundStyle(AppTheme.textSecondary)
+                }
                 }
                 ToolbarItem(placement: .primaryAction) {
                     Button(loc("common.save")) {
@@ -385,6 +389,8 @@ struct SmartBudgetSettingsSheet: View {
         .onChange(of: investPct)    { _, _ in reconcileSelectedPreset() }
         .sheet(isPresented: $showSalarySetup) {
             SalaryView()
+                // Presented from here, so a sheet — even when this screen was pushed.
+                .environment(\.pushedFeature, false)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
                 .presentationBackground(AppTheme.bg)

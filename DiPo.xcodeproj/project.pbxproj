@@ -105,6 +105,7 @@
 		9BEA101F2F00001F0000C3B4 /* ScreenAnalytics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BEA101F2F00001F0000F3E4 /* ScreenAnalytics.swift */; };
 		9BEA10202F0000200000C3B4 /* DateFormatterCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BEA10202F0000200000F3E4 /* DateFormatterCache.swift */; };
 		9BEA10A12F0000A10000C3B4 /* HomeSummary.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BEA10A12F0000A10000F3E4 /* HomeSummary.swift */; };
+		9BEA10B12F0000B10000C3B4 /* PlanView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BEA10B12F0000B10000F3E4 /* PlanView.swift */; };
 		9BFC17B52F91206C00D80402 /* RevenueCat in Frameworks */ = {isa = PBXBuildFile; productRef = 9BFC17B42F91206C00D80402 /* RevenueCat */; };
 /* End PBXBuildFile section */
 
@@ -241,6 +242,7 @@
 		9BEA101F2F00001F0000F3E4 /* ScreenAnalytics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenAnalytics.swift; sourceTree = "<group>"; };
 		9BEA10202F0000200000F3E4 /* DateFormatterCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DateFormatterCache.swift; sourceTree = "<group>"; };
 		9BEA10A12F0000A10000F3E4 /* HomeSummary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeSummary.swift; sourceTree = "<group>"; };
+		9BEA10B12F0000B10000F3E4 /* PlanView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlanView.swift; sourceTree = "<group>"; };
 		9BFA00062F00002000000006 /* DiPoTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = DiPoTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -415,6 +417,7 @@
 				9BEA100C2F00000C0000F3E4 /* AskDiPoIntent.swift */,
 				9BEA100B2F00000B0000F3E4 /* VoiceDictation.swift */,
 				9BEA10A12F0000A10000F3E4 /* HomeSummary.swift */,
+				9BEA10B12F0000B10000F3E4 /* PlanView.swift */,
 				9BEA100A2F00000A0000F2E4 /* BackgroundRefresh.swift */,
 				9BEA100A2F00000A0000E6E4 /* CycleIntentView.swift */,
 				9BEA100A2F00000A0000E5E4 /* CycleIntent.swift */,
@@ -737,6 +740,7 @@
 				9BEA100C2F00000C0000C3B4 /* AskDiPoIntent.swift in Sources */,
 				9BEA100B2F00000B0000C3B4 /* VoiceDictation.swift in Sources */,
 				9BEA10A12F0000A10000C3B4 /* HomeSummary.swift in Sources */,
+				9BEA10B12F0000B10000C3B4 /* PlanView.swift in Sources */,
 				9BD5A1012FC0000000000010 /* SharedScanInbox.swift in Sources */,
 				9BEA100A2F00000A0000C2B4 /* BackgroundRefresh.swift in Sources */,
 				9BEA100A2F00000A0000B6B4 /* CycleIntentView.swift in Sources */,

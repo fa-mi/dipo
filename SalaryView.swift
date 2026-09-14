@@ -407,7 +407,7 @@ struct SalaryView: View {
     }
 
     var body: some View {
-        NavigationStack {
+        FeatureStack { pushed in
             ZStack {
                 AppTheme.bg.ignoresSafeArea()
                 ScrollView(showsIndicators: false) {
@@ -438,7 +438,7 @@ struct SalaryView: View {
                     .offset(y: appeared ? 0 : 16)
                 }
             }
-            .toolbar(.hidden, for: .navigationBar)
+            .featureBar(pushed: pushed)
             .onAppear {
                 withAnimation(.spring(response: 0.55, dampingFraction: 0.85)) { appeared = true }
             }

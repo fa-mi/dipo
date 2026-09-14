@@ -16,11 +16,6 @@ struct MainTabView: View {
     /// `dipo://support`). Presented here so the user reaches their ticket
     /// thread from any tab.
     @State private var showSupport = false
-    // Destinations a notification's "what to do next" button can open. Owned
-    // here so an alert tapped from any tab lands on the right screen.
-    @State private var showBudgetFromNotif = false
-    @State private var showDebtFromNotif = false
-    @State private var showGoalsFromNotif = false
     /// Ask DiPo opened by the Back Tap / Siri shortcut, already listening.
     @State private var showVoiceEntry = false
     /// A captured sentence waiting for Ask DiPo. `item:` rather than a Bool so
@@ -94,11 +89,11 @@ struct MainTabView: View {
                     if vm.activeTab == tab || visitedTabs.contains(tab) {
                         Group {
                             switch tab {
-                            case .home:    HomeView(vm: vm)
-                            case .stats:   StatisticsView(statsVM: StatsViewModel(), appVM: vm)
-                            case .add:     Color.clear
-                            case .cards:   CardListView(vm: vm)
-                            case .profile: ProfileView(authVM: authVM)
+                            case .home:  homeStack
+                            case .stats: StatisticsView(statsVM: StatsViewModel(), appVM: vm)
+                            case .add:   Color.clear
+                            case .cards: walletStack
+                            case .plan:  PlanView(vm: vm)
                             }
                         }
                         .opacity(vm.activeTab == tab ? 1 : 0)
@@ -132,8 +127,13 @@ struct MainTabView: View {
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
 
-            CustomTabBar(vm: vm, namespace: tabNS, showAddSheet: $showAddSheet,
-                         showNoCardBanner: $showNoCardBanner)
+            // Steps aside while a feature is pushed, so it never covers the
+            // bottom of a screen that was laid out as a full page.
+            if !vm.isInsideFeature {
+                CustomTabBar(vm: vm, namespace: tabNS, showAddSheet: $showAddSheet,
+                             showNoCardBanner: $showNoCardBanner)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
 
             // Confirmation toasts. Mounted here — above every tab, below every
             // sheet — so one overlay serves the whole app and no screen has to
@@ -141,6 +141,7 @@ struct MainTabView: View {
             ActionFeedbackOverlay()
         }
         .ignoresSafeArea(edges: .bottom)
+        .animation(.spring(response: 0.35, dampingFraction: 0.9), value: vm.isInsideFeature)
         // Everything downstream reads the main card, so nothing downstream can
         // be trusted until one exists. Presented without a dismiss path on
         // purpose — the gate hosts the only action that legitimately gets you
@@ -205,6 +206,41 @@ struct MainTabView: View {
         }
     }
 
+    /// Home, with Profile pushed from the avatar in its header.
+    private var homeStack: some View {
+        NavigationStack(path: $vm.homePath) {
+            HomeView(vm: vm)
+                .navigationTitle(loc("tab.home"))
+                .toolbar(.hidden, for: .navigationBar)
+                .navigationDestination(for: HomeRoute.self) { _ in
+                    ProfileView(authVM: authVM)
+                }
+        }
+    }
+
+    /// Wallet: accounts, and what is owed on them.
+    private var walletStack: some View {
+        NavigationStack(path: $vm.walletPath) {
+            CardListView(vm: vm)
+                .navigationTitle(loc("tab.cards"))
+                .toolbar(.hidden, for: .navigationBar)
+                .navigationDestination(for: WalletRoute.self) { _ in
+                    ObligationsView().pushedFeature()
+                }
+        }
+    }
+
+    /// A notification's "what to do next" lands on the feature in its own tab.
+    /// An open Add Transaction sheet is closed first so the jump is visible.
+    private func route(_ go: @escaping () -> Void) {
+        if showAddSheet {
+            showAddSheet = false
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35, execute: go)
+        } else {
+            go()
+        }
+    }
+
     var body: some View {
         core
         .sheet(isPresented: $showAddSheet) {
@@ -241,21 +277,6 @@ struct MainTabView: View {
                 showSupport = true
             }
         }
-        .sheet(isPresented: $showBudgetFromNotif) {
-            SmartBudgetSettingsSheet()
-                .presentationDetents([.large]).presentationDragIndicator(.visible)
-                .presentationBackground(AppTheme.bg).preferredColorScheme(appColorScheme())
-        }
-        .sheet(isPresented: $showDebtFromNotif) {
-            DebtView()
-                .presentationDetents([.large]).presentationDragIndicator(.visible)
-                .presentationBackground(AppTheme.bg).preferredColorScheme(appColorScheme())
-        }
-        .sheet(isPresented: $showGoalsFromNotif) {
-            WishlistView()
-                .presentationDetents([.large]).presentationDragIndicator(.visible)
-                .presentationBackground(AppTheme.bg).preferredColorScheme(appColorScheme())
-        }
         .fullScreenCover(isPresented: $showVoiceEntry) {
             VoiceCaptureView { text in
                 spokenEntry = SpokenEntry(text: text)
@@ -288,13 +309,13 @@ struct MainTabView: View {
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .requestOpenSmartBudget)) { _ in
-            showBudgetFromNotif = true
+            route { vm.open(PlanRoute.budget) }
         }
         .onReceive(NotificationCenter.default.publisher(for: .requestOpenDebt)) { _ in
-            showDebtFromNotif = true
+            route { vm.open(WalletRoute.obligations) }
         }
         .onReceive(NotificationCenter.default.publisher(for: .requestOpenSavingsGoals)) { _ in
-            showGoalsFromNotif = true
+            route { vm.open(PlanRoute.goals) }
         }
         .onReceive(NotificationCenter.default.publisher(for: .requestOpenPaywall)) { _ in
             // If the AddTransaction sheet happens to be open (rare — would

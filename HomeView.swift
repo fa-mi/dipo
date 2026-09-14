@@ -61,13 +61,7 @@ struct HomeView: View {
     @State private var monthExpense: Double = 0
     @State private var flowPeriodLabel: String = ""
     @State private var showAllAttention = false
-    @State private var showSmartBudget = false
-    @State private var showSalarySheet   = false
-    @State private var showWishlistSheet  = false
     @State private var showGoalDetail: SavingsGoal? = nil
-    /// Open Debt sheet when an insight CTA routes there. Separate from the
-    /// Profile entry so we don't have to thread bindings across views.
-    @State private var showDebtFromInsight = false
     @State private var headerAppeared    = false
     @State private var contentAppeared   = false
     // Memoized Smart-Budget analyses. Each engine iterates ALL transactions
@@ -353,7 +347,7 @@ struct HomeView: View {
             items.append(.init(id: "insight-\(budgetCard?.id.uuidString ?? "none")-\(idx)",
                                rank: idx == 0 ? 2 : 7,
                                view: AnyView(
-                Button { HapticManager.shared.tap(); showSmartBudget = true } label: {
+                Button { HapticManager.shared.tap(); vm.open(PlanRoute.budget) } label: {
                     SmartInsightBanner(insight: insight,
                                        tappable: idx == 0,
                                        onAction: { kind in routeInsightAction(kind) })
@@ -374,7 +368,7 @@ struct HomeView: View {
         // decision.
         if let salary = nearestSalary {
             items.append(.init(id: "payday", rank: 5, view: AnyView(
-                Button { HapticManager.shared.tap(); showSalarySheet = true } label: {
+                Button { HapticManager.shared.tap(); vm.open(PlanRoute.salary) } label: {
                     SalaryReminderBanner(schedule: salary, tappable: true)
                 }
                 .buttonStyle(ScaleButtonStyle()))))
@@ -386,7 +380,7 @@ struct HomeView: View {
         }
         if let pinned = pinnedGoals.first {
             items.append(.init(id: "goal-\(pinned.id)", rank: 8, view: AnyView(
-                Button { HapticManager.shared.tap(); showWishlistSheet = true } label: {
+                Button { HapticManager.shared.tap(); vm.open(PlanRoute.goals) } label: {
                     PinnedGoalBanner(goal: pinned, tappable: true)
                 }
                 .buttonStyle(ScaleButtonStyle()))))
@@ -630,44 +624,16 @@ struct HomeView: View {
                 .presentationBackground(AppTheme.bg)
                 .preferredColorScheme(appColorScheme())
         }
-        .sheet(isPresented: $showSalarySheet) {
-            SalaryView()
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-                .presentationBackground(AppTheme.bg)
-                .preferredColorScheme(appColorScheme())
-        }
-        .sheet(isPresented: $showWishlistSheet) {
-            WishlistView()
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-                .presentationBackground(AppTheme.bg)
-                .preferredColorScheme(appColorScheme())
-        }
-        .sheet(isPresented: $showSmartBudget) {
-            SmartBudgetSettingsSheet()
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-                .presentationBackground(AppTheme.bg)
-                .preferredColorScheme(appColorScheme())
-        }
-        .sheet(isPresented: $showDebtFromInsight) {
-            DebtView()
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-                .presentationBackground(AppTheme.bg)
-                .preferredColorScheme(appColorScheme())
-        }
     }
 
     /// Route handler for `SmartInsight.action`. Each kind opens the matching
-    /// sheet on Home — this lives on HomeView (not the engine) because the
-    /// engine is intentionally UI-agnostic.
+    /// feature in its own tab — this lives on HomeView (not the engine) because
+    /// the engine is intentionally UI-agnostic.
     private func routeInsightAction(_ kind: SmartInsightAction.Kind) {
         switch kind {
-        case .openBudgetSettings: showSmartBudget = true
-        case .openSavingsGoals:   showWishlistSheet = true
-        case .openDebt:           showDebtFromInsight = true
+        case .openBudgetSettings: vm.open(PlanRoute.budget)
+        case .openSavingsGoals:   vm.open(PlanRoute.goals)
+        case .openDebt:           vm.open(WalletRoute.obligations)
         case .acknowledge:        break  // banner state managed elsewhere
         }
     }
@@ -1456,7 +1422,7 @@ struct HomeHeader: View {
             // opens the place where you change the name.
             Button {
                 HapticManager.shared.tap()
-                vm.selectTab(.profile)
+                vm.openProfile()
             } label: {
                 HStack(spacing: 12) {
                     ZStack {

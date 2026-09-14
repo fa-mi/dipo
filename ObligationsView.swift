@@ -284,7 +284,7 @@ struct ObligationsView: View {
     }
 
     var body: some View {
-        NavigationStack {
+        FeatureStack { pushed in
             ZStack {
                 AppTheme.bg.ignoresSafeArea()
                 // Deliberately NOT wrapped in a ScrollView: each segment below
@@ -320,7 +320,17 @@ struct ObligationsView: View {
             .navigationTitle(loc("oblig.nav"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(AppTheme.bg, for: .navigationBar)
-            .doneToolbar { dismiss() }
+            .toolbar {
+                if !pushed {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button { HapticManager.shared.tap(); dismiss() } label: {
+                            Text(loc("common.done"))
+                                .font(.system(.callout, weight: .semibold))
+                                .foregroundStyle(AppTheme.accent)
+                        }
+                    }
+                }
+            }
         }
     }
 }

@@ -461,7 +461,7 @@ struct RecurringExpensesView: View {
     private var nextDue: RecurringExpense? { sortedExpenses.first(where: \.isActive) }
 
     var body: some View {
-        NavigationStack {
+        FeatureStack { pushed in
             ZStack {
                 AppTheme.bg.ignoresSafeArea()
                 ScrollView(showsIndicators: false) {
@@ -510,7 +510,7 @@ struct RecurringExpensesView: View {
                     .offset(y: appeared ? 0 : 16)
                 }
             }
-            .toolbar(.hidden, for: .navigationBar)
+            .featureBar(pushed: pushed)
             .onAppear { withAnimation(.spring(response: 0.55, dampingFraction: 0.85)) { appeared = true } }
             .sheet(isPresented: $vm.showAddSheet, onDismiss: { vm.resetForm() }) {
                 RecurringFormSheet(vm: vm, context: context)
