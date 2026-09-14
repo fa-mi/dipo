@@ -317,36 +317,71 @@ struct CategoryTilePicker: View {
     @Binding var selection: TxCategory
 
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 10) {
-                ForEach(categories, id: \.self) { cat in
-                    let on = selection == cat
-                    Button {
-                        HapticManager.shared.tap()
-                        withAnimation(.spring(response: 0.3)) { selection = cat }
-                    } label: {
-                        VStack(spacing: 7) {
-                            Image(systemName: cat.icon)
-                                .font(.system(.title3, weight: .medium))
-                            Text(cat.displayLabel)
-                                .font(.system(size: 11, weight: on ? .semibold : .regular))
-                                .multilineTextAlignment(.center)
-                                .lineLimit(2)
-                                .minimumScaleFactor(0.8)
-                        }
-                        .foregroundStyle(on ? AppTheme.textPrimary : AppTheme.textSecondary)
-                        .frame(width: 84, height: 78)
-                        .background(on ? cat.color.opacity(0.16) : AppTheme.cardDark,
-                                    in: RoundedRectangle(cornerRadius: AppRadius.lg))
-                        .overlay(RoundedRectangle(cornerRadius: AppRadius.lg)
-                            .stroke(on ? cat.color.opacity(0.65) : Color.clear, lineWidth: 1.5))
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    ForEach(categories, id: \.self) { cat in
+                        tile(cat).id(cat)
                     }
-                    .buttonStyle(ScaleButtonStyle())
                 }
+                .padding(.horizontal, 22)
+                .padding(.vertical, 4)
             }
-            .padding(.horizontal, 22)
-            .padding(.vertical, 2)
+            // Editing a transaction whose category sits off-screen: bring it in.
+            .onAppear { proxy.scrollTo(selection, anchor: .center) }
         }
+    }
+
+    /// Each category in the colour its transactions carry in every list — a
+    /// solid circle with a white glyph. The picker used the muted theme hues
+    /// instead (olive for Food, a hot magenta for Health) as a faint wash over
+    /// the whole tile, so the colour you picked here matched nothing you saw
+    /// afterwards, and the picked tile looked stained rather than chosen.
+    private func tile(_ cat: TxCategory) -> some View {
+        let on = selection == cat
+        let hue = Color(hex: cat.iconBg)
+        return Button {
+            HapticManager.shared.tap()
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selection = cat }
+        } label: {
+            VStack(spacing: 8) {
+                ZStack(alignment: .topTrailing) {
+                    Circle()
+                        .fill(on ? hue : hue.opacity(0.16))
+                        .frame(width: 42, height: 42)
+                        .overlay(
+                            Image(systemName: cat.icon)
+                                .font(.system(.body, weight: .semibold))
+                                .foregroundStyle(on ? .white : hue)
+                        )
+                        .scaleEffect(on ? 1.06 : 1)
+                    if on {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 9, weight: .heavy))
+                            .foregroundStyle(AppTheme.onVividFill)
+                            .frame(width: 17, height: 17)
+                            .background(AppTheme.accentFill, in: Circle())
+                            .overlay(Circle().stroke(AppTheme.cardDark, lineWidth: 2))
+                            .offset(x: 4, y: -3)
+                            .transition(.scale.combined(with: .opacity))
+                    }
+                }
+                Text(cat.displayLabel)
+                    .font(.system(.caption2, weight: on ? .semibold : .medium))
+                    .foregroundStyle(on ? AppTheme.textPrimary : AppTheme.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.8)
+                    .frame(height: 28, alignment: .top)
+            }
+            .frame(width: 82, height: 94)
+            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+            .overlay(RoundedRectangle(cornerRadius: AppRadius.lg)
+                .stroke(on ? hue : Color.clear, lineWidth: 2))
+        }
+        .buttonStyle(ScaleButtonStyle())
+        .accessibilityLabel(cat.displayLabel)
+        .accessibilityAddTraits(on ? .isSelected : [])
     }
 }
 
