@@ -349,7 +349,9 @@ struct MainTabView: View {
                 }
                 return
             }
-            // Switch to Home so the user sees the new tx land after save.
+            // Switch to Home's root so the user actually sees the new tx land —
+            // popping Profile if it happened to be pushed on the Home stack.
+            vm.homePath.removeAll()
             vm.activeTab = .home
             showAddSheet = true
         }
@@ -401,6 +403,8 @@ struct CustomTabBar: View {
                                     .foregroundStyle(vm.activeTab == tab
                                                      ? AppTheme.accent
                                                      : AppTheme.textSecondary)
+                                    // A single bounce marks the tab you just picked.
+                                    .symbolEffect(.bounce, options: .nonRepeating, value: vm.activeTab == tab)
                                     .scaleEffect(vm.activeTab == tab ? 1.05 : 1)
                                     .animation(.spring(response: 0.3, dampingFraction: 0.6),
                                                value: vm.activeTab)
