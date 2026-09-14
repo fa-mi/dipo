@@ -55,6 +55,10 @@ enum WidgetDataSync {
         static let labelWeeklyAvg           = "widget.label.weeklyAvg"
         static let labelInsights            = "widget.label.insights"
         static let labelUpgrade             = "widget.label.upgrade"
+        static let labelLeft                = "widget.label.left"
+        static let labelOver                = "widget.label.over"
+        /// What is left of income, or how far past it — unsigned; the label says which.
+        static let leftFormatted            = "widget.leftFormatted"
     }
 
     /// Returns nil if the App Group capability isn't enabled yet — fail
@@ -101,6 +105,7 @@ enum WidgetDataSync {
             Key.labelExpenses, Key.labelIncome, Key.labelQuickAdd,
             Key.labelTopCategory, Key.labelWeeklyAvg,
             Key.labelInsights, Key.labelUpgrade,
+            Key.labelLeft, Key.labelOver, Key.leftFormatted,
         ]
         for key in keys { store.removeObject(forKey: key) }
         WidgetCenter.shared.reloadAllTimelines()
@@ -298,6 +303,10 @@ enum WidgetDataSync {
         store.set(labelWeeklyAvg,   forKey: Key.labelWeeklyAvg)
         store.set(labelInsights,    forKey: Key.labelInsights)
         store.set(labelUpgrade,     forKey: Key.labelUpgrade)
+        store.set(loc("stats.left"), forKey: Key.labelLeft)
+        store.set(loc("stats.over"), forKey: Key.labelOver)
+        store.set(CurrencyManager.shared.formatted(abs(income - expenses), currency: preferred),
+                  forKey: Key.leftFormatted)
 
         WidgetCenter.shared.reloadAllTimelines()
     }

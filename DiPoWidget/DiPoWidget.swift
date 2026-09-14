@@ -2,15 +2,17 @@
 //  DiPoWidget.swift
 //  DiPoWidget
 //
-//  Medium-sized Home Screen widget. Two variants share the same layout:
-//    - Free user: expense total, month, income on the left + Quick Add right.
-//    - Royal user: same left, but income row is replaced with Smart Insights
-//      (top category + weekly avg) so the upgrade unlocks something visible.
+//  Home Screen and Lock Screen widgets for this pay period's spending.
 //
-//  All numbers AND localized labels are pre-computed by the main app and
-//  written to App Group UserDefaults. The widget is intentionally a thin
-//  renderer — it doesn't import LanguageManager, CurrencyManager, or
-//  PremiumManager because those types live in the app target.
+//    - Small:  spending, the period, and the spend gauge with what is left.
+//    - Medium: the same, plus one insight (Royal) and a Quick Add button.
+//    - Lock Screen: a circular gauge, a rectangular line with a bar, and an
+//      inline line — for the glance that does not need the phone unlocked.
+//
+//  Every number AND label is computed by the main app and written to App Group
+//  UserDefaults (`WidgetDataSync` in RootView.swift). The widget is a thin
+//  renderer: it cannot import LanguageManager, CurrencyManager or
+//  PremiumManager, which live in the app target.
 //
 
 import WidgetKit
@@ -18,18 +20,19 @@ import SwiftUI
 
 // MARK: - Shared Bridge Config
 //
-// Mirrors `WidgetDataSync` in the main app (RootView.swift). Keep these
-// strings byte-identical to the main app's `WidgetDataSync.Key.*` —
-// they're the contract between the two processes.
+// Keep these strings byte-identical to `WidgetDataSync.Key.*` in the app —
+// they are the contract between the two processes.
 
 enum DiPoSharedConfig {
-    /// Must match the App Group enabled on BOTH this widget extension and
-    /// the main app target. iOS silently returns nil if it's wrong.
+    /// Must match the App Group enabled on BOTH this extension and the app.
     static let appGroupID = "group.com.fahmiaquinas.DiPo"
 
     enum Key {
+        static let monthlyExpenses          = "widget.monthlyExpenses"
         static let monthlyExpensesFormatted = "widget.monthlyExpensesFormatted"
+        static let monthlyIncome            = "widget.monthlyIncome"
         static let monthlyIncomeFormatted   = "widget.monthlyIncomeFormatted"
+        static let leftFormatted            = "widget.leftFormatted"
         static let monthLabel               = "widget.monthLabel"
         static let lastUpdated              = "widget.lastUpdated"
 
@@ -48,79 +51,70 @@ enum DiPoSharedConfig {
         static let labelWeeklyAvg           = "widget.label.weeklyAvg"
         static let labelInsights            = "widget.label.insights"
         static let labelUpgrade             = "widget.label.upgrade"
+        static let labelLeft                = "widget.label.left"
+        static let labelOver                = "widget.label.over"
 
         /// Written by the app's LanguageManager; used here only for the text
         /// the widget shows before the app has ever synced.
         static let language                 = "dipo_language"
     }
 
-    /// Deep-link URL the widget's Quick Add button opens. Handled by the
-    /// main app's `.onOpenURL` in FinanceAppMain.swift.
+    /// Opens Add Transaction. Handled by `.onOpenURL` in FinanceAppMain.swift.
     static let addTransactionURL = URL(string: "dipo://add-transaction")!
-
-    /// Deep-link URL the free-user Smart Insights teaser opens. Routes the
-    /// user straight to the Royal paywall — taps on the locked insights
-    /// preview must NEVER open the Add Transaction sheet, that would be
-    /// a UX trap. Handled by `.onOpenURL` in FinanceAppMain.swift.
+    /// Opens the Royal paywall — only ever from the locked insight line.
     static let upgradeRoyalURL    = URL(string: "dipo://upgrade-royal")!
 }
 
 // MARK: - Timeline Entry
 
-/// One snapshot of the data the widget renders.
 struct MonthlyExpensesEntry: TimelineEntry {
     let date: Date
-    // Numbers
+    let expenses: Double
+    let income: Double
     let expensesFormatted: String
     let incomeFormatted: String
+    let leftFormatted: String
     /// The window the total covers: "Since payday 25 Aug", or the month.
     let monthLabel: String
-    // Royal insights
     let isRoyal: Bool
     let topCategoryLabel: String
-    let topCategoryFormatted: String
     let topCategoryPercent: Int
-    let weeklyAvgFormatted: String
-    // Localized labels (mirrors the user's chosen app language)
     let labelExpenses: String
-    let labelIncome: String
     let labelQuickAdd: String
     let labelTopCategory: String
-    let labelWeeklyAvg: String
-    let labelInsights: String
     let labelUpgrade: String
-    /// True when we couldn't read the shared store. The view renders a
-    /// friendly default so the widget gallery preview doesn't show zeros.
+    let labelLeft: String
+    let labelOver: String
     let isPlaceholder: Bool
 
-    /// Sample entry for the widget gallery and the first launch, in the app's
-    /// language when the app has recorded one (Indonesian otherwise).
+    /// Spent ÷ income; nil when there is no income to measure against.
+    var spentFraction: Double? { income > 0 ? expenses / income : nil }
+
+    /// Sample entry for the gallery and first launch, in the app's language
+    /// when the app has recorded one (Indonesian otherwise).
     static var placeholder: MonthlyExpensesEntry {
         let english = WidgetCopy.isEnglish
         return MonthlyExpensesEntry(
             date: .now,
-            expensesFormatted:    "Rp 0",
-            incomeFormatted:      "Rp 0",
-            monthLabel:           english ? "This month" : "Bulan ini",
-            isRoyal:              false,
-            topCategoryLabel:     "",
-            topCategoryFormatted: "",
-            topCategoryPercent:   0,
-            weeklyAvgFormatted:   "",
-            labelExpenses:        english ? "Expense" : "Pengeluaran",
-            labelIncome:          english ? "Income" : "Pemasukan",
-            labelQuickAdd:        english ? "Add\nTransaction" : "Tambah\nTransaksi",
-            labelTopCategory:     english ? "Biggest" : "Terbesar",
-            labelWeeklyAvg:       english ? "per week" : "per minggu",
-            labelInsights:        english ? "Spending insights" : "Ringkasan belanja",
-            labelUpgrade:         english ? "Unlock with Royal" : "Buka dengan Royal",
-            isPlaceholder:        true
+            expenses: 3_450_000, income: 10_000_000,
+            expensesFormatted: "Rp 3.450.000",
+            incomeFormatted:   "Rp 10.000.000",
+            leftFormatted:     "Rp 6.550.000",
+            monthLabel:        english ? "Since payday 25 Aug" : "Sejak gajian 25 Agu",
+            isRoyal: false,
+            topCategoryLabel: "", topCategoryPercent: 0,
+            labelExpenses:    english ? "Expense" : "Pengeluaran",
+            labelQuickAdd:    english ? "Add" : "Tambah",
+            labelTopCategory: english ? "Biggest" : "Terbesar",
+            labelUpgrade:     english ? "Unlock with Royal" : "Buka dengan Royal",
+            labelLeft:        english ? "Left" : "Sisa",
+            labelOver:        english ? "Over by" : "Lebih",
+            isPlaceholder: true
         )
     }
 }
 
-/// The few strings the widget needs before the app has written any. Everything
-/// else arrives pre-translated from the app.
+/// The few strings the widget needs before the app has written any.
 enum WidgetCopy {
     static var isEnglish: Bool {
         UserDefaults(suiteName: DiPoSharedConfig.appGroupID)?
@@ -128,8 +122,8 @@ enum WidgetCopy {
     }
 
     static var galleryDescription: String {
-        isEnglish ? "Spending this pay period, and a quick Add button."
-                  : "Pengeluaran periode ini dan tombol tambah cepat."
+        isEnglish ? "Spending this pay period, how much is left, and a quick Add button."
+                  : "Pengeluaran periode ini, sisa uangmu, dan tombol tambah cepat."
     }
 }
 
@@ -141,17 +135,15 @@ struct Provider: TimelineProvider {
 
     func getSnapshot(in context: Context,
                      completion: @escaping (MonthlyExpensesEntry) -> Void) {
-        completion(readCurrent())
+        completion(context.isPreview ? .placeholder : readCurrent())
     }
 
-    /// We emit a single entry and ask iOS to refresh in 1 hour. In practice
-    /// the main app reloads the timeline after every change it makes (and when
-    /// it goes to the background), so the timer is the worst-case fallback.
+    /// One entry, refreshed hourly at worst. The app reloads the timeline after
+    /// every change it makes and when it goes to the background.
     func getTimeline(in context: Context,
                      completion: @escaping (Timeline<MonthlyExpensesEntry>) -> Void) {
-        let entry   = readCurrent()
         let refresh = Calendar.current.date(byAdding: .hour, value: 1, to: .now) ?? .now
-        completion(Timeline(entries: [entry], policy: .after(refresh)))
+        completion(Timeline(entries: [readCurrent()], policy: .after(refresh)))
     }
 
     private func readCurrent() -> MonthlyExpensesEntry {
@@ -160,44 +152,36 @@ struct Provider: TimelineProvider {
         else {
             return .placeholder
         }
-        // `typealias K` lets us reference `K.foo` like a namespace abbrev.
-        // Plain `let K = DiPoSharedConfig.Key` would fail — `Key` is a type
-        // (a caseless enum used as a namespace), not a value.
         typealias K = DiPoSharedConfig.Key
         let fallback = MonthlyExpensesEntry.placeholder
-
         return MonthlyExpensesEntry(
-            date:                 store.object(forKey: K.lastUpdated) as? Date ?? .now,
-            expensesFormatted:    expensesFormatted,
-            incomeFormatted:      store.string(forKey: K.monthlyIncomeFormatted) ?? "—",
-            monthLabel:           store.string(forKey: K.monthLabel) ?? "—",
-            isRoyal:              store.bool(forKey: K.isRoyal),
-            topCategoryLabel:     store.string(forKey: K.topCategoryLabel) ?? "",
-            topCategoryFormatted: store.string(forKey: K.topCategoryFormatted) ?? "",
-            topCategoryPercent:   store.integer(forKey: K.topCategoryPercent),
-            weeklyAvgFormatted:   store.string(forKey: K.weeklyAvgFormatted) ?? "",
-            // Labels written by an older app build may be missing — fall back
-            // to the placeholder copy, which follows the same language.
-            labelExpenses:        store.string(forKey: K.labelExpenses)    ?? fallback.labelExpenses,
-            labelIncome:          store.string(forKey: K.labelIncome)      ?? fallback.labelIncome,
-            labelQuickAdd:        store.string(forKey: K.labelQuickAdd)    ?? fallback.labelQuickAdd,
-            labelTopCategory:     store.string(forKey: K.labelTopCategory) ?? fallback.labelTopCategory,
-            labelWeeklyAvg:       store.string(forKey: K.labelWeeklyAvg)   ?? fallback.labelWeeklyAvg,
-            labelInsights:        store.string(forKey: K.labelInsights)    ?? fallback.labelInsights,
-            labelUpgrade:         store.string(forKey: K.labelUpgrade)     ?? fallback.labelUpgrade,
-            isPlaceholder:        false
+            date:               store.object(forKey: K.lastUpdated) as? Date ?? .now,
+            expenses:           store.double(forKey: K.monthlyExpenses),
+            income:             store.double(forKey: K.monthlyIncome),
+            expensesFormatted:  expensesFormatted,
+            incomeFormatted:    store.string(forKey: K.monthlyIncomeFormatted) ?? "—",
+            leftFormatted:      store.string(forKey: K.leftFormatted) ?? "",
+            monthLabel:         store.string(forKey: K.monthLabel) ?? "—",
+            isRoyal:            store.bool(forKey: K.isRoyal),
+            topCategoryLabel:   store.string(forKey: K.topCategoryLabel) ?? "",
+            topCategoryPercent: store.integer(forKey: K.topCategoryPercent),
+            labelExpenses:      store.string(forKey: K.labelExpenses)    ?? fallback.labelExpenses,
+            labelQuickAdd:      store.string(forKey: K.labelQuickAdd)    ?? fallback.labelQuickAdd,
+            labelTopCategory:   store.string(forKey: K.labelTopCategory) ?? fallback.labelTopCategory,
+            labelUpgrade:       store.string(forKey: K.labelUpgrade)     ?? fallback.labelUpgrade,
+            labelLeft:          store.string(forKey: K.labelLeft)        ?? fallback.labelLeft,
+            labelOver:          store.string(forKey: K.labelOver)        ?? fallback.labelOver,
+            isPlaceholder:      false
         )
     }
 }
 
-// MARK: - Adaptive Widget Theme
+// MARK: - Theme
 //
-// The widget can't import the main app's `AppTheme` (separate target,
-// separate process). The few colours it renders are mirrored here with the
-// SAME light/dark values as `AppTheme.swift` — a tweak there is a tweak here.
+// The widget cannot import `AppTheme`; these mirror its light/dark values.
 
 private enum WidgetTheme {
-    private static func adaptive(dark: UInt32, light: UInt32) -> Color {
+    static func adaptive(dark: UInt32, light: UInt32) -> Color {
         Color(UIColor { trait in
             let hex = trait.userInterfaceStyle == .dark ? dark : light
             return UIColor(red: CGFloat((hex >> 16) & 0xFF) / 255,
@@ -205,214 +189,282 @@ private enum WidgetTheme {
                            blue: CGFloat(hex & 0xFF) / 255, alpha: 1)
         })
     }
+    private static func fixed(_ v: UInt32) -> Color {
+        Color(red: Double((v >> 16) & 0xFF) / 255, green: Double((v >> 8) & 0xFF) / 255,
+              blue: Double(v & 0xFF) / 255)
+    }
 
-    /// `AppTheme.accent` — #1DB87A in both themes.
-    static let accent      = Color(red: 0x1D / 255, green: 0xB8 / 255, blue: 0x7A / 255)
-    /// `AppTheme.onVividFill` — label on a solid fill.
+    static let accent      = fixed(0x1DB87A)
+    static let yellow      = fixed(0xEAB308)
+    static let amber       = fixed(0xF97316)
+    static let red         = adaptive(dark: 0xFF6166, light: 0xE5484D)
+    static let orangeText  = adaptive(dark: 0xFB923C, light: 0xCF5F04)
     static let onVividFill = adaptive(dark: 0x0D1514, light: 0xFFFFFF)
-    /// `AppTheme.purple` — Royal.
     static let purple      = adaptive(dark: 0xA78BFA, light: 0x8B66F8)
-    /// `AppTheme.orange` / `AppTheme.blue` — the two insight icons.
-    static let orange      = adaptive(dark: 0xFB923C, light: 0xCF5F04)
-    static let blue        = adaptive(dark: 0x38BDF8, light: 0x0789C3)
-    /// `AppTheme.textSecondary` — `.secondary` in a widget is too faint on the
-    /// tinted background in light mode.
     static let secondary   = adaptive(dark: 0x8A9693, light: 0x4D6B62)
+    static let track       = adaptive(dark: 0x2A3330, light: 0xE4EAE8)
 
-    /// Subtle gradient so the widget reads like a card rather than a flat
-    /// panel. Two-stop, low-contrast, tinted toward the brand green.
-    static func backgroundGradient(for scheme: ColorScheme) -> LinearGradient {
-        let stops: [Color]
-        switch scheme {
-        case .dark:
-            stops = [
-                Color(red: 0.13, green: 0.17, blue: 0.16),
-                Color(red: 0.10, green: 0.13, blue: 0.12),
-            ]
-        default:
-            stops = [
-                Color(red: 0.97, green: 0.99, blue: 0.97),
-                Color(red: 0.91, green: 0.97, blue: 0.93),
-            ]
-        }
+    /// Same stops as the app's `SpendGauge`.
+    static let gaugeStops: [Gradient.Stop] = [
+        .init(color: accent, location: 0),
+        .init(color: accent, location: 0.55),
+        .init(color: yellow, location: 0.72),
+        .init(color: amber,  location: 0.88),
+        .init(color: red,    location: 1),
+    ]
+
+    static func tone(for fraction: Double) -> Color {
+        if fraction < 0.72 { return accent }
+        if fraction < 1 { return orangeText }
+        return red
+    }
+
+    static func background(for scheme: ColorScheme) -> LinearGradient {
+        let stops: [Color] = scheme == .dark
+            ? [Color(red: 0.13, green: 0.17, blue: 0.16), Color(red: 0.10, green: 0.13, blue: 0.12)]
+            : [Color(red: 0.98, green: 0.99, blue: 0.98), Color(red: 0.92, green: 0.97, blue: 0.94)]
         return LinearGradient(colors: stops, startPoint: .topLeading, endPoint: .bottomTrailing)
     }
 }
 
-// MARK: - View
+// MARK: - Pieces
+
+/// The app's spend gauge: a green→red gradient revealed up to the spent share.
+private struct WidgetSpendBar: View {
+    let fraction: Double
+    var height: CGFloat = 7
+
+    var body: some View {
+        GeometryReader { g in
+            let w = g.size.width
+            ZStack(alignment: .leading) {
+                Capsule().fill(WidgetTheme.track)
+                if fraction >= 1 {
+                    Capsule().fill(WidgetTheme.red)
+                } else {
+                    LinearGradient(stops: WidgetTheme.gaugeStops, startPoint: .leading, endPoint: .trailing)
+                        .frame(width: w)
+                        .mask(alignment: .leading) {
+                            Capsule().frame(width: max(w * CGFloat(max(fraction, 0)), height))
+                        }
+                }
+            }
+        }
+        .frame(height: height)
+    }
+}
+
+/// "Left Rp 6.550.000" or "Over by Rp 450.000", toned like the bar.
+private struct LeftLine: View {
+    let entry: MonthlyExpensesEntry
+    let fraction: Double
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Text(fraction >= 1 ? entry.labelOver : entry.labelLeft)
+                .foregroundStyle(WidgetTheme.secondary)
+            Text(entry.leftFormatted)
+                .fontWeight(.semibold)
+                .foregroundStyle(WidgetTheme.tone(for: fraction))
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
+        .font(.system(size: 12))
+    }
+}
+
+// MARK: - Views per family
 
 struct DiPoWidgetEntryView: View {
     var entry: MonthlyExpensesEntry
+    @Environment(\.widgetFamily) private var family
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        HStack(spacing: 0) {
-            infoColumn
-            Divider()
-                .padding(.vertical, 12)
-            quickAddColumn
-                // Narrower than the info column: the headline question is
-                // "how much have I spent", the button only needs a good target.
-                .frame(width: 110)
-        }
-        .containerBackground(for: .widget) {
-            WidgetTheme.backgroundGradient(for: colorScheme)
+        switch family {
+        case .accessoryCircular:
+            circular
+                .containerBackground(for: .widget) { AccessoryWidgetBackground() }
+        case .accessoryRectangular:
+            rectangular
+                .containerBackground(for: .widget) { Color.clear }
+        case .accessoryInline:
+            inline
+                .containerBackground(for: .widget) { Color.clear }
+        case .systemSmall:
+            small
+                .containerBackground(for: .widget) { WidgetTheme.background(for: colorScheme) }
+        default:
+            medium
+                .containerBackground(for: .widget) { WidgetTheme.background(for: colorScheme) }
         }
     }
 
-    // MARK: Info column (left)
+    // MARK: Home Screen
 
-    /// The expense headline is always shown; the footer is the Royal insights
-    /// or, for everyone else, a locked preview of them.
-    ///
-    /// Tapping the headline opens the app. It used to open the PAYWALL for free
-    /// users — the whole column was one upgrade link, so checking your own
-    /// spending from the Home Screen landed you on a sales page. Only the
-    /// locked preview links there now.
-    private var infoColumn: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 5) {
-                Image(systemName: "arrow.down.left")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(WidgetTheme.secondary)
-                Text(entry.labelExpenses)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(WidgetTheme.secondary)
-                if entry.isRoyal {
-                    Image(systemName: "crown.fill")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(WidgetTheme.purple)
-                }
-            }
-
+    private var headline: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(entry.labelExpenses)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(WidgetTheme.secondary)
             Text(entry.expensesFormatted)
                 .font(.system(size: 24, weight: .bold, design: .rounded))
                 .foregroundStyle(.primary)
-                .minimumScaleFactor(0.6)
+                .minimumScaleFactor(0.55)
                 .lineLimit(1)
-                .contentTransition(.numericText())
-
             Text(entry.monthLabel)
-                .font(.system(size: 12))
+                .font(.system(size: 11))
                 .foregroundStyle(WidgetTheme.secondary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
+        }
+    }
 
-            Spacer(minLength: 0)
-
-            if entry.isRoyal {
-                royalInsights
-            } else {
-                Link(destination: DiPoSharedConfig.upgradeRoyalURL) {
-                    lockedInsightsTeaser
-                }
+    @ViewBuilder
+    private var gaugeBlock: some View {
+        if let f = entry.spentFraction, !entry.leftFormatted.isEmpty {
+            VStack(alignment: .leading, spacing: 5) {
+                WidgetSpendBar(fraction: f)
+                LeftLine(entry: entry, fraction: f)
             }
         }
-        .padding(.leading, 14)
-        .padding(.vertical, 12)
-        .padding(.trailing, 10)
+    }
+
+    private var small: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            headline
+            Spacer(minLength: 6)
+            gaugeBlock
+        }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
-    /// Free-tier preview: the SHAPE of the insights with the values redacted,
-    /// and one line saying how to open them.
-    private var lockedInsightsTeaser: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            // Sample values inside the redaction give the skeleton real
-            // proportions instead of flat bars.
-            HStack(spacing: 4) {
-                Image(systemName: "trophy.fill")
-                    .font(.system(size: 11))
-                    .foregroundStyle(WidgetTheme.orange)
-                Text("Makan & Minum 42%")
-                    .font(.system(size: 12, weight: .semibold))
-                    .redacted(reason: .placeholder)
+    private var medium: some View {
+        HStack(spacing: 0) {
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(alignment: .top) {
+                    headline
+                    Spacer(minLength: 4)
+                    if entry.isRoyal {
+                        Image(systemName: "crown.fill")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(WidgetTheme.purple)
+                    }
+                }
+                Spacer(minLength: 6)
+                gaugeBlock
+                insightLine
+                    .padding(.top, 6)
             }
-            HStack(spacing: 5) {
-                Image(systemName: "lock.fill")
-                    .font(.system(size: 10, weight: .bold))
-                Text(entry.labelUpgrade)
-                    .font(.system(size: 12, weight: .bold))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-            }
-            .foregroundStyle(WidgetTheme.purple)
+            .padding(.trailing, 12)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+
+            quickAdd
+                .frame(width: 84)
         }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(entry.labelInsights), \(entry.labelUpgrade)")
     }
 
-    /// Royal footer: biggest category and a typical week. A metric with no
-    /// data yet is hidden rather than shown as "—".
-    private var royalInsights: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            if !entry.topCategoryLabel.isEmpty && !entry.topCategoryFormatted.isEmpty {
+    /// One insight for Royal; for everyone else one quiet line that says what
+    /// Royal adds. It used to spend half the widget on a blurred advertisement,
+    /// and the whole left column opened the paywall.
+    @ViewBuilder
+    private var insightLine: some View {
+        if entry.isRoyal {
+            if !entry.topCategoryLabel.isEmpty {
                 HStack(spacing: 4) {
                     Image(systemName: "trophy.fill")
-                        .font(.system(size: 11))
-                        .foregroundStyle(WidgetTheme.orange)
-                    Text(entry.topCategoryLabel)
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.system(size: 10))
+                        .foregroundStyle(WidgetTheme.orangeText)
+                    Text("\(entry.labelTopCategory): \(entry.topCategoryLabel)")
+                        .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(.primary)
                         .lineLimit(1)
                         .minimumScaleFactor(0.75)
                     Text("\(entry.topCategoryPercent)%")
-                        .font(.system(size: 12))
+                        .font(.system(size: 11))
                         .foregroundStyle(WidgetTheme.secondary)
                 }
             }
-            if !entry.weeklyAvgFormatted.isEmpty {
+        } else {
+            Link(destination: DiPoSharedConfig.upgradeRoyalURL) {
                 HStack(spacing: 4) {
-                    Image(systemName: "calendar")
-                        .font(.system(size: 11))
-                        .foregroundStyle(WidgetTheme.blue)
-                    Text(entry.weeklyAvgFormatted)
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(.primary)
+                    Image(systemName: "crown.fill")
+                        .font(.system(size: 10, weight: .bold))
+                    Text(entry.labelUpgrade)
+                        .font(.system(size: 11, weight: .semibold))
                         .lineLimit(1)
-                        .minimumScaleFactor(0.75)
-                    // Was "/ \(label)" over a label that already read
-                    // "Spending / week" — the widget showed "Rp 351.800 / Spending / week".
-                    Text(entry.labelWeeklyAvg)
-                        .font(.system(size: 12))
-                        .foregroundStyle(WidgetTheme.secondary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.75)
+                        .minimumScaleFactor(0.8)
                 }
+                .foregroundStyle(WidgetTheme.purple)
             }
         }
     }
 
-    // MARK: Quick Add column (right)
-
-    private var quickAddColumn: some View {
+    private var quickAdd: some View {
         Link(destination: DiPoSharedConfig.addTransactionURL) {
             VStack(spacing: 8) {
-                ZStack {
-                    Circle()
-                        .fill(WidgetTheme.accent)
-                        .frame(width: 46, height: 46)
-                    Image(systemName: "plus")
-                        .font(.system(size: 22, weight: .bold))
-                        .foregroundStyle(WidgetTheme.onVividFill)
-                }
+                Image(systemName: "plus")
+                    .font(.system(size: 24, weight: .bold))
+                    .foregroundStyle(WidgetTheme.onVividFill)
+                    .frame(width: 54, height: 54)
+                    .background(WidgetTheme.accent, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                 Text(entry.labelQuickAdd)
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(.primary)
                     .multilineTextAlignment(.center)
                     .lineLimit(2)
+                    .minimumScaleFactor(0.8)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+    }
+
+    // MARK: Lock Screen
+
+    private var circular: some View {
+        let f = entry.spentFraction ?? 0
+        return Gauge(value: min(max(f, 0), 1)) {
+            Image(systemName: "creditcard")
+        } currentValueLabel: {
+            Text("\(Int((f * 100).rounded()))%")
+                .font(.system(size: 13, weight: .bold, design: .rounded))
+        }
+        .gaugeStyle(.accessoryCircularCapacity)
+        .widgetAccentable()
+    }
+
+    private var rectangular: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(entry.labelExpenses)
+                .font(.system(size: 12, weight: .semibold))
+                .widgetAccentable()
+            Text(entry.expensesFormatted)
+                .font(.system(size: 17, weight: .bold, design: .rounded))
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+            if let f = entry.spentFraction {
+                Gauge(value: min(max(f, 0), 1)) { EmptyView() }
+                    .gaugeStyle(.accessoryLinearCapacity)
+            } else {
+                Text(entry.monthLabel)
+                    .font(.system(size: 11))
+                    .lineLimit(1)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var inline: some View {
+        let pct = entry.spentFraction.map { " · \(Int(($0 * 100).rounded()))%" } ?? ""
+        return Text("\(entry.expensesFormatted)\(pct)")
     }
 }
 
 // MARK: - Widget Definition
 
 struct DiPoWidget: Widget {
-    /// Stable kind ID. WidgetKit uses this to identify the widget across
-    /// reloads — never change it after shipping or users will lose their
-    /// installed widget.
+    /// Stable kind ID — never change it after shipping, or users lose the
+    /// widget they installed.
     let kind: String = "DiPoWidget"
 
     var body: some WidgetConfiguration {
@@ -421,68 +473,24 @@ struct DiPoWidget: Widget {
         }
         .configurationDisplayName("DiPo")
         .description(WidgetCopy.galleryDescription)
-        .supportedFamilies([.systemMedium])
+        .supportedFamilies([.systemSmall, .systemMedium,
+                            .accessoryCircular, .accessoryRectangular, .accessoryInline])
     }
 }
 
 // MARK: - Preview
 
-// Previews are split into 4 (light/dark × free/royal) so we catch
-// contrast bugs early. Xcode's preview canvas honors `.preferredColorScheme`
-// on widget previews same as it does on regular SwiftUI views.
-
-private let sampleFreeEntry = MonthlyExpensesEntry(
-    date: .now,
-    expensesFormatted: "Rp 703.600",
-    incomeFormatted:   "Rp 10.000.000",
-    monthLabel:        "Sejak gajian 25 Agu",
-    isRoyal:           false,
-    topCategoryLabel:  "",
-    topCategoryFormatted: "",
-    topCategoryPercent: 0,
-    weeklyAvgFormatted: "",
-    labelExpenses:    "Pengeluaran",
-    labelIncome:      "Pemasukan",
-    labelQuickAdd:    "Tambah\nTransaksi",
-    labelTopCategory: "Terbesar",
-    labelWeeklyAvg:   "per minggu",
-    labelInsights:    "Ringkasan belanja",
-    labelUpgrade:     "Buka dengan Royal",
-    isPlaceholder:    false
+private let sampleEntry = MonthlyExpensesEntry(
+    date: .now, expenses: 7_900_000, income: 10_000_000,
+    expensesFormatted: "Rp 7.900.000", incomeFormatted: "Rp 10.000.000",
+    leftFormatted: "Rp 2.100.000", monthLabel: "Sejak gajian 25 Agu",
+    isRoyal: true, topCategoryLabel: "Makan & Minum", topCategoryPercent: 42,
+    labelExpenses: "Pengeluaran", labelQuickAdd: "Tambah", labelTopCategory: "Terbesar",
+    labelUpgrade: "Buka dengan Royal", labelLeft: "Sisa", labelOver: "Lebih",
+    isPlaceholder: false
 )
 
-private let sampleRoyalEntry = MonthlyExpensesEntry(
-    date: .now,
-    expensesFormatted: "Rp 703.600",
-    incomeFormatted:   "Rp 10.000.000",
-    monthLabel:        "Sejak gajian 25 Agu",
-    isRoyal:           true,
-    topCategoryLabel:  "Makan & Minum",
-    topCategoryFormatted: "Rp 703.600",
-    topCategoryPercent: 42,
-    weeklyAvgFormatted: "Rp 351.800",
-    labelExpenses:    "Pengeluaran",
-    labelIncome:      "Pemasukan",
-    labelQuickAdd:    "Tambah\nTransaksi",
-    labelTopCategory: "Terbesar",
-    labelWeeklyAvg:   "per minggu",
-    labelInsights:    "Ringkasan belanja",
-    labelUpgrade:     "Buka dengan Royal",
-    isPlaceholder:    false
-)
-
-#Preview("Free · Light", as: .systemMedium) {
-    DiPoWidget()
-} timeline: { sampleFreeEntry }
-
-#Preview("Free · Dark", as: .systemMedium) {
-    DiPoWidget()
-} timeline: { sampleFreeEntry }
-
-#Preview("Royal · Light", as: .systemMedium) {
-    DiPoWidget()
-} timeline: { sampleRoyalEntry }
-
-#Preview("Royal · Dark", as: .systemMedium) {
-    DiPoWidget()
-} timeline: { sampleRoyalEntry }
+#Preview("Small", as: .systemSmall) { DiPoWidget() } timeline: { sampleEntry }
+#Preview("Medium", as: .systemMedium) { DiPoWidget() } timeline: { sampleEntry }
+#Preview("Lock · circular", as: .accessoryCircular) { DiPoWidget() } timeline: { sampleEntry }
+#Preview("Lock · rectangular", as: .accessoryRectangular) { DiPoWidget() } timeline: { sampleEntry }

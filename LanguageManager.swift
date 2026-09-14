@@ -528,7 +528,7 @@ final class LanguageManager {
         // chosen language.
         "widget.label.expenses":     "Expense",
         "widget.label.income":       "Income",
-        "widget.label.quickAdd":     "Add\nTransaction",
+        "widget.label.quickAdd":     "Add",
         "widget.label.topCategory":  "Biggest",
         "widget.label.weeklyAvg":    "per week",
         "widget.label.insights":     "Spending insights",
@@ -2826,7 +2826,7 @@ final class LanguageManager {
         // yang dipilih user (extension tidak bisa akses LanguageManager).
         "widget.label.expenses":     "Pengeluaran",
         "widget.label.income":       "Pemasukan",
-        "widget.label.quickAdd":     "Tambah\nTransaksi",
+        "widget.label.quickAdd":     "Tambah",
         "widget.label.topCategory":  "Terbesar",
         "widget.label.weeklyAvg":    "per minggu",
         "widget.label.insights":     "Ringkasan belanja",
