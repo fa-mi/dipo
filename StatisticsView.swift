@@ -1282,23 +1282,11 @@ struct StatisticsView: View {
     /// Income as a bar the spending eats into, with a tick for how much of the
     /// period has passed: spending behind the tick is ahead of the calendar.
     private var incomeBar: some View {
-        let used = min(filteredExpenses / filteredIncome, 1)
+        let used = filteredExpenses / filteredIncome
         let left = filteredIncome - filteredExpenses
         return VStack(alignment: .leading, spacing: 8) {
-            GeometryReader { g in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(AppTheme.accent.opacity(0.18))
-                    Capsule().fill(left >= 0 ? AppTheme.accent : AppTheme.red)
-                        .frame(width: max(g.size.width * CGFloat(used), 6))
-                        .animation(.spring(response: 0.7, dampingFraction: 0.85), value: used)
-                    if let p = periodProgress {
-                        Capsule().fill(AppTheme.textPrimary.opacity(0.7))
-                            .frame(width: 2, height: 16)
-                            .offset(x: g.size.width * CGFloat(p.elapsed) / CGFloat(p.total) - 1)
-                    }
-                }
-            }
-            .frame(height: 10)
+            SpendGauge(fraction: used,
+                       timeMarker: periodProgress.map { Double($0.elapsed) / Double($0.total) })
 
             HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: 1) {
@@ -1318,7 +1306,7 @@ struct StatisticsView: View {
                         .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                     Text(money(abs(left)))
                         .font(.system(.subheadline, weight: .semibold))
-                        .foregroundStyle(left >= 0 ? AppTheme.accent : AppTheme.red)
+                        .foregroundStyle(SpendGauge.tone(for: used))
                 }
             }
         }
@@ -1680,9 +1668,10 @@ struct StatisticsView: View {
                                                daysInCycle: periodProgress?.total ?? periodDays)
                     }
 
-                    NetWorthTrendCard(trend: netWorthTrend,
-                                      subtitle: payCycleDay != nil ? loc("stats.net_worth_sub_cycle") : loc("stats.net_worth_sub"),
-                                      currency: displayCurrency)
+                    // No trend chart here. The net-flow bars repeated the spending
+                    // chart on the main page in other colours; that chart's
+                    // breakdown already lists money in, money out and the net for
+                    // every period.
 
                     if premiumMgr.canAccess(.smartBudget), !patternRows.isEmpty {
                         VStack(alignment: .leading, spacing: 4) {
@@ -1872,24 +1861,11 @@ struct NetBalanceSummary: View {
                     .foregroundStyle(net >= 0 ? AppTheme.accent : AppTheme.red)
                     .contentTransition(.numericText())
             }
-            // Expense ratio bar
-            GeometryReader { g in
-                ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 4).fill(AppTheme.accent.opacity(0.2)).frame(height: 6)
-                    RoundedRectangle(cornerRadius: 4).fill(AppTheme.redFill)
-                        .frame(width: g.size.width * CGFloat(spentPct / 100), height: 6)
-                        .animation(.spring(response: 0.8, dampingFraction: 0.8), value: spentPct)
-                    // Where TIME is. Spending bar behind this line = ahead of
-                    // pace; past it = burning faster than the calendar.
-                    if let p = progress {
-                        let t = CGFloat(p.elapsed) / CGFloat(p.total)
-                        Rectangle().fill(AppTheme.textPrimary.opacity(0.55))
-                            .frame(width: 2, height: 12)
-                            .offset(x: g.size.width * t - 1)
-                    }
-                }
-            }
-            .frame(height: 12)
+            // Share of income spent, warming from green to red as it fills, with
+            // a tick where TIME is: a bar ending past it is ahead of the calendar.
+            SpendGauge(fraction: income > 0 ? expenses / income : 0,
+                       timeMarker: progress.map { Double($0.elapsed) / Double($0.total) },
+                       height: 8)
             HStack {
                 Text(String(format: loc("stats.percentage_spent"), String(format: "%.0f", spentPct)))
                     .font(.system(.caption2))
@@ -1900,7 +1876,7 @@ struct NetBalanceSummary: View {
                               String(format: "%.0f%%", savedPct))
                      : loc("stats.overspent"))
                     .font(.system(.caption2, weight: .medium))
-                    .foregroundStyle(net >= 0 ? AppTheme.accent : AppTheme.red)
+                    .foregroundStyle(SpendGauge.tone(for: income > 0 ? expenses / income : 1))
             }
 
             // Two facts that make the percentages mean something: how far into
@@ -1978,7 +1954,7 @@ struct NetBalanceSummary: View {
     }
 }
 
-// MARK: - Net Worth Trend Card
+// MARK: - Trend point
 
 /// One bar of the trend, carrying the numbers behind it.
 ///
@@ -1996,157 +1972,6 @@ struct CycleTrendPoint: Identifiable {
     var net: Double { income - expense }
     /// A period that has not finished yet holds an incomplete total.
     var isRunning: Bool { end > Date() }
-}
-
-struct NetWorthTrendCard: View {
-    let trend: [CycleTrendPoint]
-    var subtitle: String = loc("stats.net_worth_sub")
-    var currency: String = CurrencyManager.shared.preferredCurrency
-    @State private var appeared = false
-    @State private var showBreakdown = false
-
-    private var maxAbs: Double { trend.map { abs($0.net) }.max() ?? 1 }
-    private var hasData: Bool { trend.contains { $0.net != 0 } }
-
-    /// A single gradient bar, with an optional soft glow for the current period.
-    private func bar(_ fill: LinearGradient, w: CGFloat, h: CGFloat, glow: Color?) -> some View {
-        RoundedRectangle(cornerRadius: 5)
-            .fill(fill)
-            .frame(width: w, height: h)
-    }
-
-    var body: some View {
-        content
-            .contentShape(Rectangle())
-            .onTapGesture {
-                guard hasData else { return }
-                HapticManager.shared.tap()
-                showBreakdown = true
-            }
-            .sheet(isPresented: $showBreakdown) {
-                CycleTrendBreakdown(trend: trend, currency: currency)
-                    .presentationDetents([.large]).presentationDragIndicator(.visible)
-                    .presentationBackground(AppTheme.bg).preferredColorScheme(appColorScheme())
-            }
-    }
-
-    private var content: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(loc("stats.net_worth"))
-                        .font(.system(.subheadline, weight: .semibold))
-                        .foregroundStyle(AppTheme.textPrimary)
-                    Text(subtitle)
-                        .font(.system(.caption2))
-                        .foregroundStyle(AppTheme.textSecondary)
-                }
-                Spacer()
-                // Overall direction
-                if let last = trend.last, let first = trend.first(where: { $0.net != 0 }) {
-                    let up = last.net >= first.net
-                    HStack(spacing: 4) {
-                        Image(systemName: up ? "arrow.up.right" : "arrow.down.right")
-                            .font(.system(.caption2, weight: .bold))
-                        Text(up ? loc("stats.positive") : loc("stats.negative"))
-                            .font(.system(.caption2, weight: .semibold))
-                    }
-                    .foregroundStyle(up ? AppTheme.accent : AppTheme.red)
-                    .padding(.horizontal, 8).padding(.vertical, 4)
-                    .background((up ? AppTheme.accent : AppTheme.red).opacity(0.12), in: Capsule())
-                }
-            }
-
-            if hasData {
-                let hasNegative = trend.contains { $0.net < 0 }
-                let chartH: CGFloat = 70
-                
-                VStack(spacing: 6) {
-                    GeometryReader { geo in
-                        let w = geo.size.width
-                        let barW = (w - CGFloat(trend.count - 1) * 6) / CGFloat(trend.count)
-                        // If all positive: bars grow up from bottom, baseline at bottom.
-                        // If has negative: zero line at center, positive bars up, negative bars down.
-                        let availableH: CGFloat = hasNegative ? chartH * 0.45 : chartH - 4
-                        
-                        ZStack(alignment: hasNegative ? .center : .bottom) {
-                            // Baseline
-                            Rectangle()
-                                .fill(AppTheme.cardMid.opacity(0.6))
-                                .frame(height: 1)
-                                .frame(maxWidth: .infinity, alignment: .center)
-                            
-                            HStack(alignment: hasNegative ? .center : .bottom, spacing: 6) {
-                                ForEach(Array(trend.enumerated()), id: \.offset) { i, point in
-                                    let hasValue = point.net != 0
-                                    let rawH = maxAbs > 0 ? CGFloat(abs(point.net) / maxAbs) * availableH : 0
-                                    // Empty periods get a faint full-height
-                                    // track, not a stub that reads as "almost
-                                    // nothing" — before this, months with no
-                                    // data at all looked like months of zero.
-                                    let barH = hasValue ? max(rawH, 3) : availableH
-                                    let isPositive = point.net >= 0
-                                    let isLast = i == trend.count - 1
-                                    let base: Color = isPositive ? AppTheme.accent : AppTheme.red
-                                    // Current period pops at full saturation; past
-                                    // periods are dimmed so the eye lands on "now".
-                                    let strength = !hasValue ? 0.10 : (isLast ? 1.0 : 0.45)
-                                    let grad = LinearGradient(
-                                        colors: [base.opacity(strength), base.opacity(strength * 0.55)],
-                                        startPoint: isPositive ? .top : .bottom,
-                                        endPoint: isPositive ? .bottom : .top)
-                                    // Grow-in height (staggered) for a lively reveal.
-                                    let h = appeared ? barH : 0
-
-                                    if hasNegative {
-                                        VStack(spacing: 0) {
-                                            if isPositive {
-                                                Spacer(minLength: 0)
-                                                bar(grad, w: barW, h: h, glow: (isLast && hasValue) ? base : nil)
-                                                Color.clear.frame(height: chartH * 0.5)
-                                            } else {
-                                                Color.clear.frame(height: chartH * 0.5)
-                                                bar(grad, w: barW, h: h, glow: (isLast && hasValue) ? base : nil)
-                                                Spacer(minLength: 0)
-                                            }
-                                        }
-                                        .frame(height: chartH)
-                                        .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(Double(i) * 0.06), value: appeared)
-                                    } else {
-                                        bar(grad, w: barW, h: h, glow: (isLast && hasValue) ? base : nil)
-                                            .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(Double(i) * 0.06), value: appeared)
-                                    }
-                                }
-                            }
-                            .frame(maxWidth: .infinity)
-                        }
-                    }
-                    .frame(height: chartH)
-                    
-                    // Labels in separate row
-                    HStack(spacing: 6) {
-                        ForEach(Array(trend.enumerated()), id: \.offset) { i, point in
-                            let isLast = i == trend.count - 1
-                            Text(point.label)
-                                .font(.system(size: 10, weight: isLast ? .semibold : .regular))
-                                .foregroundStyle(isLast ? AppTheme.textPrimary : AppTheme.textSecondary)
-                                .frame(maxWidth: .infinity)
-                        }
-                    }
-                }
-            } else {
-                Text(loc("stats.trend_empty"))
-                    .font(.system(.caption))
-                    .foregroundStyle(AppTheme.textSecondary)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(.vertical, 24)
-            }
-        }
-        .padding(16)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
-        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.accent.opacity(0.12), lineWidth: 1))
-        .onAppear { appeared = true }
-    }
 }
 
 // MARK: - Smart Insights Card (Weekly Avg + Top Categories)

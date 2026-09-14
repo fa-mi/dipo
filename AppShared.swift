@@ -385,6 +385,76 @@ struct CategoryTilePicker: View {
     }
 }
 
+// MARK: - Spend gauge
+
+/// How much of an income has gone, as a bar that warms as it fills: green while
+/// there is room, through yellow and orange, red at the limit, and solid red
+/// past it.
+///
+/// The bar used to be a single green whatever it measured, so "Expenses" sat
+/// over a green bar — the colour that means money in everywhere else — and a
+/// month at 95% looked exactly as calm as one at 20%. The gradient is laid over
+/// the FULL width and revealed up to the spent share, so the tip's colour is
+/// the verdict and the colours behind it show how it got there.
+struct SpendGauge: View {
+    /// Spent ÷ income.
+    let fraction: Double
+    /// Share of the period elapsed (0…1), drawn as a tick: a bar ending past
+    /// the tick is spending faster than the calendar. Nil hides it.
+    var timeMarker: Double? = nil
+    var height: CGFloat = 10
+
+    private static let yellow = Color(hex: "#EAB308")
+    private static let amber  = Color(hex: "#F97316")
+
+    private static let stops: [Gradient.Stop] = [
+        .init(color: AppTheme.accent, location: 0),
+        .init(color: AppTheme.accent, location: 0.55),
+        .init(color: yellow,          location: 0.72),
+        .init(color: amber,           location: 0.88),
+        .init(color: AppTheme.red,    location: 1),
+    ]
+
+    /// A text colour for figures that describe the same amount, stepped to stay
+    /// readable (yellow text is not, on white).
+    static func tone(for fraction: Double) -> Color {
+        if fraction < 0.72 { return AppTheme.accent }
+        if fraction < 1 { return AppTheme.orange }
+        return AppTheme.red
+    }
+
+    var body: some View {
+        GeometryReader { g in
+            let width = g.size.width
+            let shown = min(max(fraction, 0), 1)
+            ZStack(alignment: .leading) {
+                Capsule().fill(AppTheme.cardMid)
+                if fraction >= 1 {
+                    Capsule().fill(AppTheme.red)
+                } else {
+                    LinearGradient(stops: Self.stops, startPoint: .leading, endPoint: .trailing)
+                        .frame(width: width)
+                        .mask(alignment: .leading) {
+                            Capsule().frame(width: max(width * CGFloat(shown), height))
+                        }
+                }
+                if let t = timeMarker {
+                    Capsule()
+                        .fill(AppTheme.textPrimary.opacity(0.75))
+                        .frame(width: 2, height: height + 8)
+                        .offset(x: width * CGFloat(min(max(t, 0), 1)) - 1)
+                }
+            }
+            .frame(height: height)
+            .frame(maxHeight: .infinity)
+            .animation(.spring(response: 0.7, dampingFraction: 0.85), value: shown)
+        }
+        .frame(height: height + 8)
+        .accessibilityElement()
+        .accessibilityValue("\(Int((fraction * 100).rounded()))%")
+    }
+}
+
 // MARK: - Date & Time Fields
 
 /// Date and time as two separate controls bound to one `Date`. A single

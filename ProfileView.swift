@@ -938,6 +938,12 @@ struct ProfileView: View {
             .opacity(appeared ? 1 : 0)
             .offset(y: appeared ? 0 : 20)
             .animation(AppMotion.appear, value: appeared)
+
+        voiceLanguageSection
+            .padding(.horizontal, 22)
+            .opacity(appeared ? 1 : 0)
+            .offset(y: appeared ? 0 : 20)
+            .animation(AppMotion.appear, value: appeared)
     }
 
     @ViewBuilder
@@ -986,10 +992,19 @@ struct ProfileView: View {
             .padding(4)
             .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: AppRadius.md))
 
-            Divider().background(AppTheme.cardMid).padding(.vertical, 12)
+        }
+        .padding(16)
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.textSecondary.opacity(0.12), lineWidth: 1))
+    }   // ← closing brace was missing, causing all subsequent vars to fall inside
 
-            // Voice has its own language: reading in English and speaking in
-            // Indonesian is a normal way to use a phone here.
+    /// Same control as the language card above it — a row of three choices —
+    /// because it is the same kind of decision. It was a menu tucked under the
+    /// language picker, which read as a detail of it rather than its own setting.
+    @ViewBuilder
+    private var voiceLanguageSection: some View {
+        let lang = LanguageManager.shared
+        VStack(spacing: 0) {
             HStack(spacing: 12) {
                 Image(systemName: "waveform")
                     .font(.system(.body)).foregroundStyle(AppTheme.textPrimary)
@@ -1002,33 +1017,51 @@ struct ProfileView: View {
                         .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                Spacer(minLength: 8)
-                Menu {
-                    Picker(loc("voice.lang_title"), selection: Binding(
-                        get: { voiceLanguage },
-                        set: { new in
-                            HapticManager.shared.select()
-                            voiceLanguage = new
-                            VoiceLanguage.saved = new
+                Spacer()
+            }
+            Divider().background(AppTheme.cardMid).padding(.vertical, 10)
+            HStack(spacing: 0) {
+                ForEach(VoiceLanguage.allCases) { option in
+                    let on = voiceLanguage == option
+                    Button {
+                        guard !on else { return }
+                        HapticManager.shared.tap()
+                        withAnimation(.spring(response: 0.3)) { voiceLanguage = option }
+                        VoiceLanguage.saved = option
+                    } label: {
+                        VStack(spacing: 5) {
+                            Group {
+                                switch option {
+                                case .app:        Image(systemName: "link").font(.system(.title3, weight: .semibold))
+                                case .indonesian: Text(LanguageManager.Language.indonesian.flag).font(.system(.title2))
+                                case .english:    Text(LanguageManager.Language.english.flag).font(.system(.title2))
+                                }
+                            }
+                            .frame(height: 28)
+                            .foregroundStyle(on ? AppTheme.onVividFill : AppTheme.textSecondary)
+                            Text(option == .app
+                                 ? String(format: loc("voice.lang_app_short"), lang.current == .indonesian ? "ID" : "EN")
+                                 : option.label)
+                                .font(.system(size: 11, weight: on ? .semibold : .regular))
+                                .foregroundStyle(on ? AppTheme.onVividFill : AppTheme.textSecondary)
+                                .lineLimit(1).minimumScaleFactor(0.7)
                         }
-                    )) {
-                        ForEach(VoiceLanguage.allCases) { Text($0.label).tag($0) }
+                        .frame(maxWidth: .infinity).padding(.vertical, 10)
+                        .background(on ? AppTheme.accentFill : Color.clear,
+                                    in: RoundedRectangle(cornerRadius: AppRadius.sm))
                     }
-                } label: {
-                    HStack(spacing: 4) {
-                        Text(voiceLanguage == .app ? voiceLanguage.code : voiceLanguage.label)
-                            .lineLimit(1)
-                        Image(systemName: "chevron.up.chevron.down").imageScale(.small)
-                    }
-                    .font(.system(.footnote, weight: .semibold))
-                    .foregroundStyle(AppTheme.accent)
+                    .buttonStyle(ScaleButtonStyle())
+                    .accessibilityLabel(option.label)
+                    .accessibilityAddTraits(on ? .isSelected : [])
                 }
             }
+            .padding(4)
+            .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: AppRadius.md))
         }
         .padding(16)
         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
         .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.textSecondary.opacity(0.12), lineWidth: 1))
-    }   // ← closing brace was missing, causing all subsequent vars to fall inside
+    }
 
     @ViewBuilder
     private var authButtonSection: some View {
