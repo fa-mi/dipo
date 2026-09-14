@@ -403,6 +403,8 @@ struct CustomTabBar: View {
                                     .foregroundStyle(vm.activeTab == tab
                                                      ? AppTheme.accent
                                                      : AppTheme.textSecondary)
+                                    // A single bounce marks the tab you just picked.
+                                    .symbolEffect(.bounce, options: .nonRepeating, value: vm.activeTab == tab)
                                     .scaleEffect(vm.activeTab == tab ? 1.05 : 1)
                                     .animation(.spring(response: 0.3, dampingFraction: 0.6),
                                                value: vm.activeTab)

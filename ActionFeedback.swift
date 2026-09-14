@@ -240,8 +240,9 @@ struct ActionFeedbackOverlay: View {
                     .font(.system(.subheadline, weight: .bold))
                     .foregroundStyle(toast.tint)
                     // A checkmark that simply appears feels static; drawing it
-                    // in sells the "it happened just now".
+                    // in — and giving it one bounce — sells "it happened just now".
                     .transition(.scale.combined(with: .opacity))
+                    .symbolEffect(.bounce, options: .nonRepeating, value: toast.id)
             }
             VStack(alignment: .leading, spacing: 2) {
                 Text(toast.title)

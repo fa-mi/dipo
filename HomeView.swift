@@ -1515,6 +1515,8 @@ struct HomeHeader: View {
                             Image(systemName: notifMgr.hasUnread ? "bell.badge.fill" : "bell")
                                 .font(.system(.body))
                                 .foregroundStyle(notifMgr.hasUnread ? AppTheme.accent : AppTheme.textSecondary)
+                                // Rings once when a new notification lands.
+                                .symbolEffect(.bounce, value: notifMgr.unreadCount)
                         }
                         if notifMgr.unreadCount > 0 {
                             ZStack {
