@@ -47,10 +47,9 @@ struct MonthFlowCard: View {
     @ViewBuilder
     private func half(icon: String, label: String, amount: Double, tint: Color) -> some View {
         HStack(spacing: 10) {
-            // A SOLID badge, like the battery fill while charging — a pale
-            // tint of systemGreen washed out to near-white on a light card.
-            // The glyph is dark on both colours in both modes, which keeps it
-            // legible where a white glyph on systemGreen would not be (2.2:1).
+            // A SOLID badge: a pale tint of the green washes out to near-white
+            // on a light card. The glyph takes `onVividFill`, like every label
+            // on a solid semantic fill.
             ZStack {
                 Circle()
                     .fill(tint)

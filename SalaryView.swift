@@ -723,7 +723,7 @@ struct SalaryCard: View {
 
             if recordedThisMonth {
                 // Green on the glyph only — the words stay in textPrimary, where
-                // systemGreen as 12pt text would be 2.2:1 on a white card.
+                // the accent as 12pt text would be 2.56:1 on a white card.
                 HStack(spacing: 6) {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(.footnote))
@@ -945,10 +945,9 @@ struct SalaryActionsSheet: View {
         Rectangle().fill(AppTheme.cardMid.opacity(0.7)).frame(height: 1).padding(.leading, 62)
     }
 
-    /// Blue, purple and orange are dark enough in light mode to sit as glyphs
-    /// on their own pale tint. systemGreen and systemRed are not (≈1.9:1 and
-    /// ≈3:1), so those two go SOLID with a dark glyph, like every other green
-    /// and red badge in the app.
+    /// Green and red — the two colours that carry money in and money out — go
+    /// SOLID with an `onVividFill` glyph, like every other green and red badge
+    /// in the app; the rest sit as glyphs on their own pale tint.
     private func iconTile(_ icon: String, tint: Color, solid: Bool = false) -> some View {
         Image(systemName: icon)
             .font(.system(.subheadline, weight: .semibold))

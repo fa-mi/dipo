@@ -131,8 +131,8 @@ struct AppNotificationItem: Identifiable, Codable {
     /// is shown as sent.
     var iconColor: Color {
         switch iconColorHex.uppercased() {
-        case "#1D8637", "#34C759", "#1DB87A":            return AppTheme.accent
-        case "#D92D20", "#FF6B6B", "#FF5B5B", "#EF4444": return AppTheme.red
+        case "#1DB87A", "#1D8637", "#34C759":            return AppTheme.accent
+        case "#E5484D", "#D92D20", "#FF6B6B", "#FF5B5B", "#EF4444": return AppTheme.red
         case "#FB923C", "#F59E0B":                       return AppTheme.orange
         case "#38BDF8":                                  return AppTheme.blue
         case "#A78BFA":                                  return AppTheme.purple
@@ -223,7 +223,7 @@ final class NotificationManager {
         let icon: String, hex: String, title: String, body: String, time: String
         switch daysUntil {
         case 0:
-            icon = "banknote.fill"; hex = "#1D8637"
+            icon = "banknote.fill"; hex = "#1DB87A"
             title = loc("notif.payday.today_title")
             body  = String(format: loc("notif.payday.today_body"), label, amount)
             time  = loc("notif.time.today")
@@ -328,7 +328,7 @@ final class NotificationManager {
         )
 
         NotificationManager.shared.post(AppNotificationItem(
-            icon: "exclamationmark.triangle.fill", iconColorHex: "#D92D20",
+            icon: "exclamationmark.triangle.fill", iconColorHex: "#E5484D",
             title: title, body: body, time: loc("notif.time.now"), isUrgent: true,
             advice: advice, route: NotificationRoute.smartBudget.rawValue
         ), pushToDevice: false)
@@ -340,7 +340,7 @@ final class NotificationManager {
     ///     should say what happens and where to act — not just the date.
     func postDebtReminder(name: String, amount: String, dueDay: Int,
                           advice: String? = nil) {
-        post(AppNotificationItem(icon: "creditcard.trianglebadge.exclamationmark", iconColorHex: "#D92D20",
+        post(AppNotificationItem(icon: "creditcard.trianglebadge.exclamationmark", iconColorHex: "#E5484D",
             title: loc("notif.debt_due_title"),
             body:  String(format: loc("notif.debt_due_body"), name, amount, dueDay),
             time:  loc("notif.time.upcoming"), isUrgent: true,
@@ -381,7 +381,7 @@ final class NotificationManager {
             title = loc("notif.answered")
             body  = loc("notif.answeredbody")
             icon  = "checkmark.circle.fill"
-            hex   = "#1D8637"
+            hex   = "#1DB87A"
         case "closed":
             title = loc("notif.closed")
             body  = loc("notif.closedbody")
@@ -590,7 +590,7 @@ final class NotificationManager {
             Task { @MainActor in
                 NotificationManager.shared.post(AppNotificationItem(
                     icon:         status == .expired ? "xmark.circle.fill" : "exclamationmark.triangle.fill",
-                    iconColorHex: "#D92D20",
+                    iconColorHex: "#E5484D",
                     title:        status == .expired
                         ? String(format: loc("notif.card_expired_inapp_title"), last4)
                         : String(format: loc("notif.card_expiring_inapp_title"), last4, days),
@@ -836,7 +836,7 @@ final class NotificationManager {
         }()
 
         NotificationManager.shared.post(AppNotificationItem(
-            icon: "exclamationmark.triangle.fill", iconColorHex: "#D92D20",
+            icon: "exclamationmark.triangle.fill", iconColorHex: "#E5484D",
             title: loc("notif.overspend.title"),
             body:  String(format: loc("notif.overspend.body"), overBy),
             time:  loc("notif.time.now"), isUrgent: true,

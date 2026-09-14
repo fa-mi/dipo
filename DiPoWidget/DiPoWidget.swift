@@ -418,12 +418,10 @@ struct DiPoWidgetEntryView: View {
             VStack(spacing: 8) {
                 ZStack {
                     Circle()
-                        // AppTheme.accent: #1D8637 light / #30D158 dark.
-                        .fill(colorScheme == .dark
-                              ? Color(red: 0.188, green: 0.820, blue: 0.345)
-                              : Color(red: 0.114, green: 0.525, blue: 0.216))
+                        // AppTheme.accent — #1DB87A in both themes.
+                        .fill(Color(red: 0.114, green: 0.722, blue: 0.478))
                         .frame(width: 44, height: 44)
-                    // AppTheme.onVividFill: white on the deep green, near-black on the bright one.
+                    // AppTheme.onVividFill: white in light mode, near-black in dark.
                     Image(systemName: "plus")
                         .font(.system(size: 22, weight: .bold))
                         .foregroundStyle(colorScheme == .dark

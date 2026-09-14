@@ -84,9 +84,9 @@ struct ReceiptScanResult: Equatable {
         switch confidence {
         // Mid-tone members of the app palette: this is a stored/fixed hex, so
         // it cannot adapt, and these read in both modes.
-        case 0.85...:    return "#1D8637"  // accent (light)
+        case 0.85...:    return "#1DB87A"  // accent
         case 0.6..<0.85: return "#F59E0B"  // amber
-        default:         return "#D92D20"  // red (light)
+        default:         return "#E5484D"  // red (light)
         }
     }
 }

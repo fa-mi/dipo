@@ -1206,7 +1206,7 @@ struct AddContributionSheet: View {
             // re-add the expense by hand.
             print("[DiPo][unity] ✗ local contribution tx not saved: \(error.localizedDescription)")
             NotificationManager.shared.post(AppNotificationItem(
-                icon: "exclamationmark.triangle.fill", iconColorHex: "#D92D20",
+                icon: "exclamationmark.triangle.fill", iconColorHex: "#E5484D",
                 title: loc("unity.local_save_failed_title"),
                 body: String(format: loc("unity.local_save_failed_body"), goal.title),
                 time: loc("notif.time.now"), isUrgent: true), pushToDevice: false)

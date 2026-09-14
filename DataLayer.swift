@@ -365,10 +365,10 @@ enum TxCategory: String, CaseIterable, Codable {
         case .health:      return "#D946EF"
         case .commitment:  return "#14B8A6"
         case .other:       return "#5B6F6B"
-        case .salary:      return "#1D8637"
+        case .salary:      return "#1DB87A"
         case .freelance:   return "#0EA5E9"
         case .business:    return "#8B5CF6"
-        case .investment:  return "#1D8637"
+        case .investment:  return "#1DB87A"
         case .bonus:       return "#F59E0B"
         case .gift:        return "#D946EF"
         case .incomeOther: return "#5B6F6B"
@@ -390,7 +390,7 @@ extension TxRecord {
     var displayIconBg: Color {
         let stored = iconBgHex.uppercased()
         // Every green this app has ever stored → the current adaptive green.
-        if ["#1D9E75", "#059669", "#1DB87A", "#10B981", "#34D399", "#34C759", "#1D8637"].contains(stored) {
+        if ["#1D9E75", "#059669", "#1DB87A", "#10B981", "#34D399", "#34C759", "#1D8637", "#1DB87A"].contains(stored) {
             return AppTheme.accent
         }
         // A category's OWN retired colour → that category's current one. Scoped
