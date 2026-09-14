@@ -353,6 +353,35 @@ struct PaydayTile: View {
     }
 }
 
+// MARK: - Cycle Role
+
+/// What a salary has to do with the pay cycle, as far as the user can change it.
+///
+/// The cycle starts on the pinned salary's payday, or — nothing pinned — the
+/// largest salary's. That rule made the "Cycle start" chip and its pin toggle
+/// look broken: unpinning the largest salary left it the cycle start, and with
+/// two salaries both paid on the 25th, pinning either one changed nothing at
+/// all. So the chip and the action only appear when there is a real choice,
+/// and each state says what the action will actually do.
+enum SalaryCycleRole {
+    /// No choice to make: this salary cannot start the cycle (paused, paid into
+    /// another card) or every candidate is paid on the same day.
+    case none
+    /// Cycle start because it is the largest salary.
+    case automaticStart
+    /// Cycle start because the user pinned it.
+    case pinnedStart
+    /// Could start the cycle; currently it starts on `currentDay` instead.
+    case other(currentDay: Int)
+
+    var isStart: Bool {
+        switch self {
+        case .automaticStart, .pinnedStart: return true
+        default: return false
+        }
+    }
+}
+
 // MARK: - Salary Main View
 
 struct SalaryView: View {
@@ -368,6 +397,14 @@ struct SalaryView: View {
     /// largest active salary on the main card. The hero follows the same rule,
     /// so the date it shows is the date Home and the budget roll over on.
     private var anchor: SalarySchedule? { MainCard.anchorSalary(schedules) }
+
+    private func cycleRole(for schedule: SalarySchedule) -> SalaryCycleRole {
+        let candidates = MainCard.salaries(schedules)
+        guard Set(candidates.map(\.dayOfMonth)).count > 1,
+              candidates.contains(where: { $0.id == schedule.id }) else { return .none }
+        if schedule.id == anchor?.id { return schedule.isPinned ? .pinnedStart : .automaticStart }
+        return .other(currentDay: anchor?.dayOfMonth ?? schedule.dayOfMonth)
+    }
 
     var body: some View {
         NavigationStack {
@@ -390,7 +427,7 @@ struct SalaryView: View {
                             ForEach(schedules) { schedule in
                                 SalaryCard(schedule: schedule,
                                            card: cards.first { $0.id == schedule.cardID },
-                                           isAnchor: schedule.id == anchor?.id,
+                                           cycleRole: cycleRole(for: schedule),
                                            onMore: { HapticManager.shared.tap(); actionsFor = schedule })
                                     .padding(.horizontal, 22)
                             }
@@ -415,7 +452,7 @@ struct SalaryView: View {
             .sheet(item: $actionsFor) { schedule in
                 SalaryActionsSheet(
                     schedule: schedule,
-                    isAnchor: schedule.id == anchor?.id,
+                    cycleRole: cycleRole(for: schedule),
                     onEdit: {
                         actionsFor = nil
                         // iOS drops a sheet presented while another is still
@@ -599,7 +636,7 @@ struct SalaryEmptyState: View {
 struct SalaryCard: View {
     let schedule: SalarySchedule
     let card: BankCard?
-    let isAnchor: Bool
+    let cycleRole: SalaryCycleRole
     let onMore: () -> Void
 
     /// This month's payday has passed AND the engine recorded it. A new
@@ -635,19 +672,14 @@ struct SalaryCard: View {
                         .font(.system(.body, weight: .bold))
                         .foregroundStyle(AppTheme.textPrimary)
                         .lineLimit(1)
-                    HStack(spacing: 6) {
-                        Text(String(format: loc("salary.every_day"), schedule.dayOfMonth))
-                            .font(.system(.caption))
-                            .foregroundStyle(AppTheme.textSecondary)
-                        if !active {
-                            chip(loc("salary.paused"), icon: "pause.fill", tint: AppTheme.textSecondary)
-                        } else {
-                            chip(schedule.autoRecord ? loc("salary.auto_chip") : loc("salary.manual"),
-                                 icon: schedule.autoRecord ? "wand.and.stars" : "hand.raised.fill",
-                                 tint: schedule.autoRecord ? AppTheme.textPrimary : AppTheme.orange)
-                        }
-                        if isAnchor && active {
-                            chip(loc("salary.anchor_chip"), icon: "pin.fill", tint: AppTheme.textPrimary)
+                    // One line when it fits; otherwise the chips drop below the
+                    // payday instead of squeezing it — "Cycle start" was being
+                    // broken across two lines inside its own capsule.
+                    ViewThatFits(in: .horizontal) {
+                        HStack(spacing: 6) { paydayText; chips }
+                        VStack(alignment: .leading, spacing: 6) {
+                            paydayText
+                            HStack(spacing: 6) { chips }
                         }
                     }
                 }
@@ -740,12 +772,40 @@ struct SalaryCard: View {
         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.xl))
     }
 
+    private var paydayText: some View {
+        Text(String(format: loc("salary.every_day"), schedule.dayOfMonth))
+            .font(.system(.caption))
+            .foregroundStyle(AppTheme.textSecondary)
+            .lineLimit(1)
+            .fixedSize()
+    }
+
+    @ViewBuilder
+    private var chips: some View {
+        if !schedule.isActive {
+            chip(loc("salary.paused"), icon: "pause.fill", tint: AppTheme.textSecondary)
+        } else {
+            chip(schedule.autoRecord ? loc("salary.auto_chip") : loc("salary.manual"),
+                 icon: schedule.autoRecord ? "wand.and.stars" : "hand.raised.fill",
+                 tint: schedule.autoRecord ? AppTheme.textPrimary : AppTheme.orange)
+            if cycleRole.isStart {
+                // Pin glyph only when the user pinned it; a calendar when it is
+                // the cycle start simply by being the largest salary.
+                chip(loc("salary.anchor_chip"),
+                     icon: { if case .pinnedStart = cycleRole { return "pin.fill" } else { return "calendar" } }(),
+                     tint: AppTheme.textPrimary)
+            }
+        }
+    }
+
     private func chip(_ text: String, icon: String, tint: Color) -> some View {
         HStack(spacing: 3) {
             Image(systemName: icon).font(.system(.caption2, weight: .bold)).imageScale(.small)
             Text(text).font(.system(.caption2, weight: .semibold))
         }
         .foregroundStyle(tint)
+        .lineLimit(1)
+        .fixedSize()
         .padding(.horizontal, 7).padding(.vertical, 3)
         .background(AppTheme.cardMid.opacity(0.7), in: Capsule())
     }
@@ -763,7 +823,7 @@ struct SalaryCard: View {
 /// is a switch that shows its current state instead of a verb that hides it.
 struct SalaryActionsSheet: View {
     @Bindable var schedule: SalarySchedule
-    let isAnchor: Bool
+    let cycleRole: SalaryCycleRole
     let onEdit: () -> Void
     let onTogglePin: () -> Void
     let onToggleActive: () -> Void
@@ -802,11 +862,26 @@ struct SalaryActionsSheet: View {
                     title: loc("salary.action.edit"), detail: loc("salary.action.edit_sub"),
                     action: onEdit)
                 divider
-                row(icon: schedule.isPinned ? "pin.slash.fill" : "pin.fill", tint: AppTheme.purple,
-                    title: loc(schedule.isPinned ? "salary.action.unpin" : "salary.action.pin"),
-                    detail: loc(schedule.isPinned ? "salary.action.unpin_sub" : "salary.action.pin_sub"),
-                    action: onTogglePin)
-                divider
+                switch cycleRole {
+                case .none:
+                    EmptyView()
+                case .automaticStart:
+                    row(icon: "pin.fill", tint: AppTheme.purple,
+                        title: loc("salary.action.lock"), detail: loc("salary.action.lock_sub"),
+                        action: onTogglePin)
+                    divider
+                case .pinnedStart:
+                    row(icon: "pin.slash.fill", tint: AppTheme.purple,
+                        title: loc("salary.action.unpin"), detail: loc("salary.action.unpin_sub"),
+                        action: onTogglePin)
+                    divider
+                case .other(let currentDay):
+                    row(icon: "pin.fill", tint: AppTheme.purple,
+                        title: loc("salary.action.pin"),
+                        detail: String(format: loc("salary.action.pin_sub_days"), schedule.dayOfMonth, currentDay),
+                        action: onTogglePin)
+                    divider
+                }
                 row(icon: schedule.isActive ? "pause.fill" : "play.fill", tint: AppTheme.orange,
                     title: loc(schedule.isActive ? "salary.pause" : "salary.resume"),
                     detail: loc(schedule.isActive ? "salary.action.pause_sub" : "salary.action.resume_sub"),
