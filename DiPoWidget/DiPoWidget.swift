@@ -104,7 +104,7 @@ struct MonthlyExpensesEntry: TimelineEntry {
             isRoyal: false,
             topCategoryLabel: "", topCategoryPercent: 0,
             labelExpenses:    english ? "Expense" : "Pengeluaran",
-            labelQuickAdd:    english ? "Add" : "Tambah",
+            labelQuickAdd:    english ? "Log" : "Catat",
             labelTopCategory: english ? "Biggest" : "Terbesar",
             labelUpgrade:     english ? "Unlock with Royal" : "Buka dengan Royal",
             labelLeft:        english ? "Left" : "Sisa",
@@ -228,48 +228,39 @@ private enum WidgetTheme {
 }
 
 // MARK: - Pieces
+//
+// Every piece is drawn for two worlds. In full colour it uses DiPo's palette.
+// On a Clear or Tinted Home Screen iOS flattens every colour to one tint and
+// keeps only opacity — so an opaque track under an opaque fill became one solid
+// white bar, and a white "+" on a filled square vanished. There, hierarchy is
+// carried by opacity instead, and the parts that matter are marked accentable.
 
 /// The app's spend gauge: a green→red gradient revealed up to the spent share.
 private struct WidgetSpendBar: View {
     let fraction: Double
-    var height: CGFloat = 7
+    let fullColor: Bool
+    var height: CGFloat = 8
 
     var body: some View {
         GeometryReader { g in
             let w = g.size.width
+            let shown = max(w * CGFloat(min(max(fraction, 0), 1)), height)
             ZStack(alignment: .leading) {
-                Capsule().fill(WidgetTheme.track)
-                if fraction >= 1 {
+                Capsule().fill(fullColor ? WidgetTheme.track : Color.primary.opacity(0.22))
+                if !fullColor {
+                    Capsule().fill(Color.primary)
+                        .frame(width: shown)
+                        .widgetAccentable()
+                } else if fraction >= 1 {
                     Capsule().fill(WidgetTheme.red)
                 } else {
                     LinearGradient(stops: WidgetTheme.gaugeStops, startPoint: .leading, endPoint: .trailing)
                         .frame(width: w)
-                        .mask(alignment: .leading) {
-                            Capsule().frame(width: max(w * CGFloat(max(fraction, 0)), height))
-                        }
+                        .mask(alignment: .leading) { Capsule().frame(width: shown) }
                 }
             }
         }
         .frame(height: height)
-    }
-}
-
-/// "Left Rp 6.550.000" or "Over by Rp 450.000", toned like the bar.
-private struct LeftLine: View {
-    let entry: MonthlyExpensesEntry
-    let fraction: Double
-
-    var body: some View {
-        HStack(spacing: 4) {
-            Text(fraction >= 1 ? entry.labelOver : entry.labelLeft)
-                .foregroundStyle(WidgetTheme.secondary)
-            Text(entry.leftFormatted)
-                .fontWeight(.semibold)
-                .foregroundStyle(WidgetTheme.tone(for: fraction))
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-        }
-        .font(.system(size: 12))
     }
 }
 
@@ -279,6 +270,9 @@ struct DiPoWidgetEntryView: View {
     var entry: MonthlyExpensesEntry
     @Environment(\.widgetFamily) private var family
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.widgetRenderingMode) private var renderingMode
+
+    private var fullColor: Bool { renderingMode == .fullColor }
 
     var body: some View {
         switch family {
@@ -300,73 +294,114 @@ struct DiPoWidgetEntryView: View {
         }
     }
 
-    // MARK: Home Screen
+    // MARK: Shared parts
 
-    private var headline: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(entry.labelExpenses)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(WidgetTheme.secondary)
-            Text(entry.expensesFormatted)
-                .font(.system(size: 24, weight: .bold, design: .rounded))
-                .foregroundStyle(.primary)
-                .minimumScaleFactor(0.55)
-                .lineLimit(1)
-            Text(entry.monthLabel)
-                .font(.system(size: 11))
-                .foregroundStyle(WidgetTheme.secondary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-        }
+    private var secondary: Color { fullColor ? WidgetTheme.secondary : Color.primary.opacity(0.65) }
+
+    private func tone(_ fraction: Double) -> Color {
+        fullColor ? WidgetTheme.tone(for: fraction) : .primary
     }
 
-    @ViewBuilder
-    private var gaugeBlock: some View {
-        if let f = entry.spentFraction, !entry.leftFormatted.isEmpty {
-            VStack(alignment: .leading, spacing: 5) {
-                WidgetSpendBar(fraction: f)
-                LeftLine(entry: entry, fraction: f)
+    /// "● Expense" with the Royal crown when it applies.
+    private var titleRow: some View {
+        HStack(spacing: 5) {
+            Circle()
+                .fill(fullColor ? WidgetTheme.accent : Color.primary)
+                .frame(width: 7, height: 7)
+                .widgetAccentable()
+            Text(entry.labelExpenses)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(secondary)
+                .lineLimit(1)
+            if entry.isRoyal {
+                Image(systemName: "crown.fill")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(fullColor ? WidgetTheme.purple : Color.primary.opacity(0.8))
+                    .widgetAccentable()
             }
         }
     }
 
+    private func amount(size: CGFloat) -> some View {
+        Text(entry.expensesFormatted)
+            .font(.system(size: size, weight: .bold, design: .rounded))
+            .foregroundStyle(.primary)
+            .lineLimit(1)
+            .minimumScaleFactor(0.5)
+            .contentTransition(.numericText())
+    }
+
+    private var period: some View {
+        Text(entry.monthLabel)
+            .font(.system(size: 11, weight: .medium))
+            .foregroundStyle(secondary)
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
+    }
+
+    /// Bar with the share spent at its end, and "Left Rp X" underneath.
+    @ViewBuilder
+    private func gauge(compact: Bool) -> some View {
+        if let f = entry.spentFraction, !entry.leftFormatted.isEmpty {
+            VStack(alignment: .leading, spacing: 5) {
+                HStack(spacing: 8) {
+                    WidgetSpendBar(fraction: f, fullColor: fullColor)
+                    Text("\(Int((f * 100).rounded()))%")
+                        .font(.system(size: 11, weight: .bold, design: .rounded))
+                        .foregroundStyle(tone(f))
+                        .fixedSize()
+                }
+                HStack(spacing: 4) {
+                    Text(f >= 1 ? entry.labelOver : entry.labelLeft)
+                        .foregroundStyle(secondary)
+                    Text(entry.leftFormatted)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(tone(f))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                }
+                .font(.system(size: compact ? 11 : 12))
+            }
+        } else {
+            period
+        }
+    }
+
+    // MARK: Home Screen
+
     private var small: some View {
         VStack(alignment: .leading, spacing: 0) {
-            headline
-            Spacer(minLength: 6)
-            gaugeBlock
+            titleRow
+            amount(size: 22)
+                .padding(.top, 6)
+            period
+                .padding(.top, 1)
+            Spacer(minLength: 8)
+            gauge(compact: true)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
     private var medium: some View {
-        HStack(spacing: 0) {
+        HStack(alignment: .center, spacing: 14) {
             VStack(alignment: .leading, spacing: 0) {
-                HStack(alignment: .top) {
-                    headline
-                    Spacer(minLength: 4)
-                    if entry.isRoyal {
-                        Image(systemName: "crown.fill")
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundStyle(WidgetTheme.purple)
-                    }
-                }
-                Spacer(minLength: 6)
-                gaugeBlock
+                titleRow
+                amount(size: 26)
+                    .padding(.top, 4)
+                period
+                    .padding(.top, 1)
+                Spacer(minLength: 8)
+                gauge(compact: false)
                 insightLine
                     .padding(.top, 6)
             }
-            .padding(.trailing, 12)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
 
             quickAdd
-                .frame(width: 84)
         }
     }
 
-    /// One insight for Royal; for everyone else one quiet line that says what
-    /// Royal adds. It used to spend half the widget on a blurred advertisement,
-    /// and the whole left column opened the paywall.
+    /// One insight for Royal; for everyone else one quiet line on what Royal adds.
     @ViewBuilder
     private var insightLine: some View {
         if entry.isRoyal {
@@ -374,15 +409,15 @@ struct DiPoWidgetEntryView: View {
                 HStack(spacing: 4) {
                     Image(systemName: "trophy.fill")
                         .font(.system(size: 10))
-                        .foregroundStyle(WidgetTheme.orangeText)
-                    Text("\(entry.labelTopCategory): \(entry.topCategoryLabel)")
+                        .foregroundStyle(fullColor ? WidgetTheme.orangeText : Color.primary.opacity(0.8))
+                    Text(entry.topCategoryLabel)
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(.primary)
                         .lineLimit(1)
                         .minimumScaleFactor(0.75)
                     Text("\(entry.topCategoryPercent)%")
                         .font(.system(size: 11))
-                        .foregroundStyle(WidgetTheme.secondary)
+                        .foregroundStyle(secondary)
                 }
             }
         } else {
@@ -395,27 +430,37 @@ struct DiPoWidgetEntryView: View {
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
                 }
-                .foregroundStyle(WidgetTheme.purple)
+                .foregroundStyle(fullColor ? WidgetTheme.purple : Color.primary.opacity(0.8))
             }
         }
     }
 
+    /// A round button with its label. In Clear/Tinted mode the disc turns to a
+    /// translucent tint and the plus stays solid, so the glyph can't disappear
+    /// into its own background.
     private var quickAdd: some View {
         Link(destination: DiPoSharedConfig.addTransactionURL) {
-            VStack(spacing: 8) {
-                Image(systemName: "plus")
-                    .font(.system(size: 24, weight: .bold))
-                    .foregroundStyle(WidgetTheme.onVividFill)
-                    .frame(width: 54, height: 54)
-                    .background(WidgetTheme.accent, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            VStack(spacing: 7) {
+                ZStack {
+                    if fullColor {
+                        Circle().fill(WidgetTheme.accent)
+                    } else {
+                        Circle().fill(Color.primary.opacity(0.18))
+                            .widgetAccentable()
+                    }
+                    Image(systemName: "plus")
+                        .font(.system(size: 24, weight: .bold))
+                        .foregroundStyle(fullColor ? WidgetTheme.onVividFill : Color.primary)
+                }
+                .frame(width: 58, height: 58)
                 Text(entry.labelQuickAdd)
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(.primary)
-                    .multilineTextAlignment(.center)
-                    .lineLimit(2)
+                    .lineLimit(1)
                     .minimumScaleFactor(0.8)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .frame(width: 70)
+            .frame(maxHeight: .infinity)
         }
     }
 
@@ -485,7 +530,7 @@ private let sampleEntry = MonthlyExpensesEntry(
     expensesFormatted: "Rp 7.900.000", incomeFormatted: "Rp 10.000.000",
     leftFormatted: "Rp 2.100.000", monthLabel: "Sejak gajian 25 Agu",
     isRoyal: true, topCategoryLabel: "Makan & Minum", topCategoryPercent: 42,
-    labelExpenses: "Pengeluaran", labelQuickAdd: "Tambah", labelTopCategory: "Terbesar",
+    labelExpenses: "Pengeluaran", labelQuickAdd: "Catat", labelTopCategory: "Terbesar",
     labelUpgrade: "Buka dengan Royal", labelLeft: "Sisa", labelOver: "Lebih",
     isPlaceholder: false
 )
