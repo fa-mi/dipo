@@ -181,10 +181,11 @@ enum DebtType: String, CaseIterable {
 
     var label: String {
         switch self {
-        case .creditCard:  return "Credit Card"
-        case .loan:        return "Loan"
-        case .installment: return "Installment"
-        case .other:       return "Other"
+        // Was hardcoded English on every debt card, in both languages.
+        case .creditCard:  return loc("debt.type.credit_card")
+        case .loan:        return loc("debt.type.loan")
+        case .installment: return loc("debt.type.installment")
+        case .other:       return loc("debt.type.other")
         }
     }
 
@@ -199,10 +200,11 @@ enum DebtType: String, CaseIterable {
 
     var color: Color {
         switch self {
-        case .creditCard:  return Color(hex: "#FF6B6B")
-        case .loan:        return Color(hex: "#A78BFA")
-        case .installment: return Color(hex: "#FB923C")
-        case .other:       return Color(hex: "#8A9693")
+        // Credit card = purple, as its badge is everywhere else in the app.
+        case .creditCard:  return AppTheme.purple
+        case .loan:        return AppTheme.blue
+        case .installment: return AppTheme.orange
+        case .other:       return AppTheme.textSecondary
         }
     }
 }
@@ -443,11 +445,12 @@ struct FinancialHealthEngine {
 
     var healthColor: Color {
         switch healthScore {
-        case 80...100: return Color(hex: "#5EFFC8")
-        case 60..<80:  return Color(hex: "#38BDF8")
-        case 40..<60:  return Color(hex: "#FB923C")
-        case 20..<40:  return Color(hex: "#FF6B6B")
-        default:       return Color(hex: "#FF3366")
+        // Two reds for "poor" and "critical" were indistinguishable at a
+        // glance; the label already says which. One red, adaptive hues.
+        case 80...100: return AppTheme.accent
+        case 60..<80:  return AppTheme.blue
+        case 40..<60:  return AppTheme.orange
+        default:       return AppTheme.red
         }
     }
 

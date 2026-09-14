@@ -111,12 +111,31 @@ final class AIChatViewModel {
         }
     }
 
+    /// Did DiPo's last turn ask for something?
+    ///
+    /// A question mark is crude but it holds in both languages, and the cost of
+    /// being wrong is asymmetric: a false positive spends one credit on an
+    /// entry the parser could have handled, while a false negative files a
+    /// transaction under the wrong name.
+    ///
+    /// Messages carrying transactions are excluded — those already recorded
+    /// something, so whatever follows starts fresh.
+    private var lastAssistantAskedSomething: Bool {
+        guard let last = messages.last(where: { $0.role == .assistant }) else { return false }
+        guard last.transactions.isEmpty else { return false }
+        return last.text.contains("?")
+    }
+
     // ── Send a message ────────────────────────────────────────────────────
 
     func send(context: String = "") async {
         let text = input.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty, !isLoading else { return }
         guard let userId = UserSession.shared.userID else { return }
+
+        // Read BEFORE the new message is appended, so "the last thing DiPo
+        // said" is not the message we are about to answer.
+        let isFollowUp = lastAssistantAskedSomething
 
         messages.append(AIChatMessage(role: .user, text: text))
         input = ""
@@ -126,7 +145,14 @@ final class AIChatViewModel {
         // credit, a round trip, and a working connection for no added judgement.
         // The parser returns nil unless it is confident, so anything ambiguous
         // still reaches the model.
-        if let local = LocalTxParser.parse(text) {
+        //
+        // Except when the user is ANSWERING a question. The parser sees one
+        // message at a time, so "Harganya 25.000" — the reply to "berapa
+        // harganya?" — looked like a complete entry and was filed under the
+        // name "Harganya", losing the nasi goreng it was the price of. A reply
+        // only means anything alongside the question, and the model is the
+        // only part of this that can see both.
+        if !isFollowUp, let local = LocalTxParser.parse(text) {
             let parsed = local.items.map { item in
                 AIParsedTx(name: item.name, amount: item.amount,
                            isExpense: item.isExpense, category: item.category,
@@ -238,6 +264,11 @@ struct AIChatView: View {
 
     /// Set by the Back Tap / Siri shortcut so the sheet opens already listening.
     var autoStartVoice: Bool = false
+    /// A sentence already captured elsewhere — by `VoiceCaptureView` — to be
+    /// sent as soon as this view appears. The voice screen deliberately does
+    /// no parsing of its own; this is where the sentence lands.
+    var initialMessage: String? = nil
+    @State private var showVoiceCapture = false
 
     @State private var voice = VoiceDictation()
     @State private var voiceNotice: String? = nil
@@ -284,7 +315,14 @@ struct AIChatView: View {
                 let snapshot = buildFinancialContext()
                 Task { await vm.send(context: snapshot) }
             }
-            if autoStartVoice {
+            if let initialMessage, !initialMessage.isEmpty, vm.messages.isEmpty {
+                vm.input = initialMessage
+                let snapshot = buildFinancialContext()
+                await vm.send(context: snapshot)
+            } else if autoStartVoice {
+                // Legacy path. New entry points open `VoiceCaptureView`, which
+                // gives dictation a screen of its own instead of running it
+                // inside a chat with a keyboard competing for the same space.
                 await voice.start()
             }
         }
@@ -302,6 +340,14 @@ struct AIChatView: View {
             }
         }
         .onDisappear { voice.cancel() }
+        .fullScreenCover(isPresented: $showVoiceCapture) {
+            VoiceCaptureView { text in
+                vm.input = text
+                let snapshot = buildFinancialContext()
+                Task { await vm.send(context: snapshot) }
+            }
+            .preferredColorScheme(appColorScheme())
+        }
         .sheet(isPresented: $showCardPicker) {
             cardPickerSheet
                 .presentationDetents([.medium, .large])
@@ -317,10 +363,10 @@ struct AIChatView: View {
         HStack(spacing: 12) {
             HStack(spacing: 7) {
                 Image(systemName: "sparkles")
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.system(.subheadline, weight: .semibold))
                     .foregroundStyle(AppTheme.purple)
                 Text(loc("ai.title"))
-                    .font(.system(size: 17, weight: .bold))
+                    .font(.system(.body, weight: .bold))
                     .foregroundStyle(AppTheme.textPrimary)
             }
             Spacer()
@@ -330,9 +376,9 @@ struct AIChatView: View {
             // chip surfaces just in time as a gentle "almost out" warning.
             if let credits = vm.creditsLeft, credits < 10 {
                 HStack(spacing: 5) {
-                    Image(systemName: "bolt.fill").font(.system(size: 10))
+                    Image(systemName: "bolt.fill").font(.system(.caption2)).imageScale(.small)
                     Text("\(credits)")
-                        .font(.system(size: 13, weight: .bold))
+                        .font(.system(.footnote, weight: .bold))
                         .contentTransition(.numericText())
                 }
                 .foregroundStyle(credits == 0 ? AppTheme.red : AppTheme.orange)
@@ -394,15 +440,15 @@ struct AIChatView: View {
                                             startPoint: .top, endPoint: .bottom))
                     .frame(width: 26, height: 17)
                 Text(loc("ai.add_to"))
-                    .font(.system(size: 12))
+                    .font(.system(.caption))
                     .foregroundStyle(AppTheme.textSecondary)
                 Text(targetCard.map(cardLabel) ?? "—")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(.caption, weight: .semibold))
                     .foregroundStyle(AppTheme.textPrimary)
                     .lineLimit(1)
                 if cards.count > 1 {
                     Image(systemName: "chevron.down")
-                        .font(.system(size: 9, weight: .bold))
+                        .font(.system(.caption2, weight: .bold)).imageScale(.small)
                         .foregroundStyle(AppTheme.textSecondary)
                 }
                 Spacer(minLength: 0)
@@ -458,7 +504,7 @@ struct AIChatView: View {
                         HStack {
                             ProgressView().scaleEffect(0.8)
                             Text(loc("ai.thinking"))
-                                .font(.system(size: 13))
+                                .font(.system(.footnote))
                                 .foregroundStyle(AppTheme.textSecondary)
                             Spacer()
                         }
@@ -483,19 +529,19 @@ struct AIChatView: View {
             HStack {
                 Spacer(minLength: 50)
                 Text(msg.text)
-                    .font(.system(size: 14))
-                    .foregroundStyle(AppTheme.onAccentFill)
+                    .font(.system(.subheadline))
+                    .foregroundStyle(AppTheme.onVividFill)
                     .padding(.horizontal, 14).padding(.vertical, 10)
-                    .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: 16))
+                    .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: AppRadius.md))
             }
             .padding(.horizontal, 18)
         } else {
             VStack(alignment: .leading, spacing: 10) {
                 Text(msg.text)
-                    .font(.system(size: 14))
+                    .font(.system(.subheadline))
                     .foregroundStyle(msg.isError ? AppTheme.red : AppTheme.textPrimary)
                     .padding(.horizontal, 14).padding(.vertical, 10)
-                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
+                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
                     .frame(maxWidth: .infinity, alignment: .leading)
                 ForEach(msg.transactions) { tx in
                     txCard(tx, in: msg.id)
@@ -512,25 +558,25 @@ struct AIChatView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 10) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 10)
+                    RoundedRectangle(cornerRadius: AppRadius.sm)
                         .fill(tx.category.color.opacity(0.18))
                         .frame(width: 38, height: 38)
                     Image(systemName: tx.category.icon)
-                        .font(.system(size: 15))
+                        .font(.system(.subheadline))
                         .foregroundStyle(tx.category.color)
                 }
                 VStack(alignment: .leading, spacing: 2) {
                     Text(tx.name)
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.system(.subheadline, weight: .semibold))
                         .foregroundStyle(AppTheme.textPrimary)
                     Text(tx.category.displayLabel)
-                        .font(.system(size: 11))
+                        .font(.system(.caption2))
                         .foregroundStyle(AppTheme.textSecondary)
                 }
                 Spacer()
                 Text((tx.isExpense ? "-" : "+") +
                      CurrencyManager.shared.formatted(tx.amount, currency: tx.currency))
-                    .font(.system(size: 14, weight: .bold))
+                    .font(.system(.subheadline, weight: .bold))
                     .foregroundStyle(tx.isExpense ? AppTheme.red : AppTheme.accent)
             }
             // Add / Added button.
@@ -541,19 +587,19 @@ struct AIChatView: View {
                     Image(systemName: tx.added ? "checkmark.circle.fill" : "plus.circle.fill")
                     Text(tx.added ? loc("ai.tx.added") : loc("ai.tx.add"))
                 }
-                .font(.system(size: 13, weight: .semibold))
+                .font(.system(.footnote, weight: .semibold))
                 .foregroundStyle(tx.added ? AppTheme.accent : .white)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 9)
                 .background(tx.added ? AppTheme.accent.opacity(0.12) : AppTheme.accent,
-                            in: RoundedRectangle(cornerRadius: 10))
+                            in: RoundedRectangle(cornerRadius: AppRadius.sm))
             }
             .buttonStyle(.plain)
             .disabled(tx.added)
         }
         .padding(12)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
-        .overlay(RoundedRectangle(cornerRadius: 14).stroke(AppTheme.cardMid, lineWidth: 1))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.cardMid, lineWidth: 1))
     }
 
     // MARK: Input bar
@@ -566,11 +612,11 @@ struct AIChatView: View {
             HapticManager.shared.tap()
             voiceNotice = nil
             if voice.isListening {
+                // Only reachable from the legacy auto-start path.
                 voice.stop()
             } else {
-                voice.reset()
                 inputFocused = false
-                Task { await voice.start() }
+                showVoiceCapture = true
             }
         } label: {
             ZStack {
@@ -585,7 +631,7 @@ struct AIChatView: View {
                         .animation(.easeOut(duration: 0.12), value: voice.level)
                 }
                 Image(systemName: voice.isListening ? "stop.fill" : "mic.fill")
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.system(.subheadline, weight: .semibold))
                     .foregroundStyle(voice.isListening ? AppTheme.red : AppTheme.textSecondary)
             }
         }
@@ -604,9 +650,9 @@ struct AIChatView: View {
             if let voiceNotice {
                 HStack(spacing: 6) {
                     Image(systemName: "exclamationmark.circle.fill")
-                        .font(.system(size: 11)).foregroundStyle(AppTheme.orange)
+                        .font(.system(.caption2)).foregroundStyle(AppTheme.orange)
                     Text(voiceNotice)
-                        .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                        .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                     Spacer()
                 }
                 .padding(.horizontal, 16).padding(.top, 8)
@@ -617,29 +663,30 @@ struct AIChatView: View {
 
                 TextField(voice.isListening ? loc("voice.listening") : loc("ai.input_placeholder"),
                           text: $vm.input, axis: .vertical)
-                    .font(.system(size: 14))
+                    .font(.system(.subheadline))
                     .lineLimit(1...4)
                     .focused($inputFocused)
                     .padding(.horizontal, 14).padding(.vertical, 10)
-                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 18))
+                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
                 Button {
                     inputFocused = false
                     let snapshot = buildFinancialContext()
                     Task { await vm.send(context: snapshot) }
                 } label: {
                     Image(systemName: "arrow.up")
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundStyle(AppTheme.onAccentFill)
+                        .font(.system(.callout, weight: .bold))
+                        .foregroundStyle(AppTheme.onVividFill)
                         .frame(width: 38, height: 38)
                         .background(AppTheme.accentFill, in: Circle())
                 }
+.accessibilityLabel(loc("a11y.send"))
                 .disabled(vm.input.trimmingCharacters(in: .whitespaces).isEmpty || vm.isLoading)
                 .opacity(vm.input.trimmingCharacters(in: .whitespaces).isEmpty ? 0.5 : 1)
             }
             .padding(.horizontal, 16).padding(.vertical, 12)
             // 1 credit/message hint.
             Text(loc("ai.credit_hint"))
-                .font(.system(size: 10))
+                .font(.system(.caption2))
                 .foregroundStyle(AppTheme.textSecondary.opacity(0.7))
                 .padding(.bottom, 8)
         }
@@ -653,7 +700,7 @@ struct AIChatView: View {
                 .font(.system(size: 40))
                 .foregroundStyle(AppTheme.textSecondary)
             Text(loc("ai.no_card"))
-                .font(.system(size: 14))
+                .font(.system(.subheadline))
                 .foregroundStyle(AppTheme.textSecondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 40)

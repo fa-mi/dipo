@@ -89,7 +89,7 @@ struct WalletCard: View {
                     if card.isDigitalWallet { providerTile } else { chip }
                     Spacer()
                     Image(systemName: card.isDigitalWallet ? "qrcode" : "wave.3.right")
-                        .font(.system(size: 15, weight: .medium))
+                        .font(.system(.subheadline, weight: .medium))
                         .foregroundStyle(.white.opacity(0.75))
                 }
 
@@ -101,18 +101,18 @@ struct WalletCard: View {
                     Text(card.holderName.isEmpty
                          ? (card.walletProvider.isEmpty ? loc("wallet.untitled") : card.walletProvider)
                          : card.holderName)
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(.system(.caption2, weight: .semibold))
                         .foregroundStyle(.white)
                         .lineLimit(2).minimumScaleFactor(0.75)
                         .multilineTextAlignment(.leading)
                 } else {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(balanceLabel.uppercased())
-                        .font(.system(size: 9, weight: .semibold))
+                        .font(.system(.caption2, weight: .semibold))
                         .foregroundStyle(.white.opacity(0.65))
                         .tracking(0.8)
                     Text(balanceText)
-                        .font(.system(size: 22, weight: .bold))
+                        .font(.system(.title2, weight: .bold))
                         .foregroundStyle(.white)
                         .minimumScaleFactor(0.55)
                         .lineLimit(1)
@@ -132,15 +132,15 @@ struct WalletCard: View {
                     HStack(alignment: .bottom) {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(card.holderName.isEmpty ? loc("wallet.untitled") : card.holderName)
-                                .font(.system(size: 12, weight: .semibold))
+                                .font(.system(.caption, weight: .semibold))
                                 .foregroundStyle(.white)
                                 .lineLimit(1).minimumScaleFactor(0.7)
                             if card.isDigitalWallet && !card.walletProvider.isEmpty {
                                 Text(card.walletProvider)
-                                    .font(.system(size: 9)).foregroundStyle(.white.opacity(0.7))
+                                    .font(.system(.caption2)).foregroundStyle(.white.opacity(0.7))
                             } else if !card.expireDate.isEmpty {
                                 Text(card.expireDate)
-                                    .font(.system(size: 9)).foregroundStyle(.white.opacity(0.7))
+                                    .font(.system(.caption2)).foregroundStyle(.white.opacity(0.7))
                             }
                         }
                         Spacer(minLength: 6)
@@ -183,15 +183,15 @@ struct WalletCard: View {
 
     /// The wallet's brand mark, shaped like an app icon rather than a chip.
     private var providerTile: some View {
-        RoundedRectangle(cornerRadius: 8, style: .continuous)
+        RoundedRectangle(cornerRadius: AppRadius.xs, style: .continuous)
             .fill(.white.opacity(0.22))
             .frame(width: 30, height: 30)
             .overlay(
                 Text(String((card.walletProvider.isEmpty ? "W" : card.walletProvider).prefix(1)).uppercased())
-                    .font(.system(size: 14, weight: .heavy, design: .rounded))
+                    .font(.system(.subheadline, design: .rounded, weight: .heavy))
                     .foregroundStyle(.white)
             )
-            .overlay(RoundedRectangle(cornerRadius: 8).stroke(.white.opacity(0.3), lineWidth: 0.7))
+            .overlay(RoundedRectangle(cornerRadius: AppRadius.xs).stroke(.white.opacity(0.3), lineWidth: 0.7))
     }
 
     private var chip: some View {
@@ -214,13 +214,13 @@ struct WalletCard: View {
     private var networkMark: some View {
         if card.isDigitalWallet {
             Text(loc("wallet.ewallet").uppercased())
-                .font(.system(size: 8, weight: .bold))
+                .font(.system(.caption2, weight: .bold))
                 .foregroundStyle(.white.opacity(0.85))
                 .padding(.horizontal, 6).padding(.vertical, 3)
                 .background(.white.opacity(0.18), in: Capsule())
         } else if card.isCreditCard {
             Text(loc("cc.badge"))
-                .font(.system(size: 8, weight: .bold))
+                .font(.system(.caption2, weight: .bold))
                 .foregroundStyle(.white.opacity(0.85))
                 .padding(.horizontal, 6).padding(.vertical, 3)
                 .background(.white.opacity(0.18), in: Capsule())
@@ -324,21 +324,21 @@ struct WalletCardActions: View {
             VStack(alignment: .leading, spacing: 1) {
                 HStack(spacing: 6) {
                     Text(subtitle)
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.system(.subheadline, weight: .semibold))
                         .foregroundStyle(AppTheme.textPrimary).lineLimit(1)
                     // Which account the whole app is reasoning about, stated on
                     // the account itself. Anywhere else and the user has to
                     // remember a setting to read their own numbers.
                     if isMain {
                         Text(loc("main.badge"))
-                            .font(.system(size: 9, weight: .bold))
+                            .font(.system(.caption2, weight: .bold))
                             .foregroundStyle(AppTheme.accent)
                             .padding(.horizontal, 6).padding(.vertical, 2)
                             .background(AppTheme.accent.opacity(0.15), in: Capsule())
                     }
                 }
                 Text(String(format: loc(txCount == 1 ? "cards.tx_count" : "cards.tx_counts"), txCount))
-                    .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                    .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
             }
             Spacer(minLength: 8)
             // One gesture, no sheet.
@@ -353,7 +353,7 @@ struct WalletCardActions: View {
             if !card.isCreditCard {
                 if isMain {
                     Image(systemName: "star.fill")
-                        .font(.system(size: 14))
+                        .font(.system(.subheadline))
                         .foregroundStyle(AppTheme.bg)
                         .frame(width: 36, height: 36)
                         .background(AppTheme.accentFill, in: Circle())
@@ -364,7 +364,7 @@ struct WalletCardActions: View {
                         withAnimation(AppMotion.move) { MainCard.set(card) }
                     } label: {
                         Image(systemName: "star")
-                            .font(.system(size: 14))
+                            .font(.system(.subheadline))
                             .foregroundStyle(AppTheme.accent)
                             .frame(width: 36, height: 36)
                             .background(AppTheme.accent.opacity(0.12), in: Circle())
@@ -375,21 +375,23 @@ struct WalletCardActions: View {
             }
             Button { HapticManager.shared.tap(); onEdit() } label: {
                 Image(systemName: "pencil")
-                    .font(.system(size: 14)).foregroundStyle(AppTheme.textSecondary)
+                    .font(.system(.subheadline)).foregroundStyle(AppTheme.textSecondary)
                     .frame(width: 36, height: 36)
                     .background(AppTheme.cardMid, in: Circle())
             }
+.accessibilityLabel(loc("common.edit"))
             .buttonStyle(ScaleButtonStyle())
             Button { HapticManager.shared.warning(); onDelete() } label: {
                 Image(systemName: "trash")
-                    .font(.system(size: 14)).foregroundStyle(AppTheme.red.opacity(0.85))
+                    .font(.system(.subheadline)).foregroundStyle(AppTheme.red.opacity(0.85))
                     .frame(width: 36, height: 36)
                     .background(AppTheme.red.opacity(0.12), in: Circle())
             }
+.accessibilityLabel(loc("common.delete"))
             .buttonStyle(ScaleButtonStyle())
         }
         .padding(.horizontal, 14).padding(.vertical, 12)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
 
     }
 

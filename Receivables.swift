@@ -207,7 +207,7 @@ struct ReceivablesView: View {
 
                             if !settledList.isEmpty {
                                 Text(loc("receivable.settled_section"))
-                                    .font(.system(size: 11, weight: .semibold))
+                                    .font(.system(.caption2, weight: .semibold))
                                     .foregroundStyle(AppTheme.textSecondary)
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                     .padding(.horizontal, 22).padding(.top, 8)
@@ -238,16 +238,16 @@ struct ReceivablesView: View {
     private var summaryCard: some View {
         VStack(spacing: 6) {
             Text(loc("receivable.total_outstanding"))
-                .font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
+                .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
             Text(CurrencyManager.shared.formatted(totalOutstanding,
                                                   currency: CurrencyManager.shared.preferredCurrency))
-                .font(.system(size: 30, weight: .bold)).foregroundStyle(AppTheme.accent)
+                .font(.system(.title, weight: .bold)).foregroundStyle(AppTheme.accent)
             Text(String(format: loc("receivable.people_count"), outstandingList.count))
-                .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 20)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 18))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
         .padding(.horizontal, 22)
         .opacity(appeared ? 1 : 0)
     }
@@ -260,12 +260,12 @@ struct ReceivablesView: View {
             vm.showAddSheet = true
         } label: {
             HStack(spacing: 8) {
-                Image(systemName: "plus.circle.fill").font(.system(size: 14))
-                Text(loc("receivable.add")).font(.system(size: 14, weight: .semibold))
+                Image(systemName: "plus.circle.fill").font(.system(.subheadline))
+                Text(loc("receivable.add")).font(.system(.subheadline, weight: .semibold))
             }
             .foregroundStyle(AppTheme.accent)
             .frame(maxWidth: .infinity).padding(.vertical, 13)
-            .background(AppTheme.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 14))
+            .background(AppTheme.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: AppRadius.md))
         }
         .buttonStyle(ScaleButtonStyle())
         .padding(.horizontal, 22)
@@ -274,11 +274,11 @@ struct ReceivablesView: View {
     private var emptyState: some View {
         VStack(spacing: 12) {
             Image(systemName: "hand.raised.fill")
-                .font(.system(size: 34)).foregroundStyle(AppTheme.textSecondary.opacity(0.5))
+                .font(.system(.largeTitle)).foregroundStyle(AppTheme.textSecondary.opacity(0.5))
             Text(loc("receivable.empty_title"))
-                .font(.system(size: 15, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                .font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
             Text(loc("receivable.empty_sub"))
-                .font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
+                .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                 .multilineTextAlignment(.center).padding(.horizontal, 40)
         }
         .padding(.top, 40)
@@ -294,17 +294,17 @@ struct ReceivablesView: View {
                     Circle().fill((r.isSettled ? AppTheme.accent : AppTheme.blue).opacity(0.15))
                         .frame(width: 40, height: 40)
                     Text(String(r.personName.prefix(1).uppercased()))
-                        .font(.system(size: 15, weight: .bold))
+                        .font(.system(.subheadline, weight: .bold))
                         .foregroundStyle(r.isSettled ? AppTheme.accent : AppTheme.blue)
                 }
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 6) {
                         Text(r.personName)
-                            .font(.system(size: 15, weight: .semibold))
+                            .font(.system(.subheadline, weight: .semibold))
                             .foregroundStyle(AppTheme.textPrimary).lineLimit(1)
                         if r.isOverdue {
                             Text(loc("receivable.overdue"))
-                                .font(.system(size: 9, weight: .bold)).foregroundStyle(AppTheme.red)
+                                .font(.system(.caption2, weight: .bold)).foregroundStyle(AppTheme.red)
                                 .padding(.horizontal, 5).padding(.vertical, 2)
                                 .background(AppTheme.red.opacity(0.15), in: Capsule())
                         }
@@ -314,11 +314,11 @@ struct ReceivablesView: View {
                          : String(format: loc("receivable.of_total"),
                                   CurrencyManager.shared.formatted(repaid, currency: r.currency),
                                   CurrencyManager.shared.formatted(r.amount, currency: r.currency)))
-                        .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                        .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                 }
                 Spacer()
                 Text(CurrencyManager.shared.formatted(left, currency: r.currency))
-                    .font(.system(size: 15, weight: .bold))
+                    .font(.system(.subheadline, weight: .bold))
                     .foregroundStyle(r.isSettled ? AppTheme.textSecondary : AppTheme.textPrimary)
             }
 
@@ -336,9 +336,9 @@ struct ReceivablesView: View {
                         HapticManager.shared.tap(); repaying = r
                     } label: {
                         Text(loc("receivable.record_repayment"))
-                            .font(.system(size: 12, weight: .semibold)).foregroundStyle(AppTheme.accent)
+                            .font(.system(.caption, weight: .semibold)).foregroundStyle(AppTheme.accent)
                             .frame(maxWidth: .infinity).padding(.vertical, 8)
-                            .background(AppTheme.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
+                            .background(AppTheme.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: AppRadius.sm))
                     }
                     .buttonStyle(.plain)
                     Button {
@@ -347,16 +347,16 @@ struct ReceivablesView: View {
                         try? context.save()
                     } label: {
                         Text(loc("receivable.mark_settled"))
-                            .font(.system(size: 12, weight: .semibold)).foregroundStyle(AppTheme.textSecondary)
+                            .font(.system(.caption, weight: .semibold)).foregroundStyle(AppTheme.textSecondary)
                             .frame(maxWidth: .infinity).padding(.vertical, 8)
-                            .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: 10))
+                            .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: AppRadius.sm))
                     }
                     .buttonStyle(.plain)
                 }
             }
         }
         .padding(14)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
         .contextMenu {
             Button { vm.loadForEdit(r) } label: { Label(loc("action.edit"), systemImage: "pencil") }
             if r.isSettled {
@@ -392,7 +392,7 @@ struct ReceivableFormSheet: View {
                                    text: $vm.formName)
 
                         VStack(spacing: 8) {
-                            Text(loc("receivable.amount")).font(.system(size: 13))
+                            Text(loc("receivable.amount")).font(.system(.footnote))
                                 .foregroundStyle(AppTheme.textSecondary)
                                 .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 22)
                             HStack(spacing: 10) {
@@ -402,19 +402,19 @@ struct ReceivableFormSheet: View {
                                     }
                                 } label: {
                                     HStack(spacing: 6) {
-                                        Text(vm.formCurrency).font(.system(size: 15, weight: .semibold))
+                                        Text(vm.formCurrency).font(.system(.subheadline, weight: .semibold))
                                             .foregroundStyle(AppTheme.textPrimary)
-                                        Image(systemName: "chevron.up.chevron.down").font(.system(size: 10))
+                                        Image(systemName: "chevron.up.chevron.down").font(.system(.caption2)).imageScale(.small)
                                             .foregroundStyle(AppTheme.textSecondary)
                                     }
                                     .padding(.horizontal, 14).padding(.vertical, 14)
-                                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
+                                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
                                 }
                                 TextField("0", text: $vm.formAmount)
-                                    .font(.system(size: 22, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
+                                    .font(.system(.title2, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
                                     .keyboardType(.decimalPad)
                                     .padding(.horizontal, 16).padding(.vertical, 14)
-                                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
+                                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
                             }
                             .padding(.horizontal, 22)
                         }
@@ -423,7 +423,7 @@ struct ReceivableFormSheet: View {
                         // has none, and a forced date would be fiction.
                         VStack(spacing: 10) {
                             Toggle(isOn: $vm.formHasDueDate) {
-                                Text(loc("receivable.set_due")).font(.system(size: 14))
+                                Text(loc("receivable.set_due")).font(.system(.subheadline))
                                     .foregroundStyle(AppTheme.textPrimary)
                             }
                             .tint(AppTheme.accent)
@@ -438,12 +438,12 @@ struct ReceivableFormSheet: View {
                         if !isEditing {
                             VStack(alignment: .leading, spacing: 8) {
                                 Toggle(isOn: $vm.formRecordOutflow) {
-                                    Text(loc("receivable.record_outflow")).font(.system(size: 14))
+                                    Text(loc("receivable.record_outflow")).font(.system(.subheadline))
                                         .foregroundStyle(AppTheme.textPrimary)
                                 }
                                 .tint(AppTheme.accent)
                                 Text(loc("receivable.record_outflow_hint"))
-                                    .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                                    .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                                     .fixedSize(horizontal: false, vertical: true)
                                 if vm.formRecordOutflow {
                                     CardPickerSection(selectedCardID: $vm.formCardID,
@@ -458,7 +458,7 @@ struct ReceivableFormSheet: View {
                                    text: $vm.formNotes)
 
                         if let err = vm.formError {
-                            Text(err).font(.system(size: 12)).foregroundStyle(AppTheme.red)
+                            Text(err).font(.system(.caption)).foregroundStyle(AppTheme.red)
                                 .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 22)
                         }
 
@@ -466,10 +466,10 @@ struct ReceivableFormSheet: View {
                             guard vm.validate() else { HapticManager.shared.warning(); return }
                             save()
                         } label: {
-                            Text(loc("action.save")).font(.system(size: 16, weight: .bold))
-                                .foregroundStyle(AppTheme.onAccentFill)
+                            Text(loc("action.save")).font(.system(.callout, weight: .bold))
+                                .foregroundStyle(AppTheme.onVividFill)
                                 .frame(maxWidth: .infinity).padding(.vertical, 16)
-                                .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: 16))
+                                .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: AppRadius.md))
                         }
                         .buttonStyle(ScaleButtonStyle())
                         .padding(.horizontal, 22)
@@ -550,23 +550,23 @@ struct RepaymentSheet: View {
                     VStack(spacing: 18) {
                         VStack(spacing: 4) {
                             Text(loc("receivable.remaining"))
-                                .font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
+                                .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                             Text(CurrencyManager.shared.formatted(remaining, currency: receivable.currency))
-                                .font(.system(size: 26, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
+                                .font(.system(.title, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
                         }
                         .padding(.top, 8)
 
                         TextField("0", text: $amountText)
-                            .font(.system(size: 22, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
+                            .font(.system(.title2, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
                             .keyboardType(.decimalPad).multilineTextAlignment(.center)
                             .padding(.vertical, 14)
-                            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
+                            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
                             .padding(.horizontal, 22)
 
                         Button {
                             amountText = String(remaining)
                         } label: {
-                            Text(loc("receivable.pay_full")).font(.system(size: 12, weight: .semibold))
+                            Text(loc("receivable.pay_full")).font(.system(.caption, weight: .semibold))
                                 .foregroundStyle(AppTheme.accent)
                         }
                         .buttonStyle(.plain)
@@ -578,10 +578,10 @@ struct RepaymentSheet: View {
                             record()
                         } label: {
                             Text(loc("receivable.record_repayment"))
-                                .font(.system(size: 16, weight: .bold)).foregroundStyle(.white)
+                                .font(.system(.callout, weight: .bold)).foregroundStyle(canSave ? AppTheme.onVividFill : AppTheme.textSecondary)
                                 .frame(maxWidth: .infinity).padding(.vertical, 15)
-                                .background(canSave ? AppTheme.accent : AppTheme.cardMid,
-                                            in: RoundedRectangle(cornerRadius: 16))
+                                .background(canSave ? AppTheme.accentFill : AppTheme.cardMid,
+                                            in: RoundedRectangle(cornerRadius: AppRadius.md))
                         }
                         .buttonStyle(ScaleButtonStyle())
                         .disabled(!canSave)

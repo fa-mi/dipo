@@ -31,24 +31,24 @@ struct PremiumLockedFeatureLink: View {
         }) {
             HStack(spacing: 14) {
                 Image(systemName: badgeIcon)
-                    .font(.system(size: 18))
+                    .font(.system(.body))
                     .foregroundStyle(isLocked ? AppTheme.textSecondary : badgeTint)
                     .frame(width: 36, height: 36)
                     .background(
                         (isLocked ? AppTheme.textSecondary : feature.color).opacity(0.12),
-                        in: RoundedRectangle(cornerRadius: 10)
+                        in: RoundedRectangle(cornerRadius: AppRadius.sm)
                     )
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 6) {
                         Text(title)
-                            .font(.system(size: 14, weight: .medium))
+                            .font(.system(.subheadline, weight: .medium))
                             .foregroundStyle(isLocked ? AppTheme.textSecondary : AppTheme.textPrimary)
                         if isLocked {
                             HStack(spacing: 3) {
                                 Image(systemName: feature.requiredPlan.icon)
-                                    .font(.system(size: 8, weight: .bold))
+                                    .font(.system(.caption2, weight: .bold)).imageScale(.small)
                                 Text(feature.requiredPlan.label)
-                                    .font(.system(size: 9, weight: .bold))
+                                    .font(.system(.caption2, weight: .bold))
                                     .tracking(0.5)
                             }
                             .foregroundStyle(feature.requiredPlan.color)
@@ -57,7 +57,7 @@ struct PremiumLockedFeatureLink: View {
                         }
                     }
                     Text(subtitle)
-                        .font(.system(size: 12))
+                        .font(.system(.caption))
                         .foregroundStyle(AppTheme.textSecondary)
                 }
                 Spacer()
@@ -66,8 +66,8 @@ struct PremiumLockedFeatureLink: View {
                     .foregroundStyle(isLocked ? AppTheme.textSecondary.opacity(0.5) : AppTheme.textSecondary)
             }
             .padding(14)
-            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
-            .overlay(RoundedRectangle(cornerRadius: 14)
+            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+            .overlay(RoundedRectangle(cornerRadius: AppRadius.md)
                 .stroke(isLocked ? AppTheme.cardMid.opacity(0.5) : feature.color.opacity(0.15), lineWidth: 1))
         }
         .buttonStyle(ScaleButtonStyle())
@@ -87,26 +87,26 @@ struct ProfileFeatureLink: View {
         Button(action: { HapticManager.shared.tap(); action() }) {
             HStack(spacing: 14) {
                 Image(systemName: icon)
-                    .font(.system(size: 18))
+                    .font(.system(.body))
                     .foregroundStyle(color)
                     .frame(width: 36, height: 36)
-                    .background(color.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
+                    .background(color.opacity(0.12), in: RoundedRectangle(cornerRadius: AppRadius.sm))
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
-                        .font(.system(size: 14, weight: .medium))
+                        .font(.system(.subheadline, weight: .medium))
                         .foregroundStyle(AppTheme.textPrimary)
                     Text(subtitle)
-                        .font(.system(size: 12))
+                        .font(.system(.caption))
                         .foregroundStyle(AppTheme.textSecondary)
                 }
                 Spacer()
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 13))
+                    .font(.system(.footnote))
                     .foregroundStyle(AppTheme.textSecondary)
             }
             .padding(14)
-            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
-            .overlay(RoundedRectangle(cornerRadius: 14)
+            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+            .overlay(RoundedRectangle(cornerRadius: AppRadius.md)
                 .stroke(color.opacity(0.15), lineWidth: 1))
         }
         .buttonStyle(ScaleButtonStyle())
@@ -143,22 +143,16 @@ struct ProfileView: View {
 
     @State private var appeared           = false
     @State private var showResetConfirm   = false
-    @State private var showSalary         = false
-    @State private var showRecurring      = false
-    @State private var showAIChat         = false
-    @State private var showWishlist       = false
-    @State private var showCardManager    = false
-    @State private var showBudgetSettings = false
     @State private var isEditingName      = false
     @State private var editNameText       = ""
     @State private var showEmailEdit      = false
     @State private var idCopied           = false
     @State private var emailText          = ""
-    @State private var showObligations = false
     @State private var showBackTapGuide = false
     @State private var showWebSync        = false
     @State private var showPaywall        = false
     @State private var appearanceMode: String = UserDefaults.standard.string(forKey: "appearance_mode") ?? "system"
+    @State private var voiceLanguage = VoiceLanguage.saved
     @State private var premiumMgr  = PremiumManager.shared
     @State private var session     = UserSession.shared
     @State private var showSignOut = false
@@ -258,7 +252,7 @@ struct ProfileView: View {
             AppTheme.bg.ignoresSafeArea()
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 24) {
-                    Spacer(minLength: 20)
+                    Spacer(minLength: 4)
                     avatarSection
                     nameSection
                     securityCard
@@ -276,6 +270,10 @@ struct ProfileView: View {
                 }
             }
         }
+        // Pushed from the avatar on Home: the bar carries the back button.
+        .navigationTitle(loc("tab.profile"))
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(AppTheme.bg, for: .navigationBar)
         // Backup busy overlay — shown over the entire profile while export
         // or import is running. Disables interaction with all sheets and
         // buttons so the user can't double-tap or cancel mid-write.
@@ -320,19 +318,10 @@ struct ProfileView: View {
                 confirmLabel: loc("profile.reset_btn"),
                 onConfirm: { resetAllData() }
             )
-            .presentationDetents([.height(420)])
             .presentationDragIndicator(.visible)
             .presentationBackground(AppTheme.bg)
             .presentationCornerRadius(28)
             .preferredColorScheme(appColorScheme())
-        }
-        .sheet(isPresented: $showSalary) {
-            SalaryView().presentationDetents([.large]).presentationDragIndicator(.visible)
-                .presentationBackground(AppTheme.bg).preferredColorScheme(appColorScheme())
-        }
-        .sheet(isPresented: $showRecurring) {
-            RecurringExpensesView().presentationDetents([.large]).presentationDragIndicator(.visible)
-                .presentationBackground(AppTheme.bg).preferredColorScheme(appColorScheme())
         }
         .sheet(isPresented: $showDeleteAccount) {
             DangerConfirmSheet(
@@ -359,21 +348,13 @@ struct ProfileView: View {
                     VStack(spacing: 14) {
                         ProgressView().tint(.white).scaleEffect(1.2)
                         Text(loc("delete_acct.working"))
-                            .font(.system(size: 14, weight: .medium)).foregroundStyle(.white)
+                            .font(.system(.subheadline, weight: .medium)).foregroundStyle(.white)
                     }
                     .padding(28)
-                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20))
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: AppRadius.lg))
                 }
                 .transition(.opacity)
             }
-        }
-        .sheet(isPresented: $showAIChat) {
-            AIChatView().presentationDetents([.large]).presentationDragIndicator(.visible)
-                .presentationBackground(AppTheme.bg).preferredColorScheme(appColorScheme())
-        }
-        .sheet(isPresented: $showWishlist) {
-            WishlistView().presentationDetents([.large]).presentationDragIndicator(.visible)
-                .presentationBackground(AppTheme.bg).preferredColorScheme(appColorScheme())
         }
         // Backup share sheet — fires when export succeeds.
         .sheet(item: $backupShareItem) { item in
@@ -447,20 +428,10 @@ struct ProfileView: View {
                     runImport(from: url)
                 }
             )
-            .presentationDetents([.height(420)])
             .presentationDragIndicator(.visible)
             .presentationBackground(AppTheme.bg)
             .presentationCornerRadius(28)
             .preferredColorScheme(appColorScheme())
-        }
-        .sheet(isPresented: $showBudgetSettings) {
-            SmartBudgetSettingsSheet().presentationDetents([.large]).presentationDragIndicator(.visible)
-                .presentationBackground(AppTheme.bg).preferredColorScheme(appColorScheme())
-        }
-        .sheet(isPresented: $showObligations) {
-            ObligationsView()
-                .presentationDetents([.large]).presentationDragIndicator(.visible)
-                .presentationBackground(AppTheme.bg).preferredColorScheme(appColorScheme())
         }
         .sheet(isPresented: $showBackTapGuide) {
             BackTapGuideView()
@@ -533,7 +504,6 @@ struct ProfileView: View {
                 .frame(width: 118, height: 118)
             ZStack {
                 Circle().fill(AppTheme.cardDark).frame(width: 110, height: 110)
-                    .shadow(color: AppTheme.accent.opacity(0.35), radius: 18, y: 6)
                 if let img = profileImage {
                     Image(uiImage: img).resizable().scaledToFill()
                         .frame(width: 110, height: 110).clipShape(Circle())
@@ -546,11 +516,12 @@ struct ProfileView: View {
             Button { showPhotoOptions = true } label: {
                 ZStack {
                     Circle().fill(AppTheme.accentFill).frame(width: 32, height: 32)
-                        .shadow(color: AppTheme.accent.opacity(0.55), radius: 8, y: 3)
                     Image(systemName: "camera.fill")
-                        .font(.system(size: 13, weight: .semibold)).foregroundStyle(.white)
+                        .font(.system(.footnote, weight: .semibold)).foregroundStyle(AppTheme.onVividFill)
                 }
             }
+.accessibilityLabel(loc("a11y.change_photo"))
+.hitTarget(32)
             .buttonStyle(ScaleButtonStyle())
             .offset(x: 36, y: 36)
         }
@@ -574,19 +545,21 @@ struct ProfileView: View {
             if isEditingName {
                 HStack(spacing: 8) {
                     TextField(loc("auth.name_placeholder"), text: $editNameText)
-                        .font(.system(size: 24, weight: .bold, design: .rounded))
+                        .font(.system(.title2, design: .rounded, weight: .bold))
                         .foregroundStyle(AppTheme.textPrimary)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 16).padding(.vertical, 10)
-                        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
-                        .overlay(RoundedRectangle(cornerRadius: 14).stroke(AppTheme.accent.opacity(0.5), lineWidth: 1.5))
+                        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+                        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.accent.opacity(0.5), lineWidth: 1.5))
                         .submitLabel(.done).onSubmit { saveName() }
                     Button { saveName() } label: {
-                        Image(systemName: "checkmark.circle.fill").font(.system(size: 28)).foregroundStyle(AppTheme.accent)
-                    }.buttonStyle(ScaleButtonStyle())
+                        Image(systemName: "checkmark.circle.fill").font(.system(.title)).foregroundStyle(AppTheme.accent)
+                    }
+.accessibilityLabel(loc("a11y.save_name")).buttonStyle(ScaleButtonStyle())
                     Button { isEditingName = false; editNameText = authVM.savedName } label: {
-                        Image(systemName: "xmark.circle.fill").font(.system(size: 28)).foregroundStyle(AppTheme.textSecondary)
-                    }.buttonStyle(ScaleButtonStyle())
+                        Image(systemName: "xmark.circle.fill").font(.system(.title)).foregroundStyle(AppTheme.textSecondary)
+                    }
+.accessibilityLabel(loc("common.cancel")).buttonStyle(ScaleButtonStyle())
                 }
                 .padding(.horizontal, 28)
                 .transition(.scale(scale: 0.95).combined(with: .opacity))
@@ -597,9 +570,9 @@ struct ProfileView: View {
                 } label: {
                     HStack(spacing: 6) {
                         Text(authVM.savedName)
-                            .font(.system(size: 26, weight: .bold, design: .rounded))
+                            .font(.system(.title, design: .rounded, weight: .bold))
                             .foregroundStyle(AppTheme.textPrimary)
-                        Image(systemName: "pencil").font(.system(size: 13, weight: .medium))
+                        Image(systemName: "pencil").font(.system(.footnote, weight: .medium))
                             .foregroundStyle(AppTheme.textSecondary.opacity(0.6))
                     }
                 }
@@ -608,11 +581,11 @@ struct ProfileView: View {
             }
             HStack(spacing: 5) {
                 if premiumMgr.plan != .free {
-                    Image(systemName: premiumMgr.plan.icon).font(.system(size: 10, weight: .bold))
+                    Image(systemName: premiumMgr.plan.icon).font(.system(.caption2, weight: .bold)).imageScale(.small)
                         .foregroundStyle(premiumMgr.plan.color)
                 }
                 Text(premiumMgr.plan == .free ? loc("auth.tagline") : "DiPo \(premiumMgr.plan.label)")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(.caption, weight: .semibold))
                     .foregroundStyle(planTaglineFill)
                     .tracking(premiumMgr.plan == .free ? 1.4 : 0.5)
             }
@@ -629,14 +602,14 @@ struct ProfileView: View {
         HStack(spacing: 12) {
             let c: Color = hasEmail ? AppTheme.accent : AppTheme.orange
             Image(systemName: hasEmail ? "envelope.fill" : "envelope.badge")
-                .font(.system(size: 18)).foregroundStyle(c)
+                .font(.system(.body)).foregroundStyle(c)
                 .frame(width: 36, height: 36)
-                .background(c.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
+                .background(c.opacity(0.12), in: RoundedRectangle(cornerRadius: AppRadius.sm))
             VStack(alignment: .leading, spacing: 2) {
                 Text(loc("profile.email_title"))
-                    .font(.system(size: 14, weight: .medium)).foregroundStyle(AppTheme.textPrimary)
+                    .font(.system(.subheadline, weight: .medium)).foregroundStyle(AppTheme.textPrimary)
                 Text(hasEmail ? (session.email ?? "") : loc("profile.email_not_set"))
-                    .font(.system(size: 12))
+                    .font(.system(.caption))
                     .foregroundStyle(hasEmail ? AppTheme.textSecondary : AppTheme.orange)
                     .lineLimit(1)
             }
@@ -647,7 +620,7 @@ struct ProfileView: View {
                 showEmailEdit = true
             } label: {
                 Text(hasEmail ? loc("common.edit") : loc("profile.add_email"))
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(.caption, weight: .semibold))
                     .foregroundStyle(hasEmail ? AppTheme.accent : .white)
                     .padding(.horizontal, 14).padding(.vertical, 7)
                     .background(hasEmail ? AppTheme.accent.opacity(0.12) : AppTheme.accent, in: Capsule())
@@ -656,8 +629,8 @@ struct ProfileView: View {
             .buttonStyle(ScaleButtonStyle())
         }
         .padding(16)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16)
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.md)
             .stroke((hasEmail ? AppTheme.accent : AppTheme.orange).opacity(0.18), lineWidth: 1))
         .padding(.horizontal, 22)
         .opacity(appeared ? 1 : 0)
@@ -680,21 +653,20 @@ struct ProfileView: View {
     @ViewBuilder
     private var dipoIDSection: some View {
         let id = session.dipoID ?? "—"
-        let brandA = Color(hex: "#38BDF8") // sky
+        let brandA = AppTheme.blue // sky
         let brandB = Color(hex: "#6366F1") // indigo
         let grad = LinearGradient(colors: [brandA, brandB],
                                   startPoint: .topLeading, endPoint: .bottomTrailing)
         HStack(spacing: 12) {
             Image(systemName: "person.text.rectangle.fill")
-                .font(.system(size: 18)).foregroundStyle(.white)
+                .font(.system(.body)).foregroundStyle(.white)
                 .frame(width: 36, height: 36)
-                .background(grad, in: RoundedRectangle(cornerRadius: 10))
-                .shadow(color: brandB.opacity(0.35), radius: 5, y: 2)
+                .background(grad, in: RoundedRectangle(cornerRadius: AppRadius.sm))
             VStack(alignment: .leading, spacing: 2) {
                 Text(loc("profile.dipo_id_title"))
-                    .font(.system(size: 14, weight: .medium)).foregroundStyle(AppTheme.textPrimary)
+                    .font(.system(.subheadline, weight: .medium)).foregroundStyle(AppTheme.textPrimary)
                 Text(id)
-                    .font(.system(size: 13, weight: .bold, design: .monospaced))
+                    .font(.system(.footnote, design: .monospaced, weight: .bold))
                     .foregroundStyle(brandB)
                     .lineLimit(1)
             }
@@ -709,9 +681,9 @@ struct ProfileView: View {
             } label: {
                 HStack(spacing: 4) {
                     Image(systemName: idCopied ? "checkmark" : "doc.on.doc")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.system(.caption2, weight: .semibold))
                     Text(idCopied ? loc("common.copied") : loc("common.copy"))
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.system(.caption, weight: .semibold))
                 }
                 .foregroundStyle(.white)
                 .padding(.horizontal, 14).padding(.vertical, 7)
@@ -723,8 +695,8 @@ struct ProfileView: View {
         .background(
             LinearGradient(colors: [brandA.opacity(0.10), brandB.opacity(0.10)],
                            startPoint: .topLeading, endPoint: .bottomTrailing),
-            in: RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).stroke(brandB.opacity(0.30), lineWidth: 1))
+            in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(brandB.opacity(0.30), lineWidth: 1))
         .padding(.horizontal, 22)
         .opacity(appeared ? 1 : 0)
     }
@@ -733,11 +705,11 @@ struct ProfileView: View {
     private var securityCard: some View {
         HStack(spacing: 12) {
             let bioColor = authVM.isBiometricAvailable ? AppTheme.accent : AppTheme.textSecondary
-            Image(systemName: authVM.biometricIcon).font(.system(size: 18)).foregroundStyle(bioColor)
+            Image(systemName: authVM.biometricIcon).font(.system(.body)).foregroundStyle(bioColor)
                 .frame(width: 36, height: 36)
-                .background(bioColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
+                .background(bioColor.opacity(0.12), in: RoundedRectangle(cornerRadius: AppRadius.sm))
             VStack(alignment: .leading, spacing: 2) {
-                Text(authVM.biometricLabel).font(.system(size: 14, weight: .medium)).foregroundStyle(AppTheme.textPrimary)
+                Text(authVM.biometricLabel).font(.system(.subheadline, weight: .medium)).foregroundStyle(AppTheme.textPrimary)
                 Text(
                     authVM.isBiometricAvailable
                     ? (biometricEnabled
@@ -745,7 +717,7 @@ struct ProfileView: View {
                         : loc("biometric.disabled"))
                     : loc("biometric.unavailable")
                 )
-                .font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
+                .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
             }
             Spacer()
             if authVM.isBiometricAvailable {
@@ -757,8 +729,8 @@ struct ProfileView: View {
             }
         }
         .padding(16)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).stroke(AppTheme.accent.opacity(0.18), lineWidth: 1))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.accent.opacity(0.18), lineWidth: 1))
         .padding(.horizontal, 22)
         .opacity(appeared ? 1 : 0)
     }
@@ -768,37 +740,37 @@ struct ProfileView: View {
         HStack(spacing: 14) {
             ZStack {
                 let isApple = session.provider == .apple
-                RoundedRectangle(cornerRadius: 12)
+                RoundedRectangle(cornerRadius: AppRadius.sm)
                     .fill(isApple
                         ? LinearGradient(colors: [Color(hex: "#1C1C1E"), Color(hex: "#3A3A3C")], startPoint: .topLeading, endPoint: .bottomTrailing)
                         : LinearGradient(colors: [Color(hex: "#4285F4").opacity(0.2), Color(hex: "#34A853").opacity(0.15)], startPoint: .topLeading, endPoint: .bottomTrailing))
                     .frame(width: 44, height: 44)
-                    .overlay(RoundedRectangle(cornerRadius: 12)
+                    .overlay(RoundedRectangle(cornerRadius: AppRadius.sm)
                         .stroke(isApple ? Color.white.opacity(0.08) : Color(hex: "#4285F4").opacity(0.3), lineWidth: 1))
                 if session.provider == .apple {
-                    Image(systemName: "apple.logo").font(.system(size: 18, weight: .medium)).foregroundStyle(.white)
+                    Image(systemName: "apple.logo").font(.system(.body, weight: .medium)).foregroundStyle(.white)
                 } else {
-                    Text("G").font(.system(size: 18, weight: .bold)).foregroundStyle(Color(hex: "#4285F4"))
+                    Text("G").font(.system(.body, weight: .bold)).foregroundStyle(Color(hex: "#4285F4"))
                 }
             }
             VStack(alignment: .leading, spacing: 3) {
                 Text(session.displayName ?? loc("profile.account"))
-                    .font(.system(size: 15, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                    .font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
                 HStack(spacing: 4) {
                     let isApple = session.provider == .apple
                     Text(isApple ? "Apple" : "Google")
-                        .font(.system(size: 10, weight: .bold))
+                        .font(.system(.caption2, weight: .bold))
                         .foregroundStyle(isApple ? .white : Color(hex: "#4285F4"))
                         .padding(.horizontal, 6).padding(.vertical, 2)
                         .background(isApple ? Color(hex: "#3A3A3C") : Color(hex: "#4285F4").opacity(0.15), in: Capsule())
                     if let email = session.email, !email.isEmpty {
-                        Text("· \(email)").font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary).lineLimit(1)
+                        Text("· \(email)").font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary).lineLimit(1)
                     }
                 }
             }
             Spacer()
             Button { HapticManager.shared.tap(); showSignOut = true } label: {
-                Text(loc("profile.logout")).font(.system(size: 12, weight: .semibold)).foregroundStyle(AppTheme.red)
+                Text(loc("profile.logout")).font(.system(.caption, weight: .semibold)).foregroundStyle(AppTheme.red)
                     .padding(.horizontal, 12).padding(.vertical, 6)
                     .background(AppTheme.red.opacity(0.1), in: Capsule())
                     .overlay(Capsule().stroke(AppTheme.red.opacity(0.3), lineWidth: 1))
@@ -808,8 +780,8 @@ struct ProfileView: View {
         .background(
             LinearGradient(colors: [AppTheme.cardDark, AppTheme.cardDark.opacity(0.8)],
                            startPoint: .topLeading, endPoint: .bottomTrailing),
-            in: RoundedRectangle(cornerRadius: 18))
-        .overlay(RoundedRectangle(cornerRadius: 18).stroke(AppTheme.cardMid.opacity(0.6), lineWidth: 1))
+            in: RoundedRectangle(cornerRadius: AppRadius.lg))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.lg).stroke(AppTheme.cardMid.opacity(0.6), lineWidth: 1))
         .padding(.horizontal, 22)
         .opacity(appeared ? 1 : 0)
         .animation(AppMotion.appear, value: appeared)
@@ -820,22 +792,22 @@ struct ProfileView: View {
         Button { HapticManager.shared.tap(); showPaywall = true } label: {
             HStack(spacing: 14) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 12).fill(planIconFill).frame(width: 44, height: 44)
-                        .overlay(RoundedRectangle(cornerRadius: 12)
+                    RoundedRectangle(cornerRadius: AppRadius.sm).fill(planIconFill).frame(width: 44, height: 44)
+                        .overlay(RoundedRectangle(cornerRadius: AppRadius.sm)
                             .stroke(premiumMgr.plan == .free ? Color.clear : premiumMgr.plan.color.opacity(0.4), lineWidth: 1))
-                    Image(systemName: premiumMgr.plan.icon).font(.system(size: 18, weight: .medium))
+                    Image(systemName: premiumMgr.plan.icon).font(.system(.body, weight: .medium))
                         .foregroundStyle(premiumMgr.plan == .free ? AppTheme.textSecondary : premiumMgr.plan.color)
                 }
                 VStack(alignment: .leading, spacing: 3) {
                     Text(premiumMgr.plan == .free ? loc("free.user") : "DiPo \(premiumMgr.plan.label)")
-                        .font(.system(size: 15, weight: .bold))
+                        .font(.system(.subheadline, weight: .bold))
                         .foregroundStyle(premiumMgr.plan == .free ? AppTheme.textPrimary : premiumMgr.plan.color)
                     // Subtitle ternary collapsed from 3-tier to 2-tier
                     // (Premium plan removed). Only Free or Royal possible.
                     let subtitle = premiumMgr.plan == .free
                         ? loc("free.title")
                         : loc("royal.title")
-                    Text(subtitle).font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
+                    Text(subtitle).font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                 }
                 Spacer()
                 if premiumMgr.plan == .free {
@@ -843,20 +815,19 @@ struct ProfileView: View {
                     // amber tone is gone with the tier. Consistent purple
                     // throughout the upgrade journey is also clearer
                     // branding ("this color = paid feature").
-                    Text(loc("profile.upgrade")).font(.system(size: 12, weight: .bold)).foregroundStyle(.white)
+                    Text(loc("profile.upgrade")).font(.system(.caption, weight: .bold)).foregroundStyle(.white)
                         .padding(.horizontal, 14).padding(.vertical, 7)
                         .background(
                             LinearGradient(colors: [PremiumPlan.royal.color, PremiumPlan.royal.color.opacity(0.75)],
                                            startPoint: .topLeading, endPoint: .bottomTrailing), in: Capsule())
-                        .shadow(color: PremiumPlan.royal.color.opacity(0.4), radius: 6, y: 3)
                 } else {
-                    Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold))
+                    Image(systemName: "chevron.right").font(.system(.footnote, weight: .semibold))
                         .foregroundStyle(premiumMgr.plan.color.opacity(0.7))
                 }
             }
             .padding(16)
-            .background(planCardFill, in: RoundedRectangle(cornerRadius: 18))
-            .overlay(RoundedRectangle(cornerRadius: 18)
+            .background(planCardFill, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+            .overlay(RoundedRectangle(cornerRadius: AppRadius.lg)
                 .stroke(premiumMgr.plan == .free ? AppTheme.cardMid.opacity(0.5) : premiumMgr.plan.color.opacity(0.4),
                         lineWidth: premiumMgr.plan == .free ? 1 : 1.5))
         }
@@ -868,42 +839,10 @@ struct ProfileView: View {
 
     @ViewBuilder
     private var featureLinksCard: some View {
+        // Money features (budget, salary, bills, savings, Ask DiPo) moved to the
+        // Plan tab and Debts & Credits to Wallet. What stays is how DiPo
+        // connects to things outside the app.
         VStack(spacing: 12) {
-            PremiumLockedFeatureLink(
-                feature: .aiAdvisor, title: loc("profile.ai_advisor"),
-                subtitle: premiumMgr.canAccess(.aiAdvisor)
-                    ? loc("profile.ai_advisor_sub")
-                    : loc("profile.requires_royal"),
-                showPaywall: $showPaywall) { showAIChat = true }
-            ProfileFeatureLink(icon: "banknote.fill", color: AppTheme.accent,
-                               title: loc("profile.salary"),
-                               subtitle: loc("profile.salary_sub")) { showSalary = true }
-            ProfileFeatureLink(icon: "arrow.triangle.2.circlepath", color: AppTheme.orange,
-                               title: loc("profile.recurring"),
-                               subtitle: loc("profile.recurring_sub")) { showRecurring = true }
-            PremiumLockedFeatureLink(
-                feature: .savingsGoals, title: loc("profile.savings"),
-                // Savings Goals moved from Premium-tier to Royal-tier when
-                // the Premium plan was removed, so the locked-state copy
-                // points at Royal now (same key the other paid features
-                // already use).
-                subtitle: premiumMgr.canAccess(.savingsGoals) ? loc("profile.savings_sub") : loc("profile.requires_royal"),
-                showPaywall: $showPaywall) { showWishlist = true }
-            PremiumLockedFeatureLink(
-                feature: .smartBudget, title: loc("profile.budget"),
-                subtitle: premiumMgr.canAccess(.smartBudget)
-                    ? (SmartBudgetManager.shared.isEnabled ? loc("profile.budget_active") : loc("budget.off"))
-                    : loc("profile.requires_royal"),
-                showPaywall: $showPaywall) { showBudgetSettings = true }
-            // One door for everything owed, owing, or being considered. These
-            // were three separate rows; they answer the same question from
-            // three sides, and splitting them hid the only number that matters
-            // — what all of it adds up to against income.
-            PremiumLockedFeatureLink(
-                feature: .smartDebt, title: loc("oblig.nav"),
-                subtitle: premiumMgr.canAccess(.smartDebt) ? loc("oblig.entry_sub") : loc("profile.requires_royal"),
-                iconOverride: "scalemass.fill",
-                showPaywall: $showPaywall) { showObligations = true }
             // Gated on .smartBudget — the same entitlement the Worker checks
             // before serving the dashboard, so the button can't offer something
             // the server will refuse.
@@ -932,8 +871,8 @@ struct ProfileView: View {
                 showPaywall: $showPaywall) { showBackTapGuide = true }
         }
         .padding(16)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).stroke(AppTheme.green.opacity(0.18), lineWidth: 1))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.green.opacity(0.18), lineWidth: 1))
         .padding(.horizontal, 22)
         .opacity(appeared ? 1 : 0)
         .offset(y: appeared ? 0 : 20)
@@ -944,13 +883,13 @@ struct ProfileView: View {
     private var appearanceCard: some View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
-                Image(systemName: "circle.lefthalf.filled").font(.system(size: 18)).foregroundStyle(AppTheme.textPrimary)
+                Image(systemName: "circle.lefthalf.filled").font(.system(.body)).foregroundStyle(AppTheme.textPrimary)
                     .frame(width: 36, height: 36)
-                    .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: 10))
+                    .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: AppRadius.sm))
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(loc("profile.appearance")).font(.system(size: 14, weight: .medium)).foregroundStyle(AppTheme.textPrimary)
+                    Text(loc("profile.appearance")).font(.system(.subheadline, weight: .medium)).foregroundStyle(AppTheme.textPrimary)
                     Text(appearanceMode == "system" ? loc("appearance.following_system") : appearanceMode == "dark" ? loc("appearance.dark_mode") : loc("appearance.light_mode"))
-                        .font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
+                        .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                 }
                 Spacer()
             }
@@ -969,25 +908,25 @@ struct ProfileView: View {
                         performAppearanceTransition(to: item.mode)
                     } label: {
                         VStack(spacing: 5) {
-                            Image(systemName: item.icon).font(.system(size: 16))
-                                .foregroundStyle(appearanceMode == item.mode ? AppTheme.bg : AppTheme.textSecondary)
+                            Image(systemName: item.icon).font(.system(.callout))
+                                .foregroundStyle(appearanceMode == item.mode ? AppTheme.onVividFill : AppTheme.textSecondary)
                             Text(item.label)
                                 .font(.system(size: 11, weight: appearanceMode == item.mode ? .semibold : .regular))
-                                .foregroundStyle(appearanceMode == item.mode ? AppTheme.bg : AppTheme.textSecondary)
+                                .foregroundStyle(appearanceMode == item.mode ? AppTheme.onVividFill : AppTheme.textSecondary)
                         }
                         .frame(maxWidth: .infinity).padding(.vertical, 10)
-                        .background(appearanceMode == item.mode ? AppTheme.accent : Color.clear,
-                                    in: RoundedRectangle(cornerRadius: 10))
+                        .background(appearanceMode == item.mode ? AppTheme.accentFill : Color.clear,
+                                    in: RoundedRectangle(cornerRadius: AppRadius.sm))
                     }
                     .buttonStyle(ScaleButtonStyle())
                 }
             }
             .padding(4)
-            .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: 14))
+            .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: AppRadius.md))
         }
         .padding(16)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).stroke(AppTheme.textSecondary.opacity(0.12), lineWidth: 1))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.textSecondary.opacity(0.12), lineWidth: 1))
         .padding(.horizontal, 22)
         .opacity(appeared ? 1 : 0)
         .offset(y: appeared ? 0 : 20)
@@ -995,6 +934,12 @@ struct ProfileView: View {
 
         // ── Language Toggle ──────────────────────────────────────────────
         languageSection
+            .padding(.horizontal, 22)
+            .opacity(appeared ? 1 : 0)
+            .offset(y: appeared ? 0 : 20)
+            .animation(AppMotion.appear, value: appeared)
+
+        voiceLanguageSection
             .padding(.horizontal, 22)
             .opacity(appeared ? 1 : 0)
             .offset(y: appeared ? 0 : 20)
@@ -1008,14 +953,14 @@ struct ProfileView: View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
                 Text("🌐")
-                    .font(.system(size: 18))
+                    .font(.system(.body))
                     .frame(width: 36, height: 36)
-                    .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: 10))
+                    .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: AppRadius.sm))
                 VStack(alignment: .leading, spacing: 2) {
                     Text(loc("profile.language"))
-                        .font(.system(size: 14, weight: .medium)).foregroundStyle(AppTheme.textPrimary)
+                        .font(.system(.subheadline, weight: .medium)).foregroundStyle(AppTheme.textPrimary)
                     Text(lang.current.flag + " " + lang.current.nativeName)
-                        .font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
+                        .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                 }
                 Spacer()
             }
@@ -1030,27 +975,93 @@ struct ProfileView: View {
                         }
                     } label: {
                         VStack(spacing: 5) {
-                            Text(language.flag).font(.system(size: 22))
+                            Text(language.flag).font(.system(.title2))
                             Text(language.nativeName)
                                 .font(.system(size: 11,
                                               weight: language == lang.current ? .semibold : .regular))
-                                .foregroundStyle(language == lang.current ? AppTheme.bg : AppTheme.textSecondary)
+                                .foregroundStyle(language == lang.current ? AppTheme.onVividFill : AppTheme.textSecondary)
                                 .lineLimit(1).minimumScaleFactor(0.7)
                         }
                         .frame(maxWidth: .infinity).padding(.vertical, 10)
-                        .background(language == lang.current ? AppTheme.accent : Color.clear,
-                                    in: RoundedRectangle(cornerRadius: 10))
+                        .background(language == lang.current ? AppTheme.accentFill : Color.clear,
+                                    in: RoundedRectangle(cornerRadius: AppRadius.sm))
                     }
                     .buttonStyle(ScaleButtonStyle())
                 }
             }
             .padding(4)
-            .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: 14))
+            .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: AppRadius.md))
+
         }
         .padding(16)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).stroke(AppTheme.textSecondary.opacity(0.12), lineWidth: 1))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.textSecondary.opacity(0.12), lineWidth: 1))
     }   // ← closing brace was missing, causing all subsequent vars to fall inside
+
+    /// Same control as the language card above it — a row of three choices —
+    /// because it is the same kind of decision. It was a menu tucked under the
+    /// language picker, which read as a detail of it rather than its own setting.
+    @ViewBuilder
+    private var voiceLanguageSection: some View {
+        let lang = LanguageManager.shared
+        VStack(spacing: 0) {
+            HStack(spacing: 12) {
+                Image(systemName: "waveform")
+                    .font(.system(.body)).foregroundStyle(AppTheme.textPrimary)
+                    .frame(width: 36, height: 36)
+                    .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: AppRadius.sm))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(loc("voice.lang_title"))
+                        .font(.system(.subheadline, weight: .medium)).foregroundStyle(AppTheme.textPrimary)
+                    Text(loc("voice.lang_sub"))
+                        .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer()
+            }
+            Divider().background(AppTheme.cardMid).padding(.vertical, 10)
+            HStack(spacing: 0) {
+                ForEach(VoiceLanguage.allCases) { option in
+                    let on = voiceLanguage == option
+                    Button {
+                        guard !on else { return }
+                        HapticManager.shared.tap()
+                        withAnimation(.spring(response: 0.3)) { voiceLanguage = option }
+                        VoiceLanguage.saved = option
+                    } label: {
+                        VStack(spacing: 5) {
+                            Group {
+                                switch option {
+                                case .app:        Image(systemName: "link").font(.system(.title3, weight: .semibold))
+                                case .indonesian: Text(LanguageManager.Language.indonesian.flag).font(.system(.title2))
+                                case .english:    Text(LanguageManager.Language.english.flag).font(.system(.title2))
+                                }
+                            }
+                            .frame(height: 28)
+                            .foregroundStyle(on ? AppTheme.onVividFill : AppTheme.textSecondary)
+                            Text(option == .app
+                                 ? String(format: loc("voice.lang_app_short"), lang.current == .indonesian ? "ID" : "EN")
+                                 : option.label)
+                                .font(.system(size: 11, weight: on ? .semibold : .regular))
+                                .foregroundStyle(on ? AppTheme.onVividFill : AppTheme.textSecondary)
+                                .lineLimit(1).minimumScaleFactor(0.7)
+                        }
+                        .frame(maxWidth: .infinity).padding(.vertical, 10)
+                        .background(on ? AppTheme.accentFill : Color.clear,
+                                    in: RoundedRectangle(cornerRadius: AppRadius.sm))
+                    }
+                    .buttonStyle(ScaleButtonStyle())
+                    .accessibilityLabel(option.label)
+                    .accessibilityAddTraits(on ? .isSelected : [])
+                }
+            }
+            .padding(4)
+            .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: AppRadius.md))
+        }
+        .padding(16)
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.textSecondary.opacity(0.12), lineWidth: 1))
+    }
 
     @ViewBuilder
     private var authButtonSection: some View {
@@ -1058,7 +1069,7 @@ struct ProfileView: View {
             if isSigningIn {
                 HStack(spacing: 10) {
                     ProgressView().tint(AppTheme.accent)
-                    Text(loc("profile.signing_in")).font(.system(size: 15)).foregroundStyle(AppTheme.textSecondary)
+                    Text(loc("profile.signing_in")).font(.system(.subheadline)).foregroundStyle(AppTheme.textSecondary)
                 }
                 .frame(maxWidth: .infinity).padding(.vertical, 16)
             } else {
@@ -1069,14 +1080,14 @@ struct ProfileView: View {
                 } label: {
                     HStack(spacing: 10) {
                         Image(systemName: loggedIn ? "person.crop.circle.badge.xmark" : "person.crop.circle.badge.checkmark")
-                            .font(.system(size: 16))
-                        Text(loggedIn ? loc("profile.logout") : loc("profile.login")).font(.system(size: 15, weight: .medium))
+                            .font(.system(.callout))
+                        Text(loggedIn ? loc("profile.logout") : loc("profile.login")).font(.system(.subheadline, weight: .medium))
                     }
                     .foregroundStyle(loggedIn ? AppTheme.red : AppTheme.accent)
                     .frame(maxWidth: .infinity).padding(.vertical, 16)
                     .background((loggedIn ? AppTheme.red : AppTheme.accent).opacity(0.08),
-                                in: RoundedRectangle(cornerRadius: 16))
-                    .overlay(RoundedRectangle(cornerRadius: 16)
+                                in: RoundedRectangle(cornerRadius: AppRadius.md))
+                    .overlay(RoundedRectangle(cornerRadius: AppRadius.md)
                         .stroke((loggedIn ? AppTheme.red : AppTheme.accent).opacity(0.25), lineWidth: 1))
                 }
                 .buttonStyle(ScaleButtonStyle())
@@ -1089,7 +1100,7 @@ struct ProfileView: View {
                     showDeleteAccount = true
                 } label: {
                     Text(loc("profile.delete"))
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.system(.footnote, weight: .semibold))
                         .foregroundStyle(AppTheme.red.opacity(0.85))
                         .underline()
                         .padding(.vertical, 6)
@@ -1146,27 +1157,27 @@ struct ProfileView: View {
                 } label: {
                     HStack(spacing: 10) {
                         Image(systemName: lastExportDate == nil ? "exclamationmark.circle.fill" : "clock.arrow.circlepath")
-                            .font(.system(size: 18))
+                            .font(.system(.body))
                             .foregroundStyle(AppTheme.orange)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(lastExportDate == nil
                                  ? loc("backup.reminder.never_title")
                                  : loc("backup.reminder.stale_title"))
-                                .font(.system(size: 13, weight: .semibold))
+                                .font(.system(.footnote, weight: .semibold))
                                 .foregroundStyle(AppTheme.textPrimary)
                             Text(backupReminderSubtitle)
-                                .font(.system(size: 11))
+                                .font(.system(.caption2))
                                 .foregroundStyle(AppTheme.textSecondary)
                                 .multilineTextAlignment(.leading)
                         }
                         Spacer()
                         Image(systemName: "chevron.right")
-                            .font(.system(size: 11, weight: .semibold))
+                            .font(.system(.caption2, weight: .semibold))
                             .foregroundStyle(AppTheme.textSecondary)
                     }
                     .padding(12)
-                    .background(AppTheme.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
-                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(AppTheme.orange.opacity(0.3), lineWidth: 1))
+                    .background(AppTheme.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: AppRadius.sm))
+                    .overlay(RoundedRectangle(cornerRadius: AppRadius.sm).stroke(AppTheme.orange.opacity(0.3), lineWidth: 1))
                 }
                 .buttonStyle(ScaleButtonStyle())
             }
@@ -1174,10 +1185,10 @@ struct ProfileView: View {
             // Section header so users understand what they're touching
             HStack(spacing: 6) {
                 Image(systemName: "externaldrive.fill")
-                    .font(.system(size: 12))
+                    .font(.system(.caption))
                     .foregroundStyle(AppTheme.textSecondary)
                 Text(loc("backup.section_title"))
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(.caption, weight: .semibold))
                     .foregroundStyle(AppTheme.textSecondary)
                 Spacer()
             }
@@ -1195,13 +1206,13 @@ struct ProfileView: View {
                     runExport()
                 } label: {
                     HStack(spacing: 8) {
-                        Image(systemName: "square.and.arrow.up").font(.system(size: 14, weight: .semibold))
-                        Text(loc("backup.export")).font(.system(size: 14, weight: .semibold))
+                        Image(systemName: "square.and.arrow.up").font(.system(.subheadline, weight: .semibold))
+                        Text(loc("backup.export")).font(.system(.subheadline, weight: .semibold))
                     }
                     .foregroundStyle(AppTheme.accent)
                     .frame(maxWidth: .infinity).padding(.vertical, 14)
-                    .background(AppTheme.accent.opacity(0.1), in: RoundedRectangle(cornerRadius: 14))
-                    .overlay(RoundedRectangle(cornerRadius: 14).stroke(AppTheme.accent.opacity(0.25), lineWidth: 1))
+                    .background(AppTheme.accent.opacity(0.1), in: RoundedRectangle(cornerRadius: AppRadius.md))
+                    .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.accent.opacity(0.25), lineWidth: 1))
                     .opacity(isDisabled ? 0.5 : 1)
                 }
                 .buttonStyle(ScaleButtonStyle())
@@ -1213,13 +1224,13 @@ struct ProfileView: View {
                     showImportPicker = true
                 } label: {
                     HStack(spacing: 8) {
-                        Image(systemName: "square.and.arrow.down").font(.system(size: 14, weight: .semibold))
-                        Text(loc("backup.import")).font(.system(size: 14, weight: .semibold))
+                        Image(systemName: "square.and.arrow.down").font(.system(.subheadline, weight: .semibold))
+                        Text(loc("backup.import")).font(.system(.subheadline, weight: .semibold))
                     }
                     .foregroundStyle(AppTheme.blue)
                     .frame(maxWidth: .infinity).padding(.vertical, 14)
-                    .background(AppTheme.blue.opacity(0.1), in: RoundedRectangle(cornerRadius: 14))
-                    .overlay(RoundedRectangle(cornerRadius: 14).stroke(AppTheme.blue.opacity(0.25), lineWidth: 1))
+                    .background(AppTheme.blue.opacity(0.1), in: RoundedRectangle(cornerRadius: AppRadius.md))
+                    .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.blue.opacity(0.25), lineWidth: 1))
                     .opacity(isDisabled ? 0.5 : 1)
                 }
                 .buttonStyle(ScaleButtonStyle())
@@ -1231,14 +1242,14 @@ struct ProfileView: View {
                 // letting them silently wonder. Subtle inline hint —
                 // matches existing `backup.subtitle` styling.
                 Text(loc("backup.login_required"))
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.system(.caption2, weight: .medium))
                     .foregroundStyle(AppTheme.red.opacity(0.85))
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: .infinity)
             }
 
             Text(loc("backup.subtitle"))
-                .font(.system(size: 11))
+                .font(.system(.caption2))
                 .foregroundStyle(AppTheme.textSecondary.opacity(0.8))
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: .infinity)
@@ -1268,12 +1279,12 @@ struct ProfileView: View {
     private var resetButton: some View {
         Button { HapticManager.shared.warning(); showResetConfirm = true } label: {
             HStack(spacing: 10) {
-                Image(systemName: "trash.fill").font(.system(size: 16))
-                Text(loc("profile.reset_all")).font(.system(size: 15, weight: .medium))
+                Image(systemName: "trash.fill").font(.system(.callout))
+                Text(loc("profile.reset_all")).font(.system(.subheadline, weight: .medium))
             }
             .foregroundStyle(AppTheme.red).frame(maxWidth: .infinity).padding(.vertical, 16)
-            .background(AppTheme.red.opacity(0.08), in: RoundedRectangle(cornerRadius: 16))
-            .overlay(RoundedRectangle(cornerRadius: 16).stroke(AppTheme.red.opacity(0.25), lineWidth: 1))
+            .background(AppTheme.red.opacity(0.08), in: RoundedRectangle(cornerRadius: AppRadius.md))
+            .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.red.opacity(0.25), lineWidth: 1))
         }
         .buttonStyle(ScaleButtonStyle()).padding(.horizontal, 22).opacity(appeared ? 1 : 0)
     }
@@ -1293,21 +1304,21 @@ struct ProfileView: View {
                 } label: {
                     HStack(spacing: 14) {
                         Image(systemName: "headphones.circle.fill")
-                            .font(.system(size: 18)).foregroundStyle(AppTheme.textSecondary)
+                            .font(.system(.body)).foregroundStyle(AppTheme.textSecondary)
                             .frame(width: 36, height: 36)
-                            .background(AppTheme.textSecondary.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
+                            .background(AppTheme.textSecondary.opacity(0.12), in: RoundedRectangle(cornerRadius: AppRadius.sm))
                         VStack(alignment: .leading, spacing: 2) {
                             Text(loc("profile.support"))
-                                .font(.system(size: 14, weight: .medium)).foregroundStyle(AppTheme.textSecondary)
+                                .font(.system(.subheadline, weight: .medium)).foregroundStyle(AppTheme.textSecondary)
                             Text(loc("profile.support_needs_email"))
-                                .font(.system(size: 12)).foregroundStyle(AppTheme.orange)
+                                .font(.system(.caption)).foregroundStyle(AppTheme.orange)
                         }
                         Spacer()
-                        Image(systemName: "lock.fill").font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
+                        Image(systemName: "lock.fill").font(.system(.footnote)).foregroundStyle(AppTheme.textSecondary)
                     }
                     .padding(14)
-                    .background(AppTheme.cardDark.opacity(0.6), in: RoundedRectangle(cornerRadius: 14))
-                    .overlay(RoundedRectangle(cornerRadius: 14).stroke(AppTheme.orange.opacity(0.2), lineWidth: 1))
+                    .background(AppTheme.cardDark.opacity(0.6), in: RoundedRectangle(cornerRadius: AppRadius.md))
+                    .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.orange.opacity(0.2), lineWidth: 1))
                 }
                 .buttonStyle(ScaleButtonStyle())
             } else {
@@ -1337,6 +1348,8 @@ struct ProfileView: View {
         let trimmed = editNameText.trimmingCharacters(in: .whitespaces)
         guard trimmed.count >= 2 else { return }
         Keychain.save(trimmed, key: "user_name")
+        // Home greets the user by name and caches it; tell it the name moved.
+        NotificationCenter.default.post(name: .profilePhotoDidChange, object: nil)
         HapticManager.shared.success()
         withAnimation(.spring(response: 0.35)) { isEditingName = false }
     }
@@ -1440,12 +1453,12 @@ struct ProfileView: View {
                         .controlSize(.large)
                         .tint(.white)
                     Text(label)
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.system(.subheadline, weight: .semibold))
                         .foregroundStyle(.white)
                 }
                 .padding(.horizontal, 32)
                 .padding(.vertical, 26)
-                .background(.black.opacity(0.6), in: RoundedRectangle(cornerRadius: 18))
+                .background(.black.opacity(0.6), in: RoundedRectangle(cornerRadius: AppRadius.lg))
             }
             .transition(.opacity)
         }
@@ -1614,7 +1627,6 @@ struct ProfileSignInSheet: View {
                             )
                         )
                         .frame(width: 76, height: 76)
-                        .shadow(color: .black.opacity(0.25), radius: 12, y: 6)
 
                     // 🧊 Highlight (fake light reflection)
                     Circle()
@@ -1642,9 +1654,9 @@ struct ProfileSignInSheet: View {
                     value: appeared
                 )
                 VStack(spacing: 5) {
-                    Text(context.title).font(.system(size: 20, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
+                    Text(context.title).font(.system(.title3, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
                     Text(context.subtitle)
-                        .font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary).multilineTextAlignment(.center)
+                        .font(.system(.footnote)).foregroundStyle(AppTheme.textSecondary).multilineTextAlignment(.center)
                 }
                 .opacity(appeared ? 1 : 0).offset(y: appeared ? 0 : 10)
                 .animation(AppMotion.appear, value: appeared)
@@ -1660,8 +1672,8 @@ struct ProfileSignInSheet: View {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { onApple() }
                 } label: {
                     HStack(spacing: 10) {
-                        Image(systemName: "apple.logo").font(.system(size: 17, weight: .medium))
-                        Text(loc("auth.apple")).font(.system(size: 16, weight: .semibold))
+                        Image(systemName: "apple.logo").font(.system(.body, weight: .medium))
+                        Text(loc("auth.apple")).font(.system(.callout, weight: .semibold))
                     }
                     // Use textPrimary (auto-inverts: dark in light mode, white
                     // in dark mode) instead of fixed `.white`. Previously the
@@ -1671,8 +1683,8 @@ struct ProfileSignInSheet: View {
                     // consistency between the two sign-in options.
                     .foregroundStyle(AppTheme.textPrimary)
                     .frame(maxWidth: .infinity).padding(.vertical, 15)
-                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 15))
-                    .overlay(RoundedRectangle(cornerRadius: 15).stroke(AppTheme.cardMid, lineWidth: 1.5))
+                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+                    .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.cardMid, lineWidth: 1.5))
                 }
                 .buttonStyle(ScaleButtonStyle())
 
@@ -1683,19 +1695,19 @@ struct ProfileSignInSheet: View {
                     HStack(spacing: 10) {
                         ZStack {
                             Circle().fill(.white).frame(width: 20, height: 20)
-                            Text("G").font(.system(size: 13, weight: .bold)).foregroundStyle(Color(hex: "#4285F4"))
+                            Text("G").font(.system(.footnote, weight: .bold)).foregroundStyle(Color(hex: "#4285F4"))
                         }
-                        Text(loc("auth.google")).font(.system(size: 16, weight: .semibold))
+                        Text(loc("auth.google")).font(.system(.callout, weight: .semibold))
                             .foregroundStyle(AppTheme.textPrimary)
                     }
                     .frame(maxWidth: .infinity).padding(.vertical, 15)
-                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 15))
-                    .overlay(RoundedRectangle(cornerRadius: 15).stroke(AppTheme.cardMid, lineWidth: 1.5))
+                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+                    .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.cardMid, lineWidth: 1.5))
                 }
                 .buttonStyle(ScaleButtonStyle())
 
                 Text(loc("auth.data_stays"))
-                    .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary.opacity(0.5))
+                    .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary.opacity(0.5))
                     .multilineTextAlignment(.center).padding(.top, 2)
             }
             .padding(.horizontal, 24).padding(.top, 24)
@@ -1737,6 +1749,9 @@ extension Notification.Name {
     /// user wants — routing it through the transaction form first renders a
     /// screen nobody asked for on the way to the scanner.
     static let requestOpenScanFromShortcut = Notification.Name("requestOpenScanFromShortcut")
+    /// Posted when the share extension opens `dipo://scan-shared`. The image
+    /// itself waits in `SharedScanInbox`; MainTabView collects it.
+    static let requestOpenSharedScan       = Notification.Name("requestOpenSharedScan")
     static let requestOpenDebt           = Notification.Name("requestOpenDebt")
     static let requestOpenSavingsGoals   = Notification.Name("requestOpenSavingsGoals")
 }
@@ -1756,6 +1771,10 @@ extension Notification.Name {
 /// `.sheet(isPresented:)` with `.presentationDetents([.height(...)])`.
 struct DangerConfirmSheet: View {
     @Environment(\.dismiss) private var dismiss
+    /// Measured, so a long message or large Dynamic Type never clips and a short
+    /// one does not leave a half-empty panel. Call sites used to guess 420pt,
+    /// and two set no height at all and opened full-screen.
+    @State private var contentHeight: CGFloat = 400
 
     /// SF Symbol shown in the colored circle at the top.
     let icon: String
@@ -1803,11 +1822,11 @@ struct DangerConfirmSheet: View {
             // Title + message
             VStack(spacing: 10) {
                 Text(title)
-                    .font(.system(size: 22, weight: .bold))
+                    .font(.system(.title2, weight: .bold))
                     .foregroundStyle(AppTheme.textPrimary)
                     .multilineTextAlignment(.center)
                 Text(message)
-                    .font(.system(size: 14))
+                    .font(.system(.subheadline))
                     .foregroundStyle(AppTheme.textSecondary)
                     .multilineTextAlignment(.center)
                     .lineSpacing(3)
@@ -1825,13 +1844,13 @@ struct DangerConfirmSheet: View {
                     dismiss()
                 } label: {
                     Text(loc("common.cancel"))
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.system(.subheadline, weight: .semibold))
                         .foregroundStyle(AppTheme.textPrimary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 15)
-                        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
+                        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
                         .overlay(
-                            RoundedRectangle(cornerRadius: 14)
+                            RoundedRectangle(cornerRadius: AppRadius.md)
                                 .stroke(AppTheme.cardMid, lineWidth: 1)
                         )
                 }
@@ -1848,12 +1867,11 @@ struct DangerConfirmSheet: View {
                     }
                 } label: {
                     Text(confirmLabel)
-                        .font(.system(size: 15, weight: .bold))
-                        .foregroundStyle(.white)
+                        .font(.system(.subheadline, weight: .bold))
+                        .foregroundStyle(AppTheme.onVividFill)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 15)
-                        .background(tone.color, in: RoundedRectangle(cornerRadius: 14))
-                        .shadow(color: tone.color.opacity(0.35), radius: 12, y: 6)
+                        .background(tone.color, in: RoundedRectangle(cornerRadius: AppRadius.md))
                 }
                 .buttonStyle(ScaleButtonStyle())
             }
@@ -1861,7 +1879,51 @@ struct DangerConfirmSheet: View {
             .padding(.bottom, 22)
         }
         .frame(maxWidth: .infinity)
+        .fixedSize(horizontal: false, vertical: true)
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { contentHeight = $0 + 20 }
         .background(AppTheme.bg)
+        .presentationDetents([.height(contentHeight)])
+        .presentationDragIndicator(.visible)
+        .presentationBackground(AppTheme.bg)
+        .presentationCornerRadius(28)
+    }
+}
+
+extension View {
+    /// The one confirmation for anything that deletes, removes or overrides:
+    /// a sheet that names the action, says what happens, and keeps Cancel the
+    /// easy tap. Replaces system action sheets and alerts, which could not say
+    /// more than one line and looked like a different app from the rest of DiPo.
+    func confirmSheet(isPresented: Binding<Bool>,
+                      icon: String = "trash.fill",
+                      tone: DangerConfirmSheet.Tone = .danger,
+                      title: String,
+                      message: String,
+                      confirmLabel: String,
+                      onConfirm: @escaping () -> Void) -> some View {
+        sheet(isPresented: isPresented) {
+            DangerConfirmSheet(icon: icon, tone: tone, title: title, message: message,
+                               confirmLabel: confirmLabel, onConfirm: onConfirm)
+                .preferredColorScheme(appColorScheme())
+        }
+    }
+
+    /// Same, for confirming an action on a specific item (this instalment, this
+    /// member). The item is captured when the sheet opens: the sheet closes
+    /// before `onConfirm` runs, and closing clears the binding, so reading the
+    /// optional at confirm time would find nil and silently do nothing.
+    func confirmSheet<Item: Identifiable>(item: Binding<Item?>,
+                                          icon: String = "trash.fill",
+                                          tone: DangerConfirmSheet.Tone = .danger,
+                                          title: @escaping (Item) -> String,
+                                          message: @escaping (Item) -> String,
+                                          confirmLabel: String,
+                                          onConfirm: @escaping (Item) -> Void) -> some View {
+        sheet(item: item) { it in
+            DangerConfirmSheet(icon: icon, tone: tone, title: title(it), message: message(it),
+                               confirmLabel: confirmLabel, onConfirm: { onConfirm(it) })
+                .preferredColorScheme(appColorScheme())
+        }
     }
 }
 
@@ -1887,17 +1949,17 @@ struct BackupPreviewSheet: View {
                         .fill(AppTheme.blue.opacity(0.12))
                         .frame(width: 70, height: 70)
                     Image(systemName: "doc.text.magnifyingglass")
-                        .font(.system(size: 30, weight: .semibold))
+                        .font(.system(.title, weight: .semibold))
                         .foregroundStyle(AppTheme.blue)
                 }
                 .padding(.top, 12)
 
                 Text(loc("backup.preview.title"))
-                    .font(.system(size: 20, weight: .bold))
+                    .font(.system(.title3, weight: .bold))
                     .foregroundStyle(AppTheme.textPrimary)
 
                 Text(loc("backup.preview.subtitle"))
-                    .font(.system(size: 13))
+                    .font(.system(.footnote))
                     .foregroundStyle(AppTheme.textSecondary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 24)
@@ -1917,15 +1979,15 @@ struct BackupPreviewSheet: View {
                     value: "v\(preview.appVersion)"
                 )
             }
-            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
-            .overlay(RoundedRectangle(cornerRadius: 14).stroke(AppTheme.cardMid, lineWidth: 1))
+            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+            .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.cardMid, lineWidth: 1))
             .padding(.horizontal, 22)
             .padding(.top, 18)
 
             // Counts grid
             VStack(alignment: .leading, spacing: 8) {
                 Text(loc("backup.preview.contents"))
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(.caption, weight: .semibold))
                     .foregroundStyle(AppTheme.textSecondary)
                     .padding(.horizontal, 22)
 
@@ -1955,12 +2017,12 @@ struct BackupPreviewSheet: View {
                     onCancel()
                 } label: {
                     Text(loc("common.cancel"))
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.system(.subheadline, weight: .semibold))
                         .foregroundStyle(AppTheme.textPrimary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 14)
-                        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
-                        .overlay(RoundedRectangle(cornerRadius: 14).stroke(AppTheme.cardMid, lineWidth: 1))
+                        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+                        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.cardMid, lineWidth: 1))
                 }
                 .buttonStyle(ScaleButtonStyle())
 
@@ -1969,11 +2031,11 @@ struct BackupPreviewSheet: View {
                     onContinue()
                 } label: {
                     Text(loc("backup.preview.continue"))
-                        .font(.system(size: 15, weight: .bold))
-                        .foregroundStyle(AppTheme.onAccentFill)
+                        .font(.system(.subheadline, weight: .bold))
+                        .foregroundStyle(AppTheme.onVividFill)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 14)
-                        .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: 14))
+                        .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: AppRadius.md))
                 }
                 .buttonStyle(ScaleButtonStyle())
             }
@@ -1987,15 +2049,15 @@ struct BackupPreviewSheet: View {
     private func metadataRow(icon: String, label: String, value: String) -> some View {
         HStack(spacing: 12) {
             Image(systemName: icon)
-                .font(.system(size: 13))
+                .font(.system(.footnote))
                 .foregroundStyle(AppTheme.textSecondary)
                 .frame(width: 18)
             Text(label)
-                .font(.system(size: 13))
+                .font(.system(.footnote))
                 .foregroundStyle(AppTheme.textSecondary)
             Spacer()
             Text(value)
-                .font(.system(size: 13, weight: .semibold))
+                .font(.system(.footnote, weight: .semibold))
                 .foregroundStyle(AppTheme.textPrimary)
         }
         .padding(.horizontal, 14)
@@ -2014,35 +2076,38 @@ struct BackupPreviewSheet: View {
             ZStack {
                 Circle().fill(color.opacity(0.15)).frame(width: 32, height: 32)
                 Image(systemName: icon)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.system(.footnote, weight: .semibold))
                     .foregroundStyle(color)
             }
             VStack(alignment: .leading, spacing: 1) {
                 Text("\(count)")
-                    .font(.system(size: 15, weight: .bold))
+                    .font(.system(.subheadline, weight: .bold))
                     .foregroundStyle(AppTheme.textPrimary)
                     .contentTransition(.numericText())
                 Text(label)
-                    .font(.system(size: 10))
+                    .font(.system(.caption2))
                     .foregroundStyle(AppTheme.textSecondary)
             }
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 10).padding(.vertical, 8)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(AppTheme.cardMid.opacity(0.4), lineWidth: 1))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.sm))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.sm).stroke(AppTheme.cardMid.opacity(0.4), lineWidth: 1))
     }
 }
 
 // MARK: - Back Tap walkthrough
 
-/// How to wire "pay with QRIS → double-tap the back of the phone → the expense
-/// is logged".
+/// How to wire the two Back Tap gestures.
 ///
-/// Every step here happens OUTSIDE DiPo, which is the whole reason this screen
+/// Everything here happens OUTSIDE DiPo, which is the whole reason this screen
 /// exists. Back Tap is an Accessibility setting and cannot be claimed by an
-/// app; it only offers Shortcuts. So DiPo publishes the action and the user
-/// binds it — and without a guide that chain is three apps deep and invisible.
+/// app; it only offers Shortcuts. So DiPo publishes the actions and the user
+/// binds them — and without a guide that chain is three apps deep and
+/// invisible.
+///
+/// Two gestures, two lists, kept apart because they are independent setups:
+/// someone may well want only one of them.
 struct BackTapGuideView: View {
     @Environment(\.dismiss) private var dismiss
 
@@ -2053,7 +2118,8 @@ struct BackTapGuideView: View {
         let glyph: String
     }
 
-    private var steps: [Step] {
+    /// Double tap → capture the payment screen.
+    private var screenshotSteps: [Step] {
         [
             Step(id: 1, title: loc("backtap.s1_title"), body: loc("backtap.s1_body"),
                  glyph: "plus.square.on.square"),
@@ -2068,108 +2134,46 @@ struct BackTapGuideView: View {
         ]
     }
 
+    /// Triple tap → say it out loud. Shorter because DiPo publishes this action
+    /// ready-made: there is no shortcut to assemble, only one to bind.
+    private var voiceSteps: [Step] {
+        [
+            Step(id: 1, title: loc("backtap.v1_title"), body: loc("backtap.v1_body"),
+                 glyph: "square.and.arrow.down.on.square"),
+            Step(id: 2, title: loc("backtap.v2_title"), body: loc("backtap.v2_body"),
+                 glyph: "hand.tap.fill"),
+            Step(id: 3, title: loc("backtap.v3_title"), body: loc("backtap.v3_body"),
+                 glyph: "waveform"),
+        ]
+    }
+
     var body: some View {
         NavigationStack {
             ZStack {
                 AppTheme.bg.ignoresSafeArea()
                 ScrollView(showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: 22) {
+                    VStack(alignment: .leading, spacing: 20) {
 
-                        // What the finished gesture feels like, before the setup
-                        // that earns it.
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text(loc("backtap.hero_title"))
-                                .font(.system(size: 21, weight: .bold))
-                                .foregroundStyle(AppTheme.textPrimary)
-                            Text(loc("backtap.hero_body"))
-                                .font(.system(size: 14))
-                                .foregroundStyle(AppTheme.textSecondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                        .padding(16)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
-                        .overlay(RoundedRectangle(cornerRadius: 16)
-                            .stroke(AppTheme.orange.opacity(0.25), lineWidth: 1))
+                        hero
 
-                        Text(loc("backtap.setup_heading"))
-                            .font(.system(size: 12, weight: .semibold))
+                        sectionLabel(loc("backtap.setup_heading"), tint: AppTheme.orange)
+                        stepList(screenshotSteps, tint: AppTheme.orange)
+
+                        sectionLabel(loc("backtap.voice_heading"), tint: AppTheme.accent)
+                        Text(loc("backtap.voice_intro"))
+                            .font(.system(.footnote))
                             .foregroundStyle(AppTheme.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        stepList(voiceSteps, tint: AppTheme.accent)
 
-                        VStack(spacing: 0) {
-                            ForEach(steps) { step in
-                                HStack(alignment: .top, spacing: 13) {
-                                    VStack(spacing: 0) {
-                                        ZStack {
-                                            Circle().fill(AppTheme.orange.opacity(0.14))
-                                                .frame(width: 30, height: 30)
-                                            Text("\(step.id)")
-                                                .font(.system(size: 13, weight: .bold))
-                                                .foregroundStyle(AppTheme.orange)
-                                        }
-                                        // The rail makes the order explicit —
-                                        // these steps genuinely must happen in
-                                        // sequence, so the numbering is real
-                                        // information rather than decoration.
-                                        if step.id != steps.count {
-                                            Rectangle()
-                                                .fill(AppTheme.orange.opacity(0.18))
-                                                .frame(width: 2)
-                                                .frame(maxHeight: .infinity)
-                                        }
-                                    }
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        HStack(spacing: 7) {
-                                            Image(systemName: step.glyph)
-                                                .font(.system(size: 12, weight: .semibold))
-                                                .foregroundStyle(AppTheme.orange)
-                                            Text(step.title)
-                                                .font(.system(size: 14, weight: .semibold))
-                                                .foregroundStyle(AppTheme.textPrimary)
-                                        }
-                                        Text(step.body)
-                                            .font(.system(size: 13))
-                                            .foregroundStyle(AppTheme.textSecondary)
-                                            .fixedSize(horizontal: false, vertical: true)
-                                    }
-                                    .padding(.bottom, step.id == steps.count ? 0 : 20)
-                                    Spacer(minLength: 0)
-                                }
-                                .fixedSize(horizontal: false, vertical: true)
-                            }
-                        }
-                        .padding(16)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
-
-                        VStack(alignment: .leading, spacing: 8) {
-                            Label(loc("backtap.using_heading"), systemImage: "sparkles")
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundStyle(AppTheme.accent)
-                            Text(loc("backtap.using_body"))
-                                .font(.system(size: 13))
-                                .foregroundStyle(AppTheme.textSecondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                        .padding(16)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(AppTheme.accent.opacity(0.08), in: RoundedRectangle(cornerRadius: 16))
+                        callout(loc("backtap.using_heading"), body: loc("backtap.using_body"),
+                                icon: "sparkles", tint: AppTheme.accent)
 
                         // Stated plainly rather than buried: the parser is good,
                         // not infallible, and a wrong amount saved silently is
                         // worse than one the user was asked to confirm.
-                        VStack(alignment: .leading, spacing: 8) {
-                            Label(loc("backtap.limits_heading"), systemImage: "exclamationmark.circle")
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundStyle(AppTheme.textSecondary)
-                            Text(loc("backtap.limits_body"))
-                                .font(.system(size: 13))
-                                .foregroundStyle(AppTheme.textSecondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                        .padding(16)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(AppTheme.cardMid.opacity(0.45), in: RoundedRectangle(cornerRadius: 16))
+                        callout(loc("backtap.limits_heading"), body: loc("backtap.limits_body"),
+                                icon: "exclamationmark.circle", tint: AppTheme.textSecondary)
 
                         Button {
                             HapticManager.shared.tap()
@@ -2178,12 +2182,12 @@ struct BackTapGuideView: View {
                             }
                         } label: {
                             HStack(spacing: 8) {
-                                Image(systemName: "arrow.up.forward.app.fill").font(.system(size: 14))
-                                Text(loc("backtap.open_shortcuts")).font(.system(size: 15, weight: .semibold))
+                                Image(systemName: "arrow.up.forward.app.fill").font(.system(.subheadline))
+                                Text(loc("backtap.open_shortcuts")).font(.system(.subheadline, weight: .semibold))
                             }
-                            .foregroundStyle(AppTheme.onAccentFill)
+                            .foregroundStyle(AppTheme.onVividFill)
                             .frame(maxWidth: .infinity).padding(.vertical, 14)
-                            .background(AppTheme.accentFill, in: Capsule())
+                            .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: AppRadius.lg))
                         }
                         .buttonStyle(ScaleButtonStyle())
                     }
@@ -2197,5 +2201,96 @@ struct BackTapGuideView: View {
             .toolbarBackground(AppTheme.bg, for: .navigationBar)
             .doneToolbar { dismiss() }
         }
+    }
+
+    // MARK: Pieces
+
+    /// What the finished gestures feel like, before the setup that earns them.
+    private var hero: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(loc("backtap.hero_title"))
+                .font(.system(.title3, weight: .bold))
+                .foregroundStyle(AppTheme.textPrimary)
+            Text(loc("backtap.hero_body"))
+                .font(.system(.subheadline))
+                .foregroundStyle(AppTheme.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.md)
+            .stroke(AppTheme.orange.opacity(0.25), lineWidth: 1))
+    }
+
+    private func sectionLabel(_ text: String, tint: Color) -> some View {
+        HStack(spacing: 8) {
+            Circle().fill(tint).frame(width: 6, height: 6)
+            Text(text)
+                .font(.system(.caption, weight: .semibold))
+                .foregroundStyle(AppTheme.textSecondary)
+        }
+    }
+
+    /// One numbered list with a connecting rail. The rail is real information:
+    /// these steps only work in order.
+    private func stepList(_ items: [Step], tint: Color) -> some View {
+        VStack(spacing: 0) {
+            ForEach(items) { step in
+                HStack(alignment: .top, spacing: 13) {
+                    VStack(spacing: 0) {
+                        ZStack {
+                            Circle().fill(tint.opacity(0.14))
+                                .frame(width: 30, height: 30)
+                            Text("\(step.id)")
+                                .font(.system(.footnote, weight: .bold))
+                                .foregroundStyle(tint)
+                        }
+                        if step.id != items.count {
+                            Rectangle()
+                                .fill(tint.opacity(0.18))
+                                .frame(width: 2)
+                                .frame(maxHeight: .infinity)
+                        }
+                    }
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(spacing: 7) {
+                            Image(systemName: step.glyph)
+                                .font(.system(.caption, weight: .semibold))
+                                .foregroundStyle(tint)
+                            Text(step.title)
+                                .font(.system(.subheadline, weight: .semibold))
+                                .foregroundStyle(AppTheme.textPrimary)
+                        }
+                        Text(step.body)
+                            .font(.system(.footnote))
+                            .foregroundStyle(AppTheme.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(.bottom, step.id == items.count ? 0 : 20)
+                    Spacer(minLength: 0)
+                }
+                .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+    }
+
+    private func callout(_ title: String, body: String,
+                         icon: String, tint: Color) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label(title, systemImage: icon)
+                .font(.system(.footnote, weight: .semibold))
+                .foregroundStyle(tint)
+            Text(body)
+                .font(.system(.footnote))
+                .foregroundStyle(AppTheme.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(tint.opacity(0.08), in: RoundedRectangle(cornerRadius: AppRadius.md))
     }
 }

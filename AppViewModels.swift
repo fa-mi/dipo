@@ -10,6 +10,36 @@ final class AppViewModel {
     var isLoaded: Bool = false
     var showCardManager: Bool = false
 
+    /// Each tab's push stack. Owned here so anything — a Home banner, a
+    /// notification, an insight — can land the user on a feature in the tab it
+    /// lives in, instead of stacking that feature as a sheet over Home.
+    var homePath: [HomeRoute] = []
+    var walletPath: [WalletRoute] = []
+    var planPath: [PlanRoute] = []
+    var statsPath: [StatsRoute] = []
+
+    /// The active tab has a feature pushed on it. The tab bar steps aside then,
+    /// like `hidesBottomBarWhenPushed`, so it never covers a feature's content.
+    var isInsideFeature: Bool {
+        switch activeTab {
+        case .home:  return !homePath.isEmpty
+        case .cards: return !walletPath.isEmpty
+        case .plan:  return !planPath.isEmpty
+        case .stats: return !statsPath.isEmpty
+        default:     return false
+        }
+    }
+
+    func open(_ route: PlanRoute) {
+        activeTab = .plan
+        planPath = [route]
+    }
+
+    func open(_ route: WalletRoute) {
+        activeTab = .cards
+        walletPath = [route]
+    }
+
     // ✅ Safe: guard against stale selectedCardIndex after card deletion.
     // cards.isEmpty check alone is insufficient — index can still be out of range
     // if selectedCardIndex was 2 and cards shrunk to 1 between two render passes.
@@ -31,6 +61,11 @@ final class AppViewModel {
     func selectTab(_ tab: AppTab) {
         HapticManager.shared.select()
         activeTab = tab
+    }
+
+    func openProfile() {
+        activeTab = .home
+        homePath = [.profile]
     }
 
     func selectCard(_ index: Int) {
@@ -113,26 +148,35 @@ enum StatTab: String, CaseIterable {
 
 // MARK: - App Tab
 
+/// Profile left the tab bar: it is account settings, opened from the avatar on
+/// Home. Its slot went to Plan, which holds the money features people check
+/// every week — budget, salary, bills, savings — that used to be sheets
+/// stacked on top of Profile.
 enum AppTab: Int, CaseIterable {
-    case home = 0, stats, add, cards, profile
+    case home = 0, stats, add, cards, plan
 
     var icon: String {
         switch self {
-        case .home:    return "house.fill"
-        case .stats:   return "chart.bar.fill"
-        case .add:     return "plus"
-        case .cards:   return "creditcard.fill"
-        case .profile: return "person"
+        case .home:  return "house.fill"
+        case .stats: return "chart.bar.fill"
+        case .add:   return "plus"
+        case .cards: return "wallet.bifold.fill"
+        case .plan:  return "list.clipboard.fill"
         }
     }
 
     var label: String {
         switch self {
-        case .home:    return loc("tab.home")
-        case .stats:   return loc("tab.stats")
-        case .add:     return ""
-        case .cards:   return loc("tab.cards")
-        case .profile: return loc("tab.profile")
+        case .home:  return loc("tab.home")
+        case .stats: return loc("tab.stats")
+        case .add:   return ""
+        case .cards: return loc("tab.cards")
+        case .plan:  return loc("tab.plan")
         }
     }
 }
+
+enum HomeRoute: Hashable { case profile }
+enum WalletRoute: Hashable { case obligations }
+enum PlanRoute: Hashable { case budget, salary, bills, goals }
+enum StatsRoute: Hashable { case analysis }

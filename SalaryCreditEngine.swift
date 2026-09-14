@@ -87,7 +87,7 @@ struct SalaryCreditEngine {
                     amount: schedule.amount,
                     type: "tx.type.income",
                     icon: "S",
-                    iconBgHex: "#1D9E75",
+                    iconBgHex: TxCategory.salary.iconBg,
                     category: .salary,
                     currency: schedule.currency,
                     notes: "tx.note.salary_auto"

@@ -39,7 +39,7 @@ struct SplashView: View {
                             endPoint: .trailing
                         ))
                     Text(loc("auth.tagline"))
-                        .font(.system(size: 16, weight: .medium))
+                        .font(.system(.callout, weight: .medium))
                         .foregroundStyle(LinearGradient(
                             colors: [.white, .gray,],
                             startPoint: .leading,
@@ -133,10 +133,10 @@ struct SocialLoginView: View {
 
                     VStack(spacing: 8) {
                         Text(loc("auth.welcome"))
-                            .font(.system(size: 28, weight: .bold, design: .rounded))
+                            .font(.system(.title, design: .rounded, weight: .bold))
                             .foregroundStyle(AppTheme.textPrimary)
                         Text(loc("auth.subtitle"))
-                            .font(.system(size: 15))
+                            .font(.system(.subheadline))
                             .foregroundStyle(AppTheme.textSecondary)
                             .multilineTextAlignment(.center)
                             .lineSpacing(3)
@@ -153,7 +153,7 @@ struct SocialLoginView: View {
                 VStack(spacing: 14) {
                     if let err = errorMsg {
                         Text(err)
-                            .font(.system(size: 13))
+                            .font(.system(.footnote))
                             .foregroundStyle(AppTheme.red)
                             .multilineTextAlignment(.center)
                             .padding(.horizontal, 24)
@@ -186,16 +186,16 @@ struct SocialLoginView: View {
                                 ProgressView().tint(Color(.systemBackground))
                             } else {
                                 Image(systemName: "apple.logo")
-                                    .font(.system(size: 18, weight: .medium))
+                                    .font(.system(.body, weight: .medium))
                                     .foregroundStyle(Color(.systemBackground))
                             }
                             Text(loc("auth.apple"))
-                                .font(.system(size: 16, weight: .semibold))
+                                .font(.system(.callout, weight: .semibold))
                                 .foregroundStyle(Color(.systemBackground))
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
-                        .background(Color(.label), in: RoundedRectangle(cornerRadius: 16))
+                        .background(Color(.label), in: RoundedRectangle(cornerRadius: AppRadius.md))
                     }
                     .buttonStyle(ScaleButtonStyle())
                     .disabled(isLoading)
@@ -230,18 +230,18 @@ struct SocialLoginView: View {
                                 ZStack {
                                     Circle().fill(.white).frame(width: 22, height: 22)
                                     Text("G")
-                                        .font(.system(size: 14, weight: .bold))
+                                        .font(.system(.subheadline, weight: .bold))
                                         .foregroundStyle(Color(hex: "#4285F4"))
                                 }
                             }
                             Text(loc("auth.google"))
-                                .font(.system(size: 16, weight: .semibold))
+                                .font(.system(.callout, weight: .semibold))
                                 .foregroundStyle(AppTheme.textPrimary)
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
-                        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
-                        .overlay(RoundedRectangle(cornerRadius: 16).stroke(AppTheme.cardMid, lineWidth: 1.5))
+                        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+                        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.cardMid, lineWidth: 1.5))
                     }
                     .buttonStyle(ScaleButtonStyle())
                     .disabled(isLoading)
@@ -249,7 +249,7 @@ struct SocialLoginView: View {
                     // Divider
                     HStack {
                         Rectangle().fill(AppTheme.cardMid).frame(height: 1)
-                        Text(loc("common.or")).font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary).fixedSize()
+                        Text(loc("common.or")).font(.system(.footnote)).foregroundStyle(AppTheme.textSecondary).fixedSize()
                         Rectangle().fill(AppTheme.cardMid).frame(height: 1)
                     }
                     .padding(.vertical, 4)
@@ -259,14 +259,14 @@ struct SocialLoginView: View {
                         authVM.skipSocialLogin()
                     } label: {
                         Text(loc("auth.guest"))
-                            .font(.system(size: 14))
+                            .font(.system(.subheadline))
                             .foregroundStyle(AppTheme.textSecondary)
                             .underline()
                     }
                     .buttonStyle(ScaleButtonStyle())
 
                     Text(loc("auth.data_stays"))
-                        .font(.system(size: 11))
+                        .font(.system(.caption2))
                         .foregroundStyle(AppTheme.textSecondary.opacity(0.5))
                         .multilineTextAlignment(.center)
                 }
@@ -306,9 +306,9 @@ struct NameEntryView: View {
                 } label: {
                     HStack(spacing: 6) {
                         Image(systemName: "chevron.left")
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(.system(.subheadline, weight: .semibold))
                         Text(loc("common.back"))
-                            .font(.system(size: 15))
+                            .font(.system(.subheadline))
                     }
                     .foregroundStyle(AppTheme.textSecondary)
                 }
@@ -336,10 +336,10 @@ struct NameEntryView: View {
 
                 VStack(spacing: 10) {
                     Text(loc("auth.name_prompt"))
-                        .font(.system(size: 28, weight: .bold))
+                        .font(.system(.title, weight: .bold))
                         .foregroundStyle(AppTheme.textPrimary)
                     Text(loc("auth.name_sub"))
-                        .font(.system(size: 15))
+                        .font(.system(.subheadline))
                         .foregroundStyle(AppTheme.textSecondary)
                         .multilineTextAlignment(.center)
                         .lineSpacing(3)
@@ -350,20 +350,20 @@ struct NameEntryView: View {
                 // Name field
                 VStack(spacing: 12) {
                     TextField(loc("auth.name_placeholder"), text: $authVM.userName)
-                        .font(.system(size: 18, weight: .medium))
+                        .font(.system(.body, weight: .medium))
                         .foregroundStyle(AppTheme.textPrimary)
                         .multilineTextAlignment(.center)
                         .padding(.vertical, 16)
                         .padding(.horizontal, 20)
-                        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
-                        .overlay(RoundedRectangle(cornerRadius: 16)
+                        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+                        .overlay(RoundedRectangle(cornerRadius: AppRadius.md)
                             .stroke(focused ? AppTheme.accent.opacity(0.6) : Color.clear, lineWidth: 1.5))
                         .focused($focused)
                         .onSubmit { authVM.submitName() }
 
                     if let err = authVM.errorMessage {
                         Text(err)
-                            .font(.system(size: 13))
+                            .font(.system(.footnote))
                             .foregroundStyle(AppTheme.red)
                             .transition(.opacity)
                     }
@@ -381,16 +381,16 @@ struct NameEntryView: View {
             } label: {
                 HStack(spacing: 10) {
                     Text(loc("auth.continue"))
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.system(.callout, weight: .semibold))
                     Image(systemName: "arrow.right")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.system(.subheadline, weight: .semibold))
                 }
-                .foregroundStyle(AppTheme.bg)
+                .foregroundStyle(authVM.userName.count >= 2 ? AppTheme.onVividFill : AppTheme.textSecondary)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 16)
                 .background(
-                    authVM.userName.count >= 2 ? AppTheme.accent : AppTheme.textSecondary.opacity(0.3),
-                    in: Capsule()
+                    authVM.userName.count >= 2 ? AppTheme.accent : AppTheme.textSecondary.opacity(0.25),
+                    in: RoundedRectangle(cornerRadius: AppRadius.lg)
                 )
             }
             .buttonStyle(ScaleButtonStyle())
@@ -431,10 +431,10 @@ struct BiometricGateView: View {
 
                     VStack(spacing: 8) {
                         Text(loc("auth.welcome_back"))
-                            .font(.system(size: 16))
+                            .font(.system(.callout))
                             .foregroundStyle(AppTheme.textSecondary)
                         Text(authVM.savedName)
-                            .font(.system(size: 28, weight: .bold))
+                            .font(.system(.title, weight: .bold))
                             .foregroundStyle(AppTheme.textPrimary)
                     }
                     .opacity(appeared ? 1 : 0)
@@ -445,7 +445,7 @@ struct BiometricGateView: View {
                     if let err = authVM.errorMessage {
                         VStack(spacing: 16) {
                             Text(err)
-                                .font(.system(size: 13))
+                                .font(.system(.footnote))
                                 .foregroundStyle(AppTheme.red)
                                 .multilineTextAlignment(.center)
                                 .padding(.horizontal, 40)
@@ -456,15 +456,14 @@ struct BiometricGateView: View {
                             } label: {
                                 HStack(spacing: 8) {
                                     Image(systemName: authVM.biometricIcon)
-                                        .font(.system(size: 15, weight: .semibold))
+                                        .font(.system(.subheadline, weight: .semibold))
                                     Text(loc("auth.try_again"))
-                                        .font(.system(size: 15, weight: .semibold))
+                                        .font(.system(.subheadline, weight: .semibold))
                                 }
                                 .foregroundStyle(AppTheme.bg)
                                 .padding(.horizontal, 28)
                                 .padding(.vertical, 14)
                                 .background(AppTheme.accentFill, in: Capsule())
-                                .shadow(color: AppTheme.accent.opacity(0.35), radius: 12, y: 6)
                             }
                             .buttonStyle(ScaleButtonStyle())
                         }
@@ -475,7 +474,7 @@ struct BiometricGateView: View {
                 Spacer()
 
                 Text(loc("auth.biometric_hint"))
-                    .font(.system(size: 12))
+                    .font(.system(.caption))
                     .foregroundStyle(AppTheme.textSecondary.opacity(0.5))
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 40)
@@ -520,18 +519,18 @@ struct BiometricPulseIcon: View {
                     .fill(AppTheme.cardDark)
                     .frame(width: 72, height: 72)
                     .overlay(Circle().stroke(AppTheme.accent.opacity(0.3), lineWidth: 1.5))
-                    .shadow(color: AppTheme.accent.opacity(0.2), radius: 16)
 
                 if authVM.isLoading {
                     ProgressView()
                         .tint(AppTheme.accent)
                 } else {
                     Image(systemName: authVM.biometricIcon)
-                        .font(.system(size: 30))
+                        .font(.system(.title))
                         .foregroundStyle(AppTheme.accent)
                 }
             }
         }
+.accessibilityLabel(String(format: loc("a11y.unlock_with"), authVM.biometricLabel))
         .buttonStyle(ScaleButtonStyle())
         .onAppear { pulsing = true }
     }

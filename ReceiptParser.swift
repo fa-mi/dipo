@@ -230,6 +230,15 @@ enum ReceiptParser {
         return ""
     }
 
+    /// Keywords that name a KIND of place rather than a business. They earn a
+    /// category but never a name — the words around them are the shop.
+    private static let genericPlaceWords: Set<String> = [
+        "warung", "warteg", "toko", "kedai", "resto", "restoran", "cafe", "kafe",
+        "apotek", "apotik", "bengkel", "salon", "laundry", "londri", "binatu",
+        "minimarket", "supermarket", "pasar", "kios", "depot", "rumah makan",
+        "angkringan", "lesehan", "pujasera", "katering", "catering", "klinik",
+    ]
+
     private static func extractMerchant(from lines: [String], excluding issuer: String = "") -> String {
         // Whatever the slip itself named as the payment rail is not the shop,
         // whether or not it happens to be in `paymentBrands`.
@@ -287,10 +296,20 @@ enum ReceiptParser {
             let lower = line.lowercased()
             for entry in SmartBudgetManager.merchantMap {
                 for keyword in entry.keywords {
-                    if lower.contains(keyword) {
-                        // Return the canonical merchant name (Title Case)
-                        return keyword.capitalized
+                    guard lower.contains(keyword) else { continue }
+                    // A brand keyword IS the answer, and canonicalising it is
+                    // the point: "INDOMARET BSD JL RAYA" and "Indomaret Kav 5"
+                    // should land in one place in the user's history.
+                    //
+                    // A generic one is not. "warung" matches inside "WARUNG
+                    // PADANG SEDERHANA" and returning the keyword throws away
+                    // every word that says WHICH warung — a receipt filed as
+                    // "Warung" tells the user nothing they did not know.
+                    if genericPlaceWords.contains(keyword) {
+                        let full = line.trimmingCharacters(in: .whitespaces)
+                        if full.count > keyword.count + 2 { return full }
                     }
+                    return keyword.capitalized
                 }
             }
         }

@@ -330,47 +330,90 @@ enum TxCategory: String, CaseIterable, Codable {
         }
     }
 
+    /// Category hues, all adaptive and none of them red or green outside the
+    /// two income categories that ARE money in. Food was coral and debt payment
+    /// was coral too, so every lunch in the list sat in a red circle beside a
+    /// red-ish amount — the list read as a column of warnings.
     var color: Color {
         switch self {
         case .shopping:    return AppTheme.orange
-        case .food:        return Color(hex: "#FF6B6B")
+        case .food:        return AppTheme.amber
         case .travel:      return AppTheme.blue
-        case .bills:       return Color(hex: "#F59E0B")
-        case .transport:   return Color(hex: "#6366F1")
-        case .health:      return Color(hex: "#EC4899")
-        case .commitment:  return Color(hex: "#14B8A6")
+        case .bills:       return AppTheme.purple
+        case .transport:   return AppTheme.indigo
+        case .health:      return AppTheme.fuchsia
+        case .commitment:  return AppTheme.teal
         case .other:       return AppTheme.textSecondary
         case .salary:      return AppTheme.accent
-        case .freelance:   return Color(hex: "#38BDF8")
-        case .business:    return Color(hex: "#A78BFA")
-        case .investment:  return Color(hex: "#34D399")
-        case .bonus:       return Color(hex: "#FBBF24")
-        case .gift:        return Color(hex: "#F87171")
+        case .freelance:   return AppTheme.blue
+        case .business:    return AppTheme.purple
+        case .investment:  return AppTheme.accent
+        case .bonus:       return AppTheme.amber
+        case .gift:        return AppTheme.fuchsia
         case .incomeOther: return AppTheme.textSecondary
-        case .debtPayment: return Color(hex: "#FF6B6B")
+        case .debtPayment: return AppTheme.slate
         }
     }
 
     var iconBg: String {
         switch self {
-        case .shopping:    return "#FF9900"
-        case .food:        return "#FF6B6B"
-        case .travel:      return "#38BDF8"
-        case .bills:       return "#F59E0B"
+        case .shopping:    return "#F97316"
+        case .food:        return "#F59E0B"
+        case .travel:      return "#0EA5E9"
+        case .bills:       return "#8B5CF6"
         case .transport:   return "#6366F1"
-        case .health:      return "#EC4899"
-        case .commitment:  return "#0D9488"
+        case .health:      return "#D946EF"
+        case .commitment:  return "#14B8A6"
         case .other:       return "#5B6F6B"
-        case .salary:      return "#1D9E75"
+        case .salary:      return "#1DB87A"
         case .freelance:   return "#0EA5E9"
-        case .business:    return "#7C3AED"
-        case .investment:  return "#059669"
-        case .bonus:       return "#D97706"
-        case .gift:        return "#DC2626"
+        case .business:    return "#8B5CF6"
+        case .investment:  return "#1DB87A"
+        case .bonus:       return "#F59E0B"
+        case .gift:        return "#D946EF"
         case .incomeOther: return "#5B6F6B"
-        case .debtPayment: return "#FF4444"
+        case .debtPayment: return "#64748B"
         }
     }
+}
+
+// MARK: - Icon background (display)
+
+extension TxRecord {
+    /// The colour a row's icon circle is painted with.
+    ///
+    /// `iconBgHex` is STORED per transaction, so re-colouring a category only
+    /// reaches rows created afterwards — every salary logged before the green
+    /// was unified would keep its old emerald. The retired greens are mapped
+    /// to the current one here, at display time, rather than rewriting every
+    /// record (and every backup that carries the old value).
+    var displayIconBg: Color {
+        let stored = iconBgHex.uppercased()
+        // Every green this app has ever stored → the current adaptive green.
+        if ["#1D9E75", "#059669", "#1DB87A", "#10B981", "#34D399", "#34C759", "#1D8637", "#1DB87A"].contains(stored) {
+            return AppTheme.accent
+        }
+        // A category's OWN retired colour → that category's current one. Scoped
+        // per category on purpose: transfers store #38BDF8 under "Other", and
+        // must keep it, while a Travel row storing the same hex should update.
+        if Self.retiredIconBg[category]?.contains(stored) == true {
+            return Color(hex: category.iconBg)
+        }
+        return Color(hex: iconBgHex)
+    }
+
+    private static let retiredIconBg: [TxCategory: Set<String>] = [
+        .shopping:    ["#FF9900"],
+        .food:        ["#FF6B6B"],
+        .travel:      ["#38BDF8"],
+        .bills:       ["#F59E0B"],
+        .health:      ["#EC4899"],
+        .commitment:  ["#0D9488"],
+        .business:    ["#7C3AED"],
+        .bonus:       ["#D97706"],
+        .gift:        ["#DC2626"],
+        .debtPayment: ["#FF4444"],
+    ]
 }
 
 // MARK: - TxCategory Localized Label

@@ -81,21 +81,515 @@ struct SheetField: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(label)
-                .font(.system(size: 13, weight: .semibold))
+                .font(.system(.footnote, weight: .semibold))
                 .foregroundStyle(AppTheme.textSecondary)
             TextField(placeholder, text: $text)
                 .keyboardType(keyboard)
-                .font(.system(size: 15))
+                .font(.system(.subheadline))
                 .foregroundStyle(AppTheme.textPrimary)
                 .padding(14)
-                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
+                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 14)
+                    RoundedRectangle(cornerRadius: AppRadius.md)
                         .stroke(focused ? AppTheme.accent.opacity(0.6) : Color.clear, lineWidth: 1.5)
                 )
                 .focused($focused)
         }
         .padding(.horizontal, 22)
+    }
+}
+
+// MARK: - Action List Sheet
+
+/// One row in an `ActionListSheet`.
+struct ActionItem: Identifiable {
+    let id = UUID()
+    let icon: String
+    let title: String
+    var detail: String? = nil
+    var tint: Color = AppTheme.blue
+    var destructive: Bool = false
+    let action: () -> Void
+}
+
+/// What a ⋯ button opens, everywhere: the thing being acted on at the top,
+/// then its actions as rows with an icon and — where the verb alone does not
+/// say it — what the action does. Destructive actions sit in their own group
+/// at the bottom, away from the thumb's path to the everyday ones.
+///
+/// Replaces system action sheets (bare verbs, no icons, a style from outside
+/// the app). The action runs after the sheet has left, because most actions
+/// open another sheet and iOS drops one presented mid-dismissal.
+struct ActionListSheet: View {
+    let icon: String
+    var iconTint: Color = AppTheme.accent
+    let title: String
+    var subtitle: String? = nil
+    let items: [ActionItem]
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var contentHeight: CGFloat = 420
+
+    var body: some View {
+        VStack(spacing: 16) {
+            HStack(spacing: 12) {
+                Image(systemName: icon)
+                    .font(.system(.body, weight: .semibold))
+                    .foregroundStyle(AppTheme.onVividFill)
+                    .frame(width: 46, height: 46)
+                    .background(iconTint, in: Circle())
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.system(.body, weight: .bold))
+                        .foregroundStyle(AppTheme.textPrimary)
+                        .lineLimit(2)
+                    if let subtitle {
+                        Text(subtitle)
+                            .font(.system(.footnote))
+                            .foregroundStyle(AppTheme.textSecondary)
+                            .lineLimit(2)
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.top, 6)
+
+            group(items.filter { !$0.destructive })
+            let danger = items.filter(\.destructive)
+            if !danger.isEmpty { group(danger) }
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 14)
+        .padding(.bottom, 8)
+        .fixedSize(horizontal: false, vertical: true)
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { contentHeight = $0 + 24 }
+        .presentationDetents([.height(contentHeight)])
+        .presentationDragIndicator(.visible)
+        .presentationBackground(AppTheme.bg)
+        .presentationCornerRadius(28)
+    }
+
+    private func group(_ rows: [ActionItem]) -> some View {
+        VStack(spacing: 0) {
+            ForEach(Array(rows.enumerated()), id: \.element.id) { i, item in
+                if i > 0 {
+                    Rectangle().fill(AppTheme.cardMid.opacity(0.7)).frame(height: 1).padding(.leading, 62)
+                }
+                Button {
+                    HapticManager.shared.tap()
+                    dismiss()
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { item.action() }
+                } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: item.icon)
+                            .font(.system(.subheadline, weight: .semibold))
+                            .foregroundStyle(item.destructive ? AppTheme.onVividFill : item.tint)
+                            .frame(width: 36, height: 36)
+                            .background(item.destructive ? AppTheme.red : item.tint.opacity(0.14),
+                                        in: RoundedRectangle(cornerRadius: AppRadius.sm))
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(item.title)
+                                .font(.system(.subheadline, weight: .semibold))
+                                .foregroundStyle(item.destructive ? AppTheme.red : AppTheme.textPrimary)
+                            if let detail = item.detail {
+                                Text(detail)
+                                    .font(.system(.caption))
+                                    .foregroundStyle(AppTheme.textSecondary)
+                                    .multilineTextAlignment(.leading)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                        Spacer(minLength: 6)
+                        if !item.destructive {
+                            Image(systemName: "chevron.right")
+                                .font(.system(.caption, weight: .semibold))
+                                .foregroundStyle(AppTheme.textSecondary)
+                        }
+                    }
+                    .padding(.horizontal, 14).padding(.vertical, 12)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+    }
+}
+
+// MARK: - Hit Target
+
+extension View {
+    /// Grows the tappable area to Apple's 44×44pt minimum WITHOUT changing the
+    /// layout: pad out, claim that padded rectangle as the hit shape, then pad
+    /// back in. A 36pt circle keeps looking like a 36pt circle while a thumb
+    /// that lands 4pt outside it still counts.
+    func hitTarget(_ visualSize: CGFloat, minimum: CGFloat = 44) -> some View {
+        let inset = max(0, (minimum - visualSize) / 2)
+        return padding(inset)
+            .contentShape(Rectangle())
+            .padding(-inset)
+    }
+}
+
+// MARK: - Icon Field
+
+/// A labelled text field with a glyph inside it.
+///
+/// `SheetField` puts a bare box under a label. The glyph is not decoration: on
+/// a form where six boxes stack vertically and all of them look alike, it is
+/// what lets someone find "the notes one" without reading every label on the
+/// way down.
+struct IconField: View {
+    let label: String
+    let icon: String
+    let placeholder: String
+    @Binding var text: String
+    var keyboard: UIKeyboardType = .default
+    /// Appended to the label in lighter type — for fields that are safe to skip.
+    var optionalHint: String? = nil
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 5) {
+                Text(label)
+                    .font(.system(.subheadline, weight: .semibold))
+                    .foregroundStyle(AppTheme.textPrimary)
+                if let optionalHint {
+                    Text(optionalHint)
+                        .font(.system(.caption))
+                        .foregroundStyle(AppTheme.textSecondary)
+                }
+            }
+            HStack(spacing: 10) {
+                Image(systemName: icon)
+                    .font(.system(.subheadline))
+                    .foregroundStyle(focused ? AppTheme.accent : AppTheme.textSecondary)
+                    .frame(width: 20)
+                TextField(placeholder, text: $text)
+                    .keyboardType(keyboard)
+                    .font(.system(.subheadline))
+                    .foregroundStyle(AppTheme.textPrimary)
+                    .focused($focused)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 15)
+            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+            .overlay(
+                RoundedRectangle(cornerRadius: AppRadius.md)
+                    .stroke(focused ? AppTheme.accent.opacity(0.6) : Color.clear, lineWidth: 1.5)
+            )
+            .animation(.easeOut(duration: 0.15), value: focused)
+        }
+    }
+}
+
+// MARK: - Form Section Label
+
+/// The heading above a form section. One definition so every section on the
+/// add-transaction form sits on the same baseline and weight — they had drifted
+/// between 13pt secondary and 15pt primary depending on when each was written.
+struct FormSectionLabel: View {
+    let text: String
+    var body: some View {
+        Text(text)
+            .font(.system(.subheadline, weight: .semibold))
+            .foregroundStyle(AppTheme.textPrimary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+// MARK: - Category Tile Picker
+
+/// Icon-over-label category tiles, shared by the create AND edit forms so the
+/// two cannot drift apart again — the edit form was still on the old pills a
+/// release after the create form moved on.
+///
+/// Neither glyph nor label is tinted with the category colour, deliberately.
+/// Ten of the sixteen category colours are bright hexes picked for dark mode;
+/// against their own pale tint on a white card they measure 1.55:1 (bonus
+/// #FBBF24) to 2.96:1 (health #EC4899), under the 3:1 floor for a graphic that
+/// carries meaning. Selection is said four ways that do not depend on hue —
+/// tinted fill, coloured border, darker glyph, heavier label — and the hue is
+/// left to the fill, which only has to be told apart, not read.
+struct CategoryTilePicker: View {
+    let categories: [TxCategory]
+    @Binding var selection: TxCategory
+
+    var body: some View {
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    ForEach(categories, id: \.self) { cat in
+                        tile(cat).id(cat)
+                    }
+                }
+                .padding(.horizontal, 22)
+                .padding(.vertical, 4)
+            }
+            // Editing a transaction whose category sits off-screen: bring it in.
+            .onAppear { proxy.scrollTo(selection, anchor: .center) }
+        }
+    }
+
+    /// Each category in the colour its transactions carry in every list — a
+    /// solid circle with a white glyph. The picker used the muted theme hues
+    /// instead (olive for Food, a hot magenta for Health) as a faint wash over
+    /// the whole tile, so the colour you picked here matched nothing you saw
+    /// afterwards, and the picked tile looked stained rather than chosen.
+    private func tile(_ cat: TxCategory) -> some View {
+        let on = selection == cat
+        let hue = Color(hex: cat.iconBg)
+        return Button {
+            HapticManager.shared.tap()
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selection = cat }
+        } label: {
+            VStack(spacing: 8) {
+                ZStack(alignment: .topTrailing) {
+                    Circle()
+                        .fill(on ? hue : hue.opacity(0.16))
+                        .frame(width: 42, height: 42)
+                        .overlay(
+                            Image(systemName: cat.icon)
+                                .font(.system(.body, weight: .semibold))
+                                .foregroundStyle(on ? .white : hue)
+                        )
+                        .scaleEffect(on ? 1.06 : 1)
+                    if on {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 9, weight: .heavy))
+                            .foregroundStyle(AppTheme.onVividFill)
+                            .frame(width: 17, height: 17)
+                            .background(AppTheme.accentFill, in: Circle())
+                            .overlay(Circle().stroke(AppTheme.cardDark, lineWidth: 2))
+                            .offset(x: 4, y: -3)
+                            .transition(.scale.combined(with: .opacity))
+                    }
+                }
+                Text(cat.displayLabel)
+                    .font(.system(.caption2, weight: on ? .semibold : .medium))
+                    .foregroundStyle(on ? AppTheme.textPrimary : AppTheme.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.8)
+                    .frame(height: 28, alignment: .top)
+            }
+            .frame(width: 82, height: 94)
+            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+            .overlay(RoundedRectangle(cornerRadius: AppRadius.lg)
+                .stroke(on ? hue : Color.clear, lineWidth: 2))
+        }
+        .buttonStyle(ScaleButtonStyle())
+        .accessibilityLabel(cat.displayLabel)
+        .accessibilityAddTraits(on ? .isSelected : [])
+    }
+}
+
+// MARK: - Spend gauge
+
+/// How much of an income has gone, as a bar that warms as it fills: green while
+/// there is room, through yellow and orange, red at the limit, and solid red
+/// past it.
+///
+/// The bar used to be a single green whatever it measured, so "Expenses" sat
+/// over a green bar — the colour that means money in everywhere else — and a
+/// month at 95% looked exactly as calm as one at 20%. The gradient is laid over
+/// the FULL width and revealed up to the spent share, so the tip's colour is
+/// the verdict and the colours behind it show how it got there.
+struct SpendGauge: View {
+    /// Spent ÷ income.
+    let fraction: Double
+    /// Share of the period elapsed (0…1), drawn as a tick: a bar ending past
+    /// the tick is spending faster than the calendar. Nil hides it.
+    var timeMarker: Double? = nil
+    var height: CGFloat = 10
+
+    private static let yellow = Color(hex: "#EAB308")
+    private static let amber  = Color(hex: "#F97316")
+
+    private static let stops: [Gradient.Stop] = [
+        .init(color: AppTheme.accent, location: 0),
+        .init(color: AppTheme.accent, location: 0.55),
+        .init(color: yellow,          location: 0.72),
+        .init(color: amber,           location: 0.88),
+        .init(color: AppTheme.red,    location: 1),
+    ]
+
+    /// A text colour for figures that describe the same amount, stepped to stay
+    /// readable (yellow text is not, on white).
+    static func tone(for fraction: Double) -> Color {
+        if fraction < 0.72 { return AppTheme.accent }
+        if fraction < 1 { return AppTheme.orange }
+        return AppTheme.red
+    }
+
+    var body: some View {
+        GeometryReader { g in
+            let width = g.size.width
+            let shown = min(max(fraction, 0), 1)
+            ZStack(alignment: .leading) {
+                Capsule().fill(AppTheme.cardMid)
+                if fraction >= 1 {
+                    Capsule().fill(AppTheme.red)
+                } else {
+                    LinearGradient(stops: Self.stops, startPoint: .leading, endPoint: .trailing)
+                        .frame(width: width)
+                        .mask(alignment: .leading) {
+                            Capsule().frame(width: max(width * CGFloat(shown), height))
+                        }
+                }
+                if let t = timeMarker {
+                    Capsule()
+                        .fill(AppTheme.textPrimary.opacity(0.75))
+                        .frame(width: 2, height: height + 8)
+                        .offset(x: width * CGFloat(min(max(t, 0), 1)) - 1)
+                }
+            }
+            .frame(height: height)
+            .frame(maxHeight: .infinity)
+            .animation(.spring(response: 0.7, dampingFraction: 0.85), value: shown)
+        }
+        .frame(height: height + 8)
+        .accessibilityElement()
+        .accessibilityValue("\(Int((fraction * 100).rounded()))%")
+    }
+}
+
+// MARK: - Date & Time Fields
+
+/// Date and time as two separate controls bound to one `Date`. A single
+/// combined `.compact` picker made changing only the time a detour through a
+/// calendar.
+struct DateTimeFields: View {
+    @Binding var date: Date
+
+    var body: some View {
+        HStack(spacing: 12) {
+            box(icon: "calendar") {
+                DatePicker("", selection: $date, displayedComponents: .date)
+                    .datePickerStyle(.compact).labelsHidden().tint(AppTheme.accent)
+            }
+            box(icon: "clock") {
+                DatePicker("", selection: $date, displayedComponents: .hourAndMinute)
+                    .datePickerStyle(.compact).labelsHidden().tint(AppTheme.accent)
+            }
+        }
+    }
+
+    private func box<Content: View>(icon: String, @ViewBuilder content: () -> Content) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.system(.subheadline))
+                .foregroundStyle(AppTheme.textSecondary)
+            content()
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        // Expand BEFORE painting: with `.frame` after `.background` the fill
+        // hugged its own text and the two boxes came out different widths.
+        .frame(maxWidth: .infinity)
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+    }
+}
+
+// MARK: - Card Swipe Picker
+
+/// Swipe between cards — the same gesture as the card carousel on Home, so
+/// there is one way to move between cards anywhere in the app. A menu hides the
+/// other cards behind a tap; a pager shows that there ARE others (the dots) and
+/// reaches one with the thumb already on the screen.
+///
+/// Used by the transaction form and the salary form. `figure` decides what each
+/// face states: a balance, or the room left on a credit limit.
+struct CardSwipePicker: View {
+    let cards: [BankCard]
+    @Binding var selectedIndex: Int
+    let figure: (BankCard) -> (label: String, value: String)
+
+    var body: some View {
+        if cards.count > 1 {
+            VStack(spacing: 10) {
+                TabView(selection: $selectedIndex) {
+                    ForEach(Array(cards.enumerated()), id: \.element.id) { index, card in
+                        let f = figure(card)
+                        CardFaceView(card: card, label: f.label, value: f.value)
+                            .padding(.horizontal, 22)
+                            .tag(index)
+                    }
+                }
+                .tabViewStyle(.page(indexDisplayMode: .never))
+                .frame(height: 100)
+
+                HStack(spacing: 5) {
+                    ForEach(cards.indices, id: \.self) { i in
+                        Capsule()
+                            .fill(i == selectedIndex ? AppTheme.accent : AppTheme.textSecondary.opacity(0.35))
+                            .frame(width: i == selectedIndex ? 18 : 6, height: 6)
+                    }
+                }
+                .animation(.spring(response: 0.35, dampingFraction: 0.7), value: selectedIndex)
+            }
+        } else if let card = cards.first {
+            let f = figure(card)
+            CardFaceView(card: card, label: f.label, value: f.value)
+                .frame(height: 100)
+                .padding(.horizontal, 22)
+        }
+    }
+}
+
+/// A short card face: enough to recognise the card — its colours, name and
+/// digits — plus one figure.
+struct CardFaceView: View {
+    let card: BankCard
+    let label: String
+    let value: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(CardLabel.title(card))
+                        .font(.system(.subheadline, weight: .semibold))
+                        .lineLimit(1)
+                    let sub = CardLabel.subtitle(card)
+                    if !sub.isEmpty {
+                        Text(sub)
+                            .font(.system(.caption2))
+                            .opacity(0.75)
+                            .lineLimit(1)
+                    }
+                }
+                Spacer(minLength: 8)
+                if card.isDigitalWallet, let wp = WalletProvider(rawValue: card.walletProvider) {
+                    Image(systemName: wp.icon)
+                        .font(.system(.callout, weight: .semibold))
+                        .opacity(0.9)
+                } else {
+                    CardNetworkLogo(network: CardNetwork.detect(from: card.cardNumber))
+                        .scaleEffect(0.75, anchor: .topTrailing)
+                }
+            }
+            Spacer(minLength: 6)
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text(label)
+                    .font(.system(.caption2, weight: .medium))
+                    .opacity(0.75)
+                Spacer(minLength: 6)
+                Text(card.isHidden ? "••••••" : value)
+                    .font(.system(.body, weight: .bold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
+        }
+        .foregroundStyle(.white)
+        .padding(14)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(
+            LinearGradient(colors: [Color(hex: card.gradientStart), Color(hex: card.gradientEnd)],
+                           startPoint: .topLeading, endPoint: .bottomTrailing),
+            in: RoundedRectangle(cornerRadius: AppRadius.lg))
     }
 }
 
@@ -200,10 +694,10 @@ struct InlineBanner: View {
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: tone.icon)
-                .font(.system(size: 14))
+                .font(.system(.subheadline))
                 .foregroundStyle(tone.color)
             Text(message)
-                .font(.system(size: 12, weight: .medium))
+                .font(.system(.caption, weight: .medium))
                 .foregroundStyle(tone.color)
                 .multilineTextAlignment(.leading)
                 .fixedSize(horizontal: false, vertical: true)
@@ -211,9 +705,9 @@ struct InlineBanner: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
-        .background(tone.color.opacity(0.1), in: RoundedRectangle(cornerRadius: 10))
+        .background(tone.color.opacity(0.1), in: RoundedRectangle(cornerRadius: AppRadius.sm))
         .overlay(
-            RoundedRectangle(cornerRadius: 10)
+            RoundedRectangle(cornerRadius: AppRadius.sm)
                 .stroke(tone.color.opacity(0.25), lineWidth: 1)
         )
         .transition(.opacity)
@@ -429,11 +923,66 @@ struct DoneToolbar: ViewModifier {
                     action()
                 } label: {
                     Text(loc("common.done"))
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.system(.callout, weight: .semibold))
                         .foregroundStyle(AppTheme.accent)
                 }
             }
         }
+    }
+}
+
+// MARK: - Feature screens: pushed from a tab, or presented as a sheet
+
+private struct PushedFeatureKey: EnvironmentKey { static let defaultValue = false }
+
+extension EnvironmentValues {
+    /// Set on a feature screen pushed onto a tab's NavigationStack.
+    var pushedFeature: Bool {
+        get { self[PushedFeatureKey.self] }
+        set { self[PushedFeatureKey.self] = newValue }
+    }
+}
+
+/// The root of a feature screen (Salary, Bills, Savings Goals, Budget, Debts).
+///
+/// The same screen is pushed from its tab and, from a few shortcuts, still
+/// presented as a sheet. Pushed, it must not open a NavigationStack of its own
+/// — a stack inside a stack breaks back navigation — and it keeps the system
+/// bar for the back button. Presented, it needs its own stack for its titles
+/// and toolbars. `pushed` is handed to the content so it can pick its bar and
+/// drop its Done/Cancel button, and the flag is cleared below this point so a
+/// sheet the screen opens is treated as a sheet again.
+struct FeatureStack<Content: View>: View {
+    @Environment(\.pushedFeature) private var pushed
+    @ViewBuilder let content: (_ pushed: Bool) -> Content
+
+    var body: some View {
+        if pushed {
+            content(true).environment(\.pushedFeature, false)
+        } else {
+            NavigationStack { content(false) }
+        }
+    }
+}
+
+extension View {
+    /// Bar for a feature screen that draws its own large header. As a sheet the
+    /// system bar is hidden; pushed, it stays for the back button and nothing
+    /// else, so the header below is not repeated in it.
+    @ViewBuilder
+    func featureBar(pushed: Bool) -> some View {
+        if pushed {
+            self.navigationTitle("")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbarBackground(AppTheme.bg, for: .navigationBar)
+        } else {
+            self.toolbar(.hidden, for: .navigationBar)
+        }
+    }
+
+    /// Marks a destination as pushed from a tab. See `FeatureStack`.
+    func pushedFeature() -> some View {
+        environment(\.pushedFeature, true)
     }
 }
 

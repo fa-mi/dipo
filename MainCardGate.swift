@@ -65,15 +65,15 @@ struct MainCardGate: View {
             ZStack {
                 Circle().fill(AppTheme.accent.opacity(0.15)).frame(width: 54, height: 54)
                 Image(systemName: "star.circle.fill")
-                    .font(.system(size: 26, weight: .semibold))
+                    .font(.system(.title, weight: .semibold))
                     .foregroundStyle(AppTheme.accent)
             }
             Text(loc("main.gate_title"))
-                .font(.system(size: 26, weight: .bold))
+                .font(.system(.title, weight: .bold))
                 .foregroundStyle(AppTheme.textPrimary)
                 .fixedSize(horizontal: false, vertical: true)
             Text(loc("main.gate_body"))
-                .font(.system(size: 14))
+                .font(.system(.subheadline))
                 .foregroundStyle(AppTheme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -84,7 +84,7 @@ struct MainCardGate: View {
     private var reasons: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text(loc("main.gate_why"))
-                .font(.system(size: 10, weight: .bold))
+                .font(.system(.caption2, weight: .bold))
                 .foregroundStyle(AppTheme.textSecondary)
                 .tracking(0.7)
                 .padding(.bottom, 12)
@@ -92,16 +92,16 @@ struct MainCardGate: View {
             ForEach(Array(MainCard.dependents.enumerated()), id: \.element.id) { idx, dep in
                 HStack(alignment: .top, spacing: 12) {
                     Image(systemName: dep.icon)
-                        .font(.system(size: 14, weight: .medium))
+                        .font(.system(.subheadline, weight: .medium))
                         .foregroundStyle(AppTheme.accent)
                         .frame(width: 26, height: 26)
                         .background(AppTheme.accent.opacity(0.12), in: Circle())
                     VStack(alignment: .leading, spacing: 2) {
                         Text(loc(dep.titleKey))
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(.system(.footnote, weight: .semibold))
                             .foregroundStyle(AppTheme.textPrimary)
                         Text(loc(dep.detailKey))
-                            .font(.system(size: 12))
+                            .font(.system(.caption))
                             .foregroundStyle(AppTheme.textSecondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -114,7 +114,7 @@ struct MainCardGate: View {
             }
         }
         .padding(14)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 18))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
     }
 
     // MARK: Choose
@@ -122,7 +122,7 @@ struct MainCardGate: View {
     private var picker: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(loc("main.gate_choose"))
-                .font(.system(size: 10, weight: .bold))
+                .font(.system(.caption2, weight: .bold))
                 .foregroundStyle(AppTheme.textSecondary)
                 .tracking(0.7)
 
@@ -141,20 +141,20 @@ struct MainCardGate: View {
                 showAddCard = true
             } label: {
                 HStack(spacing: 8) {
-                    Image(systemName: "plus.circle.fill").font(.system(size: 14))
-                    Text(loc("main.gate_add_card")).font(.system(size: 13, weight: .semibold))
+                    Image(systemName: "plus.circle.fill").font(.system(.subheadline))
+                    Text(loc("main.gate_add_card")).font(.system(.footnote, weight: .semibold))
                 }
                 .foregroundStyle(AppTheme.accent)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 13)
-                .background(AppTheme.accent.opacity(0.10), in: RoundedRectangle(cornerRadius: 14))
+                .background(AppTheme.accent.opacity(0.10), in: RoundedRectangle(cornerRadius: AppRadius.md))
             }
             .buttonStyle(ScaleButtonStyle())
 
             // Said once, plainly, and only after the choice is in front of
             // them: this is not a decision they are stuck with.
             Text(loc("main.gate_changeable"))
-                .font(.system(size: 11))
+                .font(.system(.caption2))
                 .foregroundStyle(AppTheme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, 2)
@@ -168,12 +168,12 @@ struct MainCardGate: View {
             MainCard.set(card)
         } label: {
             Text(loc("main.gate_confirm"))
-                .font(.system(size: 15, weight: .bold))
+                .font(.system(.subheadline, weight: .bold))
                 .foregroundStyle(picked == nil ? AppTheme.textSecondary : AppTheme.bg)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 16)
                 .background(picked == nil ? AppTheme.cardMid : AppTheme.accent,
-                            in: RoundedRectangle(cornerRadius: 16))
+                            in: RoundedRectangle(cornerRadius: AppRadius.md))
         }
         .buttonStyle(ScaleButtonStyle())
         .disabled(picked == nil)

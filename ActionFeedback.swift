@@ -237,7 +237,7 @@ struct ActionFeedbackOverlay: View {
             ZStack {
                 Circle().fill(toast.tint.opacity(0.16)).frame(width: 34, height: 34)
                 Image(systemName: toast.icon)
-                    .font(.system(size: 15, weight: .bold))
+                    .font(.system(.subheadline, weight: .bold))
                     .foregroundStyle(toast.tint)
                     // A checkmark that simply appears feels static; drawing it
                     // in sells the "it happened just now".
@@ -245,12 +245,12 @@ struct ActionFeedbackOverlay: View {
             }
             VStack(alignment: .leading, spacing: 2) {
                 Text(toast.title)
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.system(.subheadline, weight: .semibold))
                     .foregroundStyle(AppTheme.textPrimary)
                     .lineLimit(1).minimumScaleFactor(0.8)
                 if let detail = toast.detail {
                     Text(detail)
-                        .font(.system(size: 11))
+                        .font(.system(.caption2))
                         .foregroundStyle(AppTheme.textSecondary)
                         .lineLimit(1)
                 }
@@ -258,11 +258,11 @@ struct ActionFeedbackOverlay: View {
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 14).padding(.vertical, 12)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.md)
             .stroke(toast.tint.opacity(0.22), lineWidth: 1))
         .shadow(color: .black.opacity(0.18), radius: 14, y: 6)
-        .contentShape(RoundedRectangle(cornerRadius: 16))
+        .contentShape(RoundedRectangle(cornerRadius: AppRadius.md))
         .onTapGesture { center.dismiss() }
         .padding(.top, 8)
     }

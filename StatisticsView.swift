@@ -120,7 +120,7 @@ enum StatPeriod: String, CaseIterable {
 
 struct StatisticsView: View {
     @State var statsVM: StatsViewModel
-    let appVM: AppViewModel
+    @Bindable var appVM: AppViewModel
     @Query private var cardBudgetConfigs: [CardBudgetConfig]
     @Query(sort: \SalarySchedule.createdAt) private var salarySchedules: [SalarySchedule]
     @Query private var recurringPlans: [RecurringExpense]
@@ -151,6 +151,7 @@ struct StatisticsView: View {
     @State private var showSpendingAudit = false
     @State private var showExportSheet = false
     @State private var showTidy = false
+    @State private var showAllCategories = false
 
     /// Count of "Other" expenses the categoriser could confidently re-map.
     private var tidyableCount: Int {
@@ -281,22 +282,22 @@ struct StatisticsView: View {
     /// card opens the Royal paywall.
     private var lockedInsightsOverlay: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 18)
+            RoundedRectangle(cornerRadius: AppRadius.lg)
                 .fill(AppTheme.bg.opacity(0.35))
             VStack(spacing: 8) {
                 ZStack {
                     Circle().fill(AppTheme.purple.opacity(0.15)).frame(width: 46, height: 46)
                     Image(systemName: "crown.fill")
-                        .font(.system(size: 20, weight: .semibold))
+                        .font(.system(.title3, weight: .semibold))
                         .foregroundStyle(AppTheme.purple)
                 }
                 Text(loc("stats.insights"))
-                    .font(.system(size: 15, weight: .bold))
+                    .font(.system(.subheadline, weight: .bold))
                     .foregroundStyle(AppTheme.textPrimary)
                 HStack(spacing: 4) {
-                    Image(systemName: "lock.fill").font(.system(size: 10, weight: .bold))
+                    Image(systemName: "lock.fill").font(.system(.caption2, weight: .bold)).imageScale(.small)
                     Text(loc("stats.insights_locked"))
-                        .font(.system(size: 12, weight: .bold))
+                        .font(.system(.caption, weight: .bold))
                 }
                 .foregroundStyle(AppTheme.purple)
             }
@@ -999,307 +1000,28 @@ struct StatisticsView: View {
         return "\(holder) ••\(card.last4)"
     }
 
+    // MARK: - Layout
+    //
+    // The screen answers four questions, in the order a person asks them, and
+    // nothing else: how much has gone out and am I fine, where did it go, what
+    // is worth knowing, and is this more than usual. It used to stack nine
+    // cards — a cash-flow card, a net card with a balance reconciliation, a net
+    // trend, commitments priced in goal-time, a weekly-rate card with an audit,
+    // a donut, patterns — which were each right and together unreadable. The
+    // working behind the numbers moved one tap away, to Full analysis.
+
+    /// Top categories shown before "Show all".
+    private static let categoryPreview = 5
+    private func money(_ v: Double) -> String {
+        CurrencyManager.shared.formatted(v, currency: displayCurrency)
+    }
+
     var body: some View {
-        ZStack {
-            AppTheme.bg.ignoresSafeArea()
-
-            ScrollView(showsIndicators: false) {
-                VStack(spacing: 0) {
-                    // Title
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(loc("stats.title")).font(.system(size: 24, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
-                            Text(periodSubtitle).font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
-                        }
-                        Spacer()
-                        Button {
-                            HapticManager.shared.tap()
-                            showExportSheet = true
-                        } label: {
-                            Image(systemName: "square.and.arrow.up")
-                                .font(.system(size: 18))
-                                .foregroundStyle(AppTheme.accent)
-                                .frame(width: 44, height: 44)
-                                .background(AppTheme.accent.opacity(0.12), in: Circle())
-                        }
-                        .buttonStyle(ScaleButtonStyle())
-                    }
-                    .padding(.horizontal, 22)
-                    .padding(.top, 20)
-
-                    // Period picker — a single quiet chip that opens a menu.
-                    // A row of five filled pills competed with the numbers for
-                    // attention and ate a whole band of the screen; the period
-                    // is context, not the content.
-                    HStack {
-                        Menu {
-                            ForEach(availablePeriods, id: \.self) { period in
-                                Button {
-                                    HapticManager.shared.tap()
-                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
-                                        selectedPeriod = period
-                                        statsVM.selectedSliceIndex = nil
-                                        statsVM.animateIn()
-                                        if period == .custom { showCustomPicker = true }
-                                    }
-                                } label: {
-                                    if selectedPeriod == period {
-                                        Label(period.title, systemImage: "checkmark")
-                                    } else {
-                                        Text(period.title)
-                                    }
-                                }
-                            }
-                        } label: {
-                            HStack(spacing: 6) {
-                                Text(selectedPeriod.title)
-                                    .font(.system(size: 13, weight: .semibold))
-                                    .foregroundStyle(AppTheme.textPrimary)
-                                Image(systemName: "chevron.down")
-                                    .font(.system(size: 10, weight: .semibold))
-                                    .foregroundStyle(AppTheme.textSecondary)
-                            }
-                            .padding(.horizontal, 13).padding(.vertical, 8)
-                            .background(AppTheme.cardDark, in: Capsule())
-                        }
-                        Spacer(minLength: 0)
-                    }
-                    .padding(.horizontal, 22)
-                    .padding(.top, 12)
-
-                    // The anchor, named. Not a control.
-                    //
-                    // It briefly offered a "Change" affordance here, which put
-                    // the same decision in two places — and this is the worse
-                    // of the two: choosing which account the whole app reasons
-                    // about is a Wallet decision, made once, next to the cards
-                    // themselves. Offering it again mid-analysis invites
-                    // treating it as a per-screen filter, which is exactly the
-                    // browsing behaviour that produced contradictory numbers on
-                    // different screens in the first place.
-                    if let main = selectedCard {
-                        HStack(spacing: 9) {
-                            LinearGradient(colors: [Color(hex: main.gradientStart),
-                                                    Color(hex: main.gradientEnd)],
-                                           startPoint: .top, endPoint: .bottom)
-                                .frame(width: 4, height: 22)
-                                .clipShape(Capsule())
-                            Text(cardLabel(main))
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundStyle(AppTheme.textPrimary)
-                                .lineLimit(1)
-                            Text(loc("main.badge"))
-                                .font(.system(size: 9, weight: .bold))
-                                .foregroundStyle(AppTheme.accent)
-                                .padding(.horizontal, 6).padding(.vertical, 2)
-                                .background(AppTheme.accent.opacity(0.15), in: Capsule())
-                            Spacer(minLength: 0)
-                        }
-                        .padding(.horizontal, 14).padding(.vertical, 10)
-                        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
-                        .padding(.horizontal, 22)
-                        .padding(.top, 10)
-                    }
-
-                    // Tidy "Other" chip — surfaces when uncategorised expenses
-                    // could be auto-fixed, so they stop skewing Daily/Lifestyle.
-                    if tidyableCount > 0 {
-                        Button {
-                            HapticManager.shared.tap(); showTidy = true
-                        } label: {
-                            HStack(spacing: 8) {
-                                Image(systemName: "wand.and.stars").font(.system(size: 13, weight: .semibold))
-                                Text(String(format: loc("tidy.chip"), tidyableCount)).font(.system(size: 13, weight: .semibold))
-                                Spacer()
-                                Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold))
-                            }
-                            .foregroundStyle(AppTheme.purple)
-                            .padding(.horizontal, 14).padding(.vertical, 12)
-                            .background(AppTheme.purple.opacity(0.10), in: RoundedRectangle(cornerRadius: 14))
-                            .overlay(RoundedRectangle(cornerRadius: 14).stroke(AppTheme.purple.opacity(0.25), lineWidth: 1))
-                        }
-                        .buttonStyle(ScaleButtonStyle())
-                        .padding(.horizontal, 22).padding(.top, 16)
-                    }
-
-                    // Summary cards
-                    CashflowCard(income: filteredIncome, expenses: filteredExpenses,
-                                 previousIncome: previousPeriodIncome,
-                                 previousExpenses: previousPeriodExpenses,
-                                 currency: displayCurrency)
-                        .padding(.horizontal, 22)
-                        .padding(.top, 16)
-
-                    // Net balance card
-                    NetBalanceSummary(net: filteredIncome - filteredExpenses, income: filteredIncome, expenses: filteredExpenses, currency: displayCurrency,
-                                      cardBalanceNow: selectedCard?.computedBalance(),
-                                      startBalance: periodStartBalance,
-                                      transferNet: periodTransferNet,
-                                      progress: periodProgress,
-                                      previousExpenses: previousPeriodExpenses)
-                        .padding(.horizontal, 22)
-                        .padding(.top, 10)
-
-                    // Net worth trend — 6 month sparkline
-                    NetWorthTrendCard(trend: netWorthTrend,
-                                      subtitle: payCycleDay != nil ? loc("stats.net_worth_sub_cycle") : loc("stats.net_worth_sub"),
-                                      currency: displayCurrency)
-                        .padding(.horizontal, 22)
-                        .padding(.top, 12)
-                    
-                    // Smart Insights Card — Weekly avg + Top Category.
-                    // Royal-only feature. Free users get a blurred teaser
-                    // that opens the paywall on tap (same pattern as the
-                    // Home Screen widget's locked-insights treatment).
-                    // Commitments priced in goal-time, next to the descriptive
-                    // insights. The weekly average says what happened; this says
-                    // what it costs.
-                    if premiumMgr.canAccess(.smartBudget), !commitmentReview.lines.isEmpty {
-                        CommitmentPriorityCard(review: commitmentReview,
-                                               currency: displayCurrency,
-                                               dailyAllowance: dailyAllowance,
-                                               typicalDaily: typicalDailySpend,
-                                               irregularThisCycle: irregularSpend.total,
-                                               daysInCycle: periodProgress?.total ?? periodDays)
-                            .padding(.horizontal, 22)
-                            .padding(.top, 12)
-                    }
-
-                    if filteredExpenses > 0 {
-                        let insightsCard = SmartInsightsCard(
-                            weeklyAverage: weeklyAverage,
-                            dailyAllowance: dailyAllowance,
-                            irregular: irregularSpend,
-                            topCategories: topCategories,
-                            totalExpenses: filteredExpenses,
-                            currency: displayCurrency,
-                            isPartialPeriod: isPartialWeeklyPeriod,
-                            periodDays: periodDays,
-                            onAudit: {
-                                HapticManager.shared.tap()
-                                showSpendingAudit = true
-                            }
-                        )
-                        if premiumMgr.canAccess(.smartBudget) {
-                            insightsCard
-                                .padding(.horizontal, 22)
-                                .padding(.top, 12)
-                        } else {
-                            insightsCard
-                                // Blur the real data — the user sees the
-                                // shape of the insight but can't read it.
-                                .blur(radius: 7)
-                                .allowsHitTesting(false)
-                                .overlay { lockedInsightsOverlay }
-                                .padding(.horizontal, 22)
-                                .padding(.top, 12)
-                                .contentShape(Rectangle())
-                                .onTapGesture {
-                                    HapticManager.shared.tap()
-                                    // Reuses the paywall notification that
-                                    // MainTabView already listens for.
-                                    NotificationCenter.default.post(
-                                        name: .requestOpenPaywall, object: nil)
-                                }
-                        }
-                    }
-
-                    StatSegmentPicker(vm: statsVM)
-                        .padding(.horizontal, 22)
-                        .padding(.top, 20)
-
-                    if realCategories.isEmpty {
-                        // Empty state with direct CTA to Add Transaction.
-                        // Without the CTA the user reads "no expenses yet"
-                        // and has to figure out the central "+" tab is what
-                        // adds them. Linking from here makes the workflow
-                        // obvious — and MainTabView's listener auto-switches
-                        // to Home on save so the new tx is visible afterwards.
-                        VStack(spacing: 14) {
-                            Image(systemName: statsVM.selectedStatTab == .expenses ? "cart" : "arrow.down.circle")
-                                .font(.system(size: 40))
-                                .foregroundStyle(AppTheme.textSecondary)
-                                .gentleFloat()
-                            Text(String(format: loc("stats.title_empty"), statsVM.selectedStatTab.localizedLabel.lowercased()))
-                                .font(.system(size: 16)).foregroundStyle(AppTheme.textSecondary)
-                            Text(loc("stats.empty"))
-                                .font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary.opacity(0.7))
-
-                            Button {
-                                HapticManager.shared.tap()
-                                NotificationCenter.default.post(name: .requestOpenAddTransaction, object: nil)
-                            } label: {
-                                HStack(spacing: 8) {
-                                    Image(systemName: "plus.circle.fill").font(.system(size: 14))
-                                    Text(loc("home.add_first_tx")).font(.system(size: 13, weight: .semibold))
-                                }
-                                .foregroundStyle(AppTheme.accent)
-                                .padding(.horizontal, 16).padding(.vertical, 9)
-                                .background(AppTheme.accent.opacity(0.12), in: Capsule())
-                                .overlay(Capsule().stroke(AppTheme.accent.opacity(0.3), lineWidth: 1))
-                            }
-                            .buttonStyle(ScaleButtonStyle())
-                            .padding(.top, 4)
-                        }
-                        .padding(.top, 48)
-                    } else {
-                        CategoryDonutChart(
-                            categories: realCategories,
-                            total: realTotal,
-                            currency: displayCurrency,
-                            statsVM: statsVM
-                        )
-                        .padding(.horizontal, 22)
-                        .padding(.top, 20)
-                    }
-
-                    // Patterns — forward-looking and behavioural. The old
-                    // "Recent Expenses" list here repeated Home's transaction
-                    // feed without adding anything Statistics should own.
-                    if statsVM.selectedStatTab == .expenses && !patternRows.isEmpty
-                        && premiumMgr.canAccess(.smartBudget) {
-                        VStack(alignment: .leading, spacing: 0) {
-                            Text(loc("stats.patterns"))
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundStyle(AppTheme.textPrimary)
-                                .padding(.bottom, 12)
-
-                            VStack(spacing: 0) {
-                                ForEach(Array(patternRows.enumerated()), id: \.offset) { i, row in
-                                    HStack(alignment: .top, spacing: 12) {
-                                        Image(systemName: row.icon)
-                                            .font(.system(size: 14))
-                                            .foregroundStyle(row.tint)
-                                            .frame(width: 22)
-                                        VStack(alignment: .leading, spacing: 2) {
-                                            Text(row.title)
-                                                .font(.system(size: 13.5, weight: .semibold))
-                                                .foregroundStyle(AppTheme.textPrimary)
-                                                .fixedSize(horizontal: false, vertical: true)
-                                            Text(row.detail)
-                                                .font(.system(size: 11.5))
-                                                .foregroundStyle(AppTheme.textSecondary)
-                                                .fixedSize(horizontal: false, vertical: true)
-                                                .lineSpacing(1.5)
-                                        }
-                                        Spacer(minLength: 0)
-                                    }
-                                    .padding(.vertical, 12)
-                                    if i < patternRows.count - 1 {
-                                        Divider().background(AppTheme.cardMid.opacity(0.5))
-                                    }
-                                }
-                            }
-                            .padding(.horizontal, 16)
-                            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 18))
-                        }
-                        .padding(.horizontal, 22)
-                        .padding(.top, 24)
-                    }
-
-                    Spacer(minLength: 110)
-                }
-            }
+        NavigationStack(path: $appVM.statsPath) {
+            mainPage
+                .navigationTitle(loc("stats.title"))
+                .toolbar(.hidden, for: .navigationBar)
+                .navigationDestination(for: StatsRoute.self) { _ in fullAnalysis }
         }
         .onAppear {
             statsVM.animateIn()
@@ -1311,24 +1033,15 @@ struct StatisticsView: View {
                 didDefaultPeriod = true
                 if payCycleDay != nil { selectedPeriod = .payCycle }
             }
-            // Auto-select first available card if none is selected.
-            // Statistics is always per-card to avoid mixing currencies.
             selectedCardID = MainCard.reconcile(cards: appVM.cards)?.id.uuidString
-            // Populate the memoized derivations before reading realCategories.
             recomputeStats()
-            // Update categories with real data on appear
             withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-                statsVM.categories = realCategories.isEmpty
-                    ? [SpendCategory(name: "No data", amount: 1, color: AppTheme.textSecondary)]
-                    : realCategories
+                statsVM.categories = realCategories
             }
         }
-        // StatisticsView lives in MainTabView's ZStack and is mounted ONCE at
-        // app launch (tab switching only toggles opacity), so `.onAppear` fires
-        // before the user has added their first card. Re-running reconcile when
-        // activity first appears catches that transition — otherwise the screen
-        // reports Rp 0 / Rp 0 with the data sitting right there. Keyed by
-        // `count` so it doesn't churn on every tx insert.
+        // Re-running reconcile when activity first appears catches a first card
+        // added after this tab mounted — otherwise the screen reports Rp 0 with
+        // the data sitting right there. Keyed by `count` so it doesn't churn.
         .onChange(of: cardsWithActivity.count) { _, _ in
             selectedCardID = MainCard.reconcile(cards: appVM.cards)?.id.uuidString
         }
@@ -1348,19 +1061,17 @@ struct StatisticsView: View {
                 .presentationBackground(AppTheme.bg)
                 .preferredColorScheme(appColorScheme())
                 // A swipe inside the sheet changes which transactions the rate
-                // is built from, so the figures behind it have to be rebuilt —
-                // otherwise the user corrects something and the number they
-                // came to check does not move.
+                // is built from, so the figures behind it have to be rebuilt.
                 .onDisappear { recomputeStats() }
         }
         .onChange(of: statsVM.selectedStatTab) { _, _ in
             statsVM.selectedSliceIndex = nil
+            showAllCategories = false
             withAnimation { statsVM.categories = realCategories }
             statsVM.animateIn()
         }
         .onChange(of: selectedPeriod) { _, _ in
             statsVM.selectedSliceIndex = nil
-            // If selected card has no tx in new period, auto-switch to a card that does
             selectedCardID = MainCard.reconcile(cards: appVM.cards)?.id.uuidString
             recomputeStats()
             withAnimation { statsVM.categories = realCategories }
@@ -1375,12 +1086,10 @@ struct StatisticsView: View {
         .onChange(of: customStart) { _, _ in
             recomputeStats()
             withAnimation { statsVM.categories = realCategories }
-            statsVM.animateIn()
         }
         .onChange(of: customEnd) { _, _ in
             recomputeStats()
             withAnimation { statsVM.categories = realCategories }
-            statsVM.animateIn()
         }
         // A tx added/removed anywhere → refresh the memoized derivations.
         .onChange(of: statTxCount) { _, _ in
@@ -1402,16 +1111,15 @@ struct StatisticsView: View {
                 income: filteredIncome,
                 budgetIncome: budgetInsightIncome,
                 expenses: filteredExpenses,
-                // Royal-only figures. The Smart Insights card on screen blurs
-                // these behind the paywall, but the export handed them over in
-                // plain text — tap Share and a free user could read exactly
-                // what the blur was hiding. Withhold the data itself rather
-                // than hiding it in the layout.
+                // The typical week is a Royal note, so it is withheld from the
+                // export itself, not just hidden in the layout. Categories are
+                // on the free screen, so they travel for everyone.
                 weeklyAverage: premiumMgr.canAccess(.smartBudget) ? weeklyAverage : 0,
-                topCategories: premiumMgr.canAccess(.smartBudget) ? topCategories : [],
+                topCategories: topCategories,
                 transactions: filteredTx,
                 currency: displayCurrency,
-                configs: cardBudgetConfigs
+                configs: cardBudgetConfigs,
+                previousExpenses: previousPeriodExpenses
             )
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
@@ -1426,71 +1134,675 @@ struct StatisticsView: View {
                 .preferredColorScheme(appColorScheme())
         }
     }
+
+    // MARK: Main page
+
+    private var mainPage: some View {
+        ZStack {
+            AppTheme.bg.ignoresSafeArea()
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 16) {
+                    header
+                    summaryCard
+                    if tidyableCount > 0 { tidyRow }
+                    categoriesCard
+                    notesCard
+                    SpendingTrendCard(trend: netWorthTrend, currency: displayCurrency,
+                                      byPayCycle: payCycleDay != nil)
+                    detailLink
+                    Spacer(minLength: 110)
+                }
+                .padding(.horizontal, 22)
+                .padding(.top, 20)
+            }
+        }
+    }
+
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .center) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(loc("stats.title"))
+                        .font(.system(.title, weight: .bold))
+                        .foregroundStyle(AppTheme.textPrimary)
+                    Text(periodSubtitle)
+                        .font(.system(.footnote))
+                        .foregroundStyle(AppTheme.textSecondary)
+                }
+                Spacer()
+                Button {
+                    HapticManager.shared.tap()
+                    showExportSheet = true
+                } label: {
+                    Image(systemName: "square.and.arrow.up")
+                        .font(.system(.body, weight: .semibold))
+                        .foregroundStyle(AppTheme.textPrimary)
+                        .frame(width: 44, height: 44)
+                        .background(AppTheme.cardDark, in: Circle())
+                }
+                .accessibilityLabel(loc("a11y.export"))
+                .buttonStyle(ScaleButtonStyle())
+            }
+
+            // The period is context, not content: one quiet chip.
+            Menu {
+                ForEach(availablePeriods, id: \.self) { period in
+                    Button {
+                        HapticManager.shared.tap()
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
+                            selectedPeriod = period
+                            if period == .custom { showCustomPicker = true }
+                        }
+                    } label: {
+                        if selectedPeriod == period {
+                            Label(period.title, systemImage: "checkmark")
+                        } else {
+                            Text(period.title)
+                        }
+                    }
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "calendar")
+                        .font(.system(.caption, weight: .semibold))
+                        .foregroundStyle(AppTheme.textSecondary)
+                    Text(selectedPeriod.title)
+                        .font(.system(.footnote, weight: .semibold))
+                        .foregroundStyle(AppTheme.textPrimary)
+                    Image(systemName: "chevron.down")
+                        .font(.system(.caption2, weight: .semibold)).imageScale(.small)
+                        .foregroundStyle(AppTheme.textSecondary)
+                }
+                .padding(.horizontal, 13).padding(.vertical, 8)
+                .background(AppTheme.cardDark, in: Capsule())
+            }
+        }
+    }
+
+    // MARK: 1 · How much went out, and am I fine
+
+    private var expenseChange: Double? {
+        guard let prev = previousPeriodExpenses, prev > 0 else { return nil }
+        return (filteredExpenses - prev) / prev * 100
+    }
+
+    private var summaryCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(loc("stats.expenses"))
+                    .font(.system(.subheadline, weight: .semibold))
+                    .foregroundStyle(AppTheme.textSecondary)
+                Text(money(filteredExpenses))
+                    .font(.system(size: 36, weight: .bold, design: .rounded))
+                    .foregroundStyle(AppTheme.textPrimary)
+                    .lineLimit(1).minimumScaleFactor(0.55)
+                    .contentTransition(.numericText())
+                if let change = expenseChange {
+                    let up = change >= 0
+                    Label(String(format: loc(up ? "stats.vs_prev_up" : "stats.vs_prev_down"),
+                                 Int(abs(change).rounded())),
+                          systemImage: up ? "arrow.up.right" : "arrow.down.right")
+                        .font(.system(.caption, weight: .semibold))
+                        .foregroundStyle(up ? AppTheme.red : AppTheme.accent)
+                        .padding(.horizontal, 9).padding(.vertical, 4)
+                        .background((up ? AppTheme.red : AppTheme.accent).opacity(0.12), in: Capsule())
+                        .padding(.top, 2)
+                }
+            }
+
+            if filteredIncome > 0 {
+                incomeBar
+            } else {
+                Label(loc("stats.no_income_hint"), systemImage: "info.circle")
+                    .font(.system(.caption))
+                    .foregroundStyle(AppTheme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            if let line = paceLine {
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: line.ok ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                        .font(.system(.subheadline))
+                        .foregroundStyle(line.ok ? AppTheme.accent : AppTheme.orange)
+                    Text(line.text)
+                        .font(.system(.footnote, weight: .medium))
+                        .foregroundStyle(AppTheme.textPrimary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background((line.ok ? AppTheme.accent : AppTheme.orange).opacity(0.10),
+                            in: RoundedRectangle(cornerRadius: AppRadius.md))
+            }
+        }
+        .padding(18)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.xl))
+    }
+
+    /// Income as a bar the spending eats into, with a tick for how much of the
+    /// period has passed: spending behind the tick is ahead of the calendar.
+    private var incomeBar: some View {
+        let used = filteredExpenses / filteredIncome
+        let left = filteredIncome - filteredExpenses
+        return VStack(alignment: .leading, spacing: 8) {
+            SpendGauge(fraction: used,
+                       timeMarker: periodProgress.map { Double($0.elapsed) / Double($0.total) })
+
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(loc("stats.income"))
+                        .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
+                    Text(money(filteredIncome))
+                        .font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                }
+                Spacer()
+                if let p = periodProgress {
+                    Text(String(format: loc("stats.day_of"), p.elapsed, p.total))
+                        .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
+                    Spacer()
+                }
+                VStack(alignment: .trailing, spacing: 1) {
+                    Text(loc(left >= 0 ? "stats.left" : "stats.over"))
+                        .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
+                    Text(money(abs(left)))
+                        .font(.system(.subheadline, weight: .semibold))
+                        .foregroundStyle(SpendGauge.tone(for: used))
+                }
+            }
+        }
+    }
+
+    /// One sentence on where this is heading, for a period still running.
+    private var paceLine: (ok: Bool, text: String)? {
+        guard let projected = projectedSpend, filteredIncome > 0 else { return nil }
+        if projected <= filteredIncome {
+            return (true, String(format: loc("stats.pace_safe"), money(projected)))
+        }
+        return (false, String(format: loc("stats.pace_over"), money(projected),
+                              money(projected - filteredIncome)))
+    }
+
+    private var tidyRow: some View {
+        Button {
+            HapticManager.shared.tap(); showTidy = true
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "wand.and.stars")
+                    .font(.system(.subheadline, weight: .semibold))
+                    .foregroundStyle(AppTheme.purple)
+                Text(String(format: loc("tidy.chip"), tidyableCount))
+                    .font(.system(.footnote, weight: .semibold))
+                    .foregroundStyle(AppTheme.textPrimary)
+                    .multilineTextAlignment(.leading)
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(.caption, weight: .semibold))
+                    .foregroundStyle(AppTheme.textSecondary)
+            }
+            .padding(.horizontal, 16).padding(.vertical, 13)
+            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+        }
+        .buttonStyle(ScaleButtonStyle())
+    }
+
+    // MARK: 2 · Where it went
+
+    /// Same subtype rules as the totals: transfers skipped, refunds taken off
+    /// their category, income counting normal income only.
+    private var categoryBreakdown: [(category: TxCategory, amount: Double)] {
+        var totals: [TxCategory: Double] = [:]
+        let expensesTab = statsVM.selectedStatTab == .expenses
+        for tx in filteredTx where tx.txSubtype != .transfer {
+            let amt = abs(convertedAmount(tx))
+            if expensesTab {
+                if tx.txSubtype == .refund { totals[tx.category, default: 0] -= amt }
+                else if tx.amount < 0 { totals[tx.category, default: 0] += amt }
+            } else if tx.txSubtype == .normal && tx.amount > 0 {
+                totals[tx.category, default: 0] += amt
+            }
+        }
+        return totals.filter { $0.value > 0 }
+            .map { (category: $0.key, amount: $0.value) }
+            .sorted { $0.amount > $1.amount }
+    }
+
+    private var categoriesCard: some View {
+        let rows = categoryBreakdown
+        let total = rows.reduce(0) { $0 + $1.amount }
+        let shown = showAllCategories ? rows : Array(rows.prefix(Self.categoryPreview))
+        return VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .center) {
+                Text(loc(statsVM.selectedStatTab == .expenses ? "stats.where_title" : "stats.where_income_title"))
+                    .font(.system(.body, weight: .bold))
+                    .foregroundStyle(AppTheme.textPrimary)
+                Spacer(minLength: 8)
+                flowToggle
+            }
+
+            if rows.isEmpty {
+                VStack(spacing: 10) {
+                    Text(String(format: loc("stats.title_empty"),
+                                statsVM.selectedStatTab.localizedLabel.lowercased()))
+                        .font(.system(.subheadline)).foregroundStyle(AppTheme.textSecondary)
+                    Button {
+                        HapticManager.shared.tap()
+                        NotificationCenter.default.post(name: .requestOpenAddTransaction, object: nil)
+                    } label: {
+                        Label(loc("home.add_first_tx"), systemImage: "plus.circle.fill")
+                            .font(.system(.footnote, weight: .semibold))
+                            .foregroundStyle(AppTheme.onVividFill)
+                            .padding(.horizontal, 16).padding(.vertical, 10)
+                            .background(AppTheme.accentFill, in: Capsule())
+                    }
+                    .buttonStyle(ScaleButtonStyle())
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 18)
+            } else {
+                VStack(spacing: 14) {
+                    ForEach(Array(shown.enumerated()), id: \.element.category) { i, row in
+                        categoryRow(row.category, amount: row.amount,
+                                    share: total > 0 ? row.amount / total : 0, index: i)
+                    }
+                }
+                if rows.count > Self.categoryPreview {
+                    Button {
+                        HapticManager.shared.tap()
+                        withAnimation(.spring(response: 0.35)) { showAllCategories.toggle() }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Text(showAllCategories
+                                 ? loc("stats.show_less")
+                                 : String(format: loc("stats.show_all_categories"), rows.count))
+                            Image(systemName: showAllCategories ? "chevron.up" : "chevron.down")
+                                .imageScale(.small)
+                        }
+                        .font(.system(.footnote, weight: .semibold))
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .padding(16)
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.xl))
+    }
+
+    /// Money out / money in, as two small pills.
+    private var flowToggle: some View {
+        HStack(spacing: 2) {
+            ForEach(StatTab.allCases, id: \.self) { tab in
+                let on = statsVM.selectedStatTab == tab
+                Button {
+                    guard !on else { return }
+                    withAnimation(.spring(response: 0.3)) { statsVM.switchTab(tab) }
+                } label: {
+                    Text(tab.localizedLabel)
+                        .font(.system(.caption, weight: .semibold))
+                        .foregroundStyle(on ? AppTheme.textPrimary : AppTheme.textSecondary)
+                        .padding(.horizontal, 10).padding(.vertical, 6)
+                        .background(on ? AppTheme.bg : Color.clear, in: Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(3)
+        .background(AppTheme.cardMid.opacity(0.7), in: Capsule())
+    }
+
+    private func categoryRow(_ cat: TxCategory, amount: Double, share: Double, index: Int) -> some View {
+        let hue = Color(hex: cat.iconBg)
+        return HStack(spacing: 12) {
+            Image(systemName: cat.icon)
+                .font(.system(.subheadline, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: 36, height: 36)
+                .background(hue, in: Circle())
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(cat.displayLabel)
+                        .font(.system(.subheadline, weight: .semibold))
+                        .foregroundStyle(AppTheme.textPrimary)
+                        .lineLimit(1)
+                    Spacer(minLength: 8)
+                    Text(money(amount))
+                        .font(.system(.subheadline, weight: .semibold))
+                        .foregroundStyle(AppTheme.textPrimary)
+                        .lineLimit(1).minimumScaleFactor(0.8)
+                }
+                HStack(spacing: 8) {
+                    GeometryReader { g in
+                        ZStack(alignment: .leading) {
+                            Capsule().fill(AppTheme.cardMid.opacity(0.8))
+                            Capsule().fill(hue)
+                                .frame(width: max(g.size.width * CGFloat(share) * statsVM.chartProgress, 4))
+                                .animation(.spring(response: 0.7, dampingFraction: 0.85)
+                                    .delay(Double(index) * 0.05), value: statsVM.chartProgress)
+                        }
+                    }
+                    .frame(height: 6)
+                    Text("\(Int((share * 100).rounded()))%")
+                        .font(.system(.caption, weight: .medium))
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .frame(width: 38, alignment: .trailing)
+                }
+            }
+        }
+    }
+
+    // MARK: 3 · Worth knowing
+
+    /// At most three plain sentences. The pace already sits in the summary, so
+    /// it is not repeated here.
+    private var noteRows: [(icon: String, tint: Color, title: String, detail: String)] {
+        var out: [(icon: String, tint: Color, title: String, detail: String)] = []
+        if weeklyAverage > 0 {
+            out.append(("cup.and.saucer.fill", AppTheme.purple,
+                        String(format: loc("stats.weekly_line"), money(weeklyAverage)),
+                        loc("stats.weekly_line_sub")))
+        }
+        for row in patternRows where row.icon != "chart.line.uptrend.xyaxis" {
+            out.append((row.icon, row.tint, row.title, row.detail))
+        }
+        return Array(out.prefix(3))
+    }
+
+    @ViewBuilder
+    private var notesCard: some View {
+        let rows = noteRows
+        if !rows.isEmpty {
+            VStack(alignment: .leading, spacing: 12) {
+                Text(loc("stats.notes_title"))
+                    .font(.system(.body, weight: .bold))
+                    .foregroundStyle(AppTheme.textPrimary)
+                if premiumMgr.canAccess(.smartBudget) {
+                    VStack(spacing: 0) {
+                        ForEach(Array(rows.enumerated()), id: \.offset) { i, row in
+                            if i > 0 {
+                                Rectangle().fill(AppTheme.cardMid.opacity(0.7)).frame(height: 1).padding(.leading, 48)
+                            }
+                            noteRow(row.icon, row.tint, row.title, row.detail)
+                        }
+                    }
+                } else {
+                    lockedNotes(rows)
+                }
+            }
+            .padding(16)
+            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.xl))
+        }
+    }
+
+    private func noteRow(_ icon: String, _ tint: Color, _ title: String, _ detail: String) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(.footnote, weight: .semibold))
+                .foregroundStyle(tint)
+                .frame(width: 34, height: 34)
+                .background(tint.opacity(0.14), in: RoundedRectangle(cornerRadius: AppRadius.sm))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(.subheadline, weight: .semibold))
+                    .foregroundStyle(AppTheme.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(detail)
+                    .font(.system(.caption))
+                    .foregroundStyle(AppTheme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, 10)
+    }
+
+    /// The shape of the notes with the words hidden, and one way to open them.
+    private func lockedNotes(_ rows: [(icon: String, tint: Color, title: String, detail: String)]) -> some View {
+        Button {
+            HapticManager.shared.tap()
+            NotificationCenter.default.post(name: .requestOpenPaywall, object: nil)
+        } label: {
+            VStack(alignment: .leading, spacing: 10) {
+                VStack(spacing: 0) {
+                    ForEach(Array(rows.prefix(2).enumerated()), id: \.offset) { _, row in
+                        noteRow(row.icon, row.tint, row.title, row.detail)
+                    }
+                }
+                .redacted(reason: .placeholder)
+                .blur(radius: 3)
+                .accessibilityHidden(true)
+                HStack(spacing: 6) {
+                    Image(systemName: "crown.fill")
+                    Text(loc("stats.insights_locked"))
+                }
+                .font(.system(.footnote, weight: .bold))
+                .foregroundStyle(PremiumPlan.royal.color)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 11)
+                .background(PremiumPlan.royal.color.opacity(0.12), in: RoundedRectangle(cornerRadius: AppRadius.md))
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: 4 · The working, one tap away
+
+    private var detailLink: some View {
+        Button {
+            HapticManager.shared.tap()
+            appVM.statsPath.append(.analysis)
+        } label: {
+            PlanRowLabel(icon: "doc.text.magnifyingglass", tint: AppTheme.blue,
+                         title: loc("stats.detail_link"),
+                         status: loc("stats.detail_link_sub"),
+                         lockedPlan: nil)
+                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+        }
+        .buttonStyle(ScaleButtonStyle())
+    }
+
+    /// Every figure the summary is built from, for anyone who wants to check it:
+    /// the balance reconciliation, the daily allowance and its audit, fixed
+    /// payments priced in goal-time, the net trend and every pattern.
+    private var fullAnalysis: some View {
+        ZStack {
+            AppTheme.bg.ignoresSafeArea()
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(periodSubtitle)
+                            .font(.system(.footnote, weight: .semibold))
+                            .foregroundStyle(AppTheme.textPrimary)
+                        if let main = selectedCard {
+                            Text(String(format: loc("stats.main_card_line"), cardLabel(main)))
+                                .font(.system(.caption))
+                                .foregroundStyle(AppTheme.textSecondary)
+                        }
+                    }
+                    .padding(.bottom, 4)
+
+                    NetBalanceSummary(net: filteredIncome - filteredExpenses, income: filteredIncome,
+                                      expenses: filteredExpenses, currency: displayCurrency,
+                                      cardBalanceNow: selectedCard?.computedBalance(),
+                                      startBalance: periodStartBalance,
+                                      transferNet: periodTransferNet,
+                                      progress: periodProgress,
+                                      previousExpenses: previousPeriodExpenses)
+
+                    if filteredExpenses > 0 {
+                        let insightsCard = SmartInsightsCard(
+                            weeklyAverage: weeklyAverage,
+                            dailyAllowance: dailyAllowance,
+                            irregular: irregularSpend,
+                            topCategories: topCategories,
+                            totalExpenses: filteredExpenses,
+                            currency: displayCurrency,
+                            isPartialPeriod: isPartialWeeklyPeriod,
+                            periodDays: periodDays,
+                            onAudit: {
+                                HapticManager.shared.tap()
+                                showSpendingAudit = true
+                            }
+                        )
+                        if premiumMgr.canAccess(.smartBudget) {
+                            insightsCard
+                        } else {
+                            insightsCard
+                                .blur(radius: 7)
+                                .allowsHitTesting(false)
+                                .overlay { lockedInsightsOverlay }
+                                .contentShape(Rectangle())
+                                .onTapGesture {
+                                    HapticManager.shared.tap()
+                                    NotificationCenter.default.post(name: .requestOpenPaywall, object: nil)
+                                }
+                        }
+                    }
+
+                    if premiumMgr.canAccess(.smartBudget), !commitmentReview.lines.isEmpty {
+                        CommitmentPriorityCard(review: commitmentReview,
+                                               currency: displayCurrency,
+                                               dailyAllowance: dailyAllowance,
+                                               typicalDaily: typicalDailySpend,
+                                               irregularThisCycle: irregularSpend.total,
+                                               daysInCycle: periodProgress?.total ?? periodDays)
+                    }
+
+                    // No trend chart here. The net-flow bars repeated the spending
+                    // chart on the main page in other colours; that chart's
+                    // breakdown already lists money in, money out and the net for
+                    // every period.
+
+                    if premiumMgr.canAccess(.smartBudget), !patternRows.isEmpty {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(loc("stats.patterns"))
+                                .font(.system(.body, weight: .bold))
+                                .foregroundStyle(AppTheme.textPrimary)
+                                .padding(.bottom, 4)
+                            ForEach(Array(patternRows.enumerated()), id: \.offset) { _, row in
+                                noteRow(row.icon, row.tint, row.title, row.detail)
+                            }
+                        }
+                        .padding(16)
+                        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.xl))
+                    }
+
+                    Spacer(minLength: 40)
+                }
+                .padding(.horizontal, 22)
+                .padding(.top, 8)
+            }
+        }
+        .navigationTitle(loc("stats.detail_title"))
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(AppTheme.bg, for: .navigationBar)
+    }
+}
+
+// MARK: - Spending trend
+
+/// Spending per period, the latest one highlighted, against the average of the
+/// periods that have finished. Answers "is this more than usual" at a glance;
+/// tapping opens the numbers behind every bar.
+struct SpendingTrendCard: View {
+    let trend: [CycleTrendPoint]
+    let currency: String
+    var byPayCycle: Bool = false
+    @State private var showBreakdown = false
+    @State private var appeared = false
+
+    private var finished: [CycleTrendPoint] { trend.filter { !$0.isRunning && $0.expense > 0 } }
+    private var average: Double? {
+        guard !finished.isEmpty else { return nil }
+        return finished.reduce(0) { $0 + $1.expense } / Double(finished.count)
+    }
+    private var peak: Double { max(trend.map(\.expense).max() ?? 0, average ?? 0, 1) }
+
+    var body: some View {
+        if trend.contains(where: { $0.expense > 0 }) {
+            Button {
+                HapticManager.shared.tap()
+                showBreakdown = true
+            } label: {
+                content
+            }
+            .buttonStyle(ScaleButtonStyle())
+            .sheet(isPresented: $showBreakdown) {
+                CycleTrendBreakdown(trend: trend, currency: currency)
+                    .presentationDetents([.large]).presentationDragIndicator(.visible)
+                    .presentationBackground(AppTheme.bg).preferredColorScheme(appColorScheme())
+            }
+        }
+    }
+
+    private var content: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(loc(byPayCycle ? "stats.trend_title_cycle" : "stats.trend_title"))
+                        .font(.system(.body, weight: .bold))
+                        .foregroundStyle(AppTheme.textPrimary)
+                    Text(loc("stats.trend_hint"))
+                        .font(.system(.caption))
+                        .foregroundStyle(AppTheme.textSecondary)
+                }
+                Spacer(minLength: 8)
+                if let average {
+                    VStack(alignment: .trailing, spacing: 1) {
+                        Text(loc("stats.trend_average"))
+                            .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
+                        Text(CurrencyManager.shared.formatted(average, currency: currency))
+                            .font(.system(.footnote, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                    }
+                }
+            }
+
+            let chartH: CGFloat = 96
+            ZStack(alignment: .bottom) {
+                if let average {
+                    // The usual level, so each bar reads as above or below it.
+                    Rectangle()
+                        .fill(AppTheme.textSecondary.opacity(0.45))
+                        .frame(height: 1)
+                        .padding(.bottom, chartH * CGFloat(average / peak))
+                        .frame(maxHeight: .infinity, alignment: .bottom)
+                }
+                HStack(alignment: .bottom, spacing: 10) {
+                    ForEach(Array(trend.enumerated()), id: \.element.id) { i, point in
+                        let isLast = i == trend.count - 1
+                        let h = max(chartH * CGFloat(point.expense / peak), point.expense > 0 ? 4 : 2)
+                        VStack(spacing: 6) {
+                            RoundedRectangle(cornerRadius: 6)
+                                .fill(isLast ? AppTheme.red : AppTheme.red.opacity(0.28))
+                                .frame(height: appeared ? h : 2)
+                                .animation(.spring(response: 0.6, dampingFraction: 0.8)
+                                    .delay(Double(i) * 0.05), value: appeared)
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: chartH, alignment: .bottom)
+                    }
+                }
+            }
+            .frame(height: chartH)
+
+            HStack(spacing: 10) {
+                ForEach(Array(trend.enumerated()), id: \.element.id) { i, point in
+                    let isLast = i == trend.count - 1
+                    Text(point.label)
+                        .font(.system(.caption2, weight: isLast ? .bold : .regular))
+                        .foregroundStyle(isLast ? AppTheme.textPrimary : AppTheme.textSecondary)
+                        .lineLimit(1).minimumScaleFactor(0.8)
+                        .frame(maxWidth: .infinity)
+                }
+            }
+        }
+        .padding(16)
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.xl))
+        .onAppear { appeared = true }
+    }
 }
 
 // MARK: - Summary Cards
-
-/// Income and expenses in one calm card, each with how it moved versus the
-/// same stretch of the previous period. Two separately-bordered boxes made the
-/// top of the screen loud and said nothing about direction.
-struct CashflowCard: View {
-    let income: Double
-    let expenses: Double
-    let previousIncome: Double?
-    let previousExpenses: Double?
-    let currency: String
-
-    private func delta(_ now: Double, _ before: Double?) -> Double? {
-        guard let before, before > 0 else { return nil }
-        return (now - before) / before * 100
-    }
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 0) {
-            column(loc("stats.income"), income, delta(income, previousIncome),
-                   upIsGood: true, dot: AppTheme.accent)
-            Rectangle().fill(AppTheme.cardMid.opacity(0.5))
-                .frame(width: 1, height: 40)
-                .padding(.horizontal, 6)
-            column(loc("stats.expenses"), expenses, delta(expenses, previousExpenses),
-                   upIsGood: false, dot: AppTheme.red)
-        }
-        .padding(.vertical, 16).padding(.horizontal, 18)
-        .frame(maxWidth: .infinity)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 18))
-    }
-
-    private func column(_ title: String, _ amount: Double, _ change: Double?,
-                        upIsGood: Bool, dot: Color) -> some View {
-        VStack(alignment: .leading, spacing: 5) {
-            HStack(spacing: 5) {
-                Circle().fill(dot).frame(width: 6, height: 6)
-                Text(title).font(.system(size: 11.5)).foregroundStyle(AppTheme.textSecondary)
-            }
-            Text(CurrencyManager.shared.formatted(amount, currency: currency))
-                .font(.system(size: 19, weight: .bold))
-                .foregroundStyle(AppTheme.textPrimary)
-                .contentTransition(.numericText())
-                .lineLimit(1).minimumScaleFactor(0.7)
-            if let change {
-                let up = change >= 0
-                let good = up == upIsGood
-                HStack(spacing: 3) {
-                    Image(systemName: up ? "arrow.up.right" : "arrow.down.right")
-                        .font(.system(size: 8, weight: .bold))
-                    Text(String(format: "%.0f%%", abs(change)))
-                        .font(.system(size: 11, weight: .semibold))
-                }
-                .foregroundStyle(good ? AppTheme.accent : AppTheme.red)
-            } else {
-                // Keeps both columns the same height when one side has no
-                // history to compare against.
-                Text(" ").font(.system(size: 11, weight: .semibold))
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-}
 
 struct NetBalanceSummary: View {
     let net: Double
@@ -1513,8 +1825,8 @@ struct NetBalanceSummary: View {
 
     private func chip(_ icon: String, _ tint: Color, _ text: String) -> some View {
         HStack(spacing: 4) {
-            Image(systemName: icon).font(.system(size: 9, weight: .bold))
-            Text(text).font(.system(size: 10, weight: .semibold))
+            Image(systemName: icon).font(.system(.caption2, weight: .bold)).imageScale(.small)
+            Text(text).font(.system(.caption2, weight: .semibold))
         }
         .foregroundStyle(tint)
         .padding(.horizontal, 8).padding(.vertical, 4)
@@ -1539,46 +1851,33 @@ struct NetBalanceSummary: View {
                 // in/out flow for the selected period only.
                 VStack(alignment: .leading, spacing: 2) {
                     Text(loc("stats.net_balance"))
-                        .font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
+                        .font(.system(.footnote)).foregroundStyle(AppTheme.textSecondary)
                     Text(loc("stats.net_balance_sub"))
-                        .font(.system(size: 10)).foregroundStyle(AppTheme.textSecondary.opacity(0.75))
+                        .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary.opacity(0.75))
                 }
                 Spacer()
                 Text(net >= 0 ? "\(CurrencyManager.shared.formatted(net, currency: currency))"
                              : CurrencyManager.shared.formatted(net, currency: currency))
-                    .font(.system(size: 16, weight: .bold))
+                    .font(.system(.callout, weight: .bold))
                     .foregroundStyle(net >= 0 ? AppTheme.accent : AppTheme.red)
                     .contentTransition(.numericText())
             }
-            // Expense ratio bar
-            GeometryReader { g in
-                ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 4).fill(AppTheme.accent.opacity(0.2)).frame(height: 6)
-                    RoundedRectangle(cornerRadius: 4).fill(AppTheme.red)
-                        .frame(width: g.size.width * CGFloat(spentPct / 100), height: 6)
-                        .animation(.spring(response: 0.8, dampingFraction: 0.8), value: spentPct)
-                    // Where TIME is. Spending bar behind this line = ahead of
-                    // pace; past it = burning faster than the calendar.
-                    if let p = progress {
-                        let t = CGFloat(p.elapsed) / CGFloat(p.total)
-                        Rectangle().fill(AppTheme.textPrimary.opacity(0.55))
-                            .frame(width: 2, height: 12)
-                            .offset(x: g.size.width * t - 1)
-                    }
-                }
-            }
-            .frame(height: 12)
+            // Share of income spent, warming from green to red as it fills, with
+            // a tick where TIME is: a bar ending past it is ahead of the calendar.
+            SpendGauge(fraction: income > 0 ? expenses / income : 0,
+                       timeMarker: progress.map { Double($0.elapsed) / Double($0.total) },
+                       height: 8)
             HStack {
                 Text(String(format: loc("stats.percentage_spent"), String(format: "%.0f", spentPct)))
-                    .font(.system(size: 11))
+                    .font(.system(.caption2))
                     .foregroundStyle(AppTheme.textSecondary)
                 Spacer()
                 Text(net >= 0
                      ? String(format: loc(progress == nil ? "stats.saved" : "stats.saved_sofar"),
                               String(format: "%.0f%%", savedPct))
                      : loc("stats.overspent"))
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(net >= 0 ? AppTheme.accent : AppTheme.red)
+                    .font(.system(.caption2, weight: .medium))
+                    .foregroundStyle(SpendGauge.tone(for: income > 0 ? expenses / income : 1))
             }
 
             // Two facts that make the percentages mean something: how far into
@@ -1622,10 +1921,10 @@ struct NetBalanceSummary: View {
                     Divider().background(AppTheme.cardMid.opacity(0.6))
                     HStack {
                         Text(loc(isToday ? "stats.card_balance_now" : "stats.recon_end"))
-                            .font(.system(size: 11, weight: .semibold)).foregroundStyle(AppTheme.textSecondary)
+                            .font(.system(.caption2, weight: .semibold)).foregroundStyle(AppTheme.textSecondary)
                         Spacer()
                         Text("= " + (closing < 0 ? "-" : "") + CurrencyManager.shared.formatted(abs(closing), currency: currency))
-                            .font(.system(size: 12, weight: .bold))
+                            .font(.system(.caption, weight: .bold))
                             .foregroundStyle(closing >= 0 ? AppTheme.accent : AppTheme.red)
                     }
                 }
@@ -1633,62 +1932,30 @@ struct NetBalanceSummary: View {
                 Divider().background(AppTheme.cardMid)
                 HStack {
                     Text(loc("stats.card_balance_now"))
-                        .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                        .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                     Spacer()
                     Text((balance < 0 ? "-" : "") + CurrencyManager.shared.formatted(abs(balance), currency: currency))
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.system(.caption, weight: .semibold))
                         .foregroundStyle(balance >= 0 ? AppTheme.textPrimary : AppTheme.red)
                 }
             }
         }
         .padding(.vertical, 16).padding(.horizontal, 18)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 18))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
     }
 
     private func reconRow(_ label: String, _ value: Double, signed: Bool = false) -> some View {
         HStack {
-            Text(label).font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+            Text(label).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
             Spacer()
             Text((value < 0 ? "−" : signed ? "+" : "")
                  + CurrencyManager.shared.formatted(abs(value), currency: currency))
-                .font(.system(size: 12, weight: .medium)).foregroundStyle(AppTheme.textPrimary)
+                .font(.system(.caption, weight: .medium)).foregroundStyle(AppTheme.textPrimary)
         }
     }
 }
 
-// MARK: - Segment Picker
-
-struct StatSegmentPicker: View {
-    @Bindable var vm: StatsViewModel
-
-    var body: some View {
-        HStack(spacing: 0) {
-            ForEach(StatTab.allCases, id: \.self) { tab in
-                Button {
-                    vm.switchTab(tab)
-                } label: {
-                    Text(tab.localizedLabel)
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(vm.selectedStatTab == tab ? AppTheme.bg : AppTheme.textSecondary)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                        .background {
-                            if vm.selectedStatTab == tab {
-                                Capsule()
-                                    .fill(tab.tint)
-                                    .shadow(color: tab.tint.opacity(0.35), radius: 8, y: 3)
-                            }
-                        }
-                }
-                .animation(.spring(response: 0.35, dampingFraction: 0.75), value: vm.selectedStatTab)
-            }
-        }
-        .padding(4)
-        .background(AppTheme.cardDark, in: Capsule())
-    }
-}
-
-// MARK: - Net Worth Trend Card
+// MARK: - Trend point
 
 /// One bar of the trend, carrying the numbers behind it.
 ///
@@ -1706,159 +1973,6 @@ struct CycleTrendPoint: Identifiable {
     var net: Double { income - expense }
     /// A period that has not finished yet holds an incomplete total.
     var isRunning: Bool { end > Date() }
-}
-
-struct NetWorthTrendCard: View {
-    let trend: [CycleTrendPoint]
-    var subtitle: String = loc("stats.net_worth_sub")
-    var currency: String = CurrencyManager.shared.preferredCurrency
-    @State private var appeared = false
-    @State private var showBreakdown = false
-
-    private var maxAbs: Double { trend.map { abs($0.net) }.max() ?? 1 }
-    private var hasData: Bool { trend.contains { $0.net != 0 } }
-
-    /// A single gradient bar, with an optional soft glow for the current period.
-    private func bar(_ fill: LinearGradient, w: CGFloat, h: CGFloat, glow: Color?) -> some View {
-        RoundedRectangle(cornerRadius: 5)
-            .fill(fill)
-            .frame(width: w, height: h)
-            .shadow(color: (glow ?? .clear).opacity(glow == nil ? 0 : 0.45),
-                    radius: glow == nil ? 0 : 5, y: 2)
-    }
-
-    var body: some View {
-        content
-            .contentShape(Rectangle())
-            .onTapGesture {
-                guard hasData else { return }
-                HapticManager.shared.tap()
-                showBreakdown = true
-            }
-            .sheet(isPresented: $showBreakdown) {
-                CycleTrendBreakdown(trend: trend, currency: currency)
-                    .presentationDetents([.large]).presentationDragIndicator(.visible)
-                    .presentationBackground(AppTheme.bg).preferredColorScheme(appColorScheme())
-            }
-    }
-
-    private var content: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(loc("stats.net_worth"))
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(AppTheme.textPrimary)
-                    Text(subtitle)
-                        .font(.system(size: 11))
-                        .foregroundStyle(AppTheme.textSecondary)
-                }
-                Spacer()
-                // Overall direction
-                if let last = trend.last, let first = trend.first(where: { $0.net != 0 }) {
-                    let up = last.net >= first.net
-                    HStack(spacing: 4) {
-                        Image(systemName: up ? "arrow.up.right" : "arrow.down.right")
-                            .font(.system(size: 11, weight: .bold))
-                        Text(up ? loc("stats.positive") : loc("stats.negative"))
-                            .font(.system(size: 11, weight: .semibold))
-                    }
-                    .foregroundStyle(up ? AppTheme.accent : AppTheme.red)
-                    .padding(.horizontal, 8).padding(.vertical, 4)
-                    .background((up ? AppTheme.accent : AppTheme.red).opacity(0.12), in: Capsule())
-                }
-            }
-
-            if hasData {
-                let hasNegative = trend.contains { $0.net < 0 }
-                let chartH: CGFloat = 70
-                
-                VStack(spacing: 6) {
-                    GeometryReader { geo in
-                        let w = geo.size.width
-                        let barW = (w - CGFloat(trend.count - 1) * 6) / CGFloat(trend.count)
-                        // If all positive: bars grow up from bottom, baseline at bottom.
-                        // If has negative: zero line at center, positive bars up, negative bars down.
-                        let availableH: CGFloat = hasNegative ? chartH * 0.45 : chartH - 4
-                        
-                        ZStack(alignment: hasNegative ? .center : .bottom) {
-                            // Baseline
-                            Rectangle()
-                                .fill(AppTheme.cardMid.opacity(0.6))
-                                .frame(height: 1)
-                                .frame(maxWidth: .infinity, alignment: .center)
-                            
-                            HStack(alignment: hasNegative ? .center : .bottom, spacing: 6) {
-                                ForEach(Array(trend.enumerated()), id: \.offset) { i, point in
-                                    let hasValue = point.net != 0
-                                    let rawH = maxAbs > 0 ? CGFloat(abs(point.net) / maxAbs) * availableH : 0
-                                    // Empty periods get a faint full-height
-                                    // track, not a stub that reads as "almost
-                                    // nothing" — before this, months with no
-                                    // data at all looked like months of zero.
-                                    let barH = hasValue ? max(rawH, 3) : availableH
-                                    let isPositive = point.net >= 0
-                                    let isLast = i == trend.count - 1
-                                    let base: Color = isPositive ? AppTheme.accent : AppTheme.red
-                                    // Current period pops at full saturation; past
-                                    // periods are dimmed so the eye lands on "now".
-                                    let strength = !hasValue ? 0.10 : (isLast ? 1.0 : 0.45)
-                                    let grad = LinearGradient(
-                                        colors: [base.opacity(strength), base.opacity(strength * 0.55)],
-                                        startPoint: isPositive ? .top : .bottom,
-                                        endPoint: isPositive ? .bottom : .top)
-                                    // Grow-in height (staggered) for a lively reveal.
-                                    let h = appeared ? barH : 0
-
-                                    if hasNegative {
-                                        VStack(spacing: 0) {
-                                            if isPositive {
-                                                Spacer(minLength: 0)
-                                                bar(grad, w: barW, h: h, glow: (isLast && hasValue) ? base : nil)
-                                                Color.clear.frame(height: chartH * 0.5)
-                                            } else {
-                                                Color.clear.frame(height: chartH * 0.5)
-                                                bar(grad, w: barW, h: h, glow: (isLast && hasValue) ? base : nil)
-                                                Spacer(minLength: 0)
-                                            }
-                                        }
-                                        .frame(height: chartH)
-                                        .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(Double(i) * 0.06), value: appeared)
-                                    } else {
-                                        bar(grad, w: barW, h: h, glow: (isLast && hasValue) ? base : nil)
-                                            .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(Double(i) * 0.06), value: appeared)
-                                    }
-                                }
-                            }
-                            .frame(maxWidth: .infinity)
-                        }
-                    }
-                    .frame(height: chartH)
-                    
-                    // Labels in separate row
-                    HStack(spacing: 6) {
-                        ForEach(Array(trend.enumerated()), id: \.offset) { i, point in
-                            let isLast = i == trend.count - 1
-                            Text(point.label)
-                                .font(.system(size: 10, weight: isLast ? .semibold : .regular))
-                                .foregroundStyle(isLast ? AppTheme.textPrimary : AppTheme.textSecondary)
-                                .frame(maxWidth: .infinity)
-                        }
-                    }
-                }
-            } else {
-                Text(loc("stats.trend_empty"))
-                    .font(.system(size: 12))
-                    .foregroundStyle(AppTheme.textSecondary)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(.vertical, 24)
-            }
-        }
-        .padding(16)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).stroke(AppTheme.accent.opacity(0.12), lineWidth: 1))
-        .onAppear { appeared = true }
-    }
 }
 
 // MARK: - Smart Insights Card (Weekly Avg + Top Categories)
@@ -1891,11 +2005,11 @@ struct SmartInsightsCard: View {
                 ZStack {
                     Circle().fill(AppTheme.purple.opacity(0.15)).frame(width: 32, height: 32)
                     Image(systemName: "sparkles")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.system(.subheadline, weight: .semibold))
                         .foregroundStyle(AppTheme.purple)
                 }
                 Text(loc("stats.insights"))
-                    .font(.system(size: 15, weight: .bold))
+                    .font(.system(.subheadline, weight: .bold))
                     .foregroundStyle(AppTheme.textPrimary)
                 Spacer()
             }
@@ -1904,18 +2018,18 @@ struct SmartInsightsCard: View {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 6) {
                     Image(systemName: "calendar.badge.clock")
-                        .font(.system(size: 11))
+                        .font(.system(.caption2))
                         .foregroundStyle(AppTheme.purple)
                     Text(loc("stats.weekly_avg"))
-                        .font(.system(size: 11, weight: .medium))
+                        .font(.system(.caption2, weight: .medium))
                         .foregroundStyle(AppTheme.textSecondary)
                     if isPartialPeriod {
                         // Caveat chip — this window is too short for a stable
                         // weekly rate, so mark it as a partial estimate.
                         HStack(spacing: 3) {
-                            Image(systemName: "info.circle.fill").font(.system(size: 8))
+                            Image(systemName: "info.circle.fill").font(.system(.caption2)).imageScale(.small)
                             Text(loc("stats.weekly_avg_partial_badge"))
-                                .font(.system(size: 9, weight: .semibold))
+                                .font(.system(.caption2, weight: .semibold))
                         }
                         .foregroundStyle(AppTheme.orange)
                         .padding(.horizontal, 6).padding(.vertical, 2)
@@ -1923,13 +2037,13 @@ struct SmartInsightsCard: View {
                     }
                 }
                 Text(CurrencyManager.shared.formatted(weeklyAverage, currency: currency))
-                    .font(.system(size: 26, weight: .bold))
+                    .font(.system(.title, weight: .bold))
                     .foregroundStyle(AppTheme.textPrimary)
                     .contentTransition(.numericText())
                 Text(isPartialPeriod
                      ? String(format: loc("stats.weekly_avg_partial_sub"), periodDays)
                      : loc("stats.weekly_avg_sub"))
-                    .font(.system(size: 11))
+                    .font(.system(.caption2))
                     .foregroundStyle(isPartialPeriod ? AppTheme.orange.opacity(0.9) : AppTheme.textSecondary.opacity(0.8))
 
                 // The figure only means something against what a day HAS.
@@ -1937,11 +2051,11 @@ struct SmartInsightsCard: View {
                     let daily = weeklyAverage / 7
                     HStack(spacing: 5) {
                         Image(systemName: daily <= allowance ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
-                            .font(.system(size: 10))
+                            .font(.system(.caption2)).imageScale(.small)
                         Text(String(format: loc("stats.daily_vs_allowance"),
                                     CurrencyManager.shared.formatted(daily, currency: currency),
                                     CurrencyManager.shared.formatted(allowance, currency: currency)))
-                            .font(.system(size: 11, weight: .medium))
+                            .font(.system(.caption2, weight: .medium))
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     .foregroundStyle(daily <= allowance ? AppTheme.accent : AppTheme.orange)
@@ -1955,9 +2069,9 @@ struct SmartInsightsCard: View {
                     Button(action: onAudit) {
                         HStack(spacing: 4) {
                             Text(loc("audit.open"))
-                                .font(.system(size: 11, weight: .semibold))
+                                .font(.system(.caption2, weight: .semibold))
                             Image(systemName: "chevron.right")
-                                .font(.system(size: 9, weight: .bold))
+                                .font(.system(.caption2, weight: .bold)).imageScale(.small)
                         }
                         .foregroundStyle(AppTheme.purple)
                     }
@@ -1969,7 +2083,7 @@ struct SmartInsightsCard: View {
                     Text(String(format: loc(irregular.count == 1 ? "stats.oneoff_day" : "stats.oneoff_days"),
                                 irregular.count,
                                 CurrencyManager.shared.formatted(irregular.total, currency: currency)))
-                        .font(.system(size: 11))
+                        .font(.system(.caption2))
                         .foregroundStyle(AppTheme.textSecondary.opacity(0.8))
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -1981,82 +2095,15 @@ struct SmartInsightsCard: View {
                     colors: [AppTheme.purple.opacity(0.18), AppTheme.purple.opacity(0.05)],
                     startPoint: .topLeading, endPoint: .bottomTrailing
                 ),
-                in: RoundedRectangle(cornerRadius: 14)
+                in: RoundedRectangle(cornerRadius: AppRadius.md)
             )
             
         }
         .padding(.vertical, 16).padding(.horizontal, 18)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 18))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
         .onAppear {
             withAnimation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.1)) {
                 appeared = true
-            }
-        }
-    }
-}
-
-struct TopCategoryRow: View {
-    let rank: Int
-    let category: TxCategory
-    let amount: Double
-    let percentage: Double
-    let currency: String
-    let appeared: Bool
-    
-    private var rankColor: Color {
-        switch rank {
-        case 1: return AppTheme.orange
-        case 2: return AppTheme.textSecondary
-        case 3: return AppTheme.purple
-        default: return AppTheme.textSecondary
-        }
-    }
-    
-    var body: some View {
-        HStack(spacing: 10) {
-            // Rank badge
-            ZStack {
-                Circle().fill(rankColor.opacity(0.15)).frame(width: 26, height: 26)
-                Text("\(rank)")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(rankColor)
-            }
-            
-            // Category icon
-            ZStack {
-                Circle().fill(category.color.opacity(0.15)).frame(width: 32, height: 32)
-                Image(systemName: category.icon)
-                    .font(.system(size: 13))
-                    .foregroundStyle(category.color)
-            }
-            
-            VStack(alignment: .leading, spacing: 3) {
-                Text(category.displayLabel)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(AppTheme.textPrimary)
-                
-                // Mini progress bar
-                GeometryReader { g in
-                    ZStack(alignment: .leading) {
-                        RoundedRectangle(cornerRadius: 2)
-                            .fill(category.color.opacity(0.15))
-                            .frame(height: 4)
-                        RoundedRectangle(cornerRadius: 2)
-                            .fill(category.color)
-                            .frame(width: appeared ? g.size.width * CGFloat(percentage / 100) : 0, height: 4)
-                            .animation(.spring(response: 0.8, dampingFraction: 0.8).delay(Double(rank) * 0.08), value: appeared)
-                    }
-                }
-                .frame(height: 4)
-            }
-            
-            VStack(alignment: .trailing, spacing: 2) {
-                Text(CurrencyManager.shared.formatted(amount, currency: currency))
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(AppTheme.textPrimary)
-                Text(String(format: "%.0f%%", percentage))
-                    .font(.system(size: 10))
-                    .foregroundStyle(AppTheme.textSecondary)
             }
         }
     }
@@ -2079,10 +2126,13 @@ struct StatsExportSheet: View {
     /// Per-card budget configs forwarded from the parent so this sheet can
     /// hand them to StatsReportCard for ratio resolution.
     let configs: [CardBudgetConfig]
-    
+    /// Spending over the same stretch of the previous period, for the change chip.
+    var previousExpenses: Double? = nil
+
+    @Environment(\.dismiss) private var dismiss
     @State private var shareItem: ShareItem?
     @State private var isGenerating = false
-    
+
     private func cardDisplayLabel(_ card: BankCard) -> String {
         if card.isDigitalWallet, !card.walletProvider.isEmpty {
             return card.walletProvider
@@ -2090,98 +2140,12 @@ struct StatsExportSheet: View {
         let holder = card.holderName.split(separator: " ").first.map(String.init) ?? card.holderName
         return "\(holder) ••\(card.last4)"
     }
-    
-    var body: some View {
-        ScrollView(showsIndicators: false) {
-            VStack(spacing: 18) {
-                // Title only — no icon
-                VStack(spacing: 4) {
-                    Text(loc("stats.export_preview"))
-                        .font(.system(size: 22, weight: .bold))
-                        .foregroundStyle(AppTheme.textPrimary)
-                    Text(periodSubtitle)
-                        .font(.system(size: 13))
-                        .foregroundStyle(AppTheme.textSecondary)
-                }
-                .padding(.top, 28)
-                
-                // Visual preview — actual report card scaled down
-                StatsReportCard(
-                    periodSubtitle: periodSubtitle,
-                    cardLabel: selectedCard.map(cardDisplayLabel) ?? "—",
-                    cardColor: selectedCard.map { Color(hex: $0.gradientStart) } ?? AppTheme.purple,
-                    income: income,
-                    budgetIncome: budgetIncome,
-                    expenses: expenses,
-                    weeklyAverage: weeklyAverage,
-                    topCategories: topCategories,
-                    transactionCount: transactions.count,
-                    currency: currency,
-                    cardID: selectedCard?.id.uuidString,
-                    configs: configs,
-                    filteredTransactions: transactions
-                )
-                .padding(.horizontal, 22)
-                
-                // Single export button — Save as Image
-                Button {
-                    HapticManager.shared.tap()
-                    exportImage()
-                } label: {
-                    HStack(spacing: 10) {
-                        if isGenerating {
-                            ProgressView().tint(.white).scaleEffect(0.85)
-                        } else {
-                            Image(systemName: "photo.fill").font(.system(size: 16))
-                        }
-                        Text(loc("stats.export_image"))
-                            .font(.system(size: 15, weight: .semibold))
-                    }
-                    .foregroundStyle(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-                    .background(
-                        LinearGradient(
-                            colors: [AppTheme.accent, AppTheme.accent.opacity(0.85)],
-                            startPoint: .topLeading, endPoint: .bottomTrailing
-                        ),
-                        in: RoundedRectangle(cornerRadius: 14)
-                    )
-                    .shadow(color: AppTheme.accent.opacity(0.4), radius: 8, y: 3)
-                }
-                .buttonStyle(ScaleButtonStyle())
-                .disabled(isGenerating)
-                .padding(.horizontal, 22)
-                .padding(.bottom, 20)
-            }
-        }
-        .sheet(item: $shareItem) { item in
-            ActivityShareSheet(items: [item.url])
-        }
-    }
-    
-    // MARK: - Export Functions
-    
-    /// Render the report card to a PNG image and share via UIActivityViewController.
-    /// Uses ImageRenderer (iOS 16+) at 3x scale for retina-quality output.
-    /// Respects user's appearance preference (light/dark/system) so the exported
-    /// image matches what the user sees in the app.
-    @MainActor
-    private func exportImage() {
-        isGenerating = true
-        let cardName = selectedCard.map(cardDisplayLabel) ?? "—"
-        let cardColor = selectedCard.map { Color(hex: $0.gradientStart) } ?? AppTheme.purple
-        
-        // Resolve user's color scheme preference (light/dark/system → system fallback)
-        let resolvedScheme: ColorScheme = {
-            if let pref = appColorScheme() { return pref }
-            return UITraitCollection.current.userInterfaceStyle == .dark ? .dark : .light
-        }()
-        
-        let report = StatsReportCard(
+
+    private var report: StatsReportCard {
+        StatsReportCard(
             periodSubtitle: periodSubtitle,
-            cardLabel: cardName,
-            cardColor: cardColor,
+            cardLabel: selectedCard.map(cardDisplayLabel) ?? "—",
+            cardColor: selectedCard.map { Color(hex: $0.gradientStart) } ?? AppTheme.accent,
             income: income,
             budgetIncome: budgetIncome,
             expenses: expenses,
@@ -2191,25 +2155,101 @@ struct StatsExportSheet: View {
             currency: currency,
             cardID: selectedCard?.id.uuidString,
             configs: configs,
-            filteredTransactions: transactions
+            filteredTransactions: transactions,
+            previousExpenses: previousExpenses
         )
-        .frame(width: 380)
-        .padding(20)
-        .background(AppTheme.bg)
-        .environment(\.colorScheme, resolvedScheme)
-        
-        let renderer = ImageRenderer(content: report)
+    }
+
+    var body: some View {
+        NavigationStack {
+            ZStack(alignment: .bottom) {
+                AppTheme.bg.ignoresSafeArea()
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 14) {
+                        Text(loc("stats.export_hint"))
+                            .font(.system(.footnote))
+                            .foregroundStyle(AppTheme.textSecondary)
+                            .multilineTextAlignment(.center)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.horizontal, 30)
+
+                        // The preview IS the image: the same view, at the same
+                        // width it is rendered at.
+                        report
+                            .frame(maxWidth: 400)
+                            .shadow(color: .black.opacity(0.10), radius: 18, y: 8)
+                            .padding(.horizontal, 18)
+                    }
+                    .padding(.top, 8)
+                    .padding(.bottom, 110)
+                }
+
+                Button {
+                    HapticManager.shared.tap()
+                    exportImage()
+                } label: {
+                    HStack(spacing: 10) {
+                        if isGenerating {
+                            ProgressView().tint(AppTheme.onVividFill)
+                        } else {
+                            Image(systemName: "square.and.arrow.up").font(.system(.body, weight: .semibold))
+                        }
+                        Text(loc("stats.export_image"))
+                            .font(.system(.callout, weight: .bold))
+                    }
+                    .foregroundStyle(AppTheme.onVividFill)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 17)
+                    .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+                }
+                .buttonStyle(ScaleButtonStyle())
+                .disabled(isGenerating)
+                .padding(.horizontal, 22)
+                .padding(.bottom, 16)
+                .background(
+                    LinearGradient(colors: [AppTheme.bg.opacity(0), AppTheme.bg],
+                                   startPoint: .top, endPoint: .center)
+                        .ignoresSafeArea()
+                )
+            }
+            .navigationTitle(loc("stats.export_preview"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(AppTheme.bg, for: .navigationBar)
+            .doneToolbar { dismiss() }
+        }
+        .sheet(item: $shareItem) { item in
+            ActivityShareSheet(items: [item.url])
+        }
+    }
+
+    // MARK: - Export
+
+    /// Renders the report to a PNG at 3× and hands it to the share sheet, in the
+    /// app's own light/dark setting so the image matches what was previewed.
+    @MainActor
+    private func exportImage() {
+        isGenerating = true
+        let cardName = selectedCard.map(cardDisplayLabel) ?? "—"
+        let resolvedScheme: ColorScheme = {
+            if let pref = appColorScheme() { return pref }
+            return UITraitCollection.current.userInterfaceStyle == .dark ? .dark : .light
+        }()
+
+        let content = report
+            .frame(width: 390)
+            .padding(18)
+            .background(AppTheme.bg)
+            .environment(\.colorScheme, resolvedScheme)
+
+        let renderer = ImageRenderer(content: content)
         renderer.scale = 3.0
-        
-        guard let uiImg = renderer.uiImage,
-              let data = uiImg.pngData() else {
+
+        guard let uiImg = renderer.uiImage, let data = uiImg.pngData() else {
             isGenerating = false
             return
         }
-        
-        let filename = "DiPo_Stats_\(cardName.replacingOccurrences(of: " ", with: "_"))_\(Int(Date().timeIntervalSince1970)).png"
+        let filename = "DiPo_\(cardName.replacingOccurrences(of: " ", with: "_"))_\(Int(Date().timeIntervalSince1970)).png"
         let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(filename)
-        
         do {
             try data.write(to: tempURL)
             shareItem = ShareItem(url: tempURL)
@@ -2218,23 +2258,24 @@ struct StatsExportSheet: View {
         }
         isGenerating = false
     }
-    
 }
 
-// MARK: - Stats Report Card (Used for both preview and PNG export)
+// MARK: - Stats Report Card (preview and PNG export)
 
-/// A polished, screenshot-worthy report card. This view is rendered to PNG
-/// via ImageRenderer for the "Export as Image" feature, and also used as the
-/// preview in StatsExportSheet so users see exactly what they'll get.
+/// The report as an image someone would actually send: the same four answers
+/// as the Statistics screen, in the same colours, sized for a phone story.
+///
+/// It used to lead on a net figure in a green or red wash, set income and
+/// spending in two boxes, rank categories with orange/grey/purple medals in the
+/// old muted category colours, and close on a bordered tinted advice box — a
+/// different visual language from the screen it was exported from.
 struct StatsReportCard: View {
     let periodSubtitle: String
     let cardLabel: String
     let cardColor: Color
     let income: Double
-    /// Income to use for BUDGET MATH (the recommendation + savings fallback).
-    /// Prefers the salary schedule so the insight isn't distorted by a period
-    /// that ends before payday — same signal Home/Smart Budget use. Falls back
-    /// to `income` (actual received) when no schedule exists.
+    /// Income for BUDGET MATH (the recommendation): the salary schedule when
+    /// there is one, so a period ending before payday doesn't distort it.
     var budgetIncome: Double? = nil
     private var insightIncome: Double { budgetIncome ?? income }
     let expenses: Double
@@ -2242,216 +2283,117 @@ struct StatsReportCard: View {
     let topCategories: [(category: TxCategory, amount: Double, percentage: Double)]
     let transactionCount: Int
     let currency: String
-    /// Card whose ratios should appear in the budget breakdown. nil = use
-    /// global defaults.
+    /// Card whose ratios appear in the budget split. nil = global defaults.
     let cardID: String?
-    /// Per-card configs queried by the parent view; this card's ratios are
-    /// resolved from this list (with global fallback).
     let configs: [CardBudgetConfig]
-    /// Transactions for the period — needed by `recommendationSection` to call
-    /// the same `topInsight()` engine Home uses, so the export shows the same
-    /// recommendation the user sees on the home screen banner.
+    /// The period's transactions — for the same `topInsight()` Home uses.
     let filteredTransactions: [TxRecord]
-    
+    var previousExpenses: Double? = nil
+
     @Environment(\.colorScheme) private var colorScheme
-    
-    private var netBalance: Double { income - expenses }
-    
+
+    private func money(_ v: Double) -> String {
+        CurrencyManager.shared.formatted(v, currency: currency)
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            // Brand header — DiPo Mascot logo + label
-            HStack(spacing: 8) {
-                Image("DiPoMascot")
-                    .resizable().scaledToFit()
-                    .frame(width: 26, height: 26)
-                    .blendMode(colorScheme == .dark ? .screen : .multiply)
-                Text("DiPo")
-                    .font(.system(size: 14, weight: .heavy, design: .rounded))
+        VStack(alignment: .leading, spacing: 18) {
+            header
+            spendingBlock
+            if !topCategories.isEmpty { categoriesBlock }
+            insightBlock
+            if SmartBudgetManager.shared.hasActiveBudget, income > 0 { budgetBlock }
+            footer
+        }
+        .padding(20)
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.xl))
+    }
+
+    private var header: some View {
+        HStack(spacing: 10) {
+            Image("DiPoMascot")
+                .resizable().scaledToFit()
+                .frame(width: 34, height: 34)
+                .blendMode(colorScheme == .dark ? .screen : .multiply)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(loc("stats.report_title"))
+                    .font(.system(.subheadline, design: .rounded, weight: .bold))
                     .foregroundStyle(AppTheme.textPrimary)
-                Circle().fill(cardColor).frame(width: 5, height: 5)
-                Text(cardLabel)
-                    .font(.system(size: 10))
-                    .foregroundStyle(AppTheme.textSecondary)
-                    .lineLimit(1)
-                Spacer(minLength: 6)
                 Text(periodSubtitle)
-                    .font(.system(size: 10, weight: .medium))
+                    .font(.system(.caption))
                     .foregroundStyle(AppTheme.textSecondary)
                     .lineLimit(1).minimumScaleFactor(0.8)
             }
-            
-            // Hero — Net Balance
-            VStack(alignment: .leading, spacing: 4) {
-                Text(loc("stats.net_balance"))
-                    .font(.system(size: 11, weight: .semibold))
+            Spacer(minLength: 6)
+            HStack(spacing: 5) {
+                Circle().fill(cardColor).frame(width: 7, height: 7)
+                Text(cardLabel)
+                    .font(.system(.caption2, weight: .semibold))
                     .foregroundStyle(AppTheme.textSecondary)
-                Text(netBalance >= 0
-                     ? "\(CurrencyManager.shared.formatted(netBalance, currency: currency))"
-                     : CurrencyManager.shared.formatted(netBalance, currency: currency))
-                    .font(.system(size: 32, weight: .heavy))
-                    .foregroundStyle(netBalance >= 0 ? AppTheme.accent : AppTheme.red)
+                    .lineLimit(1)
+            }
+            .padding(.horizontal, 8).padding(.vertical, 4)
+            .background(AppTheme.cardMid.opacity(0.6), in: Capsule())
+        }
+    }
+
+    private var spendingBlock: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(loc("stats.expenses"))
+                    .font(.system(.footnote, weight: .semibold))
+                    .foregroundStyle(AppTheme.textSecondary)
+                Text(money(expenses))
+                    .font(.system(size: 34, weight: .bold, design: .rounded))
+                    .foregroundStyle(AppTheme.textPrimary)
                     .lineLimit(1).minimumScaleFactor(0.55)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(16)
-            .background(
-                LinearGradient(
-                    colors: [
-                        (netBalance >= 0 ? AppTheme.accent : AppTheme.red).opacity(0.18),
-                        (netBalance >= 0 ? AppTheme.accent : AppTheme.red).opacity(0.04)
-                    ],
-                    startPoint: .topLeading, endPoint: .bottomTrailing
-                ),
-                in: RoundedRectangle(cornerRadius: 16)
-            )
-            
-            // Income / Expenses split
-            HStack(spacing: 8) {
-                ReportMetricBox(
-                    label: loc("stats.income"),
-                    value: CurrencyManager.shared.formatted(income, currency: currency),
-                    color: AppTheme.accent,
-                    icon: "arrow.down.circle.fill"
-                )
-                ReportMetricBox(
-                    label: loc("stats.expenses"),
-                    value: CurrencyManager.shared.formatted(expenses, currency: currency),
-                    color: AppTheme.red,
-                    icon: "arrow.up.circle.fill"
-                )
+            if let prev = previousExpenses, prev > 0 {
+                let change = (expenses - prev) / prev * 100
+                let up = change >= 0
+                Label(String(format: loc(up ? "stats.vs_prev_up" : "stats.vs_prev_down"),
+                             Int(abs(change).rounded())),
+                      systemImage: up ? "arrow.up.right" : "arrow.down.right")
+                    .font(.system(.caption, weight: .semibold))
+                    .foregroundStyle(up ? AppTheme.red : AppTheme.accent)
+                    .padding(.horizontal, 9).padding(.vertical, 4)
+                    .background((up ? AppTheme.red : AppTheme.accent).opacity(0.12), in: Capsule())
             }
-            
-            // Weekly average + transaction count demoted to one quiet line.
-            // As boxes they carried the same visual weight as income and
-            // expenses while answering a question nobody asks of a report.
-            HStack(spacing: 6) {
-                if weeklyAverage > 0 {
-                    Text(String(format: loc("stats.report_weekly_inline"),
-                                CurrencyManager.shared.formatted(weeklyAverage, currency: currency)))
-                    Text("·")
-                }
-                Text(String(format: loc("stats.report_tx_inline"), transactionCount))
-            }
-            .font(.system(size: 10))
-            .foregroundStyle(AppTheme.textSecondary.opacity(0.8))
-            
-            // Top Categories
-            if !topCategories.isEmpty {
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(spacing: 5) {
-                        Image(systemName: "trophy.fill")
-                            .font(.system(size: 10))
-                            .foregroundStyle(AppTheme.orange)
-                        Text(loc("stats.top_categories"))
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(AppTheme.textSecondary)
+            if income > 0 {
+                let used = expenses / income
+                SpendGauge(fraction: used)
+                HStack {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(loc("stats.income")).font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
+                        Text(money(income)).font(.system(.footnote, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
                     }
-                    VStack(spacing: 7) {
-                        ForEach(Array(topCategories.prefix(3).enumerated()), id: \.offset) { idx, item in
-                            ReportCategoryRow(
-                                rank: idx + 1,
-                                category: item.category,
-                                amount: item.amount,
-                                percentage: item.percentage,
-                                currency: currency
-                            )
-                        }
+                    Spacer()
+                    VStack(alignment: .trailing, spacing: 1) {
+                        Text(loc(income >= expenses ? "stats.left" : "stats.over"))
+                            .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
+                        Text(money(abs(income - expenses)))
+                            .font(.system(.footnote, weight: .semibold))
+                            .foregroundStyle(SpendGauge.tone(for: used))
                     }
                 }
-                .padding(14)
-                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
-            }
-            
-            // Budget Allocation — premium-gated. Use `hasActiveBudget` (not the
-            // raw `isEnabled` toggle) so a user who lost their Royal access
-            // (logout, expired sub, sign-in as different non-Royal account)
-            // doesn't see this section in the export. The user's old toggle
-            // setting is preserved in UserDefaults but stays hidden until they
-            // resubscribe — same UX pattern as other Royal-only widgets.
-            if SmartBudgetManager.shared.hasActiveBudget {
-                budgetAllocationSection
-            }
-            
-            // Smart Recommendation
-            recommendationSection
-            
-            // Footer
-            HStack {
-                Image(systemName: "sparkles")
-                    .font(.system(size: 8))
-                    .foregroundStyle(AppTheme.textSecondary.opacity(0.6))
-                Text(String(format: loc("stats.generated_by"), Date().displayDateTimeShort))
-                    .font(.system(size: 9))
-                    .foregroundStyle(AppTheme.textSecondary.opacity(0.6))
-                Spacer()
-            }
-            .padding(.top, 4)
-        }
-        .padding(16)
-        .background(AppTheme.bg)
-        .overlay(RoundedRectangle(cornerRadius: 18).stroke(AppTheme.cardMid, lineWidth: 1))
-        .clipShape(RoundedRectangle(cornerRadius: 18))
-    }
-    
-    /// Budget allocation breakdown — shown only when Smart Budget is enabled.
-    /// Ratios are resolved per-card via `SmartBudgetManager.ratios(forCardID:)`,
-    /// so the export reflects the same allocation the user sees on Home for
-    /// this specific card.
-    private var budgetAllocationSection: some View {
-        let r = SmartBudgetManager.shared.ratios(forCardID: cardID, configs: configs)
-        let dailyLimit = income * r.daily
-        let lifestyleLimit = income * r.lifestyle
-        let investLimit = income * r.investDebt
-        return VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 5) {
-                Image(systemName: "chart.pie.fill")
-                    .font(.system(size: 10))
-                    .foregroundStyle(AppTheme.purple)
-                Text(loc("budget.allocation_title"))
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(AppTheme.textSecondary)
-            }
-            VStack(spacing: 6) {
-                BudgetAllocationRow(
-                    label: loc("budget.group.daily"),
-                    ratio: r.daily,
-                    limit: dailyLimit,
-                    color: AppTheme.blue,
-                    currency: currency
-                )
-                BudgetAllocationRow(
-                    label: loc("budget.group.lifestyle"),
-                    ratio: r.lifestyle,
-                    limit: lifestyleLimit,
-                    color: AppTheme.purple,
-                    currency: currency
-                )
-                BudgetAllocationRow(
-                    label: loc("budget.group.invest_debt"),
-                    ratio: r.investDebt,
-                    limit: investLimit,
-                    color: AppTheme.accent,
-                    currency: currency
-                )
             }
         }
-        .padding(12)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 12))
     }
-    
-    /// Smart recommendation — single source of truth shared with the Home
-    /// screen's "Wawasan Cerdas" banner. Both call into
-    /// `SmartBudgetManager.topInsight()` so the messaging is consistent: if
-    /// Home says "Lifestyle melebihi anggaran", Stats says the same. We only
-    /// fall back to a savings-rate summary when there's nothing actionable
-    /// to report (no overspend, no anomaly).
-    private var recommendationSection: some View {
-        // Try the same engine Home uses, with the same per-card ratios.
-        // `filteredTransactions` is already scoped to the selected period, so
-        // anchor the engine to that window too. Without this it re-filters to
-        // the calendar month and the exported insight can disagree with the
-        // numbers printed right above it.
-        let homeInsight = SmartBudgetManager.shared.topInsight(
+
+    private var categoriesBlock: some View {
+        VStack(alignment: .leading, spacing: 11) {
+            Text(loc("stats.where_title"))
+                .font(.system(.footnote, weight: .bold))
+                .foregroundStyle(AppTheme.textPrimary)
+            ForEach(Array(topCategories.prefix(5).enumerated()), id: \.offset) { _, item in
+                ReportCategoryRow(category: item.category, amount: item.amount,
+                                  percentage: item.percentage, currency: currency)
+            }
+        }
+    }
+
+    private var insightBlock: some View {
+        let insight = SmartBudgetManager.shared.topInsight(
             allTransactions: filteredTransactions,
             income: insightIncome,
             cardID: cardID,
@@ -2459,18 +2401,12 @@ struct StatsReportCard: View {
             targetCurrency: currency,
             periodStart: filteredTransactions.map(\.date).min()
         )
-
         let (icon, tint, title, body): (String, Color, String, String) = {
-            // 1. Reuse Home's insight if it has something to say
-            if let insight = homeInsight {
-                return (insight.icon, insight.color, insight.title, insight.body)
-            }
-            // 2. No income → prompt to add salary
+            if let insight { return (insight.icon, insight.color, insight.title, insight.body) }
             if insightIncome <= 0 {
                 return ("info.circle.fill", AppTheme.textSecondary,
                         loc("rec.no_income_title"), loc("rec.no_income_body"))
             }
-            // 3. Fallback: savings-rate summary
             let savingsRate = max(0, (insightIncome - expenses) / insightIncome * 100)
             let spendRatio = expenses / insightIncome
             if spendRatio > 0.9 {
@@ -2487,144 +2423,133 @@ struct StatsReportCard: View {
                     loc("rec.balance_title"),
                     String(format: loc("rec.balance_body"), Int(savingsRate)))
         }()
-        
-        return HStack(alignment: .top, spacing: 10) {
-            ZStack {
-                Circle().fill(tint.opacity(0.15)).frame(width: 28, height: 28)
-                Image(systemName: icon)
-                    .font(.system(size: 12))
-                    .foregroundStyle(tint)
+
+        return VStack(alignment: .leading, spacing: 10) {
+            Text(loc("stats.notes_title"))
+                .font(.system(.footnote, weight: .bold))
+                .foregroundStyle(AppTheme.textPrimary)
+            reportNote(icon, tint, title, body)
+            if weeklyAverage > 0 {
+                reportNote("cup.and.saucer.fill", AppTheme.purple,
+                           String(format: loc("stats.weekly_line"), money(weeklyAverage)),
+                           String(format: loc("stats.report_tx_inline"), transactionCount))
             }
+        }
+    }
+
+    private func reportNote(_ icon: String, _ tint: Color, _ title: String, _ body: String) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: icon)
+                .font(.system(.caption, weight: .semibold))
+                .foregroundStyle(tint)
+                .frame(width: 28, height: 28)
+                .background(tint.opacity(0.14), in: RoundedRectangle(cornerRadius: AppRadius.xs))
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(tint)
+                    .font(.system(.footnote, weight: .semibold))
+                    .foregroundStyle(AppTheme.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
                 Text(body)
-                    .font(.system(size: 10))
+                    .font(.system(.caption))
                     .foregroundStyle(AppTheme.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 0)
         }
-        .padding(12)
-        .background(tint.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(tint.opacity(0.25), lineWidth: 1))
     }
-}
 
-/// Compact budget allocation row showing label, percentage, and budget cap.
-/// Used in StatsReportCard's budget section for image export.
-struct BudgetAllocationRow: View {
-    let label: String
-    let ratio: Double
-    let limit: Double
-    let color: Color
-    let currency: String
-    
-    var body: some View {
-        HStack(spacing: 8) {
-            Circle().fill(color).frame(width: 8, height: 8)
-            Text(label)
-                .font(.system(size: 11, weight: .medium))
+    /// The budget split as one bar in the group colours — the same three
+    /// shares the Smart Budget screen uses.
+    private var budgetBlock: some View {
+        let r = SmartBudgetManager.shared.ratios(forCardID: cardID, configs: configs)
+        let parts: [(String, Double, Color)] = [
+            (loc("budget.group.daily"), r.daily, AppTheme.blue),
+            (loc("budget.group.lifestyle"), r.lifestyle, AppTheme.purple),
+            (loc("budget.group.invest_debt"), r.investDebt, AppTheme.accent),
+        ]
+        return VStack(alignment: .leading, spacing: 10) {
+            Text(loc("budget.allocation_title"))
+                .font(.system(.footnote, weight: .bold))
                 .foregroundStyle(AppTheme.textPrimary)
-                .lineLimit(1)
-            Spacer(minLength: 4)
-            Text(String(format: "%.0f%%", ratio * 100))
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(color)
-                .frame(minWidth: 32, alignment: .trailing)
-            Text(CurrencyManager.shared.formatted(limit, currency: currency))
-                .font(.system(size: 10))
-                .foregroundStyle(AppTheme.textSecondary)
-                .lineLimit(1)
-        }
-    }
-}
-
-struct ReportMetricBox: View {
-    let label: String
-    let value: String
-    let color: Color
-    let icon: String
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 4) {
-                Image(systemName: icon)
-                    .font(.system(size: 9))
-                    .foregroundStyle(color)
-                Text(label)
-                    .font(.system(size: 9, weight: .medium))
-                    .foregroundStyle(AppTheme.textSecondary)
-                    .lineLimit(1)
+            GeometryReader { g in
+                HStack(spacing: 3) {
+                    ForEach(Array(parts.enumerated()), id: \.offset) { _, part in
+                        Capsule().fill(part.2)
+                            .frame(width: max((g.size.width - 6) * CGFloat(part.1), 4))
+                    }
+                }
             }
-            Text(value)
-                .font(.system(size: 13, weight: .bold))
-                .foregroundStyle(AppTheme.textPrimary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.6)
+            .frame(height: 8)
+            HStack(alignment: .top, spacing: 8) {
+                ForEach(Array(parts.enumerated()), id: \.offset) { _, part in
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(spacing: 4) {
+                            Circle().fill(part.2).frame(width: 7, height: 7)
+                            Text(part.0).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
+                                .lineLimit(1).minimumScaleFactor(0.8)
+                        }
+                        Text("\(Int((part.1 * 100).rounded()))% · " + money(income * part.1))
+                            .font(.system(.caption2, weight: .semibold))
+                            .foregroundStyle(AppTheme.textPrimary)
+                            .lineLimit(1).minimumScaleFactor(0.7)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(12)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
+    }
+
+    private var footer: some View {
+        HStack(spacing: 6) {
+            Rectangle().fill(AppTheme.cardMid).frame(height: 1)
+            Text(String(format: loc("stats.generated_by"), Date().displayDateTimeShort))
+                .font(.system(.caption2))
+                .foregroundStyle(AppTheme.textSecondary)
+                .fixedSize(horizontal: true, vertical: false)
+            Rectangle().fill(AppTheme.cardMid).frame(height: 1)
+        }
     }
 }
 
+/// A category in the report: its list colour, its share as a bar, its amount.
 struct ReportCategoryRow: View {
-    let rank: Int
     let category: TxCategory
     let amount: Double
     let percentage: Double
     let currency: String
-    
-    private var rankColor: Color {
-        switch rank {
-        case 1: return AppTheme.orange
-        case 2: return AppTheme.textSecondary
-        case 3: return AppTheme.purple
-        default: return AppTheme.textSecondary.opacity(0.7)
-        }
-    }
-    
+
     var body: some View {
-        HStack(spacing: 8) {
-            ZStack {
-                Circle().fill(rankColor.opacity(0.15)).frame(width: 20, height: 20)
-                Text("\(rank)")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(rankColor)
-            }
-            ZStack {
-                Circle().fill(category.color.opacity(0.15)).frame(width: 24, height: 24)
-                Image(systemName: category.icon)
-                    .font(.system(size: 10))
-                    .foregroundStyle(category.color)
-            }
-            VStack(alignment: .leading, spacing: 2) {
-                Text(category.displayLabel)
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(AppTheme.textPrimary)
-                    .lineLimit(1)
+        let hue = Color(hex: category.iconBg)
+        HStack(spacing: 10) {
+            Image(systemName: category.icon)
+                .font(.system(.caption, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: 28, height: 28)
+                .background(hue, in: Circle())
+            VStack(alignment: .leading, spacing: 5) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(category.displayLabel)
+                        .font(.system(.footnote, weight: .semibold))
+                        .foregroundStyle(AppTheme.textPrimary)
+                        .lineLimit(1)
+                    Spacer(minLength: 6)
+                    Text(CurrencyManager.shared.formatted(amount, currency: currency))
+                        .font(.system(.footnote, weight: .semibold))
+                        .foregroundStyle(AppTheme.textPrimary)
+                        .lineLimit(1)
+                    Text("\(Int(percentage.rounded()))%")
+                        .font(.system(.caption2, weight: .medium))
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .frame(width: 32, alignment: .trailing)
+                }
                 GeometryReader { g in
                     ZStack(alignment: .leading) {
-                        RoundedRectangle(cornerRadius: 1.5)
-                            .fill(category.color.opacity(0.15))
-                            .frame(height: 3)
-                        RoundedRectangle(cornerRadius: 1.5)
-                            .fill(category.color)
-                            .frame(width: g.size.width * CGFloat(percentage / 100), height: 3)
+                        Capsule().fill(AppTheme.cardMid.opacity(0.8))
+                        Capsule().fill(hue)
+                            .frame(width: max(g.size.width * CGFloat(percentage / 100), 3))
                     }
                 }
-                .frame(height: 3)
-            }
-            VStack(alignment: .trailing, spacing: 1) {
-                Text(CurrencyManager.shared.formatted(amount, currency: currency))
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(AppTheme.textPrimary)
-                    .lineLimit(1)
-                Text(String(format: "%.0f%%", percentage))
-                    .font(.system(size: 9))
-                    .foregroundStyle(AppTheme.textSecondary)
+                .frame(height: 5)
             }
         }
     }
@@ -2643,135 +2568,6 @@ struct ActivityShareSheet: UIViewControllerRepresentable {
     }
     
     func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
-}
-
-// MARK: - Category Donut
-//
-// The hero for the category breakdown: one ring, the total in the middle, and
-// a wrapping pill legend. Replaces a stack of full-width bars that took most of
-// the screen and repeated the same number three ways (bar, %, amount).
-// Selecting a slice swaps the centre to that category, so detail is available
-// without a permanent list competing with the chart.
-struct CategoryDonutChart: View {
-    let categories: [SpendCategory]
-    let total: Double
-    let currency: String
-    @Bindable var statsVM: StatsViewModel
-
-    /// Ordered biggest-first so the ring reads clockwise from the dominant slice.
-    private var ordered: [SpendCategory] { categories.sorted { $0.amount > $1.amount } }
-
-    private var selected: SpendCategory? {
-        guard let i = statsVM.selectedSliceIndex, ordered.indices.contains(i) else { return nil }
-        return ordered[i]
-    }
-
-    /// Start/end fractions for each slice, in draw order.
-    private var slices: [(cat: SpendCategory, start: Double, end: Double)] {
-        guard total > 0 else { return [] }
-        var acc = 0.0
-        return ordered.map { cat in
-            let frac = cat.amount / total
-            let s = acc; acc += frac
-            return (cat, s, acc)
-        }
-    }
-
-    var body: some View {
-        VStack(spacing: 16) {
-            ZStack {
-                ForEach(Array(slices.enumerated()), id: \.element.cat.id) { i, slice in
-                    let isSel = statsVM.selectedSliceIndex == i
-                    let dimmed = statsVM.selectedSliceIndex != nil && !isSel
-                    Circle()
-                        .trim(from: slice.start * statsVM.chartProgress,
-                              to: slice.end * statsVM.chartProgress)
-                        .stroke(slice.cat.color.opacity(dimmed ? 0.25 : 1),
-                                style: StrokeStyle(lineWidth: isSel ? 30 : 24, lineCap: .butt))
-                        .rotationEffect(.degrees(-90))
-                        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: statsVM.selectedSliceIndex)
-                        .onTapGesture {
-                            HapticManager.shared.tap()
-                            statsVM.selectSlice(isSel ? nil : i)
-                        }
-                }
-
-                // Centre reads as the answer to whatever is selected.
-                VStack(spacing: 3) {
-                    Text(selected?.name ?? loc("stats.total"))
-                        .font(.system(size: 11))
-                        .foregroundStyle(AppTheme.textSecondary)
-                        .lineLimit(1).minimumScaleFactor(0.8)
-                    Text(CurrencyManager.shared.formatted(selected?.amount ?? total, currency: currency))
-                        .font(.system(size: 19, weight: .bold))
-                        .foregroundStyle(AppTheme.textPrimary)
-                        .contentTransition(.numericText())
-                        .lineLimit(1).minimumScaleFactor(0.6)
-                    if let sel = selected, total > 0 {
-                        Text(String(format: "%.0f%%", sel.amount / total * 100))
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(sel.color)
-                    }
-                }
-                .padding(.horizontal, 34)
-            }
-            .frame(width: 176, height: 176)
-            .padding(.top, 4)
-
-            // Legend — wraps naturally, no horizontal scroll to discover.
-            FlowLegend(items: Array(ordered.enumerated()), selectedIndex: statsVM.selectedSliceIndex) { i in
-                HapticManager.shared.tap()
-                statsVM.selectSlice(statsVM.selectedSliceIndex == i ? nil : i)
-            }
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 18).padding(.horizontal, 18)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 18))
-    }
-}
-
-/// Wrapping row of legend pills. SwiftUI has no flow layout before iOS 16's
-/// `Layout`, and a horizontal ScrollView hides categories off-screen — so the
-/// rows are chunked by a rough width estimate, which is stable for the short
-/// category names this app uses.
-struct FlowLegend: View {
-    let items: [(offset: Int, element: SpendCategory)]
-    let selectedIndex: Int?
-    let onTap: (Int) -> Void
-
-    /// ~7pt per character plus the dot and padding; 3 per row keeps it tidy at
-    /// every supported width.
-    private var rows: [[(offset: Int, element: SpendCategory)]] {
-        stride(from: 0, to: items.count, by: 3).map {
-            Array(items[$0..<min($0 + 3, items.count)])
-        }
-    }
-
-    var body: some View {
-        VStack(spacing: 8) {
-            ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
-                HStack(spacing: 8) {
-                    ForEach(row, id: \.element.id) { item in
-                        let isSel = selectedIndex == item.offset
-                        Button { onTap(item.offset) } label: {
-                            HStack(spacing: 5) {
-                                Circle().fill(item.element.color).frame(width: 7, height: 7)
-                                Text(item.element.name)
-                                    .font(.system(size: 11, weight: isSel ? .semibold : .regular))
-                                    .foregroundStyle(isSel ? AppTheme.textPrimary : AppTheme.textSecondary)
-                                    .lineLimit(1)
-                            }
-                            .padding(.horizontal, 10).padding(.vertical, 6)
-                            .background(isSel ? item.element.color.opacity(0.14) : Color.clear, in: Capsule())
-                            .overlay(Capsule().stroke(AppTheme.cardMid.opacity(isSel ? 0 : 0.7), lineWidth: 1))
-                        }
-                        .buttonStyle(.plain)
-                    }
-                    Spacer(minLength: 0)
-                }
-            }
-        }
-    }
 }
 
 // MARK: - Trend breakdown
@@ -2809,7 +2605,7 @@ struct CycleTrendBreakdown: View {
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 12) {
                         Text(loc("stats.trend_detail_intro"))
-                            .font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
+                            .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                             .fixedSize(horizontal: false, vertical: true)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.horizontal, 22)
@@ -2820,22 +2616,22 @@ struct CycleTrendBreakdown: View {
                                     VStack(alignment: .leading, spacing: 2) {
                                         HStack(spacing: 6) {
                                             Text(p.label)
-                                                .font(.system(size: 15, weight: .bold))
+                                                .font(.system(.subheadline, weight: .bold))
                                                 .foregroundStyle(AppTheme.textPrimary)
                                             if p.isRunning {
                                                 Text(loc("stats.trend_running"))
-                                                    .font(.system(size: 9, weight: .bold))
+                                                    .font(.system(.caption2, weight: .bold))
                                                     .foregroundStyle(AppTheme.orange)
                                                     .padding(.horizontal, 5).padding(.vertical, 2)
                                                     .background(AppTheme.orange.opacity(0.15), in: Capsule())
                                             }
                                         }
                                         Text(range(p))
-                                            .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                                            .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                                     }
                                     Spacer()
                                     Text((p.net >= 0 ? "+" : "−") + money(abs(p.net)))
-                                        .font(.system(size: 16, weight: .bold))
+                                        .font(.system(.callout, weight: .bold))
                                         .foregroundStyle(p.net >= 0 ? AppTheme.accent : AppTheme.red)
                                 }
                                 Divider().overlay(AppTheme.cardMid)
@@ -2846,12 +2642,12 @@ struct CycleTrendBreakdown: View {
                                     AppTheme.textSecondary)
                             }
                             .padding(14)
-                            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
+                            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
                             .padding(.horizontal, 22)
                         }
 
                         Text(loc("stats.trend_detail_note"))
-                            .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                            .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                             .fixedSize(horizontal: false, vertical: true)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.horizontal, 22).padding(.top, 4)
@@ -2869,9 +2665,9 @@ struct CycleTrendBreakdown: View {
 
     private func row(_ l: String, _ v: String, _ tint: Color) -> some View {
         HStack {
-            Text(l).font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
+            Text(l).font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
             Spacer()
-            Text(v).font(.system(size: 12, weight: .semibold)).foregroundStyle(tint)
+            Text(v).font(.system(.caption, weight: .semibold)).foregroundStyle(tint)
         }
     }
 }

@@ -124,7 +124,22 @@ struct AppNotificationItem: Identifiable, Codable {
         self.route        = route
     }
 
-    var iconColor: Color { Color(hex: iconColorHex) }
+    /// The hex is STORED with each notification (and arrives from the server
+    /// for support replies), so it cannot adapt to the theme by itself. Every
+    /// palette colour a notification has ever been posted with resolves to its
+    /// adaptive token here — old notifications included — and anything else
+    /// is shown as sent.
+    var iconColor: Color {
+        switch iconColorHex.uppercased() {
+        case "#1DB87A", "#1D8637", "#34C759":            return AppTheme.accent
+        case "#E5484D", "#D92D20", "#FF6B6B", "#FF5B5B", "#EF4444": return AppTheme.red
+        case "#FB923C", "#F59E0B":                       return AppTheme.orange
+        case "#38BDF8":                                  return AppTheme.blue
+        case "#A78BFA":                                  return AppTheme.purple
+        case "#8A9693":                                  return AppTheme.textSecondary
+        default:                                         return Color(hex: iconColorHex)
+        }
+    }
 }
 
 // MARK: - Notification Manager
@@ -313,7 +328,7 @@ final class NotificationManager {
         )
 
         NotificationManager.shared.post(AppNotificationItem(
-            icon: "exclamationmark.triangle.fill", iconColorHex: "#FF6B6B",
+            icon: "exclamationmark.triangle.fill", iconColorHex: "#E5484D",
             title: title, body: body, time: loc("notif.time.now"), isUrgent: true,
             advice: advice, route: NotificationRoute.smartBudget.rawValue
         ), pushToDevice: false)
@@ -325,7 +340,7 @@ final class NotificationManager {
     ///     should say what happens and where to act — not just the date.
     func postDebtReminder(name: String, amount: String, dueDay: Int,
                           advice: String? = nil) {
-        post(AppNotificationItem(icon: "creditcard.trianglebadge.exclamationmark", iconColorHex: "#FF6B6B",
+        post(AppNotificationItem(icon: "creditcard.trianglebadge.exclamationmark", iconColorHex: "#E5484D",
             title: loc("notif.debt_due_title"),
             body:  String(format: loc("notif.debt_due_body"), name, amount, dueDay),
             time:  loc("notif.time.upcoming"), isUrgent: true,
@@ -505,13 +520,24 @@ final class NotificationManager {
     @MainActor
     static func scheduleCardExpiryReminders(for cards: [BankCard]) {
         let center = UNUserNotificationCenter.current()
-        // Remove all previous card expiry notifications before rebuilding
+        let current = cards.filter { !$0.isDigitalWallet }.map { "card_expiry_\($0.id.uuidString)" }
+        // Sweep reminders left by cards that no longer exist. This used to
+        // remove EVERY card_expiry_ request, asynchronously — so the sweep could
+        // land after the loop below and delete the reminders it had just made.
         center.getPendingNotificationRequests { requests in
-            let ids = requests.map(\.identifier).filter { $0.hasPrefix("card_expiry_") }
-            center.removePendingNotificationRequests(withIdentifiers: ids)
+            let stale = requests.map(\.identifier).filter { id in
+                id.hasPrefix("card_expiry_") && !current.contains(where: { id.hasPrefix($0) })
+            }
+            center.removePendingNotificationRequests(withIdentifiers: stale)
         }
         for card in cards {
             guard !card.isDigitalWallet else { continue }
+            // A card moving from "soon" to "urgent" swaps its weekly reminder for
+            // a daily one; clear both repeating slots so the old one goes. The
+            // one-off alerts are left alone — cancelling a pending one here
+            // would swallow it, since it is only sent once a day.
+            let base = "card_expiry_\(card.id.uuidString)"
+            center.removePendingNotificationRequests(withIdentifiers: [base + "_daily", base + "_weekly"])
             scheduleExpiryNotificationsForCard(card)
         }
     }
@@ -525,6 +551,16 @@ final class NotificationManager {
         let last4   = card.last4
         let baseID  = "card_expiry_\(card.id.uuidString)"
 
+        // The repeating 9am reminders below are rebuilt on every call (same
+        // identifiers, so they replace). The one-off "right now" push and the
+        // bell row are not — this runs on every launch and every card edit,
+        // and it used to fire both each time. Their de-duplication compared
+        // text, so after a language switch the same alert counted as new and
+        // arrived twice, once per language. Now: once per card, per state, per day.
+        let alertKey = "card_expiry_alerted_\(card.id.uuidString)_\(status)_\(ISO8601DateFormatter.dayString(from: .now))"
+        let alertNow = !UserDefaults.standard.bool(forKey: alertKey)
+        if alertNow { UserDefaults.standard.set(true, forKey: alertKey) }
+
         let content      = UNMutableNotificationContent()
         content.sound    = .dipo
         content.badge    = 1
@@ -534,9 +570,11 @@ final class NotificationManager {
         case .expired:
             content.title = loc("notif.card_expired_push_title")
             content.body  = String(format: loc("notif.card_expired_push_body"), last4)
-            center.add(UNNotificationRequest(identifier: baseID + "_now",
-                content: content,
-                trigger: UNTimeIntervalNotificationTrigger(timeInterval: 5, repeats: false)))
+            if alertNow {
+                center.add(UNNotificationRequest(identifier: baseID + "_now",
+                    content: content,
+                    trigger: UNTimeIntervalNotificationTrigger(timeInterval: 5, repeats: false)))
+            }
             var dc = DateComponents(); dc.hour = 9; dc.minute = 0
             center.add(UNNotificationRequest(identifier: baseID + "_daily",
                 content: content,
@@ -545,9 +583,11 @@ final class NotificationManager {
         case .urgent:
             content.title = String(format: loc("notif.card_urgent_push_title"), days)
             content.body  = String(format: loc("notif.card_urgent_push_body"), last4)
-            center.add(UNNotificationRequest(identifier: baseID + "_urgent",
-                content: content,
-                trigger: UNTimeIntervalNotificationTrigger(timeInterval: 5, repeats: false)))
+            if alertNow {
+                center.add(UNNotificationRequest(identifier: baseID + "_urgent",
+                    content: content,
+                    trigger: UNTimeIntervalNotificationTrigger(timeInterval: 5, repeats: false)))
+            }
             var dc = DateComponents(); dc.hour = 9; dc.minute = 0
             center.add(UNNotificationRequest(identifier: baseID + "_daily",
                 content: content,
@@ -556,9 +596,11 @@ final class NotificationManager {
         case .soon:
             content.title = String(format: loc("notif.card_warning_push_title"), days)
             content.body  = String(format: loc("notif.card_warning_push_body"), last4, card.expireDate)
-            center.add(UNNotificationRequest(identifier: baseID + "_soon",
-                content: content,
-                trigger: UNTimeIntervalNotificationTrigger(timeInterval: 5, repeats: false)))
+            if alertNow {
+                center.add(UNNotificationRequest(identifier: baseID + "_soon",
+                    content: content,
+                    trigger: UNTimeIntervalNotificationTrigger(timeInterval: 5, repeats: false)))
+            }
             var dc = DateComponents(); dc.weekday = 2; dc.hour = 9; dc.minute = 0
             center.add(UNNotificationRequest(identifier: baseID + "_weekly",
                 content: content,
@@ -571,11 +613,11 @@ final class NotificationManager {
         // pushToDevice:false — this card already has its own scheduled
         // device pushes above (the `_now` / `_daily` triggers), so letting
         // post() add another immediate push would double up.
-        if status == .expired || status == .urgent {
+        if alertNow, status == .expired || status == .urgent {
             Task { @MainActor in
                 NotificationManager.shared.post(AppNotificationItem(
                     icon:         status == .expired ? "xmark.circle.fill" : "exclamationmark.triangle.fill",
-                    iconColorHex: "#FF5B5B",
+                    iconColorHex: "#E5484D",
                     title:        status == .expired
                         ? String(format: loc("notif.card_expired_inapp_title"), last4)
                         : String(format: loc("notif.card_expiring_inapp_title"), last4, days),
@@ -821,7 +863,7 @@ final class NotificationManager {
         }()
 
         NotificationManager.shared.post(AppNotificationItem(
-            icon: "exclamationmark.triangle.fill", iconColorHex: "#FF5B5B",
+            icon: "exclamationmark.triangle.fill", iconColorHex: "#E5484D",
             title: loc("notif.overspend.title"),
             body:  String(format: loc("notif.overspend.body"), overBy),
             time:  loc("notif.time.now"), isUrgent: true,
@@ -889,7 +931,7 @@ struct NotificationCenterView: View {
                     if !mgr.items.isEmpty {
                         Button(loc("common.clear")) { mgr.clearAll() }
                             .foregroundStyle(AppTheme.red)
-                            .font(.system(size: 13))
+                            .font(.system(.footnote))
                     }
                 }
             }
@@ -911,7 +953,7 @@ struct NotificationCenterView: View {
             HStack(spacing: 14) {
                 ZStack {
                     Circle().fill(item.iconColor.opacity(0.15)).frame(width: 44, height: 44)
-                    Image(systemName: item.icon).font(.system(size: 20)).foregroundStyle(item.iconColor)
+                    Image(systemName: item.icon).font(.system(.title3)).foregroundStyle(item.iconColor)
                 }
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 6) {
@@ -921,7 +963,7 @@ struct NotificationCenterView: View {
                         // Distinguish support replies at a glance with a small tag.
                         if item.isTicketReply {
                             Text(loc("notif.tag.support"))
-                                .font(.system(size: 9, weight: .bold))
+                                .font(.system(.caption2, weight: .bold))
                                 .tracking(0.4)
                                 .foregroundStyle(item.iconColor)
                                 .padding(.horizontal, 6).padding(.vertical, 2)
@@ -931,14 +973,14 @@ struct NotificationCenterView: View {
                         if !item.isRead {
                             Circle().fill(item.iconColor).frame(width: 8, height: 8)
                         }
-                        Text(item.relativeTime).font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                        Text(item.relativeTime).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                     }
                     // Ticket replies stay concise in the list (one truncated
                     // line) — the full reply is shown when the row is tapped
                     // (detail view) and lives in the support ticket thread.
                     // Other notifications keep their full body.
                     Text(item.body)
-                        .font(.system(size: 13))
+                        .font(.system(.footnote))
                         .foregroundStyle(AppTheme.textSecondary)
                         .lineSpacing(2)
                         .lineLimit(item.isTicketReply ? 1 : nil)
@@ -951,11 +993,11 @@ struct NotificationCenterView: View {
                     case .success(let image):
                         image.resizable().scaledToFill()
                             .frame(maxWidth: .infinity).frame(height: 160)
-                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                            .clipShape(RoundedRectangle(cornerRadius: AppRadius.sm))
                     case .failure:
                         EmptyView()
                     default:
-                        RoundedRectangle(cornerRadius: 10)
+                        RoundedRectangle(cornerRadius: AppRadius.sm)
                             .fill(AppTheme.cardDark)
                             .frame(maxWidth: .infinity).frame(height: 160)
                             .overlay(ProgressView())
@@ -967,8 +1009,8 @@ struct NotificationCenterView: View {
         .padding(14)
         .background(
             item.isUrgent && !item.isRead ? item.iconColor.opacity(0.06) : AppTheme.cardDark,
-            in: RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16)
+            in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.md)
             .stroke(item.isUrgent && !item.isRead ? item.iconColor.opacity(0.2) : Color.clear, lineWidth: 1))
     }
 
@@ -976,9 +1018,9 @@ struct NotificationCenterView: View {
         VStack(spacing: 14) {
             Image(systemName: "bell.slash").font(.system(size: 40)).foregroundStyle(AppTheme.textSecondary)
                 .gentleFloat()
-            Text(loc("notif.empty")).font(.system(size: 16, weight: .medium)).foregroundStyle(AppTheme.textSecondary)
+            Text(loc("notif.empty")).font(.system(.callout, weight: .medium)).foregroundStyle(AppTheme.textSecondary)
             Text(loc("notif.info"))
-                .font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary.opacity(0.7))
+                .font(.system(.footnote)).foregroundStyle(AppTheme.textSecondary.opacity(0.7))
                 .multilineTextAlignment(.center)
         }
     }
@@ -1027,16 +1069,16 @@ struct NotificationDetailView: View {
                                     .fill(item.iconColor.opacity(0.15))
                                     .frame(width: 54, height: 54)
                                 Image(systemName: item.icon)
-                                    .font(.system(size: 24))
+                                    .font(.system(.title2))
                                     .foregroundStyle(item.iconColor)
                             }
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(item.title)
-                                    .font(.system(size: 20, weight: .bold))
+                                    .font(.system(.title3, weight: .bold))
                                     .foregroundStyle(AppTheme.textPrimary)
                                     .fixedSize(horizontal: false, vertical: true)
                                 Text(item.relativeTime)
-                                    .font(.system(size: 12))
+                                    .font(.system(.caption))
                                     .foregroundStyle(AppTheme.textSecondary)
                             }
                             Spacer(minLength: 0)
@@ -1048,24 +1090,24 @@ struct NotificationDetailView: View {
                                 switch phase {
                                 case .success(let image):
                                     image.resizable().scaledToFit()
-                                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                                        .clipShape(RoundedRectangle(cornerRadius: AppRadius.md))
                                 case .failure:
                                     // Broken URL / offline — show a tappable
                                     // retry-ish placeholder instead of a blank.
-                                    RoundedRectangle(cornerRadius: 14)
+                                    RoundedRectangle(cornerRadius: AppRadius.md)
                                         .fill(AppTheme.cardDark)
                                         .frame(height: 180)
                                         .overlay(
                                             VStack(spacing: 6) {
                                                 Image(systemName: "photo")
-                                                    .font(.system(size: 26))
+                                                    .font(.system(.title))
                                                 Text(loc("notif.image_failed"))
-                                                    .font(.system(size: 12))
+                                                    .font(.system(.caption))
                                             }
                                             .foregroundStyle(AppTheme.textSecondary)
                                         )
                                 default:
-                                    RoundedRectangle(cornerRadius: 14)
+                                    RoundedRectangle(cornerRadius: AppRadius.md)
                                         .fill(AppTheme.cardDark)
                                         .frame(height: 180)
                                         .overlay(ProgressView())
@@ -1078,7 +1120,7 @@ struct NotificationDetailView: View {
                         // codes / details the admin sends.
                         if !item.body.isEmpty {
                             Text(item.body)
-                                .font(.system(size: 15))
+                                .font(.system(.subheadline))
                                 .foregroundStyle(AppTheme.textPrimary)
                                 .lineSpacing(4)
                                 .fixedSize(horizontal: false, vertical: true)
@@ -1094,14 +1136,14 @@ struct NotificationDetailView: View {
                             VStack(alignment: .leading, spacing: 8) {
                                 HStack(spacing: 7) {
                                     Image(systemName: "lightbulb.fill")
-                                        .font(.system(size: 13))
+                                        .font(.system(.footnote))
                                         .foregroundStyle(AppTheme.orange)
                                     Text(loc("notif.advice_title"))
-                                        .font(.system(size: 13, weight: .semibold))
+                                        .font(.system(.footnote, weight: .semibold))
                                         .foregroundStyle(AppTheme.textPrimary)
                                 }
                                 Text(advice)
-                                    .font(.system(size: 14))
+                                    .font(.system(.subheadline))
                                     .foregroundStyle(AppTheme.textSecondary)
                                     .lineSpacing(3)
                                     .fixedSize(horizontal: false, vertical: true)
@@ -1120,14 +1162,14 @@ struct NotificationDetailView: View {
                                     } label: {
                                         HStack(spacing: 8) {
                                             Text(route.actionLabel)
-                                                .font(.system(size: 14, weight: .semibold))
+                                                .font(.system(.subheadline, weight: .semibold))
                                             Image(systemName: "arrow.right")
-                                                .font(.system(size: 12, weight: .semibold))
+                                                .font(.system(.caption, weight: .semibold))
                                         }
-                                        .foregroundStyle(.white)
+                                        .foregroundStyle(AppTheme.onVividFill)
                                         .frame(maxWidth: .infinity)
                                         .padding(.vertical, 13)
-                                        .background(AppTheme.purple, in: Capsule())
+                                        .background(AppTheme.purple, in: RoundedRectangle(cornerRadius: AppRadius.lg))
                                     }
                                     .buttonStyle(ScaleButtonStyle())
                                     .padding(.top, 4)
@@ -1136,7 +1178,7 @@ struct NotificationDetailView: View {
                             .padding(14)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .background(AppTheme.orange.opacity(0.08),
-                                        in: RoundedRectangle(cornerRadius: 16))
+                                        in: RoundedRectangle(cornerRadius: AppRadius.md))
                         }
 
                         // "Learn more" link button — only when a valid URL
@@ -1148,12 +1190,12 @@ struct NotificationDetailView: View {
                             } label: {
                                 HStack(spacing: 8) {
                                     Image(systemName: item.isTicketReply ? "bubble.left.and.bubble.right.fill" : "safari.fill")
-                                        .font(.system(size: 15))
+                                        .font(.system(.subheadline))
                                     Text(item.isTicketReply ? loc("notif.view_ticket") : loc("notif.learn_more"))
-                                        .font(.system(size: 15, weight: .semibold))
+                                        .font(.system(.subheadline, weight: .semibold))
                                     Spacer()
                                     Image(systemName: "arrow.up.right")
-                                        .font(.system(size: 13, weight: .semibold))
+                                        .font(.system(.footnote, weight: .semibold))
                                 }
                                 .foregroundStyle(.white)
                                 .padding(.vertical, 15)
@@ -1163,7 +1205,7 @@ struct NotificationDetailView: View {
                                         colors: [item.iconColor, item.iconColor.opacity(0.78)],
                                         startPoint: .leading, endPoint: .trailing
                                     ),
-                                    in: RoundedRectangle(cornerRadius: 14)
+                                    in: RoundedRectangle(cornerRadius: AppRadius.md)
                                 )
                             }
                             .buttonStyle(ScaleButtonStyle())

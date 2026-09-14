@@ -26,6 +26,7 @@ struct DebtView: View {
     @State private var logSpendCard: BankCard? = nil
     @State private var payingCard: BankCard? = nil
     @State private var deletingCard: BankCard? = nil
+    @State private var payingDebt: DebtRecord? = nil
     @Query private var installments: [CardInstallment]
     @Query private var recurrings: [RecurringExpense]
     @Query private var budgetConfigs: [CardBudgetConfig]
@@ -234,146 +235,91 @@ struct DebtView: View {
         }
     }
 
+    private var activeDebts: [DebtRecord] { debts.filter(\.isActive) }
+
+    /// When the last active debt is paid off at its minimum — nil when any of
+    /// them never would be (a payment below its interest).
+    private var debtFreeDate: Date? {
+        let dates = activeDebts.compactMap(\.payoffDate)
+        guard !dates.isEmpty, dates.count == activeDebts.count else { return nil }
+        return dates.max()
+    }
+
+    // The screen reads top to bottom as: how much do I owe and is it OK, what
+    // is due now, each debt, which to pay first, and where the salary goes.
+    // It opened on a score out of 100, a four-way allocation, a warning, an
+    // urgent list and then the debts — five verdicts before the thing itself.
     private var debtContent: some View {
         ZStack { AppTheme.bg.ignoresSafeArea()
             ScrollView(showsIndicators: false) {
-                VStack(spacing: 0) {
-                    // Header
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(loc("debt.title_full")).font(.system(size: 24, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
-                            Text(loc("debt.smart_sub")).font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
-                        }
-                        Spacer()
-                        // Simulator button — hidden when embedded, where the
-                        // hub already offers a Simulate tab. Two controls a
-                        // thumb apart both labelled "simulate", doing different
-                        // things, is worse than either alone.
-                        if !debts.isEmpty && !embedded {
-                            Button {
-                                HapticManager.shared.tap()
-                                simulatorDebt = debts.filter { $0.isActive }.first
-                            } label: {
-                                HStack(spacing: 5) {
-                                    Image(systemName: "chart.line.uptrend.xyaxis")
-                                        .font(.system(size: 13, weight: .semibold))
-                                    Text(loc("debt.simulate"))
-                                        .font(.system(size: 13, weight: .semibold))
-                                }
-                                .foregroundStyle(AppTheme.accent)
-                                .padding(.horizontal, 12).padding(.vertical, 8)
-                                .background(AppTheme.accent.opacity(0.12), in: Capsule())
-                            }
-                            .buttonStyle(ScaleButtonStyle())
-                        }
-                        Button { HapticManager.shared.tap(); vm.resetForm(); vm.showAddSheet = true } label: {
-                            ZStack {
-                                Circle().fill(AppTheme.red.opacity(0.9)).frame(width: 42, height: 42)
-                                    .shadow(color: AppTheme.red.opacity(0.4), radius: 10, y: 4)
-                                Image(systemName: "plus").font(.system(size: 18, weight: .semibold)).foregroundStyle(.white)
-                            }
-                        }.buttonStyle(ScaleButtonStyle())
-                    }
-                    .padding(.horizontal, 22).padding(.top, 20)
-                    .opacity(appeared ? 1 : 0)
-
+                VStack(alignment: .leading, spacing: 18) {
                     if debts.isEmpty {
-                        DebtEmptyState(vm: vm).padding(.top, 50).opacity(appeared ? 1 : 0)
+                        DebtEmptyState(vm: vm)
+                            .frame(maxWidth: .infinity)
+                            .padding(.top, 30)
                     } else {
-                        VStack(spacing: 16) {
-                            // Financial Health Score
-                            HealthScoreCard(engine: engine, monthlyIncome: monthlyIncome)
-                                .padding(.horizontal, 22).padding(.top, 20)
-                                .opacity(appeared ? 1 : 0)
-                                .offset(y: appeared ? 0 : 20)
-                                .animation(AppMotion.appear, value: appeared)
+                        DebtSummaryCard(engine: engine,
+                                        monthlyIncome: monthlyIncome,
+                                        debtFreeDate: debtFreeDate,
+                                        showSimulator: !embedded && !activeDebts.isEmpty,
+                                        onAdd: { HapticManager.shared.tap(); vm.resetForm(); vm.showAddSheet = true },
+                                        onSimulate: { HapticManager.shared.tap(); simulatorDebt = activeDebts.first })
 
-                            // Smart allocation — needs income. When no salary/
-                            // income exists this month, the debt allocation &
-                            // health-ratio math can't run, so prompt the user to
-                            // set up their salary instead of silently hiding it.
-                            if monthlyIncome > 0 {
-                                AllocationCard(engine: engine, monthlyIncome: monthlyIncome, totalBalance: totalBalance)
-                                    .padding(.horizontal, 22)
-                                    .opacity(appeared ? 1 : 0)
-                                    .offset(y: appeared ? 0 : 20)
-                                    .animation(AppMotion.appear, value: appeared)
-                            } else {
-                                SalarySetupCTA(message: loc("salary.cta.debt")) {
-                                    showSalarySetup = true
+                        if engine.isOverspending {
+                            InlineBanner(tone: .warning,
+                                         message: String(format: loc("debt.reduce_expenses"),
+                                                         CurrencyManager.shared.formatted(engine.overspendAmount,
+                                                                                          currency: CurrencyManager.shared.preferredCurrency)))
+                        }
+
+                        if !engine.urgentDebts.isEmpty {
+                            DueSoonCard(debts: engine.urgentDebts) { payingDebt = $0 }
+                        }
+
+                        VStack(alignment: .leading, spacing: 12) {
+                            HStack(alignment: .firstTextBaseline) {
+                                Text(loc("debt.your_debts"))
+                                    .font(.system(.body, weight: .bold))
+                                    .foregroundStyle(AppTheme.textPrimary)
+                                Spacer()
+                                Text(String(format: loc("debt.active_count"), activeDebts.count))
+                                    .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
+                            }
+                            ForEach(Array(engine.avalancheOrder.prefix(debtPreviewLimit).enumerated()), id: \.element.id) { i, debt in
+                                DebtCard(debt: debt, priority: i + 1,
+                                         payFirst: i == 0 && activeDebts.count > 1, vm: vm)
+                            }
+                            if engine.avalancheOrder.count > debtPreviewLimit {
+                                Button { HapticManager.shared.tap(); showAllDebts = true } label: {
+                                    SeeAllLabel(count: engine.avalancheOrder.count)
                                 }
-                                .padding(.horizontal, 22)
-                                .opacity(appeared ? 1 : 0)
-                                .offset(y: appeared ? 0 : 20)
-                                .animation(AppMotion.appear, value: appeared)
+                                .buttonStyle(ScaleButtonStyle())
                             }
+                        }
 
-                            // Overspending warning
-                            if engine.isOverspending {
-                                OverspendingWarning(engine: engine)
-                                    .padding(.horizontal, 22)
-                                    .transition(.move(edge: .top).combined(with: .opacity))
-                            }
+                        if activeDebts.count > 1 {
+                            PayoffStrategyCard(engine: engine)
+                        }
 
-                            // Urgent payments
-                            if !engine.urgentDebts.isEmpty {
-                                UrgentPaymentsCard(debts: engine.urgentDebts)
-                                    .padding(.horizontal, 22)
-                                    .opacity(appeared ? 1 : 0)
-                                    .animation(AppMotion.appear, value: appeared)
-                            }
-
-                            // Debt list
-                            VStack(spacing: 12) {
-                                HStack {
-                                    Text(loc("debt.your_debts")).font(.system(size: 17, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
-                                    Spacer()
-                                    Text(String(format: loc("debt.active_count"), debts.filter { $0.isActive }.count))
-                                        .font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
-                                }
-                                .padding(.horizontal, 22)
-
-                                // Overview shows at most `debtPreviewLimit` cards;
-                                // the rest live on a dedicated full-list page.
-                                ForEach(Array(engine.avalancheOrder.prefix(debtPreviewLimit).enumerated()), id: \.element.id) { i, debt in
-                                    DebtCard(debt: debt, priority: i + 1, vm: vm)
-                                        .padding(.horizontal, 22)
-                                        .opacity(appeared ? 1 : 0)
-                                        .offset(y: appeared ? 0 : 24)
-                                        .animation(.spring(response: 0.55, dampingFraction: 0.8).delay(0.22 + Double(i) * 0.06), value: appeared)
-                                }
-                                if engine.avalancheOrder.count > debtPreviewLimit {
-                                    Button { HapticManager.shared.tap(); showAllDebts = true } label: {
-                                        SeeAllLabel(count: engine.avalancheOrder.count)
-                                    }
-                                    .buttonStyle(ScaleButtonStyle())
-                                    .padding(.horizontal, 22)
-                                    .opacity(appeared ? 1 : 0)
-                                    .animation(.spring(response: 0.55, dampingFraction: 0.8).delay(0.22 + Double(debtPreviewLimit) * 0.06), value: appeared)
-                                }
-                            }
-
-                            // Payoff Strategy
-                            if debts.filter({ $0.isActive }).count > 1 {
-                                PayoffStrategyCard(engine: engine)
-                                    .padding(.horizontal, 22)
-                                    .opacity(appeared ? 1 : 0)
-                                    .animation(AppMotion.appear, value: appeared)
-                            }
+                        // Everything below needs an income to be measured against.
+                        if monthlyIncome > 0 {
+                            AllocationCard(engine: engine, monthlyIncome: monthlyIncome, totalBalance: totalBalance)
+                        } else if !activeDebts.isEmpty {
+                            SalarySetupCTA(message: loc("salary.cta.debt")) { showSalarySetup = true }
                         }
                     }
 
-                    // ── Credit Cards (liability accounts) ──────────────────
-                    // Shown regardless of whether there are debts — a user may
-                    // track only a credit card. This is the single door to
-                    // create one.
+                    // Credit cards show regardless — someone may track only a card.
                     creditCardSection
-                        .padding(.top, 24)
-                        .opacity(appeared ? 1 : 0)
-                        .animation(AppMotion.appear, value: appeared)
+                        .padding(.top, 6)
 
                     Spacer(minLength: 120)
                 }
+                .padding(.horizontal, 22)
+                .padding(.top, embedded ? 4 : 20)
+                .opacity(appeared ? 1 : 0)
+                .offset(y: appeared ? 0 : 16)
+                .animation(AppMotion.appear, value: appeared)
             }
         }
         .onAppear {
@@ -400,6 +346,13 @@ struct DebtView: View {
                 .presentationDetents([.large]).presentationDragIndicator(.visible)
                 .presentationBackground(AppTheme.bg)
         }
+        .sheet(item: $payingDebt) { debt in
+            DebtPaymentSheet(debt: debt)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+                .presentationBackground(AppTheme.bg)
+                .preferredColorScheme(appColorScheme())
+        }
         .sheet(item: $simulatorDebt) { debt in
             PayoffSimulatorSheet(debt: debt, allDebts: debts.filter { $0.isActive }, income: monthlyIncome)
                 .presentationDetents([.large])
@@ -408,6 +361,7 @@ struct DebtView: View {
         }
         .sheet(isPresented: $showSalarySetup) {
             SalaryView()
+                .environment(\.pushedFeature, false)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
                 .presentationBackground(AppTheme.bg)
@@ -435,23 +389,16 @@ struct DebtView: View {
                 .presentationDetents([.large]).presentationDragIndicator(.visible)
                 .presentationBackground(AppTheme.bg).preferredColorScheme(appColorScheme())
         }
-        .alert(loc("cc.delete_title"), isPresented: Binding(
-            get: { deletingCard != nil },
-            set: { if !$0 { deletingCard = nil } })) {
-            Button(loc("common.cancel"), role: .cancel) { deletingCard = nil }
-            Button(loc("action.delete"), role: .destructive) {
-                if let c = deletingCard {
-                    // Installments belong to the card; orphaning them would
-                    // leave phantom principal locking a limit that no longer
-                    // exists.
-                    for inst in installments where inst.cardID == c.id { context.delete(inst) }
-                    context.delete(c)
-                    try? context.save()
-                }
-                deletingCard = nil
-            }
-        } message: {
-            Text(loc("cc.delete_msg"))
+        .confirmSheet(item: $deletingCard,
+                      icon: "creditcard.fill",
+                      title: { _ in loc("cc.delete_title") },
+                      message: { _ in loc("cc.delete_msg") },
+                      confirmLabel: loc("action.delete")) { c in
+            // Installments belong to the card; orphaning them would leave
+            // phantom principal locking a limit that no longer exists.
+            for inst in installments where inst.cardID == c.id { context.delete(inst) }
+            context.delete(c)
+            try? context.save()
         }
         .sheet(item: $logSpendCard) { card in
             // Cross-link: log a purchase with this credit card pre-selected.
@@ -473,24 +420,23 @@ struct DebtView: View {
     @ViewBuilder private var creditCardSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text(loc("cc.section_title")).font(.system(size: 17, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                Text(loc("cc.section_title")).font(.system(.body, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
                 Spacer()
                 Button { HapticManager.shared.tap(); showAddCreditCard = true } label: {
                     HStack(spacing: 5) {
-                        Image(systemName: "plus").font(.system(size: 12, weight: .bold))
-                        Text(loc("cc.add")).font(.system(size: 13, weight: .semibold))
+                        Image(systemName: "plus").font(.system(.caption, weight: .bold))
+                        Text(loc("cc.add")).font(.system(.footnote, weight: .semibold))
                     }
-                    .foregroundStyle(AppTheme.purple)
+                    .foregroundStyle(AppTheme.textPrimary)
                     .padding(.horizontal, 12).padding(.vertical, 7)
-                    .background(AppTheme.purple.opacity(0.12), in: Capsule())
+                    .background(AppTheme.cardDark, in: Capsule())
                 }.buttonStyle(ScaleButtonStyle())
             }
-            .padding(.horizontal, 22)
 
             if creditCards.isEmpty {
                 Text(loc("cc.section_empty"))
-                    .font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
-                    .padding(.horizontal, 22)
+                    .font(.system(.footnote)).foregroundStyle(AppTheme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
             } else {
                 ForEach(creditCards) { card in
                     VStack(spacing: 10) {
@@ -502,7 +448,6 @@ struct DebtView: View {
                                                onDelete: { deletingCard = card })
                         InstallmentSection(card: card, installments: installments, context: context)
                     }
-                    .padding(.horizontal, 22)
                 }
             }
         }
@@ -556,15 +501,15 @@ struct SalarySetupCTA: View {
             ZStack {
                 Circle().fill(AppTheme.accent.opacity(0.12)).frame(width: 56, height: 56)
                 Image(systemName: "banknote.fill")
-                    .font(.system(size: 24))
+                    .font(.system(.title2))
                     .foregroundStyle(AppTheme.accent)
             }
             VStack(spacing: 6) {
                 Text(loc("salary.cta.title"))
-                    .font(.system(size: 16, weight: .bold))
+                    .font(.system(.callout, weight: .bold))
                     .foregroundStyle(AppTheme.textPrimary)
                 Text(message)
-                    .font(.system(size: 13))
+                    .font(.system(.footnote))
                     .foregroundStyle(AppTheme.textSecondary)
                     .multilineTextAlignment(.center)
                     .lineSpacing(2)
@@ -574,92 +519,189 @@ struct SalarySetupCTA: View {
                 action()
             } label: {
                 HStack(spacing: 8) {
-                    Image(systemName: "plus.circle.fill").font(.system(size: 15))
-                    Text(loc("salary.cta.button")).font(.system(size: 15, weight: .bold))
+                    Image(systemName: "plus.circle.fill").font(.system(.subheadline))
+                    Text(loc("salary.cta.button")).font(.system(.subheadline, weight: .bold))
                 }
-                .foregroundStyle(AppTheme.onAccentFill)
+                .foregroundStyle(AppTheme.onVividFill)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 14)
-                .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: 14))
+                .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: AppRadius.md))
             }
             .buttonStyle(ScaleButtonStyle())
         }
         .padding(20)
         .frame(maxWidth: .infinity)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 20))
-        .overlay(RoundedRectangle(cornerRadius: 20).stroke(AppTheme.accent.opacity(0.2), lineWidth: 1))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.lg).stroke(AppTheme.accent.opacity(0.2), lineWidth: 1))
     }
 }
 
-// MARK: - Health Score Card
+// MARK: - Summary
 
-struct HealthScoreCard: View {
+/// What you owe, what it costs a month, when it ends, and one verdict with one
+/// piece of advice. Replaces a score out of 100, which asked the user to learn
+/// a scale before it told them anything.
+struct DebtSummaryCard: View {
     let engine: FinancialHealthEngine
     let monthlyIncome: Double
-    @State private var animScore = 0
+    let debtFreeDate: Date?
+    var showSimulator: Bool
+    let onAdd: () -> Void
+    let onSimulate: () -> Void
+
+    private func money(_ v: Double) -> String {
+        CurrencyManager.shared.formatted(v, currency: CurrencyManager.shared.preferredCurrency)
+    }
+
+    private var verdict: String {
+        monthlyIncome > 0
+            ? String(format: loc("debt.verdict_dti"), engine.healthLabel,
+                     String(format: "%.0f", engine.dtiRatio))
+            : engine.healthLabel
+    }
 
     var body: some View {
-        VStack(spacing: 16) {
-            HStack(alignment: .center, spacing: 16) {
-                // Score circle
-                ZStack {
-                    Circle().stroke(AppTheme.cardMid, lineWidth: 8).frame(width: 80, height: 80)
-                    Circle()
-                        .trim(from: 0, to: CGFloat(animScore) / 100)
-                        .stroke(engine.healthColor, style: StrokeStyle(lineWidth: 8, lineCap: .round))
-                        .frame(width: 80, height: 80)
-                        .rotationEffect(.degrees(-90))
-                        .animation(.spring(response: 1.2, dampingFraction: 0.8), value: animScore)
-                    VStack(spacing: 0) {
-                        Text("\(animScore)").font(.system(size: 22, weight: .bold)).foregroundStyle(engine.healthColor)
-                        Text("/ 100").font(.system(size: 9)).foregroundStyle(AppTheme.textSecondary)
-                    }
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(loc("debt.total_title"))
+                        .font(.system(.subheadline, weight: .semibold))
+                        .foregroundStyle(AppTheme.textSecondary)
+                    Text(money(engine.totalDebt))
+                        .font(.system(size: 34, weight: .bold, design: .rounded))
+                        .foregroundStyle(AppTheme.textPrimary)
+                        .lineLimit(1).minimumScaleFactor(0.55)
+                        .contentTransition(.numericText())
                 }
-
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack(spacing: 8) {
-                        Image(systemName: engine.healthIcon).font(.system(size: 16)).foregroundStyle(engine.healthColor)
-                        Text(loc("debt.health")).font(.system(size: 14, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
-                    }
-                    Text(engine.healthLabel)
-                        .font(.system(size: 20, weight: .bold)).foregroundStyle(engine.healthColor)
-                    if monthlyIncome <= 0 {
-                        HStack(spacing: 4) {
-                            Image(systemName: "exclamationmark.circle")
-                                .font(.system(size: 10))
-                            Text(loc("debt.health_sub"))
-                                .font(.system(size: 10))
-                        }
-                        .foregroundStyle(AppTheme.orange)
-                    } else {
-                        Text(String(format: loc("debt.dti_label"), String(format: "%.1f", engine.dtiRatio)))
-                            .font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
-                    }
+                Spacer(minLength: 8)
+                Button(action: onAdd) {
+                    Image(systemName: "plus")
+                        .font(.system(.body, weight: .bold))
+                        .foregroundStyle(AppTheme.onVividFill)
+                        .frame(width: 44, height: 44)
+                        .background(AppTheme.accentFill, in: Circle())
                 }
-                Spacer()
+                .accessibilityLabel(loc("a11y.add_debt"))
+                .buttonStyle(ScaleButtonStyle())
             }
 
-            // Advice
             HStack(spacing: 10) {
-                Image(systemName: "lightbulb.fill").font(.system(size: 14)).foregroundStyle(AppTheme.orange)
-                Text(engine.primaryAdvice).font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary).lineSpacing(2)
+                fact("calendar", loc("debt.monthly_payments_label"), money(engine.totalEffectiveMinimums))
+                if let date = debtFreeDate {
+                    fact("flag.checkered", loc("debt.free_label"),
+                         date.formatted(.dateTime.month(.abbreviated).year()))
+                }
+            }
+
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: engine.healthIcon)
+                    .font(.system(.subheadline, weight: .semibold))
+                    .foregroundStyle(engine.healthColor)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(verdict)
+                        .font(.system(.subheadline, weight: .semibold))
+                        .foregroundStyle(AppTheme.textPrimary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text(monthlyIncome > 0 ? engine.primaryAdvice : loc("debt.health_sub"))
+                        .font(.system(.caption))
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 0)
             }
             .padding(12)
-            .background(AppTheme.orange.opacity(0.07), in: RoundedRectangle(cornerRadius: 12))
-            .overlay(RoundedRectangle(cornerRadius: 12).stroke(AppTheme.orange.opacity(0.2), lineWidth: 1))
+            .background(engine.healthColor.opacity(0.10), in: RoundedRectangle(cornerRadius: AppRadius.md))
+
+            if showSimulator {
+                Button(action: onSimulate) {
+                    Label(loc("debt.simulate"), systemImage: "chart.line.uptrend.xyaxis")
+                        .font(.system(.footnote, weight: .semibold))
+                        .foregroundStyle(AppTheme.textPrimary)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 11)
+                        .background(AppTheme.cardMid.opacity(0.7), in: RoundedRectangle(cornerRadius: AppRadius.md))
+                }
+                .buttonStyle(ScaleButtonStyle())
+            }
         }
         .padding(18)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 20))
-        .overlay(RoundedRectangle(cornerRadius: 20).stroke(engine.healthColor.opacity(0.2), lineWidth: 1))
-        .onAppear {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-                animScore = engine.healthScore
-            }
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.xl))
+    }
+
+    private func fact(_ icon: String, _ title: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Label(title, systemImage: icon)
+                .font(.system(.caption))
+                .foregroundStyle(AppTheme.textSecondary)
+                .lineLimit(1)
+            Text(value)
+                .font(.system(.subheadline, weight: .semibold))
+                .foregroundStyle(AppTheme.textPrimary)
+                .lineLimit(1).minimumScaleFactor(0.8)
         }
-        .onChange(of: engine.healthScore) { _, newScore in
-            withAnimation(.spring(response: 0.8, dampingFraction: 0.8)) {
-                animScore = newScore
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(12)
+        .background(AppTheme.cardMid.opacity(0.5), in: RoundedRectangle(cornerRadius: AppRadius.md))
+    }
+}
+
+// MARK: - Due soon
+
+/// Payments falling within a few days, each with its own Pay button — the list
+/// only said what was due and left the user to find the debt to pay it.
+struct DueSoonCard: View {
+    let debts: [DebtRecord]
+    let onPay: (DebtRecord) -> Void
+
+    private func dueText(_ debt: DebtRecord) -> (String, Bool) {
+        let today = Calendar.current.component(.day, from: .now)
+        let diff = debt.dueDayOfMonth - today
+        if diff == 0 { return (loc("debt.due_today"), true) }
+        if diff > 0 { return (String(format: loc("debt.due_in_days"), diff), diff <= 1) }
+        return (String(format: loc("debt.overdue_days"), -diff), true)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(loc("debt.due_soon"))
+                .font(.system(.body, weight: .bold))
+                .foregroundStyle(AppTheme.textPrimary)
+            VStack(spacing: 0) {
+                ForEach(Array(debts.enumerated()), id: \.element.id) { i, debt in
+                    if i > 0 {
+                        Rectangle().fill(AppTheme.cardMid.opacity(0.7)).frame(height: 1).padding(.leading, 66)
+                    }
+                    let due = dueText(debt)
+                    HStack(spacing: 12) {
+                        Image(systemName: debt.debtType.icon)
+                            .font(.system(.subheadline, weight: .semibold))
+                            .foregroundStyle(debt.debtType.color)
+                            .frame(width: 40, height: 40)
+                            .background(debt.debtType.color.opacity(0.14), in: RoundedRectangle(cornerRadius: AppRadius.sm))
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(debt.name)
+                                .font(.system(.subheadline, weight: .semibold))
+                                .foregroundStyle(AppTheme.textPrimary)
+                                .lineLimit(1)
+                            Text(due.0 + " · " + CurrencyManager.shared.formatted(debt.effectiveMinimumPayment, currency: debt.currency))
+                                .font(.system(.caption))
+                                .foregroundStyle(due.1 ? AppTheme.orange : AppTheme.textSecondary)
+                                .lineLimit(1).minimumScaleFactor(0.85)
+                        }
+                        Spacer(minLength: 6)
+                        Button { HapticManager.shared.tap(); onPay(debt) } label: {
+                            Text(loc("debt.pay_short"))
+                                .font(.system(.footnote, weight: .bold))
+                                .foregroundStyle(AppTheme.onVividFill)
+                                .padding(.horizontal, 14).padding(.vertical, 8)
+                                .background(AppTheme.accentFill, in: Capsule())
+                        }
+                        .buttonStyle(ScaleButtonStyle())
+                    }
+                    .padding(.horizontal, 14).padding(.vertical, 12)
+                }
             }
+            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
         }
     }
 }
@@ -680,19 +722,18 @@ struct AllocationCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                Image(systemName: "chart.pie.fill").font(.system(size: 16)).foregroundStyle(AppTheme.accent)
-                Text(loc("salary.allocation")).font(.system(size: 15, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+            HStack(alignment: .firstTextBaseline) {
+                Text(loc("salary.allocation")).font(.system(.body, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
                 Spacer()
-                Text(loc("salary.per_month")).font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                Text(loc("salary.per_month")).font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
             }
             
             // Explainer — clarifies that this allocation is based on monthly
             // salary (not balance), and what the recommended split means.
             Text(loc("salary.allocation.explainer"))
-                .font(.system(size: 11))
+                .font(.system(.caption))
                 .foregroundStyle(AppTheme.textSecondary)
-                .lineSpacing(2)
+                .fixedSize(horizontal: false, vertical: true)
 
             // Three parts, not two. Committed money was previously folded into
             // "safe to spend", which is how a user with Rp 3,7jt of rent and
@@ -728,7 +769,8 @@ struct AllocationCard: View {
             }
             .frame(height: 12)
 
-            HStack(spacing: 12) {
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)],
+                      alignment: .leading, spacing: 12) {
                 if engine.recommendedMonthlyDebtPayment > 0 {
                     AllocationRow(color: AppTheme.red.opacity(0.8),
                                   label: loc("debt.allocation.debt"),
@@ -758,26 +800,26 @@ struct AllocationCard: View {
             // Reframes the allocation in terms users actually relate to.
             if balanceCoversMonths > 0 && totalBalance > 0 {
                 HStack(spacing: 8) {
-                    Image(systemName: "wallet.pass.fill").font(.system(size: 11)).foregroundStyle(AppTheme.accent)
+                    Image(systemName: "wallet.pass.fill").font(.system(.caption2)).foregroundStyle(AppTheme.accent)
                     Text(String(format: loc("debt.balance_coverage"),
                                 CurrencyManager.shared.formatted(totalBalance, currency: CurrencyManager.shared.preferredCurrency),
                                 String(format: "%.1f", balanceCoversMonths)))
-                        .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary).lineSpacing(2)
+                        .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary).lineSpacing(2)
                 }
                 .padding(.top, 2)
             }
 
             if engine.extraPaymentAvailable > 0 {
                 HStack(spacing: 8) {
-                    Image(systemName: "arrow.up.circle.fill").font(.system(size: 12)).foregroundStyle(AppTheme.accent)
+                    Image(systemName: "arrow.up.circle.fill").font(.system(.caption)).foregroundStyle(AppTheme.accent)
                     Text(String(format: loc("debt.extra_recommended"),
                                 CurrencyManager.shared.formatted(engine.extraPaymentAvailable, currency: CurrencyManager.shared.preferredCurrency)))
-                        .font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary).lineSpacing(2)
+                        .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary).lineSpacing(2)
                 }
             }
         }
         .padding(16)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 18))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.xl))
     }
 }
 
@@ -788,69 +830,11 @@ struct AllocationRow: View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 5) {
                 Circle().fill(color).frame(width: 7, height: 7)
-                Text(label).font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                Text(label).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
             }
-            Text("\(String(format: "%.0f", percent))%").font(.system(size: 16, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
-            Text(CurrencyManager.shared.formatted(amount, currency: currency)).font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+            Text("\(String(format: "%.0f", percent))%").font(.system(.callout, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
+            Text(CurrencyManager.shared.formatted(amount, currency: currency)).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
         }
-    }
-}
-
-// MARK: - Overspending Warning
-
-struct OverspendingWarning: View {
-    let engine: FinancialHealthEngine
-    var body: some View {
-        HStack(spacing: 12) {
-            ZStack {
-                Circle().fill(AppTheme.red.opacity(0.15)).frame(width: 44, height: 44)
-                Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 20)).foregroundStyle(AppTheme.red)
-            }
-            VStack(alignment: .leading, spacing: 3) {
-                Text(loc("debt.overspending")).font(.system(size: 14, weight: .bold)).foregroundStyle(AppTheme.red)
-                Text(String(format: loc("debt.reduce_expenses"),
-                            CurrencyManager.shared.formatted(engine.overspendAmount, currency: CurrencyManager.shared.preferredCurrency)))
-                    .font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary).lineSpacing(2)
-            }
-            Spacer()
-        }
-        .padding(14)
-        .background(AppTheme.red.opacity(0.08), in: RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).stroke(AppTheme.red.opacity(0.3), lineWidth: 1))
-    }
-}
-
-// MARK: - Urgent Payments Card
-
-struct UrgentPaymentsCard: View {
-    let debts: [DebtRecord]
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 8) {
-                Image(systemName: "bell.badge.fill").font(.system(size: 14)).foregroundStyle(AppTheme.orange)
-                Text(loc("debt.due_soon")).font(.system(size: 14, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
-            }
-            ForEach(debts) { debt in
-                HStack {
-                    Image(systemName: debt.debtType.icon).font(.system(size: 14)).foregroundStyle(debt.debtType.color)
-                    Text(debt.name).font(.system(size: 13, weight: .medium)).foregroundStyle(AppTheme.textPrimary)
-                    Spacer()
-                    Text(CurrencyManager.shared.formatted(debt.minimumPayment, currency: debt.currency))
-                        .font(.system(size: 13, weight: .bold)).foregroundStyle(AppTheme.orange)
-                    if debt.minimumPayment == 0 {
-                        Text(loc("debt.set_min"))
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundStyle(AppTheme.red)
-                    }
-                    Text(String(format: loc("debt.due_short"), debt.dueDayOfMonth)).font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
-                }
-                .padding(10)
-                .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: 10))
-            }
-        }
-        .padding(14)
-        .background(AppTheme.orange.opacity(0.07), in: RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).stroke(AppTheme.orange.opacity(0.25), lineWidth: 1))
     }
 }
 
@@ -859,6 +843,8 @@ struct UrgentPaymentsCard: View {
 struct DebtCard: View {
     let debt: DebtRecord
     let priority: Int
+    /// First in the payoff order while there is more than one debt.
+    var payFirst: Bool = false
     @Bindable var vm: DebtViewModel
     @Environment(\.modelContext) private var modelContext
     @State private var showActions      = false
@@ -866,127 +852,141 @@ struct DebtCard: View {
     @State private var showPaymentSheet = false
     @State private var animatedProgress: Double = 0
 
+    private func money(_ v: Double) -> String {
+        CurrencyManager.shared.formatted(v, currency: debt.currency)
+    }
+
+    /// One line of plan: the monthly payment, when that ends it, and what the
+    /// interest costs meanwhile. Three separate columns of figures used to say
+    /// this, each with its own label.
+    private var planLine: String {
+        var parts = [String(format: loc(debt.isMinimumDerived ? "debt.suggested_line" : "debt.min_line"),
+                            money(debt.effectiveMinimumPayment))]
+        if let date = debt.payoffDate {
+            parts.append(String(format: loc("debt.free_around"),
+                                date.formatted(.dateTime.month(.abbreviated).year())))
+        }
+        if debt.monthlyInterestCost > 0.5 {
+            parts.append(String(format: loc("debt.interest_line"), money(debt.monthlyInterestCost)))
+        }
+        return parts.joined(separator: " · ")
+    }
+
     var body: some View {
-        VStack(spacing: 0) {
-            VStack(spacing: 12) {
-                HStack(alignment: .top) {
-                    // Priority badge + icon
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(debt.debtType.color.opacity(0.15))
-                            .frame(width: 44, height: 44)
-                        Image(systemName: debt.debtType.icon)
-                            .font(.system(size: 20)).foregroundStyle(debt.debtType.color)
-                    }
-                    VStack(alignment: .leading, spacing: 3) {
-                        HStack(spacing: 6) {
-                            Text(debt.name).font(.system(size: 15, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
-                            Text(debt.debtType.label).font(.system(size: 10, weight: .semibold))
-                                .foregroundStyle(debt.debtType.color)
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: debt.debtType.icon)
+                    .font(.system(.title3))
+                    .foregroundStyle(debt.debtType.color)
+                    .frame(width: 44, height: 44)
+                    .background(debt.debtType.color.opacity(0.14), in: RoundedRectangle(cornerRadius: AppRadius.sm))
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(spacing: 6) {
+                        Text(debt.name)
+                            .font(.system(.body, weight: .bold))
+                            .foregroundStyle(AppTheme.textPrimary)
+                            .lineLimit(1)
+                        if payFirst {
+                            Text(loc("debt.pay_first"))
+                                .font(.system(.caption2, weight: .bold))
+                                .foregroundStyle(AppTheme.orange)
                                 .padding(.horizontal, 7).padding(.vertical, 2)
-                                .background(debt.debtType.color.opacity(0.12), in: Capsule())
-                        }
-                        Text(String(format: loc("debt.apr_due"),
-                                    String(format: "%.1f", debt.annualInterestRate),
-                                    debt.dueDayOfMonth))
-                            .font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
-                    }
-                    Spacer()
-                    // Priority tag
-                    Text("#\(priority)").font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(priority == 1 ? AppTheme.red : AppTheme.textSecondary)
-                        .padding(.horizontal, 8).padding(.vertical, 4)
-                        .background(priority == 1 ? AppTheme.red.opacity(0.12) : AppTheme.cardMid, in: Capsule())
-                    Button { HapticManager.shared.tap(); showActions = true } label: {
-                        Image(systemName: "ellipsis").font(.system(size: 15))
-                            .foregroundStyle(AppTheme.textSecondary).frame(width: 36, height: 36)
-                            .background(AppTheme.cardMid, in: Circle())
-                    }.buttonStyle(ScaleButtonStyle())
-                }
-
-                // Balance info
-                HStack {
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(loc("debt.remaining")).font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
-                        Text(CurrencyManager.shared.formatted(debt.currentBalance, currency: debt.currency))
-                            .font(.system(size: 22, weight: .bold)).foregroundStyle(AppTheme.red)
-                            .contentTransition(.numericText())
-                    }
-                    Spacer()
-                    VStack(alignment: .trailing, spacing: 3) {
-                        // Show the effective (planning) minimum so a debt with no
-                        // user-set minimum reads a real, actionable figure instead
-                        // of a confusing "Rp 0". Labelled "Suggested" when derived
-                        // so we never misrepresent it as a lender requirement.
-                        Text(debt.isMinimumDerived ? loc("debt.suggested_payment") : loc("debt.min_payment"))
-                            .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
-                        Text(CurrencyManager.shared.formatted(debt.effectiveMinimumPayment, currency: debt.currency))
-                            .font(.system(size: 16, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
-                    }
-                    Spacer()
-                    VStack(alignment: .trailing, spacing: 3) {
-                        Text(loc("debt.monthly_int")).font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
-                        Text(CurrencyManager.shared.formatted(debt.monthlyInterestCost, currency: debt.currency))
-                            .font(.system(size: 16, weight: .bold)).foregroundStyle(AppTheme.orange)
-                    }
-                }
-
-                // Progress bar
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack {
-                        Text(String(format: loc("debt.paid_off"), String(format: "%.1f", debt.percentagePaid)))
-                            .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
-                        Spacer()
-                        if let months = debt.monthsToPayoffMinimum {
-                            Text(String(format: loc("debt.months_to_payoff"), months))
-                                .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                                .background(AppTheme.orange.opacity(0.14), in: Capsule())
+                                .lineLimit(1)
                         }
                     }
-                    GeometryReader { g in
-                        ZStack(alignment: .leading) {
-                            RoundedRectangle(cornerRadius: 4).fill(AppTheme.cardMid).frame(height: 6)
-                            RoundedRectangle(cornerRadius: 4)
-                                .fill(LinearGradient(colors: [debt.debtType.color, debt.debtType.color.opacity(0.5)],
-                                                     startPoint: .leading, endPoint: .trailing))
-                                .frame(width: g.size.width * CGFloat(animatedProgress / 100), height: 6)
-                        }
-                    }.frame(height: 6)
+                    Text(debt.debtType.label + " · " + String(format: loc("debt.due_short"), debt.dueDayOfMonth))
+                        .font(.system(.caption))
+                        .foregroundStyle(AppTheme.textSecondary)
                 }
-                // Make Payment button
-                Button {
-                    HapticManager.shared.tap()
-                    showPaymentSheet = true
-                } label: {
-                    HStack(spacing: 8) {
-                        Image(systemName: "dollarsign.circle.fill").font(.system(size: 15))
-                        Text(loc("debt.make_payment")).font(.system(size: 14, weight: .semibold))
-                    }
-                    .foregroundStyle(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 11)
-                    .background(
-                        LinearGradient(colors: [debt.debtType.color, debt.debtType.color.opacity(0.7)],
-                                       startPoint: .leading, endPoint: .trailing),
-                        in: RoundedRectangle(cornerRadius: 12)
-                    )
-                    .shadow(color: debt.debtType.color.opacity(0.3), radius: 8, y: 4)
+                Spacer(minLength: 6)
+                Button { HapticManager.shared.tap(); showActions = true } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.system(.subheadline, weight: .bold))
+                        .foregroundStyle(AppTheme.textPrimary)
+                        .frame(width: 36, height: 36)
+                        .background(AppTheme.cardMid.opacity(0.7), in: Circle())
                 }
+                .accessibilityLabel(loc("a11y.more_actions"))
+                .hitTarget(36)
                 .buttonStyle(ScaleButtonStyle())
             }
-            .padding(16)
+
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(money(debt.currentBalance))
+                        .font(.system(.title2, weight: .bold))
+                        .foregroundStyle(AppTheme.textPrimary)
+                        .lineLimit(1).minimumScaleFactor(0.7)
+                        .contentTransition(.numericText())
+                    Text(String(format: loc("debt.left_of"), money(debt.totalAmount)))
+                        .font(.system(.footnote))
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .lineLimit(1).minimumScaleFactor(0.8)
+                    Spacer(minLength: 4)
+                    Text(String(format: loc("debt.paid_off"), String(format: "%.0f", debt.percentagePaid)))
+                        .font(.system(.caption, weight: .semibold))
+                        .foregroundStyle(AppTheme.accent)
+                }
+                GeometryReader { g in
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(AppTheme.accentTrack)
+                        Capsule().fill(AppTheme.accentFill)
+                            .frame(width: g.size.width * CGFloat(animatedProgress / 100))
+                    }
+                }
+                .frame(height: 8)
+                Text(planLine)
+                    .font(.system(.caption))
+                    .foregroundStyle(AppTheme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Button {
+                HapticManager.shared.tap()
+                showPaymentSheet = true
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "checkmark.circle.fill").font(.system(.callout))
+                    Text(loc("debt.make_payment")).font(.system(.subheadline, weight: .bold))
+                }
+                .foregroundStyle(AppTheme.onVividFill)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 13)
+                .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: AppRadius.md))
+            }
+            .buttonStyle(ScaleButtonStyle())
         }
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 18))
-        .overlay(RoundedRectangle(cornerRadius: 18)
-            .stroke(priority == 1 ? AppTheme.red.opacity(0.3) : Color.clear, lineWidth: 1))
-        .confirmationDialog(debt.name, isPresented: $showActions, titleVisibility: .visible) {
-            Button(loc("debt.make_payment")) { showPaymentSheet = true }
-            Button(loc("common.edit")) { vm.loadForEdit(debt) }
-            Button(loc("debt.mark_paid"), role: .none) { markPaid() }
-            // Migration path: a debt that's really a credit card can become a
-            // proper CC account (spendable + owed tracking) in one tap.
-            Button(loc("cc.convert_action")) { convertToCreditCard() }
-            Button(loc("common.delete"), role: .destructive) { showDelete = true }
-            Button(loc("common.cancel"), role: .cancel) {}
+        .padding(16)
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.xl))
+        .sheet(isPresented: $showActions) {
+            ActionListSheet(
+                icon: debt.debtType.icon,
+                iconTint: debt.debtType.color,
+                title: debt.name,
+                subtitle: CurrencyManager.shared.formatted(debt.currentBalance, currency: debt.currency),
+                items: [
+                    ActionItem(icon: "banknote.fill", title: loc("debt.make_payment"), tint: AppTheme.accent) {
+                        showPaymentSheet = true
+                    },
+                    ActionItem(icon: "pencil", title: loc("common.edit"), tint: AppTheme.blue) {
+                        vm.loadForEdit(debt)
+                    },
+                    ActionItem(icon: "checkmark.seal.fill", title: loc("debt.mark_paid"),
+                               detail: loc("debt.action.mark_paid_sub"), tint: AppTheme.teal) {
+                        markPaid()
+                    },
+                    // Migration path: a debt that is really a credit card becomes
+                    // a proper card account (spendable + owed tracking).
+                    ActionItem(icon: "creditcard.fill", title: loc("cc.convert_action"),
+                               detail: loc("cc.convert_action_sub"), tint: AppTheme.purple) {
+                        convertToCreditCard()
+                    },
+                    ActionItem(icon: "trash.fill", title: loc("common.delete"), destructive: true) {
+                        showDelete = true
+                    },
+                ])
+            .preferredColorScheme(appColorScheme())
         }
         .onAppear {
             withAnimation(.easeInOut(duration: 1.0).delay(0.2)) {
@@ -995,15 +995,15 @@ struct DebtCard: View {
         }
         .sheet(isPresented: $showPaymentSheet) {
             DebtPaymentSheet(debt: debt)
-                .presentationDetents([.medium])
+                .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
                 .presentationBackground(AppTheme.bg)
         }
-        .confirmationDialog(String(format: loc("debt.delete_title"), debt.name), isPresented: $showDelete, titleVisibility: .visible) {
-            Button(loc("common.delete"), role: .destructive) {
-                modelContext.delete(debt); try? modelContext.save()
-            }
-            Button(loc("common.cancel"), role: .cancel) {}
+        .confirmSheet(isPresented: $showDelete,
+                      title: String(format: loc("debt.delete_title"), debt.name),
+                      message: loc("debt.delete_confirm"),
+                      confirmLabel: loc("common.delete")) {
+            modelContext.delete(debt); try? modelContext.save()
         }
     }
 
@@ -1090,15 +1090,15 @@ struct DebtPayoffCelebration: View {
 
                 VStack(spacing: 9) {
                     Text(loc("debt.celebrate.title"))
-                        .font(.system(size: 27, weight: .bold))
+                        .font(.system(.title, weight: .bold))
                         .foregroundStyle(AppTheme.textPrimary)
                     Text(summary.name)
-                        .font(.system(size: 17, weight: .semibold))
+                        .font(.system(.body, weight: .semibold))
                         .foregroundStyle(AppTheme.accent)
                         .multilineTextAlignment(.center)
                     Text(String(format: loc("debt.celebrate.paid"),
                                 CurrencyManager.shared.formatted(summary.total, currency: summary.currency)))
-                        .font(.system(size: 15))
+                        .font(.system(.subheadline))
                         .foregroundStyle(AppTheme.textSecondary)
                         .multilineTextAlignment(.center)
 
@@ -1114,7 +1114,7 @@ struct DebtPayoffCelebration: View {
                                 .foregroundStyle(AppTheme.accent.opacity(0.9))
                         }
                     }
-                    .font(.system(size: 12.5, weight: .medium))
+                    .font(.system(.caption, weight: .medium))
                     .foregroundStyle(AppTheme.textSecondary.opacity(0.85))
                     .multilineTextAlignment(.center)
                     .padding(.top, 6)
@@ -1128,11 +1128,10 @@ struct DebtPayoffCelebration: View {
                     onDismiss()
                 } label: {
                     Text(loc("debt.celebrate.cta"))
-                        .font(.system(size: 16, weight: .bold))
+                        .font(.system(.callout, weight: .bold))
                         .foregroundStyle(AppTheme.bg)
                         .padding(.horizontal, 44).padding(.vertical, 15)
                         .background(AppTheme.accentFill, in: Capsule())
-                        .shadow(color: AppTheme.accent.opacity(0.5), radius: 16, y: 8)
                 }
                 .buttonStyle(ScaleButtonStyle())
                 .scaleEffect(scale)
@@ -1158,56 +1157,71 @@ struct DebtPayoffCelebration: View {
 
 struct PayoffStrategyCard: View {
     let engine: FinancialHealthEngine
-    @State private var strategy = 0 // 0 = avalanche, 1 = snowball
+    @State private var strategy = 0 // 0 = highest interest first, 1 = smallest balance first
 
     private var ordered: [DebtRecord] { strategy == 0 ? engine.avalancheOrder : engine.snowballOrder }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                Image(systemName: "map.fill").font(.system(size: 14)).foregroundStyle(AppTheme.purple)
-                Text(loc("debt.payoff_strat")).font(.system(size: 15, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
-                Spacer()
-            }
+        VStack(alignment: .leading, spacing: 12) {
+            Text(loc("debt.payoff_strat"))
+                .font(.system(.body, weight: .bold))
+                .foregroundStyle(AppTheme.textPrimary)
 
-            // Strategy toggle
-            HStack(spacing: 0) {
-                ForEach(["Avalanche", "Snowball"].indices, id: \.self) { i in
-                    Button { HapticManager.shared.tap(); withAnimation { strategy = i } } label: {
-                        Text(i == 0 ? "Avalanche" : "Snowball")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(strategy == i ? AppTheme.bg : AppTheme.textSecondary)
-                            .frame(maxWidth: .infinity).padding(.vertical, 8)
-                            .background { if strategy == i { Capsule().fill(AppTheme.purple) } }
+            // Plain names. "Avalanche" and "Snowball" are terms from personal-
+            // finance blogs, in English, on a screen most people read in Indonesian.
+            HStack(spacing: 2) {
+                ForEach([0, 1], id: \.self) { i in
+                    let on = strategy == i
+                    Button {
+                        HapticManager.shared.tap()
+                        withAnimation(.spring(response: 0.3)) { strategy = i }
+                    } label: {
+                        Text(loc(i == 0 ? "debt.strategy_interest" : "debt.strategy_small"))
+                            .font(.system(.footnote, weight: .semibold))
+                            .foregroundStyle(on ? AppTheme.textPrimary : AppTheme.textSecondary)
+                            .lineLimit(1).minimumScaleFactor(0.8)
+                            .frame(maxWidth: .infinity).padding(.vertical, 9)
+                            .background(on ? AppTheme.bg : Color.clear, in: Capsule())
                     }
+                    .buttonStyle(.plain)
                 }
             }
-            .padding(3).background(AppTheme.cardMid, in: Capsule())
+            .padding(3)
+            .background(AppTheme.cardMid.opacity(0.7), in: Capsule())
 
-            // Strategy description
-            Text(strategy == 0 ? loc("debt.avalanche_desc") : loc("debt.snowball_desc"))
-                .font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary).lineSpacing(2)
+            Text(loc(strategy == 0 ? "debt.avalanche_desc" : "debt.snowball_desc"))
+                .font(.system(.caption))
+                .foregroundStyle(AppTheme.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
 
-            // Order list
-            VStack(spacing: 8) {
+            VStack(spacing: 0) {
                 ForEach(Array(ordered.enumerated()), id: \.element.id) { i, debt in
-                    HStack(spacing: 10) {
-                        Text("\(i+1)").font(.system(size: 13, weight: .bold))
-                            .foregroundStyle(AppTheme.textSecondary).frame(width: 20)
-                        Image(systemName: debt.debtType.icon).font(.system(size: 14)).foregroundStyle(debt.debtType.color)
-                        Text(debt.name).font(.system(size: 13, weight: .medium)).foregroundStyle(AppTheme.textPrimary)
+                    if i > 0 {
+                        Rectangle().fill(AppTheme.cardMid.opacity(0.7)).frame(height: 1).padding(.leading, 40)
+                    }
+                    HStack(spacing: 12) {
+                        Text("\(i + 1)")
+                            .font(.system(.footnote, weight: .bold))
+                            .foregroundStyle(i == 0 ? AppTheme.onVividFill : AppTheme.textSecondary)
+                            .frame(width: 26, height: 26)
+                            .background(i == 0 ? AppTheme.accentFill : AppTheme.cardMid.opacity(0.7), in: Circle())
+                        Text(debt.name)
+                            .font(.system(.subheadline, weight: .medium))
+                            .foregroundStyle(AppTheme.textPrimary)
+                            .lineLimit(1)
                         Spacer()
                         Text(strategy == 0
                              ? String(format: loc("debt.apr_only"), String(format: "%.1f", debt.annualInterestRate))
                              : CurrencyManager.shared.formatted(debt.currentBalance, currency: debt.currency))
-                            .font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
+                            .font(.system(.caption, weight: .medium))
+                            .foregroundStyle(AppTheme.textSecondary)
                     }
-                    .padding(10).background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: 10))
+                    .padding(.vertical, 10)
                 }
             }
         }
         .padding(16)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 18))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.xl))
     }
 }
 
@@ -1216,29 +1230,35 @@ struct PayoffStrategyCard: View {
 struct DebtEmptyState: View {
     @Bindable var vm: DebtViewModel
     var body: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: 22) {
             ZStack {
-                Circle().fill(AppTheme.cardDark).frame(width: 88, height: 88)
-                    .overlay(Circle().stroke(AppTheme.accent.opacity(0.2), lineWidth: 1))
-                Image(systemName: "checkmark.seal.fill").font(.system(size: 36)).foregroundStyle(AppTheme.accent)
+                Circle().fill(AppTheme.accent.opacity(0.14)).frame(width: 120, height: 120)
+                Circle().fill(AppTheme.accentFill).frame(width: 76, height: 76)
+                Image(systemName: "checkmark.seal.fill")
+                    .font(.system(.title, weight: .semibold))
+                    .foregroundStyle(AppTheme.onVividFill)
             }
-            .gentleFloat()
             VStack(spacing: 8) {
-                Text(loc("debt.no_debts")).font(.system(size: 18, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                Text(loc("debt.no_debts"))
+                    .font(.system(.title3, weight: .bold))
+                    .foregroundStyle(AppTheme.textPrimary)
                 Text(loc("debt.empty_desc"))
-                    .font(.system(size: 14)).foregroundStyle(AppTheme.textSecondary)
+                    .font(.system(.subheadline))
+                    .foregroundStyle(AppTheme.textSecondary)
                     .multilineTextAlignment(.center).lineSpacing(3)
             }
             Button { HapticManager.shared.tap(); vm.resetForm(); vm.showAddSheet = true } label: {
                 HStack(spacing: 8) {
-                    Image(systemName: "plus").font(.system(size: 14, weight: .semibold))
-                    Text(loc("debt.add")).font(.system(size: 15, weight: .semibold))
+                    Image(systemName: "plus.circle.fill").font(.system(.body))
+                    Text(loc("debt.add")).font(.system(.callout, weight: .bold))
                 }
-                .foregroundStyle(.white).padding(.horizontal, 32).padding(.vertical, 14)
-                .background(AppTheme.red.opacity(0.9), in: Capsule())
-                .shadow(color: AppTheme.red.opacity(0.35), radius: 12, y: 6)
-            }.buttonStyle(ScaleButtonStyle())
-        }.padding(.horizontal, 40)
+                .foregroundStyle(AppTheme.onVividFill)
+                .frame(maxWidth: .infinity).padding(.vertical, 16)
+                .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+            }
+            .buttonStyle(ScaleButtonStyle())
+        }
+        .padding(.horizontal, 10)
     }
 }
 
@@ -1257,15 +1277,15 @@ struct DebtFormSheet: View {
                     VStack(spacing: 20) {
                         // Type picker
                         VStack(spacing: 8) {
-                            Text(loc("debt.type")).font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
+                            Text(loc("debt.type")).font(.system(.footnote)).foregroundStyle(AppTheme.textSecondary)
                                 .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 22)
                             ScrollView(.horizontal, showsIndicators: false) {
                                 HStack(spacing: 10) {
                                     ForEach(DebtType.allCases, id: \.self) { type in
                                         Button { HapticManager.shared.tap(); vm.formType = type } label: {
                                             HStack(spacing: 6) {
-                                                Image(systemName: type.icon).font(.system(size: 13))
-                                                Text(type.label).font(.system(size: 13, weight: .medium))
+                                                Image(systemName: type.icon).font(.system(.footnote))
+                                                Text(type.label).font(.system(.footnote, weight: .medium))
                                             }
                                             .foregroundStyle(vm.formType == type ? AppTheme.bg : AppTheme.textSecondary)
                                             .padding(.horizontal, 14).padding(.vertical, 9)
@@ -1283,11 +1303,11 @@ struct DebtFormSheet: View {
                         // Balance fields
                         HStack(spacing: 12) {
                             VStack(spacing: 8) {
-                                Text(loc("cards.current_balance")).font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
+                                Text(loc("cards.current_balance")).font(.system(.footnote)).foregroundStyle(AppTheme.textSecondary)
                                     .frame(maxWidth: .infinity, alignment: .leading)
-                                TextField("0", text: $vm.formBalance).font(.system(size: 18, weight: .bold))
+                                TextField("0", text: $vm.formBalance).font(.system(.body, weight: .bold))
                                     .foregroundStyle(AppTheme.red).keyboardType(.decimalPad)
-                                    .padding(14).background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
+                                    .padding(14).background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
                                     .onChange(of: vm.formBalance) { _, v in
                                         let n = v.replacingOccurrences(of: ",", with: ".")
                                         let f = n.filter { $0.isNumber || $0 == "." }
@@ -1297,17 +1317,17 @@ struct DebtFormSheet: View {
                                 // wrong digit count (typing 5000 vs 50000).
                                 if let p = AmountInputHelper.preview(vm.formBalance, currency: vm.formCurrency) {
                                     Text(p)
-                                        .font(.system(size: 11, weight: .medium))
+                                        .font(.system(.caption2, weight: .medium))
                                         .foregroundStyle(AppTheme.textSecondary)
                                         .frame(maxWidth: .infinity, alignment: .leading)
                                 }
                             }
                             VStack(spacing: 8) {
-                                Text(loc("debt.min_payment")).font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
+                                Text(loc("debt.min_payment")).font(.system(.footnote)).foregroundStyle(AppTheme.textSecondary)
                                     .frame(maxWidth: .infinity, alignment: .leading)
-                                TextField("0", text: $vm.formMinPayment).font(.system(size: 18, weight: .bold))
+                                TextField("0", text: $vm.formMinPayment).font(.system(.body, weight: .bold))
                                     .foregroundStyle(AppTheme.textPrimary).keyboardType(.decimalPad)
-                                    .padding(14).background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
+                                    .padding(14).background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
                                     .onChange(of: vm.formMinPayment) { _, v in
                                         let n = v.replacingOccurrences(of: ",", with: ".")
                                         let f = n.filter { $0.isNumber || $0 == "." }
@@ -1315,7 +1335,7 @@ struct DebtFormSheet: View {
                                     }
                                 if let p = AmountInputHelper.preview(vm.formMinPayment, currency: vm.formCurrency) {
                                     Text(p)
-                                        .font(.system(size: 11, weight: .medium))
+                                        .font(.system(.caption2, weight: .medium))
                                         .foregroundStyle(AppTheme.textSecondary)
                                         .frame(maxWidth: .infinity, alignment: .leading)
                                 }
@@ -1327,11 +1347,11 @@ struct DebtFormSheet: View {
                         // Interest + Due day
                         HStack(spacing: 12) {
                             VStack(spacing: 8) {
-                                Text(loc("debt.annual_int")).font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
+                                Text(loc("debt.annual_int")).font(.system(.footnote)).foregroundStyle(AppTheme.textSecondary)
                                     .frame(maxWidth: .infinity, alignment: .leading)
-                                TextField("0.0", text: $vm.formInterestRate).font(.system(size: 18, weight: .bold))
+                                TextField("0.0", text: $vm.formInterestRate).font(.system(.body, weight: .bold))
                                     .foregroundStyle(AppTheme.orange).keyboardType(.decimalPad)
-                                    .padding(14).background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
+                                    .padding(14).background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
                                     .onChange(of: vm.formInterestRate) { _, v in
                                         // Normalize comma → dot for locales that use comma as decimal
                                         let normalized = v.replacingOccurrences(of: ",", with: ".")
@@ -1351,7 +1371,7 @@ struct DebtFormSheet: View {
                                     }
                             }
                             VStack(spacing: 8) {
-                                Text(loc("debt.due_day")).font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
+                                Text(loc("debt.due_day")).font(.system(.footnote)).foregroundStyle(AppTheme.textSecondary)
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                 // 44×44pt is Apple HIG's minimum tap target.
                                 // Buttons were 36×36 — usable but missed
@@ -1359,19 +1379,21 @@ struct DebtFormSheet: View {
                                 // for users with larger fingers / thumbs.
                                 HStack(spacing: 0) {
                                     Button { HapticManager.shared.tap(); if vm.formDueDay > 1 { vm.formDueDay -= 1 } } label: {
-                                        Image(systemName: "minus").font(.system(size: 14, weight: .semibold))
+                                        Image(systemName: "minus").font(.system(.subheadline, weight: .semibold))
                                             .foregroundStyle(AppTheme.textPrimary).frame(width: 44, height: 44)
                                             .contentShape(Rectangle())
                                     }
-                                    Text("\(vm.formDueDay)").font(.system(size: 18, weight: .bold)).foregroundStyle(AppTheme.textPrimary).frame(width: 40)
+.accessibilityLabel(loc("a11y.earlier_day"))
+                                    Text("\(vm.formDueDay)").font(.system(.body, weight: .bold)).foregroundStyle(AppTheme.textPrimary).frame(width: 40)
                                         .contentTransition(.numericText())
                                     Button { HapticManager.shared.tap(); if vm.formDueDay < 31 { vm.formDueDay += 1 } } label: {
-                                        Image(systemName: "plus").font(.system(size: 14, weight: .semibold))
+                                        Image(systemName: "plus").font(.system(.subheadline, weight: .semibold))
                                             .foregroundStyle(AppTheme.textPrimary).frame(width: 44, height: 44)
                                             .contentShape(Rectangle())
                                     }
+.accessibilityLabel(loc("a11y.later_day"))
                                 }
-                                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
+                                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
                             }
                         }
                         .padding(.horizontal, 22)
@@ -1379,16 +1401,16 @@ struct DebtFormSheet: View {
 
                         // Currency
                         VStack(spacing: 8) {
-                            Text(loc("common.currency")).font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
+                            Text(loc("common.currency")).font(.system(.footnote)).foregroundStyle(AppTheme.textSecondary)
                                 .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 22)
                             ScrollView(.horizontal, showsIndicators: false) {
                                 HStack(spacing: 10) {
                                     ForEach(vm.currencies, id: \.self) { c in
                                         Button { HapticManager.shared.tap(); vm.formCurrency = c } label: {
-                                            Text(c).font(.system(size: 13, weight: .semibold))
-                                                .foregroundStyle(vm.formCurrency == c ? AppTheme.bg : AppTheme.textSecondary)
+                                            Text(c).font(.system(.footnote, weight: .semibold))
+                                                .foregroundStyle(vm.formCurrency == c ? AppTheme.onVividFill : AppTheme.textSecondary)
                                                 .padding(.horizontal, 16).padding(.vertical, 8)
-                                                .background(vm.formCurrency == c ? AppTheme.accent : AppTheme.cardDark, in: Capsule())
+                                                .background(vm.formCurrency == c ? AppTheme.accentFill : AppTheme.cardDark, in: Capsule())
                                         }.buttonStyle(ScaleButtonStyle())
                                     }
                                 }.padding(.horizontal, 22)
@@ -1403,22 +1425,22 @@ struct DebtFormSheet: View {
                             let previewDebt = DebtRecord(name: "Preview", totalAmount: bal, currentBalance: bal,
                                                           minimumPayment: minPay, annualInterestRate: rate, dueDayOfMonth: 1)
                             VStack(alignment: .leading, spacing: 8) {
-                                Text(loc("debt.payoff_preview")).font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
+                                Text(loc("debt.payoff_preview")).font(.system(.footnote)).foregroundStyle(AppTheme.textSecondary)
                                 HStack(spacing: 20) {
                                     if let m = previewDebt.monthsToPayoffMinimum {
                                         VStack(alignment: .leading, spacing: 2) {
-                                            Text(String(format: loc("debt.month"), m)).font(.system(size: 16, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
-                                            Text(loc("debt.at_min")).font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                                            Text(String(format: loc("debt.month"), m)).font(.system(.callout, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
+                                            Text(loc("debt.at_min")).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                                         }
                                     }
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text(CurrencyManager.shared.formatted(previewDebt.totalInterestAtMinimum, currency: vm.formCurrency))
-                                            .font(.system(size: 16, weight: .bold)).foregroundStyle(AppTheme.orange)
-                                        Text(loc("debt.total_int")).font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                                            .font(.system(.callout, weight: .bold)).foregroundStyle(AppTheme.orange)
+                                        Text(loc("debt.total_int")).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                                     }
                                 }
                             }
-                            .padding(14).background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
+                            .padding(14).background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
                             .padding(.horizontal, 22)
                             .opacity(appeared ? 1 : 0)
                         }
@@ -1447,11 +1469,10 @@ struct DebtFormSheet: View {
                         }()
                         Button { save() } label: {
                             Text(vm.isEditing ? loc("general.edit") : loc("debt.add"))
-                                .font(.system(size: 16, weight: .bold))
+                                .font(.system(.callout, weight: .bold))
                                 .foregroundStyle(canSave ? .white : AppTheme.textSecondary)
                                 .frame(maxWidth: .infinity).padding(.vertical, 16)
-                                .background(canSave ? AppTheme.red.opacity(0.9) : AppTheme.textSecondary.opacity(0.3), in: Capsule())
-                                .shadow(color: canSave ? AppTheme.red.opacity(0.35) : .clear, radius: 12, y: 6)
+                                .background(canSave ? AppTheme.red.opacity(0.9) : AppTheme.textSecondary.opacity(0.3), in: RoundedRectangle(cornerRadius: AppRadius.lg))
                         }
                         .buttonStyle(ScaleButtonStyle())
                         .disabled(!canSave)
@@ -1571,13 +1592,13 @@ struct DebtPaymentSheet: View {
             // Debt summary
             HStack(spacing: 14) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 12)
+                    RoundedRectangle(cornerRadius: AppRadius.sm)
                         .fill(debt.debtType.color.opacity(0.15)).frame(width: 48, height: 48)
                     Image(systemName: debt.debtType.icon)
-                        .font(.system(size: 22)).foregroundStyle(debt.debtType.color)
+                        .font(.system(.title2)).foregroundStyle(debt.debtType.color)
                 }
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(debt.name).font(.system(size: 16, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                    Text(debt.name).font(.system(.callout, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
                     Text(String(
                         format: loc("debt.balance"),
                         CurrencyManager.shared.formatted(
@@ -1585,7 +1606,7 @@ struct DebtPaymentSheet: View {
                             currency: debt.currency
                         )
                     ))
-                        .font(.system(size: 13)).foregroundStyle(AppTheme.red)
+                        .font(.system(.footnote)).foregroundStyle(AppTheme.red)
                     Text(String(
                         format: loc("debt.minimum_payment"),
                         CurrencyManager.shared.formatted(
@@ -1593,7 +1614,7 @@ struct DebtPaymentSheet: View {
                             currency: debt.currency
                         )
                     ))
-                        .font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
+                        .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                 }
                 Spacer()
             }
@@ -1605,7 +1626,7 @@ struct DebtPaymentSheet: View {
 
             // Quick amounts
             VStack(spacing: 10) {
-                Text(loc("debt.payment_amt")).font(.system(size: 13, weight: .medium)).foregroundStyle(AppTheme.textSecondary)
+                Text(loc("debt.payment_amt")).font(.system(.footnote, weight: .medium)).foregroundStyle(AppTheme.textSecondary)
                     .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 22)
 
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -1642,14 +1663,14 @@ struct DebtPaymentSheet: View {
                 // Custom amount
                 HStack(spacing: 8) {
                     Text(activeCurrency)
-                        .font(.system(size: 18, weight: .bold)).foregroundStyle(debt.debtType.color)
+                        .font(.system(.body, weight: .bold)).foregroundStyle(debt.debtType.color)
                     TextField("0", text: $amountText)
-                        .font(.system(size: 28, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
+                        .font(.system(.title, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
                         .keyboardType(.decimalPad)
                 }
                 .padding(16)
-                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
-                .overlay(RoundedRectangle(cornerRadius: 14)
+                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+                .overlay(RoundedRectangle(cornerRadius: AppRadius.md)
                     .stroke(amount > 0 ? debt.debtType.color.opacity(0.4) : Color.clear, lineWidth: 1.5))
                 .padding(.horizontal, 22)
 
@@ -1658,12 +1679,12 @@ struct DebtPaymentSheet: View {
                     let remaining = debt.currentBalance - amountInDebtCurrency
                     HStack(spacing: 8) {
                         Image(systemName: remaining == 0 ? "checkmark.seal.fill" : "minus.circle")
-                            .font(.system(size: 13))
+                            .font(.system(.footnote))
                             .foregroundStyle(remaining == 0 ? AppTheme.accent : AppTheme.textSecondary)
                         Text(remaining == 0
                              ? String(format: loc("debt.payoff_full"), debt.name)
                              : String(format: loc("debt.remaining_amount"), CurrencyManager.shared.formatted(remaining, currency: debt.currency)))
-                            .font(.system(size: 13))
+                            .font(.system(.footnote))
                             .foregroundStyle(remaining == 0 ? AppTheme.accent : AppTheme.textSecondary)
                     }
                     .padding(.horizontal, 22)
@@ -1674,9 +1695,9 @@ struct DebtPaymentSheet: View {
                 if amount > 0 && wouldGoNegative {
                     HStack(spacing: 8) {
                         Image(systemName: "exclamationmark.triangle.fill")
-                            .font(.system(size: 13)).foregroundStyle(AppTheme.red)
+                            .font(.system(.footnote)).foregroundStyle(AppTheme.red)
                         Text(String(format: loc("debt.insufficient_balance"), CurrencyManager.shared.formatted(availableBalance, currency: activeCurrency)))
-                            .font(.system(size: 13)).foregroundStyle(AppTheme.red)
+                            .font(.system(.footnote)).foregroundStyle(AppTheme.red)
                     }
                     .padding(.horizontal, 22)
                     .transition(.opacity)
@@ -1687,11 +1708,11 @@ struct DebtPaymentSheet: View {
                     let cardCur = activeCurrency
                     HStack(spacing: 8) {
                         Image(systemName: "arrow.triangle.2.circlepath")
-                            .font(.system(size: 12)).foregroundStyle(AppTheme.orange)
+                            .font(.system(.caption)).foregroundStyle(AppTheme.orange)
                         Text(String(format: loc("debt.approx_in"), CurrencyManager.shared.formatted(amountInDebtCurrency, currency: debt.currency), debt.currency))
-                            .font(.system(size: 12)).foregroundStyle(AppTheme.orange)
+                            .font(.system(.caption)).foregroundStyle(AppTheme.orange)
                         Text("(\(cardCur) → \(debt.currency))")
-                            .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                            .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                     }
                     .padding(.horizontal, 22)
                     .transition(.opacity)
@@ -1702,7 +1723,7 @@ struct DebtPaymentSheet: View {
             if cards.count > 1 {
                 Divider().padding(.horizontal, 22).padding(.vertical, 4)
                 VStack(spacing: 8) {
-                    Text(loc("debt.pay_from")).font(.system(size: 13, weight: .medium)).foregroundStyle(AppTheme.textSecondary)
+                    Text(loc("debt.pay_from")).font(.system(.footnote, weight: .medium)).foregroundStyle(AppTheme.textSecondary)
                         .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 22)
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 10) {
@@ -1716,28 +1737,28 @@ struct DebtPaymentSheet: View {
                                 Button { HapticManager.shared.tap(); selectedCardIndex = i } label: {
                                     VStack(spacing: 4) {
                                         ZStack {
-                                            RoundedRectangle(cornerRadius: 8)
+                                            RoundedRectangle(cornerRadius: AppRadius.xs)
                                                 .fill(LinearGradient(
                                                     colors: [Color(hex: card.gradientStart), Color(hex: card.gradientEnd)],
                                                     startPoint: .leading, endPoint: .trailing))
                                                 .frame(width: 80, height: 48)
-                                                .overlay(RoundedRectangle(cornerRadius: 8)
+                                                .overlay(RoundedRectangle(cornerRadius: AppRadius.xs)
                                                     .stroke(selectedCardIndex == i ? AppTheme.accent : Color.clear, lineWidth: 2))
                                             VStack(spacing: 2) {
                                                 Text(card.isDigitalWallet
                                                      ? (card.walletProvider.isEmpty ? loc("cards.wallet") : card.walletProvider)
                                                      : "•••• \(card.cardNumber.suffix(4))")
-                                                    .font(.system(size: 9, weight: .semibold)).foregroundStyle(.white)
+                                                    .font(.system(.caption2, weight: .semibold)).foregroundStyle(.white)
                                                 Text(card.isDigitalWallet ? loc("cards.wallet") : network.name)
-                                                    .font(.system(size: 8)).foregroundStyle(.white.opacity(0.6))
+                                                    .font(.system(.caption2)).foregroundStyle(.white.opacity(0.6))
                                             }
                                         }
                                         Text(CurrencyManager.shared.formatted(rawBal, currency: cardCur))
-                                            .font(.system(size: 9, weight: .medium))
+                                            .font(.system(.caption2, weight: .medium))
                                             .foregroundStyle(selectedCardIndex == i ? AppTheme.accent : AppTheme.textSecondary)
                                         if hasMismatch {
                                             Text(loc("tx.auto_convert"))
-                                                .font(.system(size: 8))
+                                                .font(.system(.caption2))
                                                 .foregroundStyle(AppTheme.orange)
                                         }
                                     }
@@ -1753,15 +1774,15 @@ struct DebtPaymentSheet: View {
             Divider().padding(.horizontal, 22).padding(.top, 8)
 
             if let err = errorMsg {
-                Text(err).font(.system(size: 13)).foregroundStyle(AppTheme.red).padding(.horizontal, 22)
+                Text(err).font(.system(.footnote)).foregroundStyle(AppTheme.red).padding(.horizontal, 22)
             }
 
             // Pay button
             Button { makePayment() } label: {
                 HStack(spacing: 10) {
-                    Image(systemName: "dollarsign.circle.fill").font(.system(size: 16))
+                    Image(systemName: "dollarsign.circle.fill").font(.system(.callout))
                     Text(amount > 0 ? String(format: loc("debt.pay"), CurrencyManager.shared.formatted(amount, currency: activeCurrency)) : loc("debt.enter_amount"))
-                        .font(.system(size: 16, weight: .bold))
+                        .font(.system(.callout, weight: .bold))
                 }
                 .foregroundStyle(isValid ? .white : AppTheme.textSecondary)
                 .frame(maxWidth: .infinity).padding(.vertical, 16)
@@ -1770,9 +1791,8 @@ struct DebtPaymentSheet: View {
                     ? AnyShapeStyle(LinearGradient(colors: [debt.debtType.color, debt.debtType.color.opacity(0.7)],
                                                    startPoint: .leading, endPoint: .trailing))
                     : AnyShapeStyle(AppTheme.cardMid),
-                    in: Capsule()
+                    in: RoundedRectangle(cornerRadius: AppRadius.lg)
                 )
-                .shadow(color: isValid ? debt.debtType.color.opacity(0.4) : .clear, radius: 12, y: 6)
             }
             .buttonStyle(ScaleButtonStyle()).disabled(!isValid).padding(.horizontal, 22)
             .padding(.top, 8)
@@ -1859,9 +1879,9 @@ struct QuickPayButton: View {
     var body: some View {
         Button(action: { HapticManager.shared.tap(); action() }) {
             VStack(spacing: 3) {
-                Text(label).font(.system(size: 11, weight: .semibold)).foregroundStyle(color)
+                Text(label).font(.system(.caption2, weight: .semibold)).foregroundStyle(color)
                 Text(CurrencyManager.shared.formatted(amount, currency: currency))
-                    .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                    .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
             }
             .padding(.horizontal, 14).padding(.vertical, 8)
             .background(color.opacity(0.1), in: Capsule())
@@ -1964,7 +1984,7 @@ struct PayoffSimulatorSheet: View {
                         if allDebts.count > 1 {
                             VStack(alignment: .leading, spacing: 8) {
                                 Text(loc("debt.select_debt"))
-                                    .font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
+                                    .font(.system(.footnote)).foregroundStyle(AppTheme.textSecondary)
                                 ScrollView(.horizontal, showsIndicators: false) {
                                     HStack(spacing: 8) {
                                         ForEach(allDebts) { d in
@@ -1974,9 +1994,9 @@ struct PayoffSimulatorSheet: View {
                                             } label: {
                                                 Text(d.name)
                                                     .font(.system(size: 13, weight: selectedDebt.id == d.id ? .semibold : .regular))
-                                                    .foregroundStyle(selectedDebt.id == d.id ? AppTheme.bg : AppTheme.textPrimary)
+                                                    .foregroundStyle(selectedDebt.id == d.id ? AppTheme.onVividFill : AppTheme.textPrimary)
                                                     .padding(.horizontal, 14).padding(.vertical, 8)
-                                                    .background(selectedDebt.id == d.id ? AppTheme.accent : AppTheme.cardMid,
+                                                    .background(selectedDebt.id == d.id ? AppTheme.accentFill : AppTheme.cardMid,
                                                                 in: Capsule())
                                             }.buttonStyle(ScaleButtonStyle())
                                         }
@@ -1991,11 +2011,11 @@ struct PayoffSimulatorSheet: View {
                             HStack {
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text(selectedDebt.name)
-                                        .font(.system(size: 16, weight: .bold))
+                                        .font(.system(.callout, weight: .bold))
                                         .foregroundStyle(AppTheme.textPrimary)
                                     HStack(spacing: 8) {
                                         Text(selectedDebt.debtType.label)
-                                            .font(.system(size: 11))
+                                            .font(.system(.caption2))
                                             .foregroundStyle(AppTheme.textSecondary)
                                             .padding(.horizontal, 8).padding(.vertical, 3)
                                             .background(AppTheme.cardMid, in: Capsule())
@@ -2003,7 +2023,7 @@ struct PayoffSimulatorSheet: View {
                                             format: loc("debt.apr"),
                                             selectedDebt.annualInterestRate
                                         ))
-                                            .font(.system(size: 11, weight: .semibold))
+                                            .font(.system(.caption2, weight: .semibold))
                                             .foregroundStyle(AppTheme.red)
                                             .padding(.horizontal, 8).padding(.vertical, 3)
                                             .background(AppTheme.red.opacity(0.12), in: Capsule())
@@ -2011,26 +2031,26 @@ struct PayoffSimulatorSheet: View {
                                 }
                                 Spacer()
                                 Text(fmt(selectedDebt.currentBalance))
-                                    .font(.system(size: 20, weight: .bold))
+                                    .font(.system(.title3, weight: .bold))
                                     .foregroundStyle(AppTheme.red)
                             }
                         }
                         .padding(16)
-                        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
-                        .overlay(RoundedRectangle(cornerRadius: 16).stroke(AppTheme.red.opacity(0.2), lineWidth: 1))
+                        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+                        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.red.opacity(0.2), lineWidth: 1))
                         .padding(.horizontal, 22)
 
                         // Extra payment input
                         VStack(alignment: .leading, spacing: 10) {
                             Text(String(format: loc("debt.extra_payment_count"), fmt(extraPayment)))
-                                .font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
+                                .font(.system(.footnote)).foregroundStyle(AppTheme.textSecondary)
 
                             HStack(spacing: 12) {
                                 Text(CurrencyManager.symbol(for: currency))
-                                    .font(.system(size: 18, weight: .bold))
+                                    .font(.system(.body, weight: .bold))
                                     .foregroundStyle(AppTheme.textSecondary)
                                 TextField("0", text: $extraPaymentText)
-                                    .font(.system(size: 24, weight: .bold))
+                                    .font(.system(.title2, weight: .bold))
                                     .foregroundStyle(AppTheme.textPrimary)
                                     .keyboardType(.numberPad)
                                     .onChange(of: extraPaymentText) { _, v in
@@ -2038,7 +2058,7 @@ struct PayoffSimulatorSheet: View {
                                     }
                             }
                             .padding(16)
-                            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
+                            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
 
                             // Quick add buttons.
                             // Amounts are scaled to the debt's currency so the
@@ -2065,7 +2085,7 @@ struct PayoffSimulatorSheet: View {
                                         extraPaymentText = String(Int(extraPayment))
                                     } label: {
                                         Text(quickChipLabel(amt))
-                                            .font(.system(size: 12, weight: .semibold))
+                                            .font(.system(.caption, weight: .semibold))
                                             .foregroundStyle(AppTheme.accent)
                                             .padding(.horizontal, 10).padding(.vertical, 6)
                                             .background(AppTheme.accent.opacity(0.1), in: Capsule())
@@ -2078,7 +2098,7 @@ struct PayoffSimulatorSheet: View {
                                         extraPayment = 0; extraPaymentText = ""
                                     } label: {
                                         Text(loc("notif.clear"))
-                                            .font(.system(size: 12))
+                                            .font(.system(.caption))
                                             .foregroundStyle(AppTheme.textSecondary)
                                     }
                                 }
@@ -2090,12 +2110,12 @@ struct PayoffSimulatorSheet: View {
                         VStack(spacing: 12) {
                             HStack {
                                 Text(loc("debt.payoff_proj"))
-                                    .font(.system(size: 15, weight: .semibold))
+                                    .font(.system(.subheadline, weight: .semibold))
                                     .foregroundStyle(AppTheme.textPrimary)
                                 Spacer()
                                 if monthsSaved > 0 {
                                     Text(String(format: loc("debt.month_saved"), monthsSaved))
-                                        .font(.system(size: 12, weight: .bold))
+                                        .font(.system(.caption, weight: .bold))
                                         .foregroundStyle(AppTheme.accent)
                                         .padding(.horizontal, 10).padding(.vertical, 4)
                                         .background(AppTheme.accent.opacity(0.12), in: Capsule())
@@ -2107,93 +2127,93 @@ struct PayoffSimulatorSheet: View {
                                 // Minimum only
                                 VStack(alignment: .leading, spacing: 8) {
                                     Text(loc("debt.min_only"))
-                                        .font(.system(size: 12, weight: .semibold))
+                                        .font(.system(.caption, weight: .semibold))
                                         .foregroundStyle(AppTheme.textSecondary)
                                     VStack(alignment: .leading, spacing: 4) {
                                         Text(String(
                                             format: loc("debt.amount_per_month"),
                                             fmt(selectedDebt.minimumPayment)
                                         ))
-                                            .font(.system(size: 13, weight: .bold))
+                                            .font(.system(.footnote, weight: .bold))
                                             .foregroundStyle(AppTheme.textPrimary)
                                         if let m = baseMonths {
                                             Text(String(format: loc("debt.month"), m))
-                                                .font(.system(size: 20, weight: .bold))
+                                                .font(.system(.title3, weight: .bold))
                                                 .foregroundStyle(AppTheme.red)
                                             Text(String(format: loc("debt.free_by"), payoffDateBase))
-                                                .font(.system(size: 11))
+                                                .font(.system(.caption2))
                                                 .foregroundStyle(AppTheme.textSecondary)
                                         } else {
                                             Text("∞")
-                                                .font(.system(size: 28, weight: .bold))
+                                                .font(.system(.title, weight: .bold))
                                                 .foregroundStyle(AppTheme.red)
                                             Text(loc("debt.payment_lt_int"))
-                                                .font(.system(size: 11))
+                                                .font(.system(.caption2))
                                                 .foregroundStyle(AppTheme.red.opacity(0.8))
                                         }
                                     }
                                 }
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .padding(14)
-                                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
-                                .overlay(RoundedRectangle(cornerRadius: 14).stroke(AppTheme.red.opacity(0.2), lineWidth: 1))
+                                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+                                .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.red.opacity(0.2), lineWidth: 1))
 
                                 // With extra
                                 VStack(alignment: .leading, spacing: 8) {
                                     Text(loc("debt.with_extra"))
-                                        .font(.system(size: 12, weight: .semibold))
+                                        .font(.system(.caption, weight: .semibold))
                                         .foregroundStyle(AppTheme.accent)
                                     VStack(alignment: .leading, spacing: 4) {
                                         Text(String(format: loc("debt.amount_per_month"), fmt(selectedDebt.minimumPayment + max(extraPayment, 0))))
-                                            .font(.system(size: 13, weight: .bold))
+                                            .font(.system(.footnote, weight: .bold))
                                             .foregroundStyle(AppTheme.textPrimary)
                                         if let m = boostedMonths {
                                             Text(String(format: loc("debt.month"), m))
-                                                .font(.system(size: 20, weight: .bold))
+                                                .font(.system(.title3, weight: .bold))
                                                 .foregroundStyle(AppTheme.accent)
                                             Text(String(format: loc("debt.free_by"), payoffDateBoosted))
-                                                .font(.system(size: 11))
+                                                .font(.system(.caption2))
                                                 .foregroundStyle(AppTheme.textSecondary)
                                         } else {
                                             Text(String(format: loc("debt.amount_per_month"), fmt(selectedDebt.minimumPayment)))
-                                                .font(.system(size: 13))
+                                                .font(.system(.footnote))
                                                 .foregroundStyle(AppTheme.textSecondary)
                                         }
                                     }
                                 }
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .padding(14)
-                                .background(AppTheme.accent.opacity(0.06), in: RoundedRectangle(cornerRadius: 14))
-                                .overlay(RoundedRectangle(cornerRadius: 14).stroke(AppTheme.accent.opacity(0.3), lineWidth: 1))
+                                .background(AppTheme.accent.opacity(0.06), in: RoundedRectangle(cornerRadius: AppRadius.md))
+                                .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.accent.opacity(0.3), lineWidth: 1))
                             }
 
                             // Interest saved banner
                             if interestSaved > 0 {
                                 HStack(spacing: 10) {
                                     Image(systemName: "banknote.fill")
-                                        .font(.system(size: 16)).foregroundStyle(AppTheme.accent)
+                                        .font(.system(.callout)).foregroundStyle(AppTheme.accent)
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text(String(format: loc("debt.interest_saved"), fmt(interestSaved)))
-                                            .font(.system(size: 13, weight: .semibold))
+                                            .font(.system(.footnote, weight: .semibold))
                                             .foregroundStyle(AppTheme.textPrimary)
                                         Text(String(format: loc("debt.interest_saved"), fmt(extraPayment)))
-                                            .font(.system(size: 11))
+                                            .font(.system(.caption2))
                                             .foregroundStyle(AppTheme.textSecondary)
                                     }
                                     Spacer()
                                 }
                                 .padding(14)
-                                .background(AppTheme.accent.opacity(0.08), in: RoundedRectangle(cornerRadius: 14))
-                                .overlay(RoundedRectangle(cornerRadius: 14).stroke(AppTheme.accent.opacity(0.25), lineWidth: 1))
+                                .background(AppTheme.accent.opacity(0.08), in: RoundedRectangle(cornerRadius: AppRadius.md))
+                                .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.accent.opacity(0.25), lineWidth: 1))
                             }
                         }
                         .padding(.horizontal, 22)
 
                         // Monthly interest cost note
                         HStack(spacing: 8) {
-                            Image(systemName: "info.circle").font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
+                            Image(systemName: "info.circle").font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                             Text(String(format: loc("debt.monthly_interest"), fmt(selectedDebt.monthlyInterestCost)))
-                                .font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
+                                .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                         }
                         .padding(.horizontal, 22)
 

@@ -28,7 +28,7 @@ struct NotificationSettingsView: View {
                                 }
                             }
                         }
-                        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
+                        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
                         footer
                         Spacer(minLength: 24)
                     }
@@ -49,7 +49,7 @@ struct NotificationSettingsView: View {
 
     private var intro: some View {
         Text(loc("notifpref.intro"))
-            .font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
+            .font(.system(.footnote)).foregroundStyle(AppTheme.textSecondary)
             .fixedSize(horizontal: false, vertical: true).lineSpacing(2)
             .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -65,18 +65,18 @@ struct NotificationSettingsView: View {
         )
         return HStack(alignment: .top, spacing: 13) {
             ZStack {
-                RoundedRectangle(cornerRadius: 11).fill(kind.tint.opacity(0.14))
+                RoundedRectangle(cornerRadius: AppRadius.sm).fill(kind.tint.opacity(0.14))
                     .frame(width: 36, height: 36)
                 Image(systemName: kind.icon)
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.system(.callout, weight: .semibold))
                     .foregroundStyle(kind.tint)
             }
             VStack(alignment: .leading, spacing: 3) {
                 Text(loc(kind.titleKey))
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.system(.subheadline, weight: .semibold))
                     .foregroundStyle(AppTheme.textPrimary)
                 Text(loc(kind.subtitleKey))
-                    .font(.system(size: 11.5)).foregroundStyle(AppTheme.textSecondary)
+                    .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                     .fixedSize(horizontal: false, vertical: true).lineSpacing(1.5)
             }
             Spacer(minLength: 8)
@@ -89,15 +89,15 @@ struct NotificationSettingsView: View {
 
     private var footer: some View {
         HStack(alignment: .top, spacing: 9) {
-            Image(systemName: "info.circle").font(.system(size: 13))
+            Image(systemName: "info.circle").font(.system(.footnote))
                 .foregroundStyle(AppTheme.textSecondary).padding(.top, 1)
             Text(loc("notifpref.footer"))
-                .font(.system(size: 11.5)).foregroundStyle(AppTheme.textSecondary)
+                .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true).lineSpacing(1.5)
             Spacer(minLength: 0)
         }
         .padding(13)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(AppTheme.cardDark.opacity(0.6), in: RoundedRectangle(cornerRadius: 13))
+        .background(AppTheme.cardDark.opacity(0.6), in: RoundedRectangle(cornerRadius: AppRadius.md))
     }
 }

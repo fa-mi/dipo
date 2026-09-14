@@ -116,7 +116,7 @@ struct SpendingAuditSheet: View {
                     Section {
                         if rows.isEmpty {
                             Text(loc(showingExcluded ? "audit.none_excluded" : "audit.none_counted"))
-                                .font(.system(size: 12))
+                                .font(.system(.caption))
                                 .foregroundStyle(AppTheme.textSecondary)
                                 .padding(.vertical, 14)
                                 .listRowBackground(Color.clear)
@@ -170,7 +170,7 @@ struct SpendingAuditSheet: View {
                  tint: AppTheme.textSecondary)
         }
         .padding(14)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 18))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
     }
 
     private var divider: some View {
@@ -209,11 +209,11 @@ struct SpendingAuditSheet: View {
             withAnimation(.spring(response: 0.28)) { action() }
         } label: {
             Text(title)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(on ? AppTheme.bg : AppTheme.textSecondary)
+                .font(.system(.footnote, weight: .semibold))
+                .foregroundStyle(on ? AppTheme.onVividFill : AppTheme.textSecondary)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 10)
-                .background(on ? AppTheme.accent : AppTheme.cardDark, in: Capsule())
+                .background(on ? AppTheme.accentFill : AppTheme.cardDark, in: Capsule())
         }
         .buttonStyle(ScaleButtonStyle())
     }
@@ -251,7 +251,7 @@ struct SpendingAuditSheet: View {
             Circle().fill(r.tx.category.color).frame(width: 8, height: 8)
             VStack(alignment: .leading, spacing: 2) {
                 Text(r.tx.name.isEmpty ? r.tx.category.displayLabel : r.tx.name)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.system(.footnote, weight: .medium))
                     .foregroundStyle(AppTheme.textPrimary)
                     .lineLimit(1)
                 HStack(spacing: 5) {
@@ -266,21 +266,21 @@ struct SpendingAuditSheet: View {
                             .foregroundStyle(AppTheme.accent.opacity(0.9))
                     }
                 }
-                .font(.system(size: 10))
+                .font(.system(.caption2))
                 .foregroundStyle(AppTheme.textSecondary)
             }
             Spacer(minLength: 8)
             Text(money(r.amount))
-                .font(.system(size: 13, weight: .semibold))
+                .font(.system(.footnote, weight: .semibold))
                 .foregroundStyle(showingExcluded ? AppTheme.textSecondary : AppTheme.textPrimary)
         }
         .padding(.horizontal, 13).padding(.vertical, 11)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 13))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
     }
 
     private var hint: some View {
         Text(loc("audit.swipe_hint"))
-            .font(.system(size: 11))
+            .font(.system(.caption2))
             .foregroundStyle(AppTheme.textSecondary)
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .leading)

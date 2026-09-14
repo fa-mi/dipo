@@ -52,14 +52,16 @@ struct HomeView: View {
     /// individually reasonable; nothing ranked them, so everything shouted and
     /// nothing was heard. Now only the most urgent gets a card and the rest
     /// collapse behind one quiet row.
+    /// Income and expense for the selected card this month, derived ONCE and
+    /// held. Computing them inside the card's body would re-walk that card's
+    /// whole history on every body pass — the exact pattern that made the
+    /// transaction list stall. Refreshed from the same places the insight
+    /// cache is refreshed.
+    @State private var monthIncome: Double = 0
+    @State private var monthExpense: Double = 0
+    @State private var flowPeriodLabel: String = ""
     @State private var showAllAttention = false
-    @State private var showSmartBudget = false
-    @State private var showSalarySheet   = false
-    @State private var showWishlistSheet  = false
     @State private var showGoalDetail: SavingsGoal? = nil
-    /// Open Debt sheet when an insight CTA routes there. Separate from the
-    /// Profile entry so we don't have to thread bindings across views.
-    @State private var showDebtFromInsight = false
     @State private var headerAppeared    = false
     @State private var contentAppeared   = false
     // Memoized Smart-Budget analyses. Each engine iterates ALL transactions
@@ -260,6 +262,44 @@ struct HomeView: View {
     /// Runs the three Smart-Budget analyses ONCE, off the render path, storing
     /// the results in @State. Called on appear and whenever the inputs change
     /// (selected card, tx count, budget on/off, ratios) — never per render.
+    /// One linear pass over the selected card's transactions, converted into
+    /// that card's currency — the same conversion the card face and the list
+    /// use, so the three figures on this screen cannot contradict each other.
+    ///
+    /// The window is the PAY CYCLE, the same one Smart Budget and the Home
+    /// insights already use. For someone paid on the 25th a calendar month is
+    /// the wrong unit twice over: on the 3rd it shows three days of spending
+    /// and no salary, and it splits one paycheque's spending across two months.
+    /// No salary schedule → no cycle to speak of, so it falls back to the month.
+    private func recomputeMonthFlow() {
+        let cal = Calendar.current
+        let windowStart: Date
+        if let payDay = MainCard.payDay(salarySchedules) {
+            windowStart = StatPeriod.payCycleRange(payDay: payDay).start
+            let df = DateFormatter()
+            df.locale = LanguageManager.shared.currentLocale
+            df.setLocalizedDateFormatFromTemplate("d MMM")
+            flowPeriodLabel = String(format: loc("home.since_payday"), df.string(from: windowStart))
+        } else {
+            windowStart = cal.safeDate(from: cal.dateComponents([.year, .month], from: Date()))
+            flowPeriodLabel = loc("home.this_month")
+        }
+
+        guard let card = selectedCard else { monthIncome = 0; monthExpense = 0; return }
+        let cur = card.resolvedCurrency
+        var income = 0.0
+        var expense = 0.0
+        for tx in card.transactions where tx.date >= windowStart && tx.txSubtype != .transfer {
+            // Transfers are money moving between the user's own accounts. Counting
+            // them would inflate both sides and make the cycle look twice as busy
+            // as it was.
+            let v = CurrencyManager.shared.convert(tx.amount, from: tx.currency, to: cur)
+            if v >= 0 { income += v } else { expense -= v }
+        }
+        monthIncome = income
+        monthExpense = expense
+    }
+
     private func recomputeHomeInsights() {
         guard SmartBudgetManager.shared.hasActiveBudget else {
             cachedInsights = []; cachedAnomalies = []; cachedRecurring = []
@@ -307,7 +347,7 @@ struct HomeView: View {
             items.append(.init(id: "insight-\(budgetCard?.id.uuidString ?? "none")-\(idx)",
                                rank: idx == 0 ? 2 : 7,
                                view: AnyView(
-                Button { HapticManager.shared.tap(); showSmartBudget = true } label: {
+                Button { HapticManager.shared.tap(); vm.open(PlanRoute.budget) } label: {
                     SmartInsightBanner(insight: insight,
                                        tappable: idx == 0,
                                        onAction: { kind in routeInsightAction(kind) })
@@ -328,7 +368,7 @@ struct HomeView: View {
         // decision.
         if let salary = nearestSalary {
             items.append(.init(id: "payday", rank: 5, view: AnyView(
-                Button { HapticManager.shared.tap(); showSalarySheet = true } label: {
+                Button { HapticManager.shared.tap(); vm.open(PlanRoute.salary) } label: {
                     SalaryReminderBanner(schedule: salary, tappable: true)
                 }
                 .buttonStyle(ScaleButtonStyle()))))
@@ -340,7 +380,7 @@ struct HomeView: View {
         }
         if let pinned = pinnedGoals.first {
             items.append(.init(id: "goal-\(pinned.id)", rank: 8, view: AnyView(
-                Button { HapticManager.shared.tap(); showWishlistSheet = true } label: {
+                Button { HapticManager.shared.tap(); vm.open(PlanRoute.goals) } label: {
                     PinnedGoalBanner(goal: pinned, tappable: true)
                 }
                 .buttonStyle(ScaleButtonStyle()))))
@@ -412,6 +452,21 @@ struct HomeView: View {
                             .scaleEffect(contentAppeared ? 1 : 0.94)
                             .animation(AppMotion.appear, value: contentAppeared)
 
+                        // What came in and what went out this pay cycle. The card
+                        // above says where the money stands; this says which
+                        // direction it has been moving to get there.
+                        MonthFlowCard(income: monthIncome,
+                                      expense: monthExpense,
+                                      currency: selectedCard?.resolvedCurrency
+                                                ?? CurrencyManager.shared.preferredCurrency,
+                                      periodLabel: flowPeriodLabel,
+                                      isHidden: selectedCard?.isHidden ?? false)
+                            .padding(.horizontal, 22)
+                            .padding(.top, 14)
+                            .opacity(contentAppeared ? 1 : 0)
+                            .offset(y: contentAppeared ? 0 : 18)
+                            .animation(AppMotion.appear, value: contentAppeared)
+
                         // Net Worth — cash minus liabilities. Only shown when the
                         // user actually has liabilities (credit cards / debts),
                         // otherwise it's just the cash total again.
@@ -419,11 +474,11 @@ struct HomeView: View {
                             let fmt = { (v: Double) in CurrencyManager.shared.formatted(v, currency: CurrencyManager.shared.preferredCurrency) }
                             VStack(alignment: .leading, spacing: 5) {
                                 HStack(spacing: 10) {
-                                    Image(systemName: "chart.pie.fill").font(.system(size: 13)).foregroundStyle(AppTheme.purple)
-                                    Text(loc("home.net_worth")).font(.system(size: 12, weight: .medium)).foregroundStyle(AppTheme.textSecondary)
+                                    Image(systemName: "chart.pie.fill").font(.system(.footnote)).foregroundStyle(AppTheme.purple)
+                                    Text(loc("home.net_worth")).font(.system(.caption, weight: .medium)).foregroundStyle(AppTheme.textSecondary)
                                     Spacer()
                                     Text((netWorth < 0 ? "-" : "") + fmt(Swift.abs(netWorth)))
-                                        .font(.system(size: 14, weight: .bold))
+                                        .font(.system(.subheadline, weight: .bold))
                                         .foregroundStyle(netWorth >= 0 ? AppTheme.textPrimary : AppTheme.red)
                                         // Roll the digits when a transaction
                                         // moves this. Seeing the figure change
@@ -440,13 +495,13 @@ struct HomeView: View {
                                               fmt(totalBalance), fmt(goalSavings), fmt(totalLiabilities))
                                      : String(format: loc("home.net_worth_breakdown"),
                                               fmt(totalBalance), fmt(totalLiabilities)))
-                                    .font(.system(size: 10))
+                                    .font(.system(.caption2))
                                     .foregroundStyle(AppTheme.textSecondary.opacity(0.75))
                                     .fixedSize(horizontal: false, vertical: true)
                             }
                             .padding(.horizontal, 16).padding(.vertical, 11)
-                            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
-                            .overlay(RoundedRectangle(cornerRadius: 14).stroke(AppTheme.purple.opacity(0.15), lineWidth: 1))
+                            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+                            .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.purple.opacity(0.15), lineWidth: 1))
                             .padding(.horizontal, 22).padding(.top, 12)
                             .opacity(contentAppeared ? 1 : 0)
                         }
@@ -467,7 +522,12 @@ struct HomeView: View {
                             onOpenSearch: { HapticManager.shared.tap(); showSearch = true }
                         )
                         .id(vm.selectedCardIndex)
-                        .padding(.top, 28)
+                        // The list reads as one surface now instead of floating
+                        // loose on the page — it is a single thing ("what you
+                        // spent") and its edges should say so.
+                        .padding(16)
+                        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.xl))
+                        .padding(.top, 24)
                         .padding(.horizontal, 22)
                                                 .opacity(contentAppeared ? 1 : 0)
                         .offset(y: contentAppeared ? 0 : 24)
@@ -488,10 +548,18 @@ struct HomeView: View {
         .onChange(of: vm.selectedCardIndex) { _, _ in
             withAnimation(.spring(response: 0.3)) { categoryFilter = nil }
             recomputeHomeInsights()
+            recomputeMonthFlow()
         }
         // Recompute memoized insights only when their inputs actually change —
         // not on every render. Keeps Home smooth as transactions pile up.
-        .onChange(of: totalTxCount)            { _, _ in recomputeHomeInsights() }
+        .onChange(of: totalTxCount)            { _, _ in recomputeHomeInsights(); recomputeMonthFlow() }
+        // Editing an existing amount changes no COUNT, so the tx-count trigger
+        // above misses it — the card face would move while income/expense sat
+        // on a stale figure. The balance is already computed each body pass, so
+        // watching it costs nothing and catches every edit that moves money.
+        .onChange(of: selectedCardBalance)     { _, _ in recomputeMonthFlow() }
+        // Setting up or moving the salary schedule moves where the cycle starts.
+        .onChange(of: MainCard.payDay(salarySchedules)) { _, _ in recomputeMonthFlow() }
         .onChange(of: budgetManager.isEnabled) { _, _ in recomputeHomeInsights() }
         .onChange(of: budgetManager.dailyRatio)     { _, _ in recomputeHomeInsights() }
         .onChange(of: budgetManager.lifestyleRatio) { _, _ in recomputeHomeInsights() }
@@ -511,6 +579,7 @@ struct HomeView: View {
                 vm.selectedCardIndex = idx
             }
             recomputeHomeInsights()
+            recomputeMonthFlow()
         }
         // A main card chosen in Wallet moves Home with it, rather than leaving
         // the two disagreeing until the next launch.
@@ -555,44 +624,16 @@ struct HomeView: View {
                 .presentationBackground(AppTheme.bg)
                 .preferredColorScheme(appColorScheme())
         }
-        .sheet(isPresented: $showSalarySheet) {
-            SalaryView()
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-                .presentationBackground(AppTheme.bg)
-                .preferredColorScheme(appColorScheme())
-        }
-        .sheet(isPresented: $showWishlistSheet) {
-            WishlistView()
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-                .presentationBackground(AppTheme.bg)
-                .preferredColorScheme(appColorScheme())
-        }
-        .sheet(isPresented: $showSmartBudget) {
-            SmartBudgetSettingsSheet()
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-                .presentationBackground(AppTheme.bg)
-                .preferredColorScheme(appColorScheme())
-        }
-        .sheet(isPresented: $showDebtFromInsight) {
-            DebtView()
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-                .presentationBackground(AppTheme.bg)
-                .preferredColorScheme(appColorScheme())
-        }
     }
 
     /// Route handler for `SmartInsight.action`. Each kind opens the matching
-    /// sheet on Home — this lives on HomeView (not the engine) because the
-    /// engine is intentionally UI-agnostic.
+    /// feature in its own tab — this lives on HomeView (not the engine) because
+    /// the engine is intentionally UI-agnostic.
     private func routeInsightAction(_ kind: SmartInsightAction.Kind) {
         switch kind {
-        case .openBudgetSettings: showSmartBudget = true
-        case .openSavingsGoals:   showWishlistSheet = true
-        case .openDebt:           showDebtFromInsight = true
+        case .openBudgetSettings: vm.open(PlanRoute.budget)
+        case .openSavingsGoals:   vm.open(PlanRoute.goals)
+        case .openDebt:           vm.open(WalletRoute.obligations)
         case .acknowledge:        break  // banner state managed elsewhere
         }
     }
@@ -632,9 +673,9 @@ struct NoCardState: View {
             }
 
             VStack(spacing: 6) {
-                Text(loc("home.get_started")).font(.system(size: 24, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
+                Text(loc("home.get_started")).font(.system(.title2, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
                 Text(loc("home.get_started_sub"))
-                    .font(.system(size: 14)).foregroundStyle(AppTheme.textSecondary)
+                    .font(.system(.subheadline)).foregroundStyle(AppTheme.textSecondary)
                     .multilineTextAlignment(.center).lineSpacing(3)
             }
 
@@ -648,7 +689,7 @@ struct NoCardState: View {
             .frame(height: 6)
             .padding(.horizontal, 32)
 
-            Text(loc("home.step1")).font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
+            Text(loc("home.step1")).font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
 
             // Tappable step rows
             VStack(spacing: 10) {
@@ -671,13 +712,12 @@ struct NoCardState: View {
 
             Button { HapticManager.shared.success(); showAddCard = true } label: {
                 HStack(spacing: 10) {
-                    Image(systemName: "plus.circle.fill").font(.system(size: 18))
-                    Text(loc("home.add_first_card")).font(.system(size: 16, weight: .bold))
+                    Image(systemName: "plus.circle.fill").font(.system(.body))
+                    Text(loc("home.add_first_card")).font(.system(.callout, weight: .bold))
                 }
-                .foregroundStyle(AppTheme.bg)
+                .foregroundStyle(AppTheme.onVividFill)
                 .padding(.horizontal, 36).padding(.vertical, 16)
                 .background(AppTheme.accentFill, in: Capsule())
-                .shadow(color: AppTheme.accent.opacity(0.65), radius: 18, y: 6)
             }
             .buttonStyle(ScaleButtonStyle())
         }
@@ -702,35 +742,35 @@ struct TappableSetupStep: View {
                     .frame(width: 36, height: 36)
                     .overlay(Circle().stroke(isActive || isDone ? AppTheme.accent.opacity(0.5) : AppTheme.cardMid, lineWidth: 1))
                 if isDone {
-                    Image(systemName: "checkmark").font(.system(size: 13, weight: .bold)).foregroundStyle(AppTheme.bg)
+                    Image(systemName: "checkmark").font(.system(.footnote, weight: .bold)).foregroundStyle(AppTheme.bg)
                 } else {
-                    Image(systemName: icon).font(.system(size: 14))
+                    Image(systemName: icon).font(.system(.subheadline))
                         .foregroundStyle(isActive ? AppTheme.accent : AppTheme.textSecondary.opacity(0.5))
                 }
             }
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.system(size: 14, weight: .semibold))
+                Text(title).font(.system(.subheadline, weight: .semibold))
                     .foregroundStyle(isActive ? AppTheme.textPrimary : AppTheme.textSecondary.opacity(0.5))
-                Text(subtitle).font(.system(size: 12))
+                Text(subtitle).font(.system(.caption))
                     .foregroundStyle(AppTheme.textSecondary.opacity(isActive ? 0.8 : 0.4))
             }
             Spacer()
             if isActive {
                 ZStack {
                     Circle().fill(AppTheme.accentFill).frame(width: 28, height: 28)
-                    Image(systemName: "chevron.right").font(.system(size: 11, weight: .bold)).foregroundStyle(AppTheme.bg)
+                    Image(systemName: "chevron.right").font(.system(.caption2, weight: .bold)).foregroundStyle(AppTheme.bg)
                 }
             } else if isDone {
-                Image(systemName: "checkmark.circle.fill").font(.system(size: 22)).foregroundStyle(AppTheme.accent)
+                Image(systemName: "checkmark.circle.fill").font(.system(.title2)).foregroundStyle(AppTheme.accent)
             } else {
                 Circle().fill(AppTheme.cardMid).frame(width: 28, height: 28)
-                    .overlay(Image(systemName: "lock.fill").font(.system(size: 10)).foregroundStyle(AppTheme.textSecondary.opacity(0.4)))
+                    .overlay(Image(systemName: "lock.fill").font(.system(.caption2)).imageScale(.small).foregroundStyle(AppTheme.textSecondary.opacity(0.4)))
             }
         }
         .padding(14)
-        .background(isActive ? AppTheme.accent.opacity(0.07) : AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
-        .overlay(RoundedRectangle(cornerRadius: 14).stroke(isActive ? AppTheme.accent.opacity(0.25) : Color.clear, lineWidth: 1))
+        .background(isActive ? AppTheme.accent.opacity(0.07) : AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(isActive ? AppTheme.accent.opacity(0.25) : Color.clear, lineWidth: 1))
     }
 }
 
@@ -760,13 +800,13 @@ struct SmartInsightBanner: View {
                 ZStack {
                     Circle().fill(insight.color.opacity(0.15)).frame(width: 40, height: 40)
                     Image(systemName: insight.icon)
-                        .font(.system(size: 16))
+                        .font(.system(.callout))
                         .foregroundStyle(insight.color)
                 }
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 6) {
                         Text(loc("home.smart_insight"))
-                            .font(.system(size: 10, weight: .semibold))
+                            .font(.system(.caption2, weight: .semibold))
                             .foregroundStyle(insight.color)
                             .padding(.horizontal, 6).padding(.vertical, 2)
                             .background(insight.color.opacity(0.15), in: Capsule())
@@ -777,11 +817,11 @@ struct SmartInsightBanner: View {
                         if insight.confidence != .high {
                             HStack(spacing: 3) {
                                 Image(systemName: "info.circle")
-                                    .font(.system(size: 9))
+                                    .font(.system(.caption2)).imageScale(.small)
                                 Text(insight.confidence == .low
                                      ? loc("insight.confidence.low")
                                      : loc("insight.confidence.medium"))
-                                    .font(.system(size: 9, weight: .semibold))
+                                    .font(.system(.caption2, weight: .semibold))
                             }
                             .foregroundStyle(AppTheme.textSecondary)
                             .padding(.horizontal, 6).padding(.vertical, 2)
@@ -789,10 +829,10 @@ struct SmartInsightBanner: View {
                         }
                     }
                     Text(insight.title)
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.system(.footnote, weight: .semibold))
                         .foregroundStyle(AppTheme.textPrimary)
                     Text(insight.body)
-                        .font(.system(size: 11))
+                        .font(.system(.caption2))
                         .foregroundStyle(AppTheme.textSecondary)
                         .lineSpacing(1)
                 }
@@ -801,7 +841,7 @@ struct SmartInsightBanner: View {
                     // Chevron only when the whole banner is tappable AND
                     // there's no action button — otherwise the banner shows
                     // its own primary action (less ambiguous).
-                    Image(systemName: "chevron.right").font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
+                    Image(systemName: "chevron.right").font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                 }
             }
             // First-time coaching — explains what the insight category
@@ -811,11 +851,11 @@ struct SmartInsightBanner: View {
             if let topic = coachingTopic {
                 HStack(alignment: .top, spacing: 8) {
                     Image(systemName: "lightbulb.fill")
-                        .font(.system(size: 11))
+                        .font(.system(.caption2))
                         .foregroundStyle(AppTheme.orange)
                     VStack(alignment: .leading, spacing: 6) {
                         Text(loc("coaching.\(topic).body"))
-                            .font(.system(size: 11))
+                            .font(.system(.caption2))
                             .foregroundStyle(AppTheme.textSecondary)
                             .lineSpacing(2)
                         Button {
@@ -824,7 +864,7 @@ struct SmartInsightBanner: View {
                             withAnimation { coachingTopic = nil }
                         } label: {
                             Text(loc("coaching.got_it"))
-                                .font(.system(size: 11, weight: .semibold))
+                                .font(.system(.caption2, weight: .semibold))
                                 .foregroundStyle(AppTheme.orange)
                         }
                         .buttonStyle(.plain)
@@ -832,8 +872,8 @@ struct SmartInsightBanner: View {
                     Spacer(minLength: 0)
                 }
                 .padding(8)
-                .background(AppTheme.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
-                .overlay(RoundedRectangle(cornerRadius: 10).stroke(AppTheme.orange.opacity(0.2), lineWidth: 1))
+                .background(AppTheme.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: AppRadius.sm))
+                .overlay(RoundedRectangle(cornerRadius: AppRadius.sm).stroke(AppTheme.orange.opacity(0.2), lineWidth: 1))
             }
 
             // Action CTA — drives the user toward a concrete next step
@@ -847,9 +887,9 @@ struct SmartInsightBanner: View {
                 } label: {
                     HStack(spacing: 6) {
                         Text(action.label)
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(.system(.caption, weight: .semibold))
                         Image(systemName: "arrow.right")
-                            .font(.system(size: 10, weight: .bold))
+                            .font(.system(.caption2, weight: .bold)).imageScale(.small)
                     }
                     .foregroundStyle(insight.color)
                     .padding(.horizontal, 12).padding(.vertical, 7)
@@ -861,8 +901,8 @@ struct SmartInsightBanner: View {
             }
         }
         .padding(12)
-        .background(insight.color.opacity(0.06), in: RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).stroke(insight.color.opacity(0.2), lineWidth: 1))
+        .background(insight.color.opacity(0.06), in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(insight.color.opacity(0.2), lineWidth: 1))
         .opacity(isDismissed ? 0 : (appeared ? 1 : 0))
         .frame(maxHeight: isDismissed ? 0 : nil)
         .onAppear {
@@ -910,34 +950,34 @@ struct DeclaredRecurringBanner: View {
             ZStack {
                 Circle().fill(expense.category.color.opacity(0.15)).frame(width: 40, height: 40)
                 Image(systemName: expense.category.icon)
-                    .font(.system(size: 16)).foregroundStyle(expense.category.color)
+                    .font(.system(.callout)).foregroundStyle(expense.category.color)
             }
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     Text(loc("home.declared_recurring_badge"))
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(.system(.caption2, weight: .semibold))
                         .foregroundStyle(expense.category.color)
                         .padding(.horizontal, 6).padding(.vertical, 2)
                         .background(expense.category.color.opacity(0.15), in: Capsule())
                     if days <= 0 {
                         Text(loc("tx.due_today"))
-                            .font(.system(size: 10, weight: .semibold))
+                            .font(.system(.caption2, weight: .semibold))
                             .foregroundStyle(AppTheme.red)
                             .padding(.horizontal, 6).padding(.vertical, 2)
                             .background(AppTheme.red.opacity(0.15), in: Capsule())
                     }
                 }
                 Text("\(expense.label) · \(CurrencyManager.shared.formatted(expense.amount, currency: expense.currency))")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.system(.footnote, weight: .semibold))
                     .foregroundStyle(AppTheme.textPrimary).lineLimit(1)
                 Text("\(whenText) · " + loc(expense.autoRecord ? "home.declared_auto_on" : "home.declared_auto_off"))
-                    .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                    .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
             }
             Spacer()
         }
         .padding(12)
-        .background(expense.category.color.opacity(0.06), in: RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).stroke(expense.category.color.opacity(0.2), lineWidth: 1))
+        .background(expense.category.color.opacity(0.06), in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(expense.category.color.opacity(0.2), lineWidth: 1))
         .opacity(appeared ? 1 : 0)
         .onAppear { withAnimation(.spring(response: 0.5)) { appeared = true } }
     }
@@ -967,23 +1007,23 @@ struct RecurringReminderBanner: View {
             ZStack {
                 Circle().fill(tint.opacity(0.15)).frame(width: 40, height: 40)
                 Image(systemName: iconName)
-                    .font(.system(size: 18)).foregroundStyle(tint)
+                    .font(.system(.body)).foregroundStyle(tint)
             }
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     Text(badgeText)
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(.system(.caption2, weight: .semibold))
                         .foregroundStyle(tint)
                         .padding(.horizontal, 6).padding(.vertical, 2)
                         .background(tint.opacity(0.15), in: Capsule())
                     Text(pattern.frequencyLabel)
-                        .font(.system(size: 10, weight: .medium))
+                        .font(.system(.caption2, weight: .medium))
                         .foregroundStyle(AppTheme.textSecondary)
                         .lineLimit(1)
                     // "Due today" only makes sense for a bill — a habit isn't due.
                     if isBill && daysUntil == 0 {
                         Text(loc("tx.due_today"))
-                            .font(.system(size: 10, weight: .semibold))
+                            .font(.system(.caption2, weight: .semibold))
                             .foregroundStyle(AppTheme.red)
                             .padding(.horizontal, 6).padding(.vertical, 2)
                             .background(AppTheme.red.opacity(0.15), in: Capsule())
@@ -994,14 +1034,14 @@ struct RecurringReminderBanner: View {
                 // nashville · ti…"), hiding the very thing that explains the
                 // flag — so the cadence moved up beside the badge instead.
                 Text(pattern.name)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.system(.footnote, weight: .semibold))
                     .foregroundStyle(AppTheme.textPrimary)
                     .lineLimit(1).truncationMode(.tail)
                 // Detail — bills get a "due" prediction; habits are framed as an
                 // average spend, no due-date pressure.
                 let amountStr = CurrencyManager.shared.formatted(pattern.amount, currency: pattern.currency)
                 Text(detailText(amountStr))
-                    .font(.system(size: 11))
+                    .font(.system(.caption2))
                     .foregroundStyle(AppTheme.textSecondary)
                 // One-line explainer so first-time users aren't confused.
                 // The evidence behind the claim, stated plainly: how many
@@ -1009,11 +1049,11 @@ struct RecurringReminderBanner: View {
                 // an assertion the user has no way to check.
                 Text(String(format: loc("recurring.evidence"),
                             pattern.occurrences, evidenceRange))
-                    .font(.system(size: 10))
+                    .font(.system(.caption2))
                     .foregroundStyle(AppTheme.textSecondary.opacity(0.8))
 
                 Text(isBill ? loc("recurring.help.bill") : loc("recurring.help.habit"))
-                    .font(.system(size: 10))
+                    .font(.system(.caption2))
                     .foregroundStyle(AppTheme.textSecondary.opacity(0.7))
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -1028,17 +1068,18 @@ struct RecurringReminderBanner: View {
                     withAnimation(.spring(response: 0.4)) { onDismiss() }
                 } label: {
                     Image(systemName: "xmark")
-                        .font(.system(size: 12, weight: .bold))
+                        .font(.system(.caption, weight: .bold))
                         .foregroundStyle(AppTheme.textSecondary)
                         .frame(width: 26, height: 26)
                         .background(AppTheme.cardMid, in: Circle())
                 }
+.accessibilityLabel(loc("a11y.dismiss"))
                 .buttonStyle(ScaleButtonStyle())
             }
         }
         .padding(12)
-        .background(tint.opacity(0.06), in: RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).stroke(tint.opacity(0.2), lineWidth: 1))
+        .background(tint.opacity(0.06), in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(tint.opacity(0.2), lineWidth: 1))
         .opacity(appeared ? 1 : 0)
         .onAppear { withAnimation(.spring(response: 0.5)) { appeared = true } }
     }
@@ -1074,13 +1115,13 @@ struct SetupSalaryBanner: View {
         HStack(spacing: 14) {
             ZStack {
                 Circle().fill(AppTheme.blue.opacity(0.15)).frame(width: 42, height: 42)
-                Image(systemName: "banknote").font(.system(size: 18)).foregroundStyle(AppTheme.blue)
+                Image(systemName: "banknote").font(.system(.body)).foregroundStyle(AppTheme.blue)
             }
             VStack(alignment: .leading, spacing: 3) {
                 Text(loc("home.setup_salary"))
-                    .font(.system(size: 14, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                    .font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
                 Text(loc("home.setup_salary_sub"))
-                    .font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
+                    .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
             }
             Spacer()
             Button {
@@ -1088,7 +1129,7 @@ struct SetupSalaryBanner: View {
                 showAddSalary = true
             } label: {
                 Text(loc("home.set_up"))
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(.caption, weight: .semibold))
                     .foregroundStyle(AppTheme.bg)
                     .padding(.horizontal, 12).padding(.vertical, 6)
                     .background(AppTheme.blue, in: Capsule())
@@ -1096,8 +1137,8 @@ struct SetupSalaryBanner: View {
             .buttonStyle(ScaleButtonStyle())
         }
         .padding(14)
-        .background(AppTheme.blue.opacity(0.06), in: RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).stroke(AppTheme.blue.opacity(0.2), lineWidth: 1))
+        .background(AppTheme.blue.opacity(0.06), in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.blue.opacity(0.2), lineWidth: 1))
     }
 }
 
@@ -1126,22 +1167,22 @@ struct PinnedGoalBanner: View {
                         .frame(width: 44, height: 44)
                         .rotationEffect(.degrees(-90))
                         .animation(AppMotion.appear, value: appeared)
-                    Text(goal.emoji).font(.system(size: 20))
+                    Text(goal.emoji).font(.system(.title3))
                 }
 
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 6) {
                         Text(goal.name)
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(.system(.subheadline, weight: .semibold))
                             .foregroundStyle(AppTheme.textPrimary)
                         Image(systemName: "pin.fill")
-                            .font(.system(size: 10))
+                            .font(.system(.caption2)).imageScale(.small)
                             .foregroundStyle(AppTheme.accent.opacity(0.7))
                     }
                     Text(String(format: loc("home.progress_to_go"),
                                 Int(progress * 100),
                                 CurrencyManager.shared.formatted(remaining, currency: goal.currency)))
-                        .font(.system(size: 12))
+                        .font(.system(.caption))
                         .foregroundStyle(AppTheme.textSecondary)
                 }
 
@@ -1149,10 +1190,10 @@ struct PinnedGoalBanner: View {
 
                 HStack(spacing: 6) {
                     Text("\(CurrencyManager.shared.formatted(goal.savedAmount, currency: goal.currency))")
-                        .font(.system(size: 13, weight: .bold))
+                        .font(.system(.footnote, weight: .bold))
                         .foregroundStyle(AppTheme.accent)
                     if tappable {
-                        Image(systemName: "chevron.right").font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
+                        Image(systemName: "chevron.right").font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                     }
                 }
             }
@@ -1171,8 +1212,8 @@ struct PinnedGoalBanner: View {
             .frame(height: 5)
         }
         .padding(14)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16)
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.md)
             .stroke(AppTheme.accent.opacity(0.2), lineWidth: 1))
         .onAppear { appeared = true }
     }
@@ -1189,11 +1230,11 @@ struct NegativeBalanceBanner: View {
             ZStack {
                 Circle().fill(AppTheme.red.opacity(0.15)).frame(width: 42, height: 42)
                 Image(systemName: "exclamationmark.triangle.fill")
-                    .font(.system(size: 18)).foregroundStyle(AppTheme.red)
+                    .font(.system(.body)).foregroundStyle(AppTheme.red)
             }
             VStack(alignment: .leading, spacing: 3) {
                 Text(loc("home.negative"))
-                    .font(.system(size: 14, weight: .semibold)).foregroundStyle(AppTheme.red)
+                    .font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.red)
                 Text(String(
                     format: loc("balance.review"),
                     CurrencyManager.shared.formatted(
@@ -1201,13 +1242,13 @@ struct NegativeBalanceBanner: View {
                         currency: currency
                     )
                 ))
-                    .font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
+                    .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
             }
             Spacer()
         }
         .padding(14)
-        .background(AppTheme.red.opacity(0.06), in: RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).stroke(AppTheme.red.opacity(0.25), lineWidth: 1))
+        .background(AppTheme.red.opacity(0.06), in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.red.opacity(0.25), lineWidth: 1))
     }
 }
 
@@ -1276,19 +1317,19 @@ struct SalaryReminderBanner: View {
                         .animation(.easeOut(duration: 1.5).repeatForever(autoreverses: false), value: pulsing)
                 }
                 Circle().fill(urgency.color.opacity(0.15)).frame(width: 40, height: 40)
-                Image(systemName: urgency.icon).font(.system(size: 18)).foregroundStyle(urgency.color)
+                Image(systemName: urgency.icon).font(.system(.body)).foregroundStyle(urgency.color)
             }
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
-                    Text(daysLabel).font(.system(size: 14, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                    Text(daysLabel).font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
                     if adjusted {
-                        Text(loc("home.adjusted")).font(.system(size: 10, weight: .semibold))
+                        Text(loc("home.adjusted")).font(.system(.caption2, weight: .semibold))
                             .foregroundStyle(AppTheme.orange)
                             .padding(.horizontal, 6).padding(.vertical, 2)
                             .background(AppTheme.orange.opacity(0.15), in: Capsule())
                     }
                 }
-                Text("\(schedule.label) - \(formattedAmount)").font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
+                Text("\(schedule.label) - \(formattedAmount)").font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                 let df: DateFormatter = {
                     let f = DateFormatter()
                     f.locale = LanguageManager.shared.currentLocale
@@ -1296,7 +1337,7 @@ struct SalaryReminderBanner: View {
                     return f
                 }()
                 Text(df.string(from: nextDate))
-                    .font(.system(size: 12, weight: .medium)).foregroundStyle(urgency.color)
+                    .font(.system(.caption, weight: .medium)).foregroundStyle(urgency.color)
             }
             Spacer()
             HStack(spacing: 6) {
@@ -1304,19 +1345,19 @@ struct SalaryReminderBanner: View {
                     if daysLeft == 0 {
                         Text(loc("home.now")).font(.system(size: 11, weight: .black)).foregroundStyle(urgency.color)
                     } else {
-                        Text("\(daysLeft)").font(.system(size: 20, weight: .bold)).foregroundStyle(urgency.color)
-                        Text(loc("home.days")).font(.system(size: 9, weight: .medium)).foregroundStyle(AppTheme.textSecondary)
+                        Text("\(daysLeft)").font(.system(.title3, weight: .bold)).foregroundStyle(urgency.color)
+                        Text(loc("home.days")).font(.system(.caption2, weight: .medium)).foregroundStyle(AppTheme.textSecondary)
                     }
                 }
                 .frame(width: 44)
                 if tappable {
-                    Image(systemName: "chevron.right").font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
+                    Image(systemName: "chevron.right").font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                 }
             }
         }
         .padding(14)
-        .background(urgency.color.opacity(0.06), in: RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).stroke(urgency.color.opacity(0.2), lineWidth: 1))
+        .background(urgency.color.opacity(0.06), in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(urgency.color.opacity(0.2), lineWidth: 1))
         .onAppear { pulsing = true }
     }
 }
@@ -1345,17 +1386,17 @@ struct MoreAttentionRow: View {
     var body: some View {
         HStack(spacing: 8) {
             Image(systemName: expanded ? "chevron.up" : "chevron.down")
-                .font(.system(size: 11, weight: .semibold))
+                .font(.system(.caption2, weight: .semibold))
                 .foregroundStyle(AppTheme.textSecondary)
             Text(expanded ? loc("home.attention_less")
                           : String(format: loc("home.attention_more"), count))
-                .font(.system(size: 13))
+                .font(.system(.footnote))
                 .foregroundStyle(AppTheme.textSecondary)
             Spacer()
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .background(AppTheme.cardDark.opacity(0.6), in: RoundedRectangle(cornerRadius: 12))
+        .background(AppTheme.cardDark.opacity(0.6), in: RoundedRectangle(cornerRadius: AppRadius.sm))
     }
 }
 
@@ -1365,51 +1406,106 @@ struct HomeHeader: View {
     @Binding var showNotifications: Bool
     private var notifMgr: NotificationManager { NotificationManager.shared }
 
-    private var profileImage: UIImage? {
-        guard let data = UserDefaults.standard.data(forKey: "profile_photo") else { return nil }
-        return UIImage(data: data)
+    /// Decoded once and held — not re-decoded on every body pass.
+    ///
+    /// This was a computed property that pulled the JPEG out of UserDefaults and
+    /// ran `UIImage(data:)` *every* time Home re-rendered: every transaction
+    /// added, every card swipe, every filter tap. The avatar changes roughly
+    /// never, so that work was pure cost on the one screen that must stay smooth.
+    @State private var avatar: UIImage? = nil
+    @State private var name: String = ""
+    /// Observed so the ring changes the moment the plan does.
+    @State private var premium = PremiumManager.shared
+
+    private var isRoyal: Bool { premium.plan == .royal }
+
+    /// Royal wears its colour as a ring — purple running into a warm gold, the
+    /// crown's own pairing — with the crown tucked at the edge. Free keeps a
+    /// quiet hairline, so the difference is a badge, not a demotion.
+    private var avatarRing: some View {
+        ZStack(alignment: .bottomTrailing) {
+            if isRoyal {
+                Circle()
+                    .strokeBorder(AngularGradient(colors: [PremiumPlan.royal.color, Color(hex: "#E879F9"),
+                                                           Color(hex: "#FBBF24"), PremiumPlan.royal.color],
+                                                  center: .center, angle: .degrees(-60)),
+                                  lineWidth: 2.5)
+                Image(systemName: "crown.fill")
+                    .font(.system(size: 8, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 18, height: 18)
+                    .background(PremiumPlan.royal.color, in: Circle())
+                    .overlay(Circle().stroke(AppTheme.bg, lineWidth: 2))
+                    .offset(x: 3, y: 3)
+                    .accessibilityHidden(true)
+            } else {
+                Circle().strokeBorder(AppTheme.cardMid, lineWidth: 1.5)
+            }
+        }
+        .frame(width: 54, height: 54)
     }
 
     var body: some View {
         HStack(spacing: 12) {
-            ZStack {
-                Circle()
-                    .fill(LinearGradient(colors: [AppTheme.cardMid, AppTheme.cardDark],
-                                        startPoint: .topLeading, endPoint: .bottomTrailing))
-                    .frame(width: 46, height: 46)
-                    .overlay(Circle().stroke(AppTheme.accent.opacity(0.25), lineWidth: 1))
-                if let img = profileImage {
-                    Image(uiImage: img)
-                        .resizable()
-                        .scaledToFill()
-                        .frame(width: 46, height: 46)
-                        .clipShape(Circle())
-                } else {
-                    Image("DiPoMascot")
-                        .resizable()
-                        .scaledToFill()
-                        .frame(width: 50, height: 50)
-                        .clipShape(Circle())
-//                    DiPoLogo(size: 46, showBackground: true)
-//                        .clipShape(Circle())
+            // Face and name are ONE control, not a decoration beside a label.
+            // The name earns its line back by being the title of a button that
+            // opens the place where you change the name.
+            Button {
+                HapticManager.shared.tap()
+                vm.openProfile()
+            } label: {
+                HStack(spacing: 12) {
+                    ZStack {
+                        Circle()
+                            .fill(LinearGradient(colors: [AppTheme.cardMid, AppTheme.cardDark],
+                                                startPoint: .topLeading, endPoint: .bottomTrailing))
+                            .frame(width: 45, height: 45)
+                        if let avatar {
+                            Image(uiImage: avatar)
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: 45, height: 45)
+                                .clipShape(Circle())
+                        } else {
+                            Image("DiPoMascot")
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: 49, height: 49)
+                                .frame(width: 45, height: 45)
+                                .clipShape(Circle())
+                        }
+                        avatarRing
+                    }
+                    .frame(width: 54, height: 54)
+
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(loc("home.greeting") + ",")
+                            .font(.system(.caption))
+                            .foregroundStyle(AppTheme.textSecondary)
+                        HStack(spacing: 4) {
+                            Text(name)
+                                .font(.system(.callout, weight: .bold))
+                                .foregroundStyle(AppTheme.textPrimary)
+                                .lineLimit(1)
+                            Image(systemName: "chevron.right")
+                                .font(.system(.caption2, weight: .semibold)).imageScale(.small)
+                                .foregroundStyle(AppTheme.textSecondary)
+                        }
+                    }
                 }
             }
-            .shadow(color: AppTheme.accent.opacity(0.2), radius: 8)
+            .buttonStyle(ScaleButtonStyle())
 
-            // Name removed: the avatar identifies the account already, and the
-            // line it occupied was competing with the attention slot below.
-            // It still lives on the profile sheet, where identity is the point.
-            Text(loc("home.greeting"))
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(AppTheme.textPrimary)
-            Spacer()
+            Spacer(minLength: 8)
+
             HStack(spacing: 14) {
                 Button { HapticManager.shared.tap(); showSearch = true } label: {
                     ZStack {
                         Circle().fill(AppTheme.cardDark).frame(width: 42, height: 42)
-                        Image(systemName: "magnifyingglass").font(.system(size: 17)).foregroundStyle(AppTheme.textSecondary)
+                        Image(systemName: "magnifyingglass").font(.system(.body)).foregroundStyle(AppTheme.textSecondary)
                     }
                 }
+.accessibilityLabel(loc("a11y.search"))
                 .buttonStyle(ScaleButtonStyle())
 
                 Button { HapticManager.shared.tap(); showNotifications = true } label: {
@@ -1417,25 +1513,45 @@ struct HomeHeader: View {
                         ZStack {
                             Circle().fill(AppTheme.cardDark).frame(width: 42, height: 42)
                             Image(systemName: notifMgr.hasUnread ? "bell.badge.fill" : "bell")
-                                .font(.system(size: 17))
+                                .font(.system(.body))
                                 .foregroundStyle(notifMgr.hasUnread ? AppTheme.accent : AppTheme.textSecondary)
                         }
                         if notifMgr.unreadCount > 0 {
                             ZStack {
-                                Circle().fill(AppTheme.red).frame(width: 18, height: 18)
+                                Circle().fill(AppTheme.redFill).frame(width: 18, height: 18)
                                 Text(notifMgr.unreadCount > 9 ? "9+" : "\(notifMgr.unreadCount)")
-                                    .font(.system(size: 9, weight: .bold)).foregroundStyle(AppTheme.onSolid)
+                                    .font(.system(.caption2, weight: .bold)).foregroundStyle(AppTheme.onVividFill)
                             }
                             .offset(x: 4, y: -4)
                         }
                     }
                 }
                 .buttonStyle(ScaleButtonStyle())
+                // Read as "Notifications, 3 unread" — the badge digit alone
+                // was announced with no noun attached.
+                .accessibilityLabel(loc("a11y.notifications"))
+                .accessibilityValue(notifMgr.unreadCount > 0
+                                    ? String(format: loc("a11y.unread_count"), notifMgr.unreadCount) : "")
             }
+        }
+        .onAppear(perform: loadIdentity)
+        // Every tab stays mounted, so `onAppear` fires once per launch. Editing
+        // the name or photo over on Profile has to say so explicitly, or Home
+        // would keep greeting the user by their old name until the next launch.
+        .onReceive(NotificationCenter.default.publisher(for: .profilePhotoDidChange)) { _ in
+            loadIdentity()
+        }
+    }
+
+    private func loadIdentity() {
+        name = Keychain.load(key: "user_name") ?? "User"
+        if let data = UserDefaults.standard.data(forKey: "profile_photo") {
+            avatar = UIImage(data: data)
+        } else {
+            avatar = nil
         }
     }
 }
-
 
 // MARK: - Card Carousel
 
@@ -1443,7 +1559,7 @@ struct CardCarousel: View {
     @Bindable var vm: AppViewModel
 
     var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 2) {
             TabView(selection: Binding(
                 get: { vm.selectedCardIndex },
                 set: { vm.selectCard($0) }
@@ -1451,11 +1567,16 @@ struct CardCarousel: View {
                 ForEach(Array(vm.cards.enumerated()), id: \.element.id) { index, card in
                     BankCardView(card: card)
                         .padding(.horizontal, 22)
+                        // The page clips its content, so the glow under the card
+                        // needs room inside it — the old black shadow was cut
+                        // off flat along the bottom edge.
+                        .padding(.top, 4)
+                        .padding(.bottom, 30)
                         .tag(index)
                 }
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
-            .frame(height: 190)
+            .frame(height: 216)
 
             HStack(spacing: 5) {
                 ForEach(0..<max(vm.cards.count, 1), id: \.self) { i in
@@ -1473,6 +1594,7 @@ struct CardCarousel: View {
 
 struct BankCardView: View {
     @Bindable var card: BankCard
+    @Environment(\.colorScheme) private var colorScheme
     @State private var isPressed = false
     /// Drives the balance count-up. Starts at 0 and animates to the real
     /// balance on appear; re-counts smoothly whenever the balance changes.
@@ -1507,171 +1629,185 @@ struct BankCardView: View {
         return (totalBalance < 0 ? "-" : "") + CurrencyManager.shared.formatted(abs, currency: cardCurrency)
     }
 
-    var body: some View {
-        ZStack(alignment: .topLeading) {
-            RoundedRectangle(cornerRadius: 22)
-                .fill(LinearGradient(
-                    colors: [Color(hex: card.gradientStart), Color(hex: card.gradientEnd)],
-                    startPoint: .topLeading, endPoint: .bottomTrailing
-                ))
+    private var gradient: LinearGradient {
+        LinearGradient(colors: [Color(hex: card.gradientStart), Color(hex: card.gradientEnd)],
+                       startPoint: .topLeading, endPoint: .bottomTrailing)
+    }
+
+    /// The face: the card's own gradient, lit like a surface rather than
+    /// painted flat — a soft glow from the top right, depth pooling at the
+    /// bottom left, a light sheen across the top and a hairline edge that
+    /// catches it. The network's colour still tints the corner curve.
+    ///
+    /// Gone: a black drop shadow (it clipped flat against the carousel page
+    /// and read as a smudge in dark mode) and a sparkline drawn from a fixed
+    /// array of numbers — a chart of nothing, on the card showing real money.
+    private var face: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: AppRadius.xl).fill(gradient)
 
             GeometryReader { g in
-                Path { p in
-                    p.move(to: .init(x: g.size.width * 0.32, y: 0))
-                    p.addCurve(
-                        to: .init(x: g.size.width, y: g.size.height * 0.7),
-                        control1: .init(x: g.size.width * 0.74, y: -12),
-                        control2: .init(x: g.size.width + 8, y: g.size.height * 0.32)
-                    )
-                    p.addLine(to: .init(x: g.size.width, y: 0))
-                    p.closeSubpath()
+                let w = g.size.width, h = g.size.height
+                ZStack {
+                    Circle()
+                        .fill(Color.white.opacity(0.22))
+                        .frame(width: w * 0.75, height: w * 0.75)
+                        .blur(radius: 38)
+                        .offset(x: w * 0.42, y: -h * 0.55)
+                    Circle()
+                        .fill(Color.black.opacity(0.22))
+                        .frame(width: w * 0.7, height: w * 0.7)
+                        .blur(radius: 44)
+                        .offset(x: -w * 0.42, y: h * 0.62)
+                    Path { p in
+                        p.move(to: .init(x: w * 0.46, y: 0))
+                        p.addCurve(to: .init(x: w, y: h * 0.62),
+                                   control1: .init(x: w * 0.8, y: -8),
+                                   control2: .init(x: w + 6, y: h * 0.3))
+                        p.addLine(to: .init(x: w, y: 0))
+                        p.closeSubpath()
+                    }
+                    .fill(LinearGradient(colors: [network.accentColor.opacity(0.28), network.accentColor.opacity(0.02)],
+                                         startPoint: .top, endPoint: .bottom))
+                    LinearGradient(colors: [Color.white.opacity(0.16), .clear],
+                                   startPoint: .top, endPoint: .center)
                 }
-                .fill(LinearGradient(
-                    colors: [network.accentColor.opacity(0.3), network.accentColor.opacity(0.05)],
-                    startPoint: .top, endPoint: .bottom
-                ))
+                .frame(width: w, height: h)
             }
-            .clipShape(RoundedRectangle(cornerRadius: 22))
+            .clipShape(RoundedRectangle(cornerRadius: AppRadius.xl))
 
-            SparklineView().frame(width: 100, height: 28).offset(x: 18, y: 72).opacity(0.45)
+            RoundedRectangle(cornerRadius: AppRadius.xl)
+                .strokeBorder(LinearGradient(colors: [Color.white.opacity(0.45), Color.white.opacity(0.06),
+                                                      Color.white.opacity(0.18)],
+                                             startPoint: .topLeading, endPoint: .bottomTrailing),
+                              lineWidth: 1)
+        }
+    }
 
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            face
+
+            // Mockup order, and the right order: the balance is the reason
+            // anyone looks at this card, so it sits at the top where the eye
+            // lands. Identity (whose card, which number, when it expires) is
+            // what you check second, so it moves to the bottom.
             VStack(alignment: .leading, spacing: 0) {
-                HStack {
-                    if card.isDigitalWallet {
-                        Image(systemName: "apps.iphone")
-                            .font(.system(size: 16))
-                            .foregroundStyle(.white.opacity(0.6))
-                    } else {
-                        Image(systemName: "wave.3.right")
-                            .font(.system(size: 18))
-                            .foregroundStyle(.white.opacity(0.6))
+                HStack(alignment: .top) {
+                    HStack(spacing: 8) {
+                        Text(card.isCreditCard ? loc("cc.owed") : loc("home.balance_total"))
+                            .font(.system(.caption2, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.75))
+                        Button {
+                            HapticManager.shared.tap()
+                            card.isHidden.toggle()
+                        } label: {
+                            Image(systemName: card.isHidden ? "eye.slash" : "eye")
+                                .font(.system(.caption, weight: .medium))
+                                .foregroundStyle(.white.opacity(0.7))
+                        }
+.accessibilityLabel(loc(card.isHidden ? "a11y.show_balance" : "a11y.hide_balance"))
+                        .buttonStyle(ScaleButtonStyle())
                     }
                     Spacer()
+                    if !card.isDigitalWallet {
+                        Image(systemName: "wave.3.right")
+                            .font(.system(.caption, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.7))
+                            .padding(.trailing, 8)
+                            .padding(.top, 3)
+                            .accessibilityHidden(true)
+                    }
                     if card.isDigitalWallet, let wp = WalletProvider(rawValue: card.walletProvider) {
                         HStack(spacing: 4) {
                             Image(systemName: wp.icon)
-                                .font(.system(size: 12, weight: .semibold))
+                                .font(.system(.caption, weight: .semibold))
                                 .foregroundStyle(.white.opacity(0.9))
                             Text(loc("cards.digital_wallet"))
-                                .font(.system(size: 10, weight: .medium))
+                                .font(.system(.caption2, weight: .medium))
                                 .foregroundStyle(.white.opacity(0.7))
                         }
                     } else {
                         CardNetworkLogo(network: network)
                     }
                 }
-                Spacer()
-                Text(card.holderName).font(.system(size: 13, weight: .medium)).foregroundStyle(.white)
-                // Phone or card number — inline eye toggle on the right
-                HStack(spacing: 6) {
-                    if card.isDigitalWallet {
-                        Text(card.displayPhone)
-                            .font(.system(size: 11))
-                            .foregroundStyle(.white.opacity(0.65))
+
+                // Hidden → static dots. Visible → CountUpText that rolls the
+                // number up on appear and re-counts whenever it changes.
+                Group {
+                    if card.isHidden {
+                        Text("••••••")
                     } else {
-                        Text(card.displayNumber)
-                            .font(.system(size: 11))
-                            .foregroundStyle(.white.opacity(0.65))
+                        CountUpText(value: animatedBalance, currency: cardCurrency)
                     }
-                    Spacer()
-                    Button {
-                        HapticManager.shared.tap()
-                        card.isHidden.toggle()
-                    } label: {
-                        Image(systemName: card.isHidden ? "eye.slash" : "eye")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(.white.opacity(0.6))
-                    }
-                    .buttonStyle(ScaleButtonStyle())
                 }
-                .padding(.top, 2)
+                .font(.system(.title, weight: .bold))
+                .foregroundStyle(totalBalance < 0 ? AppTheme.red : .white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+                .padding(.top, 8)
+                .onAppear {
+                    withAnimation(.easeOut(duration: 0.9)) { animatedBalance = totalBalance }
+                }
+                .onChange(of: totalBalance) { _, newValue in
+                    withAnimation(.easeOut(duration: 0.55)) { animatedBalance = newValue }
+                }
+
+                if totalBalance < 0 && !card.isHidden {
+                    Text(loc("home.negative"))
+                        .font(.system(.caption2, weight: .semibold))
+                        .foregroundStyle(AppTheme.red.opacity(0.9))
+                        .padding(.top, 2)
+                }
+
+                Spacer(minLength: 8)
+
                 HStack(alignment: .bottom) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        // Total balance (matches the Cards tab). No month
-                        // suffix — this is the card's running balance, not a
-                        // periodic figure.
-                        Text(card.isCreditCard ? loc("cc.owed") : loc("home.balance_total"))
-                            .font(.system(size: 9, weight: .medium))
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(card.holderName)
+                            .font(.system(.caption, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.92))
+                            .lineLimit(1)
+                        // Currency joins the number. On a single-currency
+                        // wallet it is redundant; the moment a second currency
+                        // exists it is the difference between two cards whose
+                        // digits look alike.
+                        Text("\(cardCurrency) · \(card.isDigitalWallet ? card.displayPhone : card.displayNumber)")
+                            .font(.system(.caption2))
                             .foregroundStyle(.white.opacity(0.65))
-                        // Hidden → static dots. Visible → CountUpText that
-                        // rolls the number up on appear and re-counts on
-                        // change. `.id(card.id)` resets the count-up when
-                        // the carousel swaps to a different card so each
-                        // card animates its own balance in.
-                        Group {
-                            if card.isHidden {
-                                Text("••••••")
-                            } else {
-                                CountUpText(value: animatedBalance, currency: cardCurrency)
-                            }
-                        }
-                        .font(.system(size: 26, weight: .bold))
-                        .foregroundStyle(totalBalance < 0 ? AppTheme.red : .white)
-                        .onAppear {
-                            // Count up from 0 → balance on first display.
-                            withAnimation(.easeOut(duration: 0.9)) {
-                                animatedBalance = totalBalance
-                            }
-                        }
-                        .onChange(of: totalBalance) { _, newValue in
-                            // Re-count when a tx changes the balance.
-                            withAnimation(.easeOut(duration: 0.55)) {
-                                animatedBalance = newValue
-                            }
-                        }
-                        if totalBalance < 0 && !card.isHidden {
-                            Text(loc("home.negative")).font(.system(size: 9, weight: .semibold))
-                                .foregroundStyle(AppTheme.red.opacity(0.9))
-                        }
+                            .lineLimit(1)
                     }
-                    Spacer()
+                    Spacer(minLength: 10)
                     if !card.isDigitalWallet {
                         VStack(alignment: .trailing, spacing: 2) {
-                            Text(loc("cards.expires")).font(.system(size: 10)).foregroundStyle(.white.opacity(0.6))
-                            Text(card.expireDate).font(.system(size: 13, weight: .semibold)).foregroundStyle(.white)
+                            Text(loc("cards.expires"))
+                                .font(.system(.caption2)).foregroundStyle(.white.opacity(0.6))
+                            Text(card.expireDate)
+                                .font(.system(.footnote, weight: .semibold)).foregroundStyle(.white)
                         }
                     }
                 }
-                .padding(.top, 10)
             }
             .padding(20)
         }
         .frame(height: 182)
-        .shadow(color: .black.opacity(0.35), radius: 20, y: 10)
+        // A glow in the card's own colours, not a black shadow: it lifts the
+        // card off the page in both themes and belongs to the card it sits under.
+        .background(alignment: .bottom) {
+            RoundedRectangle(cornerRadius: AppRadius.xl)
+                .fill(gradient)
+                .frame(height: 150)
+                .padding(.horizontal, 20)
+                .offset(y: 14)
+                .blur(radius: 20)
+                .opacity(colorScheme == .dark ? 0.55 : 0.45)
+        }
         .scaleEffect(isPressed ? 0.97 : 1)
         .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isPressed)
         .onLongPressGesture(minimumDuration: .infinity, pressing: { p in
             isPressed = p
             if p { HapticManager.shared.tap() }
         }, perform: {})
-    }
-}
-
-// MARK: - Sparkline
-
-struct SparklineView: View {
-    private let points: [Double] = [0.3, 0.5, 0.4, 0.7, 0.55, 0.8, 0.65]
-    @State private var progress: Double = 0
-    var body: some View {
-        GeometryReader { g in
-            let w = g.size.width, h = g.size.height
-            let step = w / Double(points.count - 1)
-            Path { path in
-                for (i, pt) in points.enumerated() {
-                    let x = Double(i) * step; let y = h - pt * h
-                    if i == 0 { path.move(to: .init(x: x, y: y)) }
-                    else {
-                        let prev = points[i-1]; let px = Double(i-1) * step; let py = h - prev * h
-                        path.addCurve(to: .init(x: x, y: y),
-                                      control1: .init(x: px + step*0.5, y: py),
-                                      control2: .init(x: x - step*0.5, y: y))
-                    }
-                }
-            }
-            .trim(from: 0, to: progress)
-            .stroke(AppTheme.accent, style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
-        }
-        .onAppear { withAnimation(.easeOut(duration: 1.2).delay(0.4)) { progress = 1 } }
     }
 }
 
@@ -1723,13 +1859,13 @@ struct CategoryFilterBar: View {
         } label: {
             VStack(spacing: 8) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 16)
+                    RoundedRectangle(cornerRadius: AppRadius.lg)
                         .fill(isActive ? cat.color.opacity(0.18) : AppTheme.cardDark)
                         .frame(width: 58, height: 58)
-                        .overlay(RoundedRectangle(cornerRadius: 16)
+                        .overlay(RoundedRectangle(cornerRadius: AppRadius.lg)
                             .stroke(isActive ? cat.color.opacity(0.6) : Color.clear, lineWidth: 1.5))
                     Image(systemName: cat.icon)
-                        .font(.system(size: 22))
+                        .font(.system(.title2))
                         .foregroundStyle(isActive ? cat.color : AppTheme.textPrimary)
                         .scaleEffect(isActive ? 1.1 : 1)
                 }
@@ -1764,12 +1900,6 @@ struct TransactionSection: View {
     @State private var pendingDelete: TxRecord? = nil
     @Environment(\.modelContext) private var context
 
-    /// Bridges the optional `pendingDelete` to the Bool the confirmation dialog
-    /// needs; clearing it on dismiss cancels the pending delete.
-    private var deleteDialogBinding: Binding<Bool> {
-        Binding(get: { pendingDelete != nil },
-                set: { if !$0 { pendingDelete = nil } })
-    }
 
     /// Everything the list needs, derived in ONE pass.
     ///
@@ -1870,7 +2000,7 @@ struct TransactionSection: View {
 
             HStack {
                 Text(loc("home.transactions"))
-                    .font(.system(size: 17, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                    .font(.system(.body, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
                 Spacer()
                 HStack(spacing: 12) {
                     // Names the window it switches to, rather than "See more"
@@ -1884,7 +2014,7 @@ struct TransactionSection: View {
                             withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) { showAll.toggle() }
                         } label: {
                             Text(showAll ? loc("home.window_3days") : loc("home.window_week"))
-                                .font(.system(size: 13, weight: .medium)).foregroundStyle(AppTheme.textSecondary)
+                                .font(.system(.footnote, weight: .medium)).foregroundStyle(AppTheme.textSecondary)
                         }
                     }
                 }
@@ -1894,21 +2024,22 @@ struct TransactionSection: View {
             // Active filter chip with clear button
             if let filter = categoryFilter {
                 HStack(spacing: 8) {
-                    Image(systemName: filter.icon).font(.system(size: 12)).foregroundStyle(filter.color)
+                    Image(systemName: filter.icon).font(.system(.caption)).foregroundStyle(filter.color)
                     Text(String(format: loc("home.filtered_month"), filter.displayLabel))
-                        .font(.system(size: 12, weight: .medium)).foregroundStyle(filter.color)
+                        .font(.system(.caption, weight: .medium)).foregroundStyle(filter.color)
                     Spacer()
                     Button {
                         HapticManager.shared.tap()
                         onClearFilter?()
                     } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 16)).foregroundStyle(AppTheme.textSecondary)
+                            .font(.system(.callout)).foregroundStyle(AppTheme.textSecondary)
                     }
+.accessibilityLabel(loc("a11y.clear_filter"))
                 }
                 .padding(.horizontal, 12).padding(.vertical, 8)
-                .background(filter.color.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
-                .overlay(RoundedRectangle(cornerRadius: 10).stroke(filter.color.opacity(0.2), lineWidth: 1))
+                .background(filter.color.opacity(0.08), in: RoundedRectangle(cornerRadius: AppRadius.sm))
+                .overlay(RoundedRectangle(cornerRadius: AppRadius.sm).stroke(filter.color.opacity(0.2), lineWidth: 1))
                 .padding(.bottom, 10)
                 .transition(.opacity)
             }
@@ -1916,20 +2047,20 @@ struct TransactionSection: View {
             if d.groups.isEmpty {
                 VStack(spacing: 14) {
                     Image(systemName: categoryFilter != nil ? "line.3.horizontal.decrease.circle" : "tray")
-                        .font(.system(size: 32)).foregroundStyle(AppTheme.textSecondary)
+                        .font(.system(.largeTitle)).foregroundStyle(AppTheme.textSecondary)
                     Text(categoryFilter != nil
                          ? String(format: loc("home.no_cat_tx_month"), categoryFilter!.displayLabel)
                          : (d.hasOlderOutsideWindow
                             ? loc("home.quiet_window")
                             : loc("home.no_tx_card")))
-                        .font(.system(size: 14)).foregroundStyle(AppTheme.textSecondary)
+                        .font(.system(.subheadline)).foregroundStyle(AppTheme.textSecondary)
                         .multilineTextAlignment(.center)
                     Text(categoryFilter != nil
                          ? loc("home.older_in_search")
                          : (d.hasOlderOutsideWindow
                             ? loc("home.quiet_window_hint")
                             : loc("home.tap_plus")))
-                        .font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary.opacity(0.7))
+                        .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary.opacity(0.7))
                         .multilineTextAlignment(.center)
 
                     // The filter only looks at this month, so an empty result
@@ -1940,8 +2071,8 @@ struct TransactionSection: View {
                             onOpenSearch()
                         } label: {
                             HStack(spacing: 8) {
-                                Image(systemName: "magnifyingglass").font(.system(size: 14))
-                                Text(loc("home.search_older")).font(.system(size: 13, weight: .semibold))
+                                Image(systemName: "magnifyingglass").font(.system(.subheadline))
+                                Text(loc("home.search_older")).font(.system(.footnote, weight: .semibold))
                             }
                             .foregroundStyle(AppTheme.accent)
                             .padding(.horizontal, 16).padding(.vertical, 9)
@@ -1963,8 +2094,8 @@ struct TransactionSection: View {
                             NotificationCenter.default.post(name: .requestOpenAddTransaction, object: nil)
                         } label: {
                             HStack(spacing: 8) {
-                                Image(systemName: "plus.circle.fill").font(.system(size: 14))
-                                Text(loc("home.add_first_tx")).font(.system(size: 13, weight: .semibold))
+                                Image(systemName: "plus.circle.fill").font(.system(.subheadline))
+                                Text(loc("home.add_first_tx")).font(.system(.footnote, weight: .semibold))
                             }
                             .foregroundStyle(AppTheme.accent)
                             .padding(.horizontal, 16).padding(.vertical, 9)
@@ -1985,13 +2116,13 @@ struct TransactionSection: View {
                             let dayTotal = group.total
                             HStack {
                                 Text(group.key)
-                                    .font(.system(size: 13, weight: .semibold))
+                                    .font(.system(.footnote, weight: .semibold))
                                     .foregroundStyle(AppTheme.textSecondary)
                                 Spacer()
                                 Text(dayTotal >= 0
                                      ? "+\(CurrencyManager.shared.formatted(dayTotal, currency: group.txs.first?.currency ?? CurrencyManager.shared.preferredCurrency))"
                                      : CurrencyManager.shared.formatted(dayTotal, currency: group.txs.first?.currency ?? CurrencyManager.shared.preferredCurrency))
-                                    .font(.system(size: 12, weight: .medium))
+                                    .font(.system(.caption, weight: .medium))
                                     .foregroundStyle(dayTotal >= 0 ? AppTheme.accent.opacity(0.7) : AppTheme.red.opacity(0.7))
                             }
 
@@ -2017,20 +2148,24 @@ struct TransactionSection: View {
                 }
             }
         }
-        .confirmationDialog(loc("tx.delete_prompt"), isPresented: deleteDialogBinding, titleVisibility: .visible) {
-            Button(loc("common.delete"), role: .destructive) {
-                if let tx = pendingDelete {
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
-                        deleteTransactionWithGoalRollback(tx, context: context)
+        .sheet(item: $pendingDelete) { tx in
+            DeleteTransactionSheet(
+                tx: tx,
+                card: sourceCard ?? cards.first,
+                onConfirm: {
+                    pendingDelete = nil
+                    // Let the sheet start leaving before the row collapses, so
+                    // the removal animation plays where the user can see it.
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                            deleteTransactionWithGoalRollback(tx, context: context)
+                        }
+                        try? context.save()
+                        HapticManager.shared.success()
                     }
-                    try? context.save()
-                    HapticManager.shared.warning()
-                }
-                pendingDelete = nil
-            }
-            Button(loc("common.cancel"), role: .cancel) { pendingDelete = nil }
-        } message: {
-            Text(loc("tx.delete_confirm"))
+                },
+                onCancel: { pendingDelete = nil })
+            .preferredColorScheme(appColorScheme())
         }
         .sheet(item: $selectedTx) { tx in
             TransactionDetailSheet(tx: tx)
@@ -2096,15 +2231,14 @@ struct SwipeToDeleteRow<Content: View>: View {
                     VStack(spacing: 5) {
                         ZStack {
                             Circle()
-                                .fill(AppTheme.red)
+                                .fill(AppTheme.redFill)
                                 .frame(width: 44, height: 44)
-                                .shadow(color: AppTheme.red.opacity(0.22), radius: 4, y: 2)
                             Image(systemName: "trash.fill")
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundStyle(AppTheme.onSolid)
+                                .font(.system(.callout, weight: .semibold))
+                                .foregroundStyle(AppTheme.onVividFill)
                         }
                         Text(loc("common.delete"))
-                            .font(.system(size: 11, weight: .semibold))
+                            .font(.system(.caption2, weight: .semibold))
                             .foregroundStyle(AppTheme.red)
                     }
                     .scaleEffect(isFullSwipe ? 1.15 : max(revealProgress, 0.4))
@@ -2116,8 +2250,10 @@ struct SwipeToDeleteRow<Content: View>: View {
             }
 
             content
-                // Opaque background so the red action is hidden when closed.
-                .background(AppTheme.bg)
+                // Opaque so the red action is hidden when closed — and the SAME
+                // colour as the card the list now sits in. It was `AppTheme.bg`,
+                // which on a white card painted a grey slab behind every row.
+                .background(AppTheme.cardDark)
                 .offset(x: offset)
                 .gesture(
                     DragGesture(minimumDistance: 16)
@@ -2195,8 +2331,8 @@ struct TxRow: View {
     var body: some View {
         HStack(spacing: 14) {
             ZStack {
-                RoundedRectangle(cornerRadius: 13)
-                    .fill(Color(hex: tx.iconBgHex)).frame(width: 44, height: 44)
+                Circle()
+                    .fill(tx.displayIconBg).frame(width: 44, height: 44)
                 Text(tx.icon)
                     .font(.system(size: tx.icon.count == 1 ? 16 : 18)).foregroundStyle(.white)
             }
@@ -2204,7 +2340,7 @@ struct TxRow: View {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     Text(tx.name)
-                        .font(.system(size: 15, weight: .medium)).foregroundStyle(AppTheme.textPrimary)
+                        .font(.system(.subheadline, weight: .medium)).foregroundStyle(AppTheme.textPrimary)
                     // Subtype badge — small inline marker showing this tx is
                     // a refund or transfer. Without this, users can't tell
                     // at a glance which tx is treated specially by the
@@ -2214,9 +2350,9 @@ struct TxRow: View {
                     if tx.txSubtype != .normal {
                         HStack(spacing: 3) {
                             Image(systemName: tx.txSubtype.icon)
-                                .font(.system(size: 8, weight: .semibold))
+                                .font(.system(.caption2, weight: .semibold)).imageScale(.small)
                             Text(tx.txSubtype.displayLabel)
-                                .font(.system(size: 9, weight: .bold))
+                                .font(.system(.caption2, weight: .bold))
                         }
                         .foregroundStyle(AppTheme.orange)
                         .padding(.horizontal, 5).padding(.vertical, 2)
@@ -2229,9 +2365,9 @@ struct TxRow: View {
                         let isSalary = tx.notes == "tx.note.salary_auto"
                         HStack(spacing: 3) {
                             Image(systemName: isSalary ? "banknote" : "arrow.clockwise")
-                                .font(.system(size: 8, weight: .semibold))
+                                .font(.system(.caption2, weight: .semibold)).imageScale(.small)
                             Text(loc(isSalary ? "tx.badge.auto_salary" : "tx.badge.auto_recurring"))
-                                .font(.system(size: 9, weight: .bold))
+                                .font(.system(.caption2, weight: .bold))
                         }
                         .foregroundStyle(isSalary ? AppTheme.accent : AppTheme.blue)
                         .padding(.horizontal, 5).padding(.vertical, 2)
@@ -2240,7 +2376,7 @@ struct TxRow: View {
                 }
                 HStack(spacing: 6) {
                     Text(timeOnly)
-                        .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                        .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                     // Source of fund badge — shown when user has multiple cards
                     if showCard, let card = sourceCard {
                         HStack(spacing: 3) {
@@ -2250,7 +2386,7 @@ struct TxRow: View {
                                     startPoint: .leading, endPoint: .trailing))
                                 .frame(width: 12, height: 8)
                             Text("••\(card.cardNumber.suffix(2))")
-                                .font(.system(size: 10, weight: .medium))
+                                .font(.system(.caption2, weight: .medium))
                                 .foregroundStyle(AppTheme.textSecondary)
                         }
                         .padding(.horizontal, 6).padding(.vertical, 2)
@@ -2265,10 +2401,10 @@ struct TxRow: View {
                 Text(tx.amount >= 0
                      ? "+\(CurrencyManager.shared.formatted(tx.amount, currency: tx.currency))"
                      : CurrencyManager.shared.formatted(tx.amount, currency: tx.currency))
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.system(.subheadline, weight: .semibold))
                     .foregroundStyle(tx.amount >= 0 ? AppTheme.green : AppTheme.textPrimary)
                 Text(tx.displayType)
-                    .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                    .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
             }
         }
         .opacity(animateEntrance ? (appeared ? 1 : 0) : 1)

@@ -163,11 +163,11 @@ struct ObligationLoadCard: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 8) {
                 Text(loc("oblig.load_title"))
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(.caption, weight: .semibold))
                     .foregroundStyle(AppTheme.textSecondary)
                 Spacer()
                 Text(loc(shown.verdict.labelKey))
-                    .font(.system(size: 10, weight: .bold))
+                    .font(.system(.caption2, weight: .bold))
                     .foregroundStyle(shown.verdict.tint)
                     .padding(.horizontal, 8).padding(.vertical, 3)
                     .background(shown.verdict.tint.opacity(0.15), in: Capsule())
@@ -175,23 +175,23 @@ struct ObligationLoadCard: View {
 
             if load.monthlyIncome <= 0 {
                 Text(loc("oblig.no_income"))
-                    .font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
+                    .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             } else {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text(pct(shown.ratio))
-                        .font(.system(size: 32, weight: .bold))
+                        .font(.system(.largeTitle, weight: .bold))
                         .foregroundStyle(shown.verdict.tint)
                     if projected != nil {
                         Text("← " + pct(load.ratio))
-                            .font(.system(size: 13, weight: .medium))
+                            .font(.system(.footnote, weight: .medium))
                             .foregroundStyle(AppTheme.textSecondary)
                     }
                     Spacer()
                 }
                 Text(String(format: loc("oblig.of_income"),
                             money(shown.total), money(load.monthlyIncome)))
-                    .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                    .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
 
                 ratioBar
 
@@ -215,15 +215,14 @@ struct ObligationLoadCard: View {
                                              : "oblig.income_elsewhere_n"),
                                  money(load.incomeElsewhere), load.jobsElsewhere),
                           systemImage: "arrow.turn.down.right")
-                        .font(.system(size: 11))
+                        .font(.system(.caption2))
                         .foregroundStyle(AppTheme.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
         }
         .padding(16)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 18))
-        .overlay(RoundedRectangle(cornerRadius: 18).stroke(shown.verdict.tint.opacity(0.22), lineWidth: 1))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
     }
 
     /// Obligations against the Smart Budget allocation, drawn to the same
@@ -245,10 +244,14 @@ struct ObligationLoadCard: View {
     }
 
     private func line(_ label: String, _ value: String, tint: Color = AppTheme.textPrimary) -> some View {
-        HStack {
-            Text(label).font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
-            Spacer()
-            Text(value).font(.system(size: 11, weight: .semibold)).foregroundStyle(tint)
+        // Label wraps, figure never does — "x / y" split across two lines
+        // was unreadable, and English labels run longer than Indonesian ones.
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            Text(label).font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 8)
+            Text(value).font(.system(.caption, weight: .semibold)).foregroundStyle(tint)
+                .fixedSize()
         }
     }
 }
@@ -281,7 +284,7 @@ struct ObligationsView: View {
     }
 
     var body: some View {
-        NavigationStack {
+        FeatureStack { pushed in
             ZStack {
                 AppTheme.bg.ignoresSafeArea()
                 // Deliberately NOT wrapped in a ScrollView: each segment below
@@ -317,7 +320,17 @@ struct ObligationsView: View {
             .navigationTitle(loc("oblig.nav"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(AppTheme.bg, for: .navigationBar)
-            .doneToolbar { dismiss() }
+            .toolbar {
+                if !pushed {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button { HapticManager.shared.tap(); dismiss() } label: {
+                            Text(loc("common.done"))
+                                .font(.system(.callout, weight: .semibold))
+                                .foregroundStyle(AppTheme.accent)
+                        }
+                    }
+                }
+            }
         }
     }
 }

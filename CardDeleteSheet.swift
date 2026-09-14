@@ -69,18 +69,18 @@ struct CardDeleteSheet: View {
                 .clipShape(Capsule())
             VStack(alignment: .leading, spacing: 3) {
                 Text(CardLabel.title(card))
-                    .font(.system(size: 17, weight: .bold))
+                    .font(.system(.body, weight: .bold))
                     .foregroundStyle(AppTheme.textPrimary)
                     .lineLimit(1)
                 let sub = CardLabel.subtitle(card)
                 Text(sub.isEmpty ? card.formattedBalance : sub + " · " + card.formattedBalance)
-                    .font(.system(size: 12))
+                    .font(.system(.caption))
                     .foregroundStyle(AppTheme.textSecondary)
             }
             Spacer(minLength: 0)
         }
         .padding(14)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
     }
 
     // MARK: What goes with it
@@ -88,7 +88,7 @@ struct CardDeleteSheet: View {
     private var inventory: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text(loc("cards.delete_takes"))
-                .font(.system(size: 10, weight: .bold))
+                .font(.system(.caption2, weight: .bold))
                 .foregroundStyle(AppTheme.textSecondary)
                 .tracking(0.6)
                 .padding(.bottom, 10)
@@ -109,7 +109,7 @@ struct CardDeleteSheet: View {
             }
         }
         .padding(14)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
     }
 
     private var divider: some View {
@@ -119,15 +119,15 @@ struct CardDeleteSheet: View {
     private func item(_ icon: String, _ title: String, _ detail: String, heavy: Bool) -> some View {
         HStack(alignment: .top, spacing: 11) {
             Image(systemName: icon)
-                .font(.system(size: 13))
+                .font(.system(.footnote))
                 .foregroundStyle(heavy ? AppTheme.red : AppTheme.textSecondary)
                 .frame(width: 23)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.system(.footnote, weight: .semibold))
                     .foregroundStyle(AppTheme.textPrimary)
                 Text(detail)
-                    .font(.system(size: 11))
+                    .font(.system(.caption2))
                     .foregroundStyle(AppTheme.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -137,12 +137,12 @@ struct CardDeleteSheet: View {
 
     private var mainWarning: some View {
         Label(loc("cards.delete_is_main"), systemImage: "star.slash")
-            .font(.system(size: 12, weight: .medium))
+            .font(.system(.caption, weight: .medium))
             .foregroundStyle(AppTheme.orange)
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(13)
-            .background(AppTheme.orange.opacity(0.10), in: RoundedRectangle(cornerRadius: 14))
+            .background(AppTheme.orange.opacity(0.10), in: RoundedRectangle(cornerRadius: AppRadius.md))
     }
 
     // MARK: Arm
@@ -154,10 +154,10 @@ struct CardDeleteSheet: View {
         } label: {
             HStack(spacing: 11) {
                 Image(systemName: armed ? "checkmark.square.fill" : "square")
-                    .font(.system(size: 19))
+                    .font(.system(.title3))
                     .foregroundStyle(armed ? AppTheme.red : AppTheme.cardMid)
                 Text(String(format: loc("cards.delete_ack"), txCount))
-                    .font(.system(size: 13))
+                    .font(.system(.footnote))
                     .foregroundStyle(AppTheme.textPrimary)
                     .fixedSize(horizontal: false, vertical: true)
                     .multilineTextAlignment(.leading)
@@ -177,12 +177,12 @@ struct CardDeleteSheet: View {
                 dismiss()
             } label: {
                 Text(loc("cards.delete_confirm_btn"))
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundStyle(canDelete ? .white : AppTheme.textSecondary)
+                    .font(.system(.subheadline, weight: .bold))
+                    .foregroundStyle(canDelete ? AppTheme.onVividFill : AppTheme.textSecondary)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
                     .background(canDelete ? AppTheme.red : AppTheme.cardMid,
-                                in: RoundedRectangle(cornerRadius: 16))
+                                in: RoundedRectangle(cornerRadius: AppRadius.md))
             }
             .buttonStyle(ScaleButtonStyle())
             .disabled(!canDelete)
@@ -191,7 +191,7 @@ struct CardDeleteSheet: View {
                 HapticManager.shared.tap(); dismiss()
             } label: {
                 Text(loc("common.cancel"))
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.system(.subheadline, weight: .semibold))
                     .foregroundStyle(AppTheme.textPrimary)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 15)

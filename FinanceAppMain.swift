@@ -268,8 +268,17 @@ struct DiPoApp: App {
     var body: some Scene {
         WindowGroup {
             RootView()
-                // ✅ Force full re-render when language switches so all Text() updates instantly
-                .id(LanguageManager.shared.renderID)
+                // Text now follows the iPhone's text size setting (every size is
+                // an iOS text style). Capped at xxLarge — body 21pt — because the
+                // layouts still have fixed-height pieces (card faces, category
+                // tiles, the tab bar) that clip past that. Raise the cap as those
+                // are made to grow.
+                .dynamicTypeSize(...DynamicTypeSize.xxLarge)
+                // The language re-render lives INSIDE RootView now (see there).
+                // Keyed out here it destroyed RootView itself, so every launch
+                // task ran again on each language switch — card-expiry pushes
+                // and bell rows fired a second time in the new language, and
+                // RevenueCat was configured twice.
                 .preferredColorScheme(resolvedColorScheme)
                 .onOpenURL { url in
                     // Two URL schemes share this hook:
@@ -292,6 +301,11 @@ struct DiPoApp: App {
                             // tap widget → see paywall, no detours through
                             // settings tab first.
                             NotificationCenter.default.post(name: .requestOpenPaywall, object: nil)
+                        case "scan-shared":
+                            // "Log with DiPo" from the share sheet. The image is
+                            // already in the App Group inbox; MainTabView takes it
+                            // and opens the same review form Back Tap uses.
+                            NotificationCenter.default.post(name: .requestOpenSharedScan, object: nil)
                         case "support":
                             // Support-reply notifications ("Learn more") deep-link
                             // here. Open the Support screen so the user lands on

@@ -56,12 +56,14 @@ struct SmartRecommendationDetailView: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 8) {
             Button { HapticManager.shared.tap(); dismiss() } label: {
-                Image(systemName: "chevron.left").font(.system(size: 16, weight: .semibold))
+                Image(systemName: "chevron.left").font(.system(.callout, weight: .semibold))
                     .foregroundStyle(AppTheme.textPrimary)
                     .frame(width: 36, height: 36).background(AppTheme.cardDark, in: Circle())
             }
-            Text(loc("reco.detail_title")).font(.system(size: 24, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
-            Text(loc("reco.detail_sub")).font(.system(size: 13)).foregroundStyle(AppTheme.textSecondary)
+.accessibilityLabel(loc("a11y.back"))
+.hitTarget(36)
+            Text(loc("reco.detail_title")).font(.system(.title2, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
+            Text(loc("reco.detail_sub")).font(.system(.footnote)).foregroundStyle(AppTheme.textSecondary)
         }
     }
 
@@ -73,10 +75,10 @@ struct SmartRecommendationDetailView: View {
                     withAnimation(.spring(response: 0.3)) { tab = t }
                 } label: {
                     Text(t.title)
-                        .font(.system(size: 12, weight: tab == t ? .bold : .medium))
-                        .foregroundStyle(tab == t ? .white : AppTheme.textSecondary)
+                        .font(.system(.caption, weight: tab == t ? .bold : .medium))
+                        .foregroundStyle(tab == t ? AppTheme.onVividFill : AppTheme.textSecondary)
                         .frame(maxWidth: .infinity).padding(.vertical, 9)
-                        .background(tab == t ? AppTheme.purple : AppTheme.cardDark, in: Capsule())
+                        .background(tab == t ? AppTheme.accentFill : AppTheme.cardDark, in: Capsule())
                 }
                 .buttonStyle(.plain)
             }
@@ -93,27 +95,33 @@ struct SmartRecommendationDetailView: View {
             : "-" + money(reco.deficitAmount)
         return VStack(alignment: .leading, spacing: 8) {
             Text(loc("reco.sum.where_title"))
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.7))
+                .font(.system(.caption, weight: .semibold))
+                .foregroundStyle(AppTheme.textSecondary)
             Text(headline)
-                .font(.system(size: 30, weight: .bold))
+                .font(.system(.title, weight: .bold))
                 .foregroundStyle(positive ? AppTheme.accent : AppTheme.red)
                 .minimumScaleFactor(0.7).lineLimit(1)
             Text(positive
                  ? String(format: loc("reco.sum.where_surplus"), money(reco.avgMonthlyExpense))
                  : String(format: loc("reco.sum.where_deficit"),
                           money(reco.avgMonthlyExpense), money(reco.monthlyIncome)))
-                .font(.system(size: 12)).foregroundStyle(.white.opacity(0.85))
+                .font(.system(.caption)).foregroundStyle(AppTheme.textPrimary)
                 .fixedSize(horizontal: false, vertical: true).lineSpacing(2)
             if !reco.periodLabel.isEmpty {
-                Text(reco.periodLabel)
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(AppTheme.purple)
+                Label(reco.periodLabel, systemImage: "calendar")
+                    .font(.system(.caption2, weight: .semibold))
+                    .foregroundStyle(AppTheme.textSecondary)
             }
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(hex: "#1B2A24"), in: RoundedRectangle(cornerRadius: 18))
+        // Was a fixed dark #1B2A24 with white text in BOTH themes — a dark slab on
+        // the light page, and once light mode's green, red and purple were
+        // deepened for legibility, the headline on it fell to ~3:1. The card
+        // now sits on the theme's own surface, tinted with the verdict's colour.
+        .background((positive ? AppTheme.accent : AppTheme.red).opacity(0.10),
+                    in: RoundedRectangle(cornerRadius: AppRadius.lg))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
     }
 
     /// 2. What to do, in order. Same items as the main screen but numbered, so
@@ -121,19 +129,19 @@ struct SmartRecommendationDetailView: View {
     private var stepsCard: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(loc("reco.sum.steps_title"))
-                .font(.system(size: 14, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                .font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
             ForEach(Array(reco.topItems.prefix(4).enumerated()), id: \.element.id) { idx, item in
                 HStack(alignment: .top, spacing: 10) {
                     Text("\(idx + 1)")
-                        .font(.system(size: 12, weight: .bold)).foregroundStyle(item.tint)
+                        .font(.system(.caption, weight: .bold)).foregroundStyle(item.tint)
                         .frame(width: 22, height: 22)
                         .background(item.tint.opacity(0.15), in: Circle())
                     VStack(alignment: .leading, spacing: 3) {
                         Text(item.title)
-                            .font(.system(size: 13, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                            .font(.system(.footnote, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
                             .fixedSize(horizontal: false, vertical: true)
                         Text(item.subtitle)
-                            .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                            .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                             .fixedSize(horizontal: false, vertical: true).lineSpacing(2)
                     }
                     Spacer(minLength: 0)
@@ -142,7 +150,7 @@ struct SmartRecommendationDetailView: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
     }
 
     /// 3. Only the outcomes that actually have a value. A grid half-full of
@@ -167,24 +175,24 @@ struct SmartRecommendationDetailView: View {
     private var impactCard: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(loc("reco.impact_title"))
-                .font(.system(size: 14, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                .font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
             Text(loc("reco.impact_intro"))
-                .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
             ForEach(Array(impactStats.enumerated()), id: \.offset) { _, stat in
                 HStack {
                     Text(stat.label)
-                        .font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
+                        .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 10)
                     Text(stat.value)
-                        .font(.system(size: 15, weight: .bold)).foregroundStyle(stat.tint)
+                        .font(.system(.subheadline, weight: .bold)).foregroundStyle(stat.tint)
                         .lineLimit(1).minimumScaleFactor(0.8)
                 }
             }
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
     }
 
     private var summaryTab: some View {
@@ -199,27 +207,27 @@ struct SmartRecommendationDetailView: View {
 
             if !reco.reasons.isEmpty {
                 VStack(alignment: .leading, spacing: 10) {
-                    Text(loc("reco.why_title")).font(.system(size: 14, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                    Text(loc("reco.why_title")).font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
                     ForEach(Array(reco.reasons.enumerated()), id: \.offset) { _, reason in
                         HStack(alignment: .top, spacing: 8) {
-                            Image(systemName: "sparkle").font(.system(size: 11)).foregroundStyle(AppTheme.purple).padding(.top, 2)
-                            Text(reason).font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
+                            Circle().fill(AppTheme.textSecondary.opacity(0.6)).frame(width: 5, height: 5).padding(.top, 6)
+                            Text(reason).font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                                 .fixedSize(horizontal: false, vertical: true)
                             Spacer(minLength: 0)
                         }
                     }
                 }
                 .padding(14).frame(maxWidth: .infinity, alignment: .leading)
-                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
+                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
             }
         }
     }
 
     private func impactStat(_ value: String, _ label: String, _ color: Color) -> some View {
         VStack(alignment: .leading, spacing: 3) {
-            Text(value).font(.system(size: 16, weight: .bold)).foregroundStyle(color)
+            Text(value).font(.system(.callout, weight: .bold)).foregroundStyle(color)
                 .minimumScaleFactor(0.6).lineLimit(1)
-            Text(label).font(.system(size: 10)).foregroundStyle(.white.opacity(0.65))
+            Text(label).font(.system(.caption2)).foregroundStyle(.white.opacity(0.65))
                 .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -230,15 +238,15 @@ struct SmartRecommendationDetailView: View {
     private var savingTab: some View {
         VStack(spacing: 16) {
             card {
-                Text(loc("reco.saving.plan")).font(.system(size: 15, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
-                Text(loc("reco.saving.recommended")).font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                Text(loc("reco.saving.plan")).font(.system(.subheadline, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
+                Text(loc("reco.saving.recommended")).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                 HStack(alignment: .firstTextBaseline) {
                     Text(money(reco.recommendedMonthlySaving) + loc("reco.per_month"))
-                        .font(.system(size: 24, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
+                        .font(.system(.title2, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
                     Spacer()
                     if reco.savingVsCurrentPct != 0 && !reco.isDeficit {
                         Text(String(format: loc("reco.vs_current"), reco.savingVsCurrentPct))
-                            .font(.system(size: 11, weight: .bold)).foregroundStyle(AppTheme.accent)
+                            .font(.system(.caption2, weight: .bold)).foregroundStyle(AppTheme.accent)
                             .padding(.horizontal, 8).padding(.vertical, 4)
                             .background(AppTheme.accent.opacity(0.12), in: Capsule())
                     }
@@ -248,7 +256,7 @@ struct SmartRecommendationDetailView: View {
 
             if !reco.savingAllocation.isEmpty {
                 card {
-                    Text(loc("reco.alloc_title")).font(.system(size: 14, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                    Text(loc("reco.alloc_title")).font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
                     HStack(spacing: 16) {
                         RecoDonutChart(slices: reco.savingAllocation,
                                        centerTitle: money(reco.recommendedMonthlySaving),
@@ -257,11 +265,11 @@ struct SmartRecommendationDetailView: View {
                             ForEach(reco.savingAllocation) { s in
                                 HStack(spacing: 8) {
                                     Circle().fill(s.color).frame(width: 8, height: 8)
-                                    Text(s.label).font(.system(size: 12)).foregroundStyle(AppTheme.textPrimary).lineLimit(1)
+                                    Text(s.label).font(.system(.caption)).foregroundStyle(AppTheme.textPrimary).lineLimit(1)
                                     Spacer(minLength: 4)
-                                    Text("\(s.pct)%").font(.system(size: 12, weight: .semibold)).foregroundStyle(AppTheme.textSecondary)
+                                    Text("\(s.pct)%").font(.system(.caption, weight: .semibold)).foregroundStyle(AppTheme.textSecondary)
                                 }
-                                Text(money(s.amount)).font(.system(size: 10)).foregroundStyle(AppTheme.textSecondary)
+                                Text(money(s.amount)).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                                     .frame(maxWidth: .infinity, alignment: .leading)
                             }
                         }
@@ -271,24 +279,24 @@ struct SmartRecommendationDetailView: View {
 
             if let cur = reco.goalCurrentMonths, let new = reco.goalNewMonths, let name = reco.topGoalName {
                 card {
-                    Text(loc("reco.goal_accel")).font(.system(size: 14, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
-                    Text(name).font(.system(size: 12, weight: .semibold)).foregroundStyle(AppTheme.purple)
+                    Text(loc("reco.goal_accel")).font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                    Text(name).font(.system(.caption, weight: .semibold)).foregroundStyle(AppTheme.textSecondary)
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(loc("reco.goal_new")).font(.system(size: 10)).foregroundStyle(AppTheme.textSecondary)
-                            Text(String(format: loc("debt.month"), new)).font(.system(size: 16, weight: .bold)).foregroundStyle(AppTheme.accent)
+                            Text(loc("reco.goal_new")).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
+                            Text(String(format: loc("debt.month"), new)).font(.system(.callout, weight: .bold)).foregroundStyle(AppTheme.accent)
                         }
                         Spacer()
-                        Image(systemName: "arrow.right").font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
+                        Image(systemName: "arrow.right").font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                         Spacer()
                         VStack(alignment: .trailing, spacing: 2) {
-                            Text(loc("reco.goal_current")).font(.system(size: 10)).foregroundStyle(AppTheme.textSecondary)
-                            Text(String(format: loc("debt.month"), cur)).font(.system(size: 16, weight: .bold)).foregroundStyle(AppTheme.textSecondary)
+                            Text(loc("reco.goal_current")).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
+                            Text(String(format: loc("debt.month"), cur)).font(.system(.callout, weight: .bold)).foregroundStyle(AppTheme.textSecondary)
                         }
                     }
                     if let faster = reco.goalMonthsFaster, faster > 0 {
                         Text(String(format: loc("reco.months_faster"), faster))
-                            .font(.system(size: 11, weight: .semibold)).foregroundStyle(AppTheme.accent)
+                            .font(.system(.caption2, weight: .semibold)).foregroundStyle(AppTheme.accent)
                     }
                 }
             }
@@ -297,13 +305,13 @@ struct SmartRecommendationDetailView: View {
             card {
                 HStack(alignment: .top) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(loc("reco.autosave_title")).font(.system(size: 14, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                        Text(loc("reco.autosave_title")).font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
                         Text(String(format: loc("reco.autosave_body"), money(reco.autoSaveAmount)))
-                            .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                            .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     Spacer(minLength: 8)
-                    Toggle("", isOn: $autoSaveOn).labelsHidden().tint(AppTheme.purple)
+                    Toggle("", isOn: $autoSaveOn).labelsHidden().tint(AppTheme.accentFill)
                 }
             }
         }
@@ -317,21 +325,21 @@ struct SmartRecommendationDetailView: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
                 Image(systemName: "info.circle.fill")
-                    .font(.system(size: 11)).foregroundStyle(AppTheme.orange)
+                    .font(.system(.caption2)).foregroundStyle(AppTheme.orange)
                 Text(loc("reco.deficit_zero_title"))
-                    .font(.system(size: 12, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                    .font(.system(.caption, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
             }
             Text(String(format: loc("reco.deficit_zero_body"),
                         Int((reco.recommendedRatios.investDebt * 100).rounded()),
                         money(reco.monthlyIncome * reco.recommendedRatios.investDebt),
                         money(reco.debtMinimumMonthly),
                         money(reco.deficitAmount)))
-                .font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true).lineSpacing(2)
         }
         .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(AppTheme.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
+        .background(AppTheme.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: AppRadius.sm))
     }
 
     // MARK: Investment
@@ -339,23 +347,23 @@ struct SmartRecommendationDetailView: View {
     private var investmentTab: some View {
         VStack(spacing: 16) {
             card {
-                Text(loc("reco.invest.plan")).font(.system(size: 15, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
-                Text(loc("reco.invest.suggested")).font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                Text(loc("reco.invest.plan")).font(.system(.subheadline, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
+                Text(loc("reco.invest.suggested")).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                 Text(money(reco.suggestedInvestment) + loc("reco.per_month"))
-                    .font(.system(size: 24, weight: .bold)).foregroundStyle(AppTheme.purple)
+                    .font(.system(.title2, weight: .bold)).foregroundStyle(AppTheme.purple)
                 if reco.isDeficit { deficitExplainer }
             }
             card {
                 HStack {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(loc("reco.invest.value10y")).font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
+                        Text(loc("reco.invest.value10y")).font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                         Text(reco.investReturn10y > 0 ? money(reco.investReturn10y) : "—")
-                            .font(.system(size: 22, weight: .bold)).foregroundStyle(AppTheme.accent)
+                            .font(.system(.title2, weight: .bold)).foregroundStyle(AppTheme.accent)
                     }
                     Spacer()
-                    Image(systemName: "chart.line.uptrend.xyaxis").font(.system(size: 30)).foregroundStyle(AppTheme.accent.opacity(0.7))
+                    Image(systemName: "chart.line.uptrend.xyaxis").font(.system(.title)).foregroundStyle(AppTheme.accent.opacity(0.7))
                 }
-                Text(loc("reco.invest.note")).font(.system(size: 10)).foregroundStyle(AppTheme.textSecondary.opacity(0.8))
+                Text(loc("reco.invest.note")).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary.opacity(0.8))
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
@@ -366,20 +374,20 @@ struct SmartRecommendationDetailView: View {
     private var spendingTab: some View {
         VStack(spacing: 16) {
             card {
-                Text(loc("reco.spending.title")).font(.system(size: 15, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
-                Text(loc("reco.spending.sub")).font(.system(size: 11)).foregroundStyle(AppTheme.textSecondary)
+                Text(loc("reco.spending.title")).font(.system(.subheadline, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
+                Text(loc("reco.spending.sub")).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                 if reco.spendingBreakdown.isEmpty {
-                    Text(loc("reco.spending.empty")).font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary).padding(.top, 4)
+                    Text(loc("reco.spending.empty")).font(.system(.caption)).foregroundStyle(AppTheme.textSecondary).padding(.top, 4)
                 } else {
                     VStack(spacing: 12) {
                         ForEach(reco.spendingBreakdown) { s in
                             VStack(spacing: 5) {
                                 HStack {
                                     Circle().fill(s.color).frame(width: 8, height: 8)
-                                    Text(s.label).font(.system(size: 12, weight: .medium)).foregroundStyle(AppTheme.textPrimary)
+                                    Text(s.label).font(.system(.caption, weight: .medium)).foregroundStyle(AppTheme.textPrimary)
                                     Spacer()
-                                    Text(money(s.amount)).font(.system(size: 12, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
-                                    Text("\(s.pct)%").font(.system(size: 10)).foregroundStyle(AppTheme.textSecondary).frame(width: 34, alignment: .trailing)
+                                    Text(money(s.amount)).font(.system(.caption, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                                    Text("\(s.pct)%").font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary).frame(width: 34, alignment: .trailing)
                                 }
                                 GeometryReader { g in
                                     ZStack(alignment: .leading) {
@@ -395,14 +403,14 @@ struct SmartRecommendationDetailView: View {
             }
             if reco.potentialCut > 0 {
                 HStack(spacing: 10) {
-                    Image(systemName: "scissors").font(.system(size: 15)).foregroundStyle(AppTheme.orange)
+                    Image(systemName: "scissors").font(.system(.subheadline)).foregroundStyle(AppTheme.orange)
                     Text(String(format: loc("reco.spending.cut"), money(reco.potentialCut)))
-                        .font(.system(size: 12)).foregroundStyle(AppTheme.textPrimary)
+                        .font(.system(.caption)).foregroundStyle(AppTheme.textPrimary)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 0)
                 }
                 .padding(12)
-                .background(AppTheme.orange.opacity(0.10), in: RoundedRectangle(cornerRadius: 14))
+                .background(AppTheme.orange.opacity(0.10), in: RoundedRectangle(cornerRadius: AppRadius.md))
             }
         }
     }
@@ -414,8 +422,8 @@ struct SmartRecommendationDetailView: View {
         VStack(alignment: .leading, spacing: 10) { content() }
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
-            .overlay(RoundedRectangle(cornerRadius: 16).stroke(AppTheme.cardMid.opacity(0.4), lineWidth: 1))
+            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+            .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.cardMid.opacity(0.4), lineWidth: 1))
     }
 }
 
@@ -447,9 +455,9 @@ struct RecoDonutChart: View {
                     .rotationEffect(.degrees(-90))
             }
             VStack(spacing: 1) {
-                Text(centerTitle).font(.system(size: 13, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
+                Text(centerTitle).font(.system(.footnote, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
                     .minimumScaleFactor(0.6).lineLimit(1)
-                Text(centerSub).font(.system(size: 9)).foregroundStyle(AppTheme.textSecondary)
+                Text(centerSub).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
             }
             .padding(6)
         }

@@ -14,71 +14,87 @@ struct AppTheme {
 
     // MARK: Semantic colours
     //
-    // Same hues as before, now ADAPTIVE. They used to be fixed `Color(hex:)`
-    // values tuned against the dark ground and then reused verbatim on the
-    // light one, where every single one failed the 4.5:1 contrast threshold —
-    // blue sat at 1.94:1, orange at 2.05:1, accent at 2.32:1. Light mode was
-    // shipping unreadable status colours.
+    // Built around DiPo's original emerald, #1DB87A — the green of its first
+    // buttons, chosen back over every alternative tried since: #008049 read as
+    // dull, and systemGreen (135°, yellow-leaning) read as cheap lime on white.
+    // The problem with light mode was the HUE, not the lightness.
     //
-    // The light variants keep each hue and its saturation and only drop
-    // lightness until the ratio clears 4.5:1, so the app reads as the same
-    // product in both themes rather than gaining a second identity.
+    // Everything else is set to sit beside it: one lightness band in light mode
+    // (≈3.9:1 on white) so no colour looks heavier or muddier than the green,
+    // and each dark value keeps its hue with the lightness the dark ground needs.
+    // Ratios measured after rounding to hex, on the white card (light) and the
+    // #222827 card (dark).
+    //
+    // Trade-off, chosen knowingly: the green is 2.56:1 on white, and white
+    // labels on it are 2.56:1 too — the look of the original design. The
+    // other colours stay at ≈3.9:1.
 
-    /// Green as TEXT or an icon sitting on the page ground. Light mode has to
-    /// be dark enough to clear 4.5:1 there, which is why it cannot be neon.
-    /// For the vivid one, see `accentFill` — these are two different jobs and
-    /// they were fighting over one value.
-    static let accent  = Color(UIColor.adaptive(dark: "#1DB87A", light: "#008049"))  // 6.51 / 4.54
-    static let green   = Color(UIColor.adaptive(dark: "#1DB87A", light: "#008049"))  // 6.51 / 4.54
-    static let red     = Color(UIColor.adaptive(dark: "#FF5B5B", light: "#DC0000"))  // 5.48 / 4.70
-    static let orange  = Color(UIColor.adaptive(dark: "#FB923C", light: "#B55304"))  // 7.37 / 4.51
-    static let blue    = Color(UIColor.adaptive(dark: "#38BDF8", light: "#0676A8"))  // 7.79 / 4.58
-    static let purple  = Color(UIColor.adaptive(dark: "#A78BFA", light: "#784CF7"))  // 6.13 / 4.54
-    /// The one slot the Profile feature list had left. Purple, green, orange,
-    /// red and sky are all already spoken for there, so a row that needs to be
-    /// told apart from its neighbours has nowhere else to go.
-    static let teal    = Color(UIColor.adaptive(dark: "#06B6D4", light: "#047A8F"))  // 6.87 / 4.52
+    /// THE green — brand, money in, success, primary actions. Same value in
+    /// both themes: 2.56:1 on white · 5.85:1 on the dark card.
+    static let accent  = Color(hex: "#1DB87A")
+    static let green   = accent
 
-    /// Green as a solid FILL — buttons, bars, chips — where the contrast that
-    /// matters is the text sitting ON it (`onSolid`, 5.52:1 here), not the
-    /// fill against the page. That frees it to stay vivid: it only owes the
-    /// page the 3:1 a UI component needs to have a discernible boundary, and
-    /// it clears that at 3.04:1.
-    ///
-    /// Light mode looked washed out because one token was doing both jobs, so
-    /// the darkness that text legibility demanded was dragging every button
-    /// and progress bar down with it.
-    static let accentFill = Color(UIColor.adaptive(dark: "#1DB87A", light: "#00AB64"))
+    /// THE red — money out, errors, destructive actions, over-budget. A cool,
+    /// slightly crimson red (358°) to pair with the emerald's 156°; the
+    /// orange-leaning red it replaces fought it.
+    /// Light #E5484D (3.91:1) · dark #FF6166 (5.11:1).
+    static let red     = Color(UIColor.adaptive(dark: "#FF6166", light: "#E5484D"))
 
-    /// The track behind an `accentFill` progress bar.
-    ///
-    /// Light mode runs DARK here on purpose. `accentFill` sits at mid
-    /// luminance, so a pale track leaves it muddy — against the old
-    /// `cardMid` (#E4EAE8) the bright green managed only 2.46:1, and going
-    /// pale the other way tops out at 3.00:1 even at pure white. A dark track
-    /// gives 3.18:1 and is what makes the fill read as lit rather than
-    /// printed. Dark mode already had the separation and is unchanged.
-    static let accentTrack = Color(UIColor.adaptive(dark: "#2A3330", light: "#404744"))
+    /// Kept as names so call sites read by role; they ARE the tokens above.
+    /// A fill and its text colour are the same value now — what changed is the
+    /// label on top (`onVividFill`), which inverts with the theme.
+    static let accentFill = accent
+    static let redFill    = red
+    static let flowIn     = accent
+    static let flowOut    = red
 
-    /// Text and icons sitting on an `accentFill`. Unlike `onSolid` this does
-    /// NOT invert with the theme: `accentFill` is a bright green in BOTH
-    /// modes, so the text on it is dark in both (7.22:1 on the dark-mode fill,
-    /// 5.52:1 on the light one). Using `onSolid` here would put white on light
-    /// green — 3.35:1, which is exactly the failure this token set exists to
-    /// prevent.
-    static let onAccentFill = Color(hex: "#0D1514")
+    static let orange  = Color(UIColor.adaptive(dark: "#FB923C", light: "#CF5F04"))  // 6.62 / 3.97
+    static let blue    = Color(UIColor.adaptive(dark: "#38BDF8", light: "#0789C3"))  // 7.00 / 3.91
+    static let purple  = Color(UIColor.adaptive(dark: "#A78BFA", light: "#8B66F8"))  // 5.51 / 3.92
+    static let teal    = Color(UIColor.adaptive(dark: "#06B6D4", light: "#058DA4"))  // 6.17 / 3.92
+    /// Category and chart hues. None of them is red or green: those two mean
+    /// money out and money in, and a coral "Food" circle beside every expense
+    /// is how the list came to read as a wall of warnings.
+    static let amber   = Color(UIColor.adaptive(dark: "#FBBF24", light: "#A67803"))  // 8.98 / 3.96
+    static let indigo  = Color(UIColor.adaptive(dark: "#818CF8", light: "#6673F6"))  // 5.03 / 3.93
+    static let fuchsia = Color(UIColor.adaptive(dark: "#E879F9", light: "#D819F5"))  // 6.09 / 3.91
+    static let slate   = Color(UIColor.adaptive(dark: "#94A3B8", light: "#6E829F"))  // 5.85 / 3.92
 
-    /// Text and icons sitting ON a solid `red` / `orange`
-    /// fill — which is the opposite problem from text on the page ground.
-    ///
-    /// `.white` was used for this everywhere and never worked: white on the
-    /// green button is 2.56:1, on orange 2.26:1. The fills are bright in dark
-    /// mode and dark in light mode, so the text on them has to invert the
-    /// other way:
-    ///
-    ///     dark theme,  fill #1DB87A : white 2.56:1  ·  near-black 7.72:1
-    ///     light theme, fill #147E53 : white 5.07:1  ·  near-black 3.90:1
-    static let onSolid = Color(UIColor.adaptive(dark: "#0D1514", light: "#FFFFFF"))
+    /// Decorative glow — the voice orb and the halo under a live mic. The one
+    /// green allowed to stay bright in light mode, because it is light, not
+    /// ink: it carries no information on its own (the orb speaks by moving),
+    /// and a deep green glow reads as a smudge. Never text, icon or fill.
+    static let voiceGlow = Color(uiColor: .systemGreen)
+
+    /// The track behind a green progress bar: a quiet surface in both modes.
+    static let accentTrack = Color(UIColor.adaptive(dark: "#2A3330", light: "#E4EAE8"))
+
+    /// Text and icons ON any solid semantic fill — green, red, orange, blue,
+    /// purple, teal, or a category colour. White in light mode, as the original
+    /// buttons were (2.56:1 on green, ≈3.9:1 on the rest); near-black in dark,
+    /// where the fills are bright (7.22:1 on green, 6.31:1 on red).
+    static let onVividFill = Color(UIColor.adaptive(dark: "#0D1514", light: "#FFFFFF"))
+    static let onSolid     = onVividFill
+}
+
+// MARK: - Radius
+
+/// Corner radii. The app had 20 different values; 14 and 16 were each used
+/// ~145 times for the same kind of surface. Five steps, each for a size of
+/// thing, so nesting reads right (an inner element is always one step smaller).
+/// Radii of 6pt and below are left as literals: thin progress bars and tick
+/// marks, where the radius is geometry, not style.
+enum AppRadius {
+    /// Small chips, tags, tiny tiles.
+    static let xs: CGFloat = 8
+    /// Icon tiles, pills inside cards, text-field accessories.
+    static let sm: CGFloat = 12
+    /// Text fields, list rows, inner cards.
+    static let md: CGFloat = 16
+    /// Cards, primary buttons, form sections.
+    static let lg: CGFloat = 20
+    /// Hero cards, card faces, large surfaces.
+    static let xl: CGFloat = 24
 }
 
 // MARK: - Layout

@@ -16,15 +16,16 @@ struct MainTabView: View {
     /// `dipo://support`). Presented here so the user reaches their ticket
     /// thread from any tab.
     @State private var showSupport = false
-    // Destinations a notification's "what to do next" button can open. Owned
-    // here so an alert tapped from any tab lands on the right screen.
-    @State private var showBudgetFromNotif = false
-    @State private var showDebtFromNotif = false
-    @State private var showGoalsFromNotif = false
     /// Ask DiPo opened by the Back Tap / Siri shortcut, already listening.
     @State private var showVoiceEntry = false
+    /// A captured sentence waiting for Ask DiPo. `item:` rather than a Bool so
+    /// the sheet cannot exist without the text it was opened to send.
+    @State private var spokenEntry: SpokenEntry? = nil
     /// Screenshot from the Back Tap shortcut, presented straight to the scanner.
     @State private var shortcutScan: ScanPayload? = nil
+    @Environment(\.scenePhase) private var scenePhase
+    /// Tabs the user has opened this session. Home is always mounted.
+    @State private var visitedTabs: Set<AppTab> = [.home]
 
     /// Observed so the gate reacts the moment a main card is chosen or cleared.
     @State private var sb = SmartBudgetManager.shared
@@ -47,6 +48,17 @@ struct MainTabView: View {
     /// Same two gates the in-app scan entry applies. Skipping them here would
     /// open the scanner for someone with no card to save to, or for a
     /// non-Royal user whose scan dies at the last step.
+    /// iOS silently drops a cover presented on top of an open sheet, so an
+    /// open Add Transaction sheet is closed first.
+    private func routeScan(_ image: UIImage) {
+        if showAddSheet {
+            showAddSheet = false
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { presentShortcutScan(image) }
+        } else {
+            presentShortcutScan(image)
+        }
+    }
+
     private func presentShortcutScan(_ image: UIImage) {
         guard !vm.cards.isEmpty else {
             withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) { showNoCardBanner = true }
@@ -62,46 +74,66 @@ struct MainTabView: View {
         shortcutScan = ScanPayload(image: image)
     }
 
-    var body: some View {
+    /// The tabs plus everything that routes INTO them from outside — shortcuts,
+    /// the share extension, notifications. Split from `body` because the single
+    /// chain of ~30 modifiers had grown past what the type checker will infer.
+    private var core: some View {
         ZStack(alignment: .bottom) {
             ZStack {
                 ForEach(AppTab.allCases, id: \.self) { tab in
-                    Group {
-                        switch tab {
-                        case .home:    HomeView(vm: vm)
-                        case .stats:   StatisticsView(statsVM: StatsViewModel(), appVM: vm)
-                        case .add:     Color.clear
-                        case .cards:   CardListView(vm: vm)
-                        case .profile: ProfileView(authVM: authVM)
+                    // Mounted on first visit, then kept. All five used to mount at
+                    // launch and stay live behind Home at opacity 0, so every
+                    // transaction added on Home also re-evaluated Statistics (the
+                    // largest screen in the app) and Profile. Kept after the first
+                    // visit so scroll position and choices survive switching back.
+                    if vm.activeTab == tab || visitedTabs.contains(tab) {
+                        Group {
+                            switch tab {
+                            case .home:  homeStack
+                            case .stats: StatisticsView(statsVM: StatsViewModel(), appVM: vm)
+                            case .add:   Color.clear
+                            case .cards: walletStack
+                            case .plan:  PlanView(vm: vm)
+                            }
                         }
+                        .opacity(vm.activeTab == tab ? 1 : 0)
+                        .scaleEffect(vm.activeTab == tab ? 1 : 0.97)
+                        .animation(.spring(response: 0.4, dampingFraction: 0.85), value: vm.activeTab)
+                        // A tab at opacity 0 is still in the tree; without this,
+                        // VoiceOver could land on buttons of a screen nobody can see.
+                        .accessibilityHidden(vm.activeTab != tab)
+                        .allowsHitTesting(vm.activeTab == tab)
                     }
-                    .opacity(vm.activeTab == tab ? 1 : 0)
-                    .scaleEffect(vm.activeTab == tab ? 1 : 0.97)
-                    .animation(.spring(response: 0.4, dampingFraction: 0.85), value: vm.activeTab)
                 }
             }
+            .onChange(of: vm.activeTab) { _, tab in visitedTabs.insert(tab) }
 
             // No-card toast banner
             if showNoCardBanner {
                 HStack(spacing: 10) {
                     Image(systemName: "creditcard.fill")
-                        .font(.system(size: 14))
+                        .font(.system(.subheadline))
                         .foregroundStyle(AppTheme.accent)
                     Text(loc("home.add_card_first"))
-                        .font(.system(size: 13, weight: .medium))
+                        .font(.system(.footnote, weight: .medium))
                         .foregroundStyle(AppTheme.textPrimary)
                 }
                 .padding(.horizontal, 18)
                 .padding(.vertical, 12)
-                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 14))
-                .overlay(RoundedRectangle(cornerRadius: 14).stroke(AppTheme.accent.opacity(0.3), lineWidth: 1))
+                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+                .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.accent.opacity(0.3), lineWidth: 1))
                 .shadow(color: .black.opacity(0.25), radius: 12, y: 4)
                 .padding(.bottom, 100)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
 
-            CustomTabBar(vm: vm, namespace: tabNS, showAddSheet: $showAddSheet,
-                         showNoCardBanner: $showNoCardBanner)
+            // Steps aside while a feature is pushed, so it never covers the
+            // bottom of a screen that was laid out as a full page.
+            if !vm.isInsideFeature {
+                CustomTabBar(vm: vm, namespace: tabNS, showAddSheet: $showAddSheet,
+                             showNoCardBanner: $showNoCardBanner)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
 
             // Confirmation toasts. Mounted here — above every tab, below every
             // sheet — so one overlay serves the whole app and no screen has to
@@ -109,6 +141,7 @@ struct MainTabView: View {
             ActionFeedbackOverlay()
         }
         .ignoresSafeArea(edges: .bottom)
+        .animation(.spring(response: 0.35, dampingFraction: 0.9), value: vm.isInsideFeature)
         // Everything downstream reads the main card, so nothing downstream can
         // be trusted until one exists. Presented without a dismiss path on
         // purpose — the gate hosts the only action that legitimately gets you
@@ -148,23 +181,68 @@ struct MainTabView: View {
             .preferredColorScheme(appColorScheme())
         }
         .task {
-            // Cold launch: the intent fired before this view existed, so the
-            // notification landed with nobody listening.
-            if let img = QuickScanRoute.shared.consume() {
+            // Cold launch: the intent fired (or the share extension handed an
+            // image over) before this view existed, so the notification landed
+            // with nobody listening.
+            if let img = QuickScanRoute.shared.consume() ?? SharedScanInbox.take() {
                 try? await Task.sleep(for: .milliseconds(400))
                 presentShortcutScan(img)
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .requestOpenScanFromShortcut)) { _ in
             guard let img = QuickScanRoute.shared.consume() else { return }
-            // iOS silently drops a cover presented on top of an open sheet.
-            if showAddSheet {
-                showAddSheet = false
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { presentShortcutScan(img) }
-            } else {
-                presentShortcutScan(img)
-            }
+            routeScan(img)
         }
+        .onReceive(NotificationCenter.default.publisher(for: .requestOpenSharedScan)) { _ in
+            guard let img = SharedScanInbox.take() else { return }
+            routeScan(img)
+        }
+        // The share extension's fallback: if it could not bring DiPo forward,
+        // the image is still waiting, and coming back to the app collects it.
+        // `take()` removes the file, so this and the URL route never both fire.
+        .onChange(of: scenePhase) { _, phase in
+            guard phase == .active, let img = SharedScanInbox.take() else { return }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { routeScan(img) }
+        }
+    }
+
+    /// Home, with Profile pushed from the avatar in its header.
+    private var homeStack: some View {
+        NavigationStack(path: $vm.homePath) {
+            HomeView(vm: vm)
+                .navigationTitle(loc("tab.home"))
+                .toolbar(.hidden, for: .navigationBar)
+                .navigationDestination(for: HomeRoute.self) { _ in
+                    ProfileView(authVM: authVM)
+                }
+        }
+    }
+
+    /// Wallet: accounts, and what is owed on them.
+    private var walletStack: some View {
+        NavigationStack(path: $vm.walletPath) {
+            CardListView(vm: vm)
+                .navigationTitle(loc("tab.cards"))
+                .toolbar(.hidden, for: .navigationBar)
+                .navigationDestination(for: WalletRoute.self) { _ in
+                    ObligationsView().pushedFeature()
+                }
+        }
+    }
+
+    /// A notification's "what to do next" lands on the feature in its own tab.
+    /// An open Add Transaction sheet is closed first so the jump is visible.
+    private func route(_ go: @escaping () -> Void) {
+        if showAddSheet {
+            showAddSheet = false
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35, execute: go)
+        } else {
+            go()
+        }
+    }
+
+    var body: some View {
+        core
         .sheet(isPresented: $showAddSheet) {
             AddTransactionSheet(vm: vm)
                 .presentationDetents([.large])
@@ -199,23 +277,16 @@ struct MainTabView: View {
                 showSupport = true
             }
         }
-        .sheet(isPresented: $showBudgetFromNotif) {
-            SmartBudgetSettingsSheet()
-                .presentationDetents([.large]).presentationDragIndicator(.visible)
-                .presentationBackground(AppTheme.bg).preferredColorScheme(appColorScheme())
+        .fullScreenCover(isPresented: $showVoiceEntry) {
+            VoiceCaptureView { text in
+                spokenEntry = SpokenEntry(text: text)
+            }
+            .preferredColorScheme(appColorScheme())
         }
-        .sheet(isPresented: $showDebtFromNotif) {
-            DebtView()
-                .presentationDetents([.large]).presentationDragIndicator(.visible)
-                .presentationBackground(AppTheme.bg).preferredColorScheme(appColorScheme())
-        }
-        .sheet(isPresented: $showGoalsFromNotif) {
-            WishlistView()
-                .presentationDetents([.large]).presentationDragIndicator(.visible)
-                .presentationBackground(AppTheme.bg).preferredColorScheme(appColorScheme())
-        }
-        .sheet(isPresented: $showVoiceEntry) {
-            AIChatView(autoStartVoice: true)
+        // Ask DiPo opens only once there is something to send, so the gesture
+        // never lands the user in a chat they then have to talk into.
+        .sheet(item: $spokenEntry) { entry in
+            AIChatView(initialMessage: entry.text)
                 .presentationDetents([.large]).presentationDragIndicator(.visible)
                 .presentationBackground(AppTheme.bg).preferredColorScheme(appColorScheme())
         }
@@ -238,13 +309,13 @@ struct MainTabView: View {
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .requestOpenSmartBudget)) { _ in
-            showBudgetFromNotif = true
+            route { vm.open(PlanRoute.budget) }
         }
         .onReceive(NotificationCenter.default.publisher(for: .requestOpenDebt)) { _ in
-            showDebtFromNotif = true
+            route { vm.open(WalletRoute.obligations) }
         }
         .onReceive(NotificationCenter.default.publisher(for: .requestOpenSavingsGoals)) { _ in
-            showGoalsFromNotif = true
+            route { vm.open(PlanRoute.goals) }
         }
         .onReceive(NotificationCenter.default.publisher(for: .requestOpenPaywall)) { _ in
             // If the AddTransaction sheet happens to be open (rare — would
@@ -319,7 +390,7 @@ struct CustomTabBar: View {
                         VStack(spacing: 4) {
                             ZStack {
                                 if vm.activeTab == tab {
-                                    RoundedRectangle(cornerRadius: 12)
+                                    RoundedRectangle(cornerRadius: AppRadius.sm)
                                         .fill(AppTheme.accent.opacity(0.15))
                                         .frame(width: 44, height: 36)
                                         .matchedGeometryEffect(id: "tab_bg", in: namespace)
@@ -352,7 +423,7 @@ struct CustomTabBar: View {
         .padding(.top, 12)
         .padding(.bottom, 28)
         .background {
-            RoundedRectangle(cornerRadius: 28)
+            RoundedRectangle(cornerRadius: AppRadius.xl)
                 .fill(AppTheme.cardDark)
                 .shadow(color: .black.opacity(0.3), radius: 20, y: -4)
         }

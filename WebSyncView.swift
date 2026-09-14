@@ -64,14 +64,13 @@ struct WebSyncView: View {
         .onAppear {
             withAnimation(.spring(response: 0.5, dampingFraction: 0.85)) { appeared = true }
         }
-        .confirmationDialog(loc("websync.revoke_title"),
-                            isPresented: $showRevokeConfirm, titleVisibility: .visible) {
-            Button(loc("websync.revoke_action"), role: .destructive) {
-                Task { await service.revoke() }
-            }
-            Button(loc("common.cancel"), role: .cancel) {}
-        } message: {
-            Text(loc("websync.revoke_body"))
+        .confirmSheet(isPresented: $showRevokeConfirm,
+                      icon: "eye.slash.fill",
+                      tone: .warning,
+                      title: loc("websync.revoke_title"),
+                      message: loc("websync.revoke_body"),
+                      confirmLabel: loc("websync.revoke_action")) {
+            Task { await service.revoke() }
         }
     }
 
@@ -82,11 +81,11 @@ struct WebSyncView: View {
             ZStack {
                 Circle().fill(AppTheme.accent.opacity(0.12)).frame(width: 66, height: 66)
                 Image(systemName: "laptopcomputer.and.iphone")
-                    .font(.system(size: 27, weight: .medium))
+                    .font(.system(.title, weight: .medium))
                     .foregroundStyle(AppTheme.accent)
             }
             Text(loc("websync.header"))
-                .font(.system(size: 15)).foregroundStyle(AppTheme.textSecondary)
+                .font(.system(.subheadline)).foregroundStyle(AppTheme.textSecondary)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
                 .lineSpacing(2)
@@ -99,12 +98,12 @@ struct WebSyncView: View {
     private var idCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             Label(loc("websync.your_id"), systemImage: "number")
-                .font(.system(size: 12, weight: .semibold))
+                .font(.system(.caption, weight: .semibold))
                 .foregroundStyle(AppTheme.textSecondary)
 
             HStack(spacing: 12) {
                 Text(dipoID)
-                    .font(.system(size: 25, weight: .bold, design: .monospaced))
+                    .font(.system(.title, design: .monospaced, weight: .bold))
                     .tracking(3)
                     .foregroundStyle(AppTheme.textPrimary)
                     .lineLimit(1).minimumScaleFactor(0.7)
@@ -119,9 +118,9 @@ struct WebSyncView: View {
                 } label: {
                     HStack(spacing: 5) {
                         Image(systemName: idCopied ? "checkmark" : "doc.on.doc")
-                            .font(.system(size: 11, weight: .bold))
+                            .font(.system(.caption2, weight: .bold))
                         Text(idCopied ? loc("common.copied") : loc("common.copy"))
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(.system(.caption, weight: .semibold))
                     }
                     .foregroundStyle(idCopied ? AppTheme.bg : AppTheme.accent)
                     .padding(.horizontal, 13).padding(.vertical, 8)
@@ -133,16 +132,16 @@ struct WebSyncView: View {
             }
 
             Text("dipo.info")
-                .font(.system(size: 12, weight: .semibold))
+                .font(.system(.caption, weight: .semibold))
                 .foregroundStyle(AppTheme.accent)
             Text(loc("websync.id_hint"))
-                .font(.system(size: 11.5)).foregroundStyle(AppTheme.textSecondary.opacity(0.85))
+                .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary.opacity(0.85))
                 .fixedSize(horizontal: false, vertical: true).lineSpacing(1.5)
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).stroke(AppTheme.accent.opacity(0.22), lineWidth: 1))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.accent.opacity(0.22), lineWidth: 1))
     }
 
     // MARK: Steps
@@ -156,7 +155,7 @@ struct WebSyncView: View {
             stepRow(3, "arrow.up.circle.fill",   AppTheme.accent, "websync.step3t", "websync.step3d")
         }
         .padding(.vertical, 4)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 16))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
     }
 
     private var stepDivider: some View {
@@ -167,25 +166,25 @@ struct WebSyncView: View {
                          _ titleKey: String, _ bodyKey: String) -> some View {
         HStack(alignment: .top, spacing: 13) {
             ZStack {
-                RoundedRectangle(cornerRadius: 11).fill(tint.opacity(0.14))
+                RoundedRectangle(cornerRadius: AppRadius.sm).fill(tint.opacity(0.14))
                     .frame(width: 36, height: 36)
                 Image(systemName: icon)
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.system(.callout, weight: .semibold))
                     .foregroundStyle(tint)
             }
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     Text("\(n)")
-                        .font(.system(size: 10, weight: .bold))
+                        .font(.system(.caption2, weight: .bold))
                         .foregroundStyle(tint)
                         .frame(width: 16, height: 16)
                         .background(tint.opacity(0.16), in: Circle())
                     Text(loc(titleKey))
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.system(.subheadline, weight: .semibold))
                         .foregroundStyle(AppTheme.textPrimary)
                 }
                 Text(loc(bodyKey))
-                    .font(.system(size: 12)).foregroundStyle(AppTheme.textSecondary)
+                    .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                     .fixedSize(horizontal: false, vertical: true).lineSpacing(1.5)
             }
             Spacer(minLength: 0)
@@ -227,14 +226,14 @@ struct WebSyncView: View {
     private func statusBox(icon: String, tint: Color, title: String, detail: String,
                           nextStep: String? = nil) -> some View {
         HStack(alignment: .top, spacing: 11) {
-            Image(systemName: icon).font(.system(size: 15)).foregroundStyle(tint).padding(.top, 1)
+            Image(systemName: icon).font(.system(.subheadline)).foregroundStyle(tint).padding(.top, 1)
             VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.system(size: 13, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
-                Text(detail).font(.system(size: 11.5)).foregroundStyle(AppTheme.textSecondary)
+                Text(title).font(.system(.footnote, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                Text(detail).font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                     .fixedSize(horizontal: false, vertical: true).lineSpacing(1.5)
                 if let nextStep {
                     Text(nextStep)
-                        .font(.system(size: 11.5, weight: .medium))
+                        .font(.system(.caption, weight: .medium))
                         .foregroundStyle(tint)
                         .fixedSize(horizontal: false, vertical: true).lineSpacing(1.5)
                         .padding(.top, 4)
@@ -244,8 +243,8 @@ struct WebSyncView: View {
         }
         .padding(13)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(tint.opacity(0.08), in: RoundedRectangle(cornerRadius: 13))
-        .overlay(RoundedRectangle(cornerRadius: 13).stroke(tint.opacity(0.2), lineWidth: 1))
+        .background(tint.opacity(0.08), in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(tint.opacity(0.2), lineWidth: 1))
         .transition(.opacity.combined(with: .move(edge: .top)))
     }
 
@@ -261,17 +260,16 @@ struct WebSyncView: View {
                 if isUploading {
                     ProgressView().tint(AppTheme.bg).scaleEffect(0.85)
                 } else {
-                    Image(systemName: "arrow.up.to.line").font(.system(size: 15, weight: .bold))
+                    Image(systemName: "arrow.up.to.line").font(.system(.subheadline, weight: .bold))
                 }
                 Text(isUploading ? loc("websync.uploading")
                                  : (service.lastSyncedAt == nil ? loc("websync.action")
                                                                 : loc("websync.action_again")))
-                    .font(.system(size: 16, weight: .bold))
+                    .font(.system(.callout, weight: .bold))
             }
             .foregroundStyle(AppTheme.bg)
             .frame(maxWidth: .infinity).padding(.vertical, 16)
-            .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: 15))
-            .shadow(color: AppTheme.accent.opacity(0.28), radius: 12, y: 5)
+            .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: AppRadius.md))
         }
         .buttonStyle(ScaleButtonStyle())
         .disabled(isUploading)
@@ -284,7 +282,7 @@ struct WebSyncView: View {
             showRevokeConfirm = true
         } label: {
             Text(loc("websync.revoke_action"))
-                .font(.system(size: 13, weight: .medium))
+                .font(.system(.footnote, weight: .medium))
                 .foregroundStyle(AppTheme.red.opacity(0.9))
         }
         .padding(.top, 2)
@@ -362,7 +360,7 @@ private struct SyncProgressOverlay: View {
                 .rotationEffect(.degrees(spin ? 360 : 0))
 
             Image(systemName: phase.icon)
-                .font(.system(size: 25, weight: .medium))
+                .font(.system(.title, weight: .medium))
                 .foregroundStyle(AppTheme.accent)
                 .contentTransition(.symbolEffect(.replace))
         }
@@ -387,7 +385,7 @@ private struct SyncProgressOverlay: View {
                         .foregroundStyle(AppTheme.accent)
                         .transition(.scale.combined(with: .opacity))
                 } else if active {
-                    Circle().fill(AppTheme.accentFill).frame(width: 7, height: 7)
+                    Circle().fill(AppTheme.accent).frame(width: 7, height: 7)
                         .scaleEffect(breathe ? 1.25 : 0.8)
                 }
             }
