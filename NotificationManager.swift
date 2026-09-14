@@ -520,13 +520,24 @@ final class NotificationManager {
     @MainActor
     static func scheduleCardExpiryReminders(for cards: [BankCard]) {
         let center = UNUserNotificationCenter.current()
-        // Remove all previous card expiry notifications before rebuilding
+        let current = cards.filter { !$0.isDigitalWallet }.map { "card_expiry_\($0.id.uuidString)" }
+        // Sweep reminders left by cards that no longer exist. This used to
+        // remove EVERY card_expiry_ request, asynchronously — so the sweep could
+        // land after the loop below and delete the reminders it had just made.
         center.getPendingNotificationRequests { requests in
-            let ids = requests.map(\.identifier).filter { $0.hasPrefix("card_expiry_") }
-            center.removePendingNotificationRequests(withIdentifiers: ids)
+            let stale = requests.map(\.identifier).filter { id in
+                id.hasPrefix("card_expiry_") && !current.contains(where: { id.hasPrefix($0) })
+            }
+            center.removePendingNotificationRequests(withIdentifiers: stale)
         }
         for card in cards {
             guard !card.isDigitalWallet else { continue }
+            // A card moving from "soon" to "urgent" swaps its weekly reminder for
+            // a daily one; clear both repeating slots so the old one goes. The
+            // one-off alerts are left alone — cancelling a pending one here
+            // would swallow it, since it is only sent once a day.
+            let base = "card_expiry_\(card.id.uuidString)"
+            center.removePendingNotificationRequests(withIdentifiers: [base + "_daily", base + "_weekly"])
             scheduleExpiryNotificationsForCard(card)
         }
     }
@@ -540,6 +551,16 @@ final class NotificationManager {
         let last4   = card.last4
         let baseID  = "card_expiry_\(card.id.uuidString)"
 
+        // The repeating 9am reminders below are rebuilt on every call (same
+        // identifiers, so they replace). The one-off "right now" push and the
+        // bell row are not — this runs on every launch and every card edit,
+        // and it used to fire both each time. Their de-duplication compared
+        // text, so after a language switch the same alert counted as new and
+        // arrived twice, once per language. Now: once per card, per state, per day.
+        let alertKey = "card_expiry_alerted_\(card.id.uuidString)_\(status)_\(ISO8601DateFormatter.dayString(from: .now))"
+        let alertNow = !UserDefaults.standard.bool(forKey: alertKey)
+        if alertNow { UserDefaults.standard.set(true, forKey: alertKey) }
+
         let content      = UNMutableNotificationContent()
         content.sound    = .dipo
         content.badge    = 1
@@ -549,9 +570,11 @@ final class NotificationManager {
         case .expired:
             content.title = loc("notif.card_expired_push_title")
             content.body  = String(format: loc("notif.card_expired_push_body"), last4)
-            center.add(UNNotificationRequest(identifier: baseID + "_now",
-                content: content,
-                trigger: UNTimeIntervalNotificationTrigger(timeInterval: 5, repeats: false)))
+            if alertNow {
+                center.add(UNNotificationRequest(identifier: baseID + "_now",
+                    content: content,
+                    trigger: UNTimeIntervalNotificationTrigger(timeInterval: 5, repeats: false)))
+            }
             var dc = DateComponents(); dc.hour = 9; dc.minute = 0
             center.add(UNNotificationRequest(identifier: baseID + "_daily",
                 content: content,
@@ -560,9 +583,11 @@ final class NotificationManager {
         case .urgent:
             content.title = String(format: loc("notif.card_urgent_push_title"), days)
             content.body  = String(format: loc("notif.card_urgent_push_body"), last4)
-            center.add(UNNotificationRequest(identifier: baseID + "_urgent",
-                content: content,
-                trigger: UNTimeIntervalNotificationTrigger(timeInterval: 5, repeats: false)))
+            if alertNow {
+                center.add(UNNotificationRequest(identifier: baseID + "_urgent",
+                    content: content,
+                    trigger: UNTimeIntervalNotificationTrigger(timeInterval: 5, repeats: false)))
+            }
             var dc = DateComponents(); dc.hour = 9; dc.minute = 0
             center.add(UNNotificationRequest(identifier: baseID + "_daily",
                 content: content,
@@ -571,9 +596,11 @@ final class NotificationManager {
         case .soon:
             content.title = String(format: loc("notif.card_warning_push_title"), days)
             content.body  = String(format: loc("notif.card_warning_push_body"), last4, card.expireDate)
-            center.add(UNNotificationRequest(identifier: baseID + "_soon",
-                content: content,
-                trigger: UNTimeIntervalNotificationTrigger(timeInterval: 5, repeats: false)))
+            if alertNow {
+                center.add(UNNotificationRequest(identifier: baseID + "_soon",
+                    content: content,
+                    trigger: UNTimeIntervalNotificationTrigger(timeInterval: 5, repeats: false)))
+            }
             var dc = DateComponents(); dc.weekday = 2; dc.hour = 9; dc.minute = 0
             center.add(UNNotificationRequest(identifier: baseID + "_weekly",
                 content: content,
@@ -586,7 +613,7 @@ final class NotificationManager {
         // pushToDevice:false — this card already has its own scheduled
         // device pushes above (the `_now` / `_daily` triggers), so letting
         // post() add another immediate push would double up.
-        if status == .expired || status == .urgent {
+        if alertNow, status == .expired || status == .urgent {
             Task { @MainActor in
                 NotificationManager.shared.post(AppNotificationItem(
                     icon:         status == .expired ? "xmark.circle.fill" : "exclamationmark.triangle.fill",

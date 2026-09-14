@@ -317,6 +317,10 @@ struct RootView: View {
 
     @State private var appVM  = AppViewModel()
     @State private var authVM = AuthViewModel()
+    /// Launch work runs once per process. RootView can be rebuilt (a new scene,
+    /// a state restoration), and none of it is safe twice: RevenueCat asserts on
+    /// a second configure, and the expiry check fires a push every time.
+    private static var didLaunch = false
     /// Observe the support service so the maintenance gate flips live when the
     /// admin toggles it.
     @State private var support = FirebaseSupportService.shared
@@ -325,6 +329,10 @@ struct RootView: View {
         ZStack {
             AppTheme.bg.ignoresSafeArea()
 
+            // Keyed on the language so every string redraws the moment it
+            // changes — but only the screens are rebuilt. RootView, its view
+            // models (the open tab, pushed screens) and its launch work stay.
+            Group {
             switch authVM.authState {
             case .splash:
                 SplashView().transition(.opacity)
@@ -353,6 +361,8 @@ struct RootView: View {
                         }
                     }
             }
+            }
+            .id(LanguageManager.shared.renderID)
         }
         .animation(.spring(response: 0.5, dampingFraction: 0.82), value: authVM.authState)
         .overlay { NoInternetOverlay() }      // full-screen offline view
@@ -453,6 +463,8 @@ struct RootView: View {
 
         .onAppear {
             appVM.cards = liveCards
+            guard !Self.didLaunch else { return }
+            Self.didLaunch = true
             UserSession.shared.checkAppleCredentialState { _ in }
             // Recover email for users who signed in before email capture was
             // fixed — so support/broadcast emails can reach them. Runs before

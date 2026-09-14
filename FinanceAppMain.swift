@@ -274,8 +274,11 @@ struct DiPoApp: App {
                 // tiles, the tab bar) that clip past that. Raise the cap as those
                 // are made to grow.
                 .dynamicTypeSize(...DynamicTypeSize.xxLarge)
-                // ✅ Force full re-render when language switches so all Text() updates instantly
-                .id(LanguageManager.shared.renderID)
+                // The language re-render lives INSIDE RootView now (see there).
+                // Keyed out here it destroyed RootView itself, so every launch
+                // task ran again on each language switch — card-expiry pushes
+                // and bell rows fired a second time in the new language, and
+                // RevenueCat was configured twice.
                 .preferredColorScheme(resolvedColorScheme)
                 .onOpenURL { url in
                     // Two URL schemes share this hook:
