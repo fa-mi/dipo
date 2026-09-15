@@ -229,7 +229,11 @@ struct DiPoApp: App {
             CardBudgetConfig.self,
             // Deliberate choices the user declared per pay cycle, so the engine
             // reports them instead of scoring them as mistakes.
-            CycleIntent.self
+            CycleIntent.self,
+            // Pre-aggregated daily buckets (see RollupEngine). A derived cache of
+            // the ledger — always rebuildable from TxRecord — that lets screens
+            // read O(days) instead of scanning every transaction on each render.
+            DailyRollup.self
         ])
         let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
         do {
