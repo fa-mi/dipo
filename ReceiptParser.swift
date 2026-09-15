@@ -141,6 +141,9 @@ enum ReceiptParser {
         "permatamobile", "permata mobile", "d-bank", "dbank", "d-bank pro",
         "one mobile", "paninmobile", "m2u", "m2u id", "jenius",
         "simobiplus", "bjb digi", "mdin",
+        // "App by Bank" logo lockups. The small "by BRI" under the "Qita" mark
+        // is branding, not the shop, and used to win the heuristic below.
+        "by bri", "by bni", "by bca", "by mandiri", "by bsi", "by btn", "by bank",
         // Wallets that appear as the rail on a payment slip
         "gopay", "ovo", "dana", "shopeepay", "linkaja", "sakuku", "flip",
     ]
@@ -271,24 +274,32 @@ enum ReceiptParser {
                 if tail.count >= 3, !isPaymentBrandOnly(tail), !isIssuer(tail) { return tail }
             }
             // Otherwise the label is its own line (or a left column) and the
-            // value follows. Receipts wrap long names, so take up to two lines.
+            // value follows. Receipts wrap long names, so look a few lines down.
             var value = ""
-            for next in lines.dropFirst(i + 1).prefix(2) {
+            for next in lines.dropFirst(i + 1).prefix(4) {
                 let candidate = next.trimmingCharacters(in: .whitespaces)
                 guard !candidate.isEmpty else { continue }
                 let candLower = candidate.lowercased()
                 if payeeLabels.contains(where: { candLower.contains($0) }) { break }
                 if railLabels.contains(where: { candLower.contains($0) }) { break }
-                if isPaymentBrandOnly(candidate) || isIssuer(candidate) { break }
-                if isAccountHolder(candidate) || isStatusLine(candidate) { break }
-                // Stop at the next label/amount row rather than swallowing it.
+                // A bank watermark ("BRI" repeated across the slip), the account
+                // holder or a status word can land BETWEEN the label and its
+                // value. Skip such noise while still looking; only stop once the
+                // real value has started.
+                if isPaymentBrandOnly(candidate) || isIssuer(candidate)
+                    || isAccountHolder(candidate) || isStatusLine(candidate) {
+                    if value.isEmpty { continue } else { break }
+                }
+                // Stop at the next amount/number row rather than swallowing it.
                 if candidate.filter({ $0.isNumber }).count > candidate.filter({ $0.isLetter }).count { break }
                 value += (value.isEmpty ? "" : " ") + candidate
             }
             if value.count >= 3 { return value }
         }
 
-        let topLines = Array(lines.prefix(10))
+        // Wider than the classic 5-line header: on a QRIS e-receipt the shop
+        // name sits below the status banner, the amount and the card block.
+        let topLines = Array(lines.prefix(14))
 
         // Pass 1: known merchants. This catches Indomaret/Alfamart/etc. even if
         // they appear lower than line 1 (sometimes there's a logo region first).
@@ -673,10 +684,42 @@ enum ReceiptParser {
     /// Try multiple date formats. Indonesian receipts use dd/mm/yyyy almost
     /// universally — we try that first. If we ever expand to US receipts we'd
     /// need disambiguation logic for ambiguous dates like 03/04/2026.
+    /// Overlays a time of day onto a parsed date. Receipts state the clock
+    /// time ("14:18:54 WIB"), and the date parser fixes the hour at midday so a
+    /// timezone shift cannot slide the day — which threw the real time away.
+    /// A time carrying a WIB/WITA/WIT marker wins; otherwise the first valid
+    /// HH:mm(:ss) is used. Colons are rare on a receipt outside the timestamp,
+    /// so this is safe. Components are applied locally — no timezone conversion,
+    /// so the day never slides.
+    private static func applyTime(to date: Date, from text: String) -> Date {
+        guard let regex = try? NSRegularExpression(
+            pattern: #"\b([01]?\d|2[0-3]):([0-5]\d)(?::([0-5]\d))?\b"#) else { return date }
+        let ns = text as NSString
+        var picked: (h: Int, m: Int, s: Int)? = nil
+        for match in regex.matches(in: text, range: NSRange(location: 0, length: ns.length)) {
+            let h = Int(ns.substring(with: match.range(at: 1))) ?? 0
+            let mn = Int(ns.substring(with: match.range(at: 2))) ?? 0
+            let sc = match.range(at: 3).location != NSNotFound
+                ? (Int(ns.substring(with: match.range(at: 3))) ?? 0) : 0
+            let end = match.range.location + match.range.length
+            let tail = end < ns.length
+                ? ns.substring(with: NSRange(location: end, length: min(6, ns.length - end))).lowercased()
+                : ""
+            if tail.contains("wib") || tail.contains("wita") || tail.contains("wit") {
+                picked = (h, mn, sc); break            // an Indonesian TZ marker is decisive
+            }
+            if picked == nil { picked = (h, mn, sc) }  // else remember the first
+        }
+        guard let t = picked else { return date }
+        var c = Calendar.current.dateComponents([.year, .month, .day], from: date)
+        c.hour = t.h; c.minute = t.m; c.second = t.s
+        return Calendar.current.date(from: c) ?? date
+    }
+
     private static func extractDate(from text: String, fallback: Date) -> Date {
         // Spelled-out months first: they are unambiguous, while "12/09" could
         // be either order.
-        if let named = extractMonthNameDate(from: text) { return named }
+        if let named = extractMonthNameDate(from: text) { return applyTime(to: named, from: text) }
 
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")  // unambiguous parsing
@@ -698,7 +741,7 @@ enum ReceiptParser {
                     let now = Date()
                     if d <= now.addingTimeInterval(86400) &&
                        d >= now.addingTimeInterval(-86400 * 365 * 5) {
-                        return d
+                        return applyTime(to: d, from: text)
                     }
                 }
             }
