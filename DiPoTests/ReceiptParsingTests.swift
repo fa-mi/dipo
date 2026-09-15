@@ -109,6 +109,50 @@ final class ReceiptParsingTests: XCTestCase {
         XCTAssertEqual(c.minute, 18)
     }
 
+    /// Every "<App> by <Bank>" logo lockup (Livin by Mandiri, Wondr by BNI,
+    /// Bale by BTN, OCTO by CIMB, digibank by DBS…) has the same trap as Qita
+    /// by BRI: the "by <bank>" fragment must never be read as the shop.
+    func testByBankLogoLockupsAreNeverTheMerchant() {
+        for lockup in ["by Mandiri", "by BNI", "by BTN", "by BSI", "by BCA",
+                       "by CIMB", "by DBS", "by UOB"] {
+            let text = """
+            \(lockup)
+            Transaksi Berhasil
+            Rp12.000
+            13 Sep 2026, 09:15:00 WIB
+            Detail Transaksi
+            Warung Sate Pak Kumis
+            QRIS Bayar
+            Total Rp12.000
+            """
+            let r = ReceiptParser.parse(rawText: text, fallbackCurrency: "IDR")
+            XCTAssertEqual(r.merchantName, "Warung Sate Pak Kumis",
+                           "\(lockup) should never win the merchant")
+        }
+    }
+
+    /// The rail registry now covers e-wallets and neobanks too, so a slip
+    /// headed GoPay / OVO / DANA / ShopeePay / SeaBank / Jago never files the
+    /// wallet as the shop.
+    func testEWalletAndNeobankRailsAreNeverTheMerchant() {
+        for rail in ["GoPay", "OVO", "DANA", "ShopeePay", "LinkAja",
+                     "SeaBank", "Jago", "Jenius", "QRIS"] {
+            let text = """
+            \(rail)
+            Transaksi Berhasil
+            Rp25.000
+            13 Sep 2026, 08:00:00 WIB
+            Detail Transaksi
+            Warung Sate Pak Kumis
+            QRIS Bayar
+            Total Rp25.000
+            """
+            let r = ReceiptParser.parse(rawText: text, fallbackCurrency: "IDR")
+            XCTAssertEqual(r.merchantName, "Warung Sate Pak Kumis",
+                           "\(rail) should never win the merchant")
+        }
+    }
+
     /// Every banking app leads with one, and it is the first wordy line once
     /// the app name and the bank are excluded.
     func testStatusBannerIsNotTheMerchant() {
