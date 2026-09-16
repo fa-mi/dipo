@@ -528,6 +528,12 @@ struct RootView: View {
             CurrencyManager.shared.fetchRate()
             SalaryCreditEngine.processIfNeeded(context: context)
             RecurringExpenseEngine.processIfNeeded(context: context)
+            // Seed the daily-rollup cache (see RollupEngine). Loads the persisted
+            // buckets when they still match the ledger, else recomputes — so a
+            // normal launch pays nothing and a diverged one self-heals. Runs
+            // after the credit/recurring engines above, which may post new
+            // transactions this launch.
+            RollupStore.shared.loadOrRebuild(context: context)
             // First write of widget data so the Home Screen shows real
             // numbers instead of the gallery placeholder on first launch.
             WidgetDataSync.refresh(context: context)
