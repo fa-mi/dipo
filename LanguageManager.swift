@@ -672,6 +672,7 @@ final class LanguageManager {
 
         // Transactions
         "tx.new":               "New Transaction",
+        "tx.card_locked_cc":    "Locked to this credit card for this purchase",
         "recurring.short_month_hint": "In shorter months it falls on the last day.",
         "recurring.this_month_on": "This month: %@",
         "recurring.deleted_toast": "Bill deleted",
@@ -2968,6 +2969,7 @@ final class LanguageManager {
 
         // Transactions
         "tx.new":               "Transaksi Baru",
+        "tx.card_locked_cc":    "Terkunci ke kartu kredit ini untuk pembelian ini",
         "recurring.short_month_hint": "Di bulan yang lebih pendek, jatuh di hari terakhirnya.",
         "recurring.this_month_on": "Bulan ini: %@",
         "recurring.deleted_toast": "Tagihan dihapus",

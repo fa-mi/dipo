@@ -173,7 +173,14 @@ struct ProfileView: View {
     @State private var showImportPicker = false
     @State private var pendingImportURL: URL? = nil
     @State private var showImportConfirm = false
-    @State private var backupToast: String? = nil
+    /// Backup/restore result banner. Carries its OWN tone so a success can
+    /// never be mistaken for an error — the previous design inferred success
+    /// from a leading "✅" the restore path forgot to add, so "Backup restored."
+    /// rendered in red as if it had failed.
+    @State private var backupToast: BackupBanner? = nil
+    /// A backup/restore result plus its tone. Explicit, so the banner's colour
+    /// is set at the call site that knows the outcome, not guessed from text.
+    private struct BackupBanner { let isError: Bool; let message: String }
     /// Loading overlay state. `nil` = idle. Otherwise carries the operation
     /// label so we can show "Mengekspor…" vs "Memulihkan…" without juggling
     /// two separate booleans + a flag.
@@ -383,11 +390,11 @@ struct ProfileView: View {
                 do {
                     importPreview = try BackupService.previewBackup(from: url)
                 } catch {
-                    backupToast = error.localizedDescription
+                    backupToast = BackupBanner(isError: true, message: error.localizedDescription)
                     pendingImportURL = nil
                 }
             case .failure(let err):
-                backupToast = err.localizedDescription
+                backupToast = BackupBanner(isError: true, message: err.localizedDescription)
             }
         }
         // Preview sheet — shows what's in the picked file BEFORE wiping.
@@ -1255,20 +1262,11 @@ struct ProfileView: View {
                 .frame(maxWidth: .infinity)
 
             if let toast = backupToast {
-                // The success string is prefixed with "✅" by the caller;
-                // we use that as the signal to render with success tone
-                // instead of error. InlineBanner handles icon + color +
-                // background so the visual feedback matches every other
-                // form in the app.
-                let isSuccess = toast.hasPrefix("✅")
-                InlineBanner(
-                    tone: isSuccess ? .success : .error,
-                    // Strip the prefix emoji — InlineBanner renders its own
-                    // status icon, so the leading "✅" would be redundant.
-                    message: isSuccess
-                        ? String(toast.dropFirst().trimmingCharacters(in: .whitespaces))
-                        : toast
-                )
+                // Tone comes from the banner's own flag, set by whichever path
+                // produced it — never inferred from the message text. InlineBanner
+                // handles icon + colour + background so the feedback matches every
+                // other form in the app.
+                InlineBanner(tone: toast.isError ? .error : .success, message: toast.message)
             }
         }
         .padding(.horizontal, 22)
@@ -1492,7 +1490,7 @@ struct ProfileView: View {
                 lastExportDate = now
             } catch {
                 backupBusyLabel = nil
-                backupToast = error.localizedDescription
+                backupToast = BackupBanner(isError: true, message: error.localizedDescription)
                 HapticManager.shared.error()
             }
         }
@@ -1508,11 +1506,11 @@ struct ProfileView: View {
             do {
                 try BackupService.importBackup(from: url, context: context)
                 backupBusyLabel = nil
-                backupToast = loc("backup.import_success")
+                backupToast = BackupBanner(isError: false, message: loc("backup.import_success"))
                 HapticManager.shared.success()
             } catch {
                 backupBusyLabel = nil
-                backupToast = error.localizedDescription
+                backupToast = BackupBanner(isError: true, message: error.localizedDescription)
                 HapticManager.shared.error()
             }
             pendingImportURL = nil

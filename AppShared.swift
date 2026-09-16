@@ -505,10 +505,20 @@ struct DateTimeFields: View {
 struct CardSwipePicker: View {
     let cards: [BankCard]
     @Binding var selectedIndex: Int
+    /// When true the picker shows only the selected card and cannot be swiped —
+    /// for flows tied to one specific card (e.g. logging a purchase on a chosen
+    /// credit card). The caller is responsible for explaining why.
+    var locked: Bool = false
     let figure: (BankCard) -> (label: String, value: String)
 
+    /// The card to show when there's nothing to swipe: the selected one when
+    /// locked, otherwise the only card.
+    private var soleCard: BankCard? {
+        cards.indices.contains(selectedIndex) ? cards[selectedIndex] : cards.first
+    }
+
     var body: some View {
-        if cards.count > 1 {
+        if !locked, cards.count > 1 {
             VStack(spacing: 10) {
                 TabView(selection: $selectedIndex) {
                     ForEach(Array(cards.enumerated()), id: \.element.id) { index, card in
@@ -530,7 +540,7 @@ struct CardSwipePicker: View {
                 }
                 .animation(.spring(response: 0.35, dampingFraction: 0.7), value: selectedIndex)
             }
-        } else if let card = cards.first {
+        } else if let card = soleCard {
             let f = figure(card)
             CardFaceView(card: card, label: f.label, value: f.value)
                 .frame(height: 100)
