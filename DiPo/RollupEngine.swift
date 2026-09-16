@@ -59,13 +59,21 @@ struct TxFact: Equatable {
     let category: String
     /// `TxSubtype` rawValue: "normal" | "refund" | "transfer".
     let subtype: String
+    /// The card this transaction posted to. The app's main screens are
+    /// PER-CARD (Statistics shows the resolved main card; Smart Budget scopes to
+    /// it), so buckets carry the card and a reader selects one card's slice.
+    /// All-cards figures are the sum across cards. `TxRecord` has no back-link to
+    /// its card, so the adapter is handed the id while iterating a card's ledger.
+    let cardID: String
 
-    init(date: Date, amount: Double, currency: String, category: String, subtype: String) {
+    init(date: Date, amount: Double, currency: String, category: String,
+         subtype: String, cardID: String = "") {
         self.date = date
         self.amount = amount
         self.currency = currency
         self.category = category
         self.subtype = subtype
+        self.cardID = cardID
     }
 }
 
@@ -77,6 +85,9 @@ struct TxFact: Equatable {
 /// `SmartBudgetManager.spent(in:)`, so numbers read back from a rollup match
 /// what those screens compute today, to the rupiah.
 struct DailyBucket: Equatable {
+    /// The card this bucket belongs to (`TxFact.cardID`). One bucket per
+    /// (card, day); an all-cards figure sums buckets across cards.
+    let cardID: String
     /// Start-of-day (Calendar.current) this bucket covers.
     let dayStart: Date
 
@@ -135,16 +146,18 @@ struct RollupTotals: Equatable {
 
 enum RollupEngine {
 
-    /// Fold transactions into one bucket per calendar day.
+    /// Fold transactions into one bucket per (card, calendar day).
     ///
     /// `calendar` is injectable only so tests can pin a timezone; production
     /// always passes `.current`, matching every screen that slices by date.
     static func daily(from facts: [TxFact], calendar: Calendar = .current) -> [DailyBucket] {
-        var byDay: [Date: DailyBucket] = [:]
+        struct Key: Hashable { let cardID: String; let day: Date }
+        var byKey: [Key: DailyBucket] = [:]
 
         for f in facts {
             let day = calendar.startOfDay(for: f.date)
-            var b = byDay[day] ?? DailyBucket(dayStart: day)
+            let key = Key(cardID: f.cardID, day: day)
+            var b = byKey[key] ?? DailyBucket(cardID: f.cardID, dayStart: day)
             let ccy = f.currency
             let mag = abs(f.amount)
 
@@ -169,10 +182,12 @@ enum RollupEngine {
             }
 
             b.txCount += 1
-            byDay[day] = b
+            byKey[key] = b
         }
 
-        return byDay.values.sorted { $0.dayStart < $1.dayStart }
+        return byKey.values.sorted {
+            $0.dayStart != $1.dayStart ? $0.dayStart < $1.dayStart : $0.cardID < $1.cardID
+        }
     }
 
     /// Sum a set of buckets into one target currency.
@@ -206,12 +221,30 @@ enum RollupEngine {
         return out
     }
 
-    /// Buckets whose day falls inside `[start, end]` (inclusive), the closed
-    /// range every screen uses (`$0.date >= start && $0.date <= end`). Cheap
-    /// linear filter over the small bucket set; a persisted rollup will instead
-    /// fetch this by an indexed date predicate.
-    static func buckets(_ buckets: [DailyBucket], in range: ClosedRange<Date>) -> [DailyBucket] {
-        buckets.filter { $0.dayStart >= range.lowerBound && $0.dayStart <= range.upperBound }
+    /// Buckets for one card (or all cards when `cardID` is nil) whose day falls
+    /// inside `[start, end]` — the closed range the date-bounded screens use
+    /// (`$0.date >= start && $0.date <= end`). Cheap linear filter over the small
+    /// bucket set; a persisted rollup will instead fetch this by an indexed date
+    /// predicate.
+    static func buckets(_ buckets: [DailyBucket],
+                        cardID: String? = nil,
+                        in range: ClosedRange<Date>) -> [DailyBucket] {
+        buckets.filter {
+            (cardID == nil || $0.cardID == cardID!)
+                && $0.dayStart >= range.lowerBound && $0.dayStart <= range.upperBound
+        }
+    }
+
+    /// Buckets for one card (or all cards) from `start` onward, with NO upper
+    /// bound — the exact window `SmartBudgetManager.spent(in:)` uses
+    /// (`$0.date >= monthStart`). Because there is no `end`, whole-day buckets
+    /// reproduce that filter exactly, with no partial-edge day to reconcile.
+    static func buckets(_ buckets: [DailyBucket],
+                        cardID: String? = nil,
+                        from start: Date) -> [DailyBucket] {
+        buckets.filter {
+            (cardID == nil || $0.cardID == cardID!) && $0.dayStart >= start
+        }
     }
 
     // MARK: Backup grouping
@@ -239,12 +272,15 @@ enum RollupEngine {
 extension TxFact {
     /// Project a stored transaction into a `TxFact`. Reads the raw stored
     /// strings (`categoryRaw`, `subtype`) directly so no enum round-trip or
-    /// localisation is involved.
-    init(_ tx: TxRecord) {
+    /// localisation is involved. `cardID` is supplied by the caller because
+    /// `TxRecord` holds no back-reference to its owning card — the store builds
+    /// facts while iterating each `BankCard.transactions`.
+    init(_ tx: TxRecord, cardID: String) {
         self.init(date: tx.date,
                   amount: tx.amount,
                   currency: tx.currency,
                   category: tx.categoryRaw,
-                  subtype: tx.subtype)
+                  subtype: tx.subtype,
+                  cardID: cardID)
     }
 }

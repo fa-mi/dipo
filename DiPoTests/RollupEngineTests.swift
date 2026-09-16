@@ -165,4 +165,37 @@ final class RollupEngineTests: XCTestCase {
         XCTAssertEqual(RollupEngine.monthKey(for: date(2026, 1, 5), calendar: cal), "2026-01")
         XCTAssertEqual(RollupEngine.monthKey(for: date(2026, 12, 31), calendar: cal), "2026-12")
     }
+
+    // MARK: Card dimension (screens are per-card)
+
+    func testBucketsAreScopedPerCard() {
+        let facts = [
+            TxFact(date: date(2026, 9, 8), amount: -100_000, currency: "IDR", category: "food", subtype: "normal", cardID: "A"),
+            TxFact(date: date(2026, 9, 8), amount: -20_000, currency: "IDR", category: "food", subtype: "normal", cardID: "B"),
+        ]
+        let all = RollupEngine.daily(from: facts, calendar: cal)
+        XCTAssertEqual(all.count, 2)   // one bucket per (card, day)
+
+        let range = date(2026, 9, 1, 0)...date(2026, 9, 30, 23)
+        let a = RollupEngine.buckets(all, cardID: "A", in: range)
+        let b = RollupEngine.buckets(all, cardID: "B", in: range)
+        XCTAssertEqual(totalsIDR(a).expenses, 100_000, accuracy: 0.001)
+        XCTAssertEqual(totalsIDR(b).expenses, 20_000, accuracy: 0.001)
+        // No card filter = all cards combined.
+        XCTAssertEqual(totalsIDR(RollupEngine.buckets(all, in: range)).expenses, 120_000, accuracy: 0.001)
+    }
+
+    /// `from:` is the window SmartBudgetManager.spent uses: `date >= monthStart`
+    /// with NO upper bound, so whole-day buckets reproduce it exactly.
+    func testFromStartHasNoUpperBoundAndScopesToCard() {
+        let facts = [
+            TxFact(date: date(2026, 8, 31), amount: -9_000, currency: "IDR", category: "food", subtype: "normal", cardID: "A"),   // before start
+            TxFact(date: date(2026, 9, 1), amount: -30_000, currency: "IDR", category: "food", subtype: "normal", cardID: "A"),   // on start
+            TxFact(date: date(2026, 9, 20), amount: -50_000, currency: "IDR", category: "food", subtype: "normal", cardID: "A"),  // later, no upper bound
+            TxFact(date: date(2026, 9, 20), amount: -70_000, currency: "IDR", category: "food", subtype: "normal", cardID: "B"),  // other card
+        ]
+        let all = RollupEngine.daily(from: facts, calendar: cal)
+        let win = RollupEngine.buckets(all, cardID: "A", from: date(2026, 9, 1, 0))
+        XCTAssertEqual(totalsIDR(win).expenses, 80_000, accuracy: 0.001)   // 30k + 50k, not the 9k before start, not B's 70k
+    }
 }

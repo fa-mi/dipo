@@ -15,8 +15,12 @@ import SwiftData
 
 @Model
 final class DailyRollup {
-    /// "yyyy-MM-dd" (Calendar.current). Unique so a day is stored once.
+    /// "cardID|yyyy-MM-dd" (Calendar.current). Unique so a (card, day) is stored
+    /// once — the app's screens are per-card, so the bucket is too.
     @Attribute(.unique) var dayKey: String
+    /// The owning card's id (`BankCard.id.uuidString`). A real stored field so a
+    /// persisted query can scope to one card.
+    var cardID: String
     /// Start-of-day — a real stored Date so a persisted query can filter a date
     /// range with an index (added when reads move onto the store).
     var dayStart: Date
@@ -36,7 +40,8 @@ final class DailyRollup {
     var updatedAt: Date
 
     init(_ b: DailyBucket) {
-        self.dayKey = DailyRollup.key(for: b.dayStart)
+        self.dayKey = DailyRollup.key(cardID: b.cardID, day: b.dayStart)
+        self.cardID = b.cardID
         self.dayStart = b.dayStart
         self.incomeByCurrency = b.incomeByCurrency
         self.expenseByCurrency = b.expenseByCurrency
@@ -47,9 +52,9 @@ final class DailyRollup {
         self.updatedAt = .now
     }
 
-    static func key(for day: Date, calendar: Calendar = .current) -> String {
+    static func key(cardID: String, day: Date, calendar: Calendar = .current) -> String {
         let c = calendar.dateComponents([.year, .month, .day], from: day)
-        return String(format: "%04d-%02d-%02d", c.year ?? 0, c.month ?? 0, c.day ?? 0)
+        return String(format: "%@|%04d-%02d-%02d", cardID, c.year ?? 0, c.month ?? 0, c.day ?? 0)
     }
 
     private static func encodeCats(_ d: [CatCur: Double]) -> [String: Double] {
@@ -70,7 +75,8 @@ final class DailyRollup {
     /// Rebuild the in-memory bucket from a persisted row, so a cold start can
     /// seed the cache without touching the transaction table.
     func toBucket() -> DailyBucket {
-        DailyBucket(dayStart: dayStart,
+        DailyBucket(cardID: cardID,
+                    dayStart: dayStart,
                     incomeByCurrency: incomeByCurrency,
                     expenseByCurrency: expenseByCurrency,
                     transferNetByCurrency: transferNetByCurrency,
@@ -114,10 +120,16 @@ final class RollupStore {
     /// Recompute buckets from the source of truth and mirror them to the store.
     @discardableResult
     func rebuild(context: ModelContext) -> [DailyBucket] {
-        let txs = (try? context.fetch(FetchDescriptor<TxRecord>())) ?? []
-        let computed = RollupEngine.daily(from: txs.map(TxFact.init))
+        // Iterate cards, not TxRecord directly: a transaction has no back-link
+        // to its card, and the app's figures are per-card, so each fact is
+        // tagged with the card whose ledger it sits in.
+        let cards = (try? context.fetch(FetchDescriptor<BankCard>())) ?? []
+        let facts = cards.flatMap { card in
+            card.transactions.map { TxFact($0, cardID: card.id.uuidString) }
+        }
+        let computed = RollupEngine.daily(from: facts)
         buckets = computed
-        builtAtTxCount = txs.count
+        builtAtTxCount = facts.count
         persist(computed, context: context)
         return computed
     }
