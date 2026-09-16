@@ -114,36 +114,64 @@ enum ReceiptParser {
         "sumber rekening", "rekening sumber", "dari rekening", "nomor referensi",
     ]
 
-    /// Banks and wallets. These appear on every payment slip — often as a
-    /// repeated watermark — and are the single most likely thing to be
-    /// mistaken for the shop. `LAUNDRY EXPERT` lost to a `BCA` watermark
-    /// because the heuristic below simply took the first wordy line.
-    private static let paymentBrands = [
-        // Banks
-        "bca", "bri", "bni", "mandiri", "cimb", "niaga", "permata", "danamon",
-        "ocbc", "panin", "btn", "bsi", "maybank", "jago", "seabank", "blu",
-        "bjb", "muamalat", "sinarmas", "btpn", "mega", "bukopin", "superbank",
-        "krom", "neobank", "allo", "hana", "line bank",
-        // Schemes
-        "qris", "gpn", "visa", "mastercard", "prima", "alto", "artajasa",
-        // Mobile banking APP names. These are branded separately from the bank
-        // and change often — "Qita by BRI" launched after this parser was
-        // written and was read as the merchant on a BRI transfer slip. The app
-        // name is splashed across its own receipt screen exactly the way a
-        // bank watermark is.
-        "brimo", "qita", "qita by bri",
-        "livin", "livin by mandiri", "kopra",
-        "wondr", "wondr by bni",
-        "mybca", "bca mobile", "blu by bca digital",
-        "bale", "balé", "bale by btn", "btn mobile",
-        "byond", "byond by bsi", "bsi mobile",
-        "octo", "octo mobile", "octo clicks",
-        "permatamobile", "permata mobile", "d-bank", "dbank", "d-bank pro",
-        "one mobile", "paninmobile", "m2u", "m2u id", "jenius",
-        "simobiplus", "bjb digi", "mdin",
-        // Wallets that appear as the rail on a payment slip
-        "gopay", "ovo", "dana", "shopeepay", "linkaja", "sakuku", "flip",
-    ]
+    /// The payment RAILS of Indonesia — banks, e-wallets, e-money, mobile-
+    /// banking apps and card schemes. A rail is splashed across every payment
+    /// slip (a logo, a header, a repeated watermark) and is the single likeliest
+    /// thing to be mistaken for the shop: `LAUNDRY EXPERT` once lost to a `BCA`
+    /// watermark. Matched EXACTLY against a cleaned line, so a shop whose name
+    /// merely CONTAINS a bank word ("Toko Mandiri Jaya") is never rejected.
+    ///
+    /// Bank names are folded in from the card-colour catalogue (`BankIssuer.all`)
+    /// so a bank is defined in ONE place; the sets below add the transfer-only
+    /// banks, the wallets and the apps that issue no card here. It is reference
+    /// data kept offline — it changes at the pace of the banking industry, not
+    /// the app — and a Set so the membership test is O(1).
+    private static let paymentBrands: Set<String> = {
+        var s = Set(BankIssuer.all.flatMap { [$0.id.lowercased(), $0.name.lowercased()] })
+        // Banks — including ones that issue no card in the catalogue but still
+        // appear on transfer / QRIS slips.
+        s.formUnion([
+            "bca", "bri", "bni", "mandiri", "cimb", "niaga", "cimb niaga",
+            "permata", "danamon", "ocbc", "ocbc nisp", "nisp", "panin", "btn",
+            "bsi", "maybank", "jago", "seabank", "blu", "bjb", "muamalat",
+            "sinarmas", "btpn", "btpn syariah", "mega", "bank mega", "bukopin",
+            "kb bukopin", "superbank", "krom", "neobank", "neo commerce", "allo",
+            "allo bank", "hana", "keb hana", "line bank", "linebank", "dbs",
+            "uob", "mnc", "sampoerna", "bank dki", "bank jatim", "bank jateng",
+            "nobu", "aladin", "amar", "bank raya", "commonwealth", "qnb",
+        ])
+        // E-wallets and QRIS sources.
+        s.formUnion([
+            "gopay", "go-pay", "ovo", "dana", "shopeepay", "shopee pay",
+            "linkaja", "link aja", "sakuku", "isaku", "i.saku", "i-saku",
+            "doku", "astrapay", "astra pay", "flip", "jeniuspay", "jenius pay",
+            "grabpay", "grab pay", "paydia", "motionpay", "motion pay",
+        ])
+        // Physical stored-value / e-money instruments that print on a slip.
+        s.formUnion([
+            "brizzi", "tapcash", "flazz", "e-money", "emoney", "e-toll", "jakcard",
+        ])
+        // Mobile-banking APP names, branded separately from the bank and
+        // changing often. A few "<App> by <Bank>" lockups are listed, but the
+        // parser also strips a leading "by " in `isPaymentBrandOnly`, so the
+        // bank behind ANY such app is caught without naming every one.
+        s.formUnion([
+            "brimo", "qita", "qita by bri", "livin", "livin by mandiri", "kopra",
+            "wondr", "wondr by bni", "mybca", "bca mobile", "blu by bca digital",
+            "bale", "balé", "bale by btn", "btn mobile", "byond", "byond by bsi",
+            "bsi mobile", "octo", "octo mobile", "octo clicks", "permatamobile",
+            "permata mobile", "permatamobile x", "d-bank", "dbank", "d-bank pro",
+            "digibank", "tmrw", "one mobile", "paninmobile", "m2u", "m2u id",
+            "jenius", "simobiplus", "bjb digi", "mdin", "motion banking", "neo",
+        ])
+        // Card schemes / networks / switching.
+        s.formUnion([
+            "qris", "gpn", "visa", "mastercard", "master card", "jcb", "amex",
+            "american express", "unionpay", "union pay", "prima", "alto",
+            "artajasa", "atm bersama",
+        ])
+        return s
+    }()
 
     /// True when the line is nothing but a payment brand — "BCA", "QRIS",
     /// "Bank BCA". A shop whose name merely CONTAINS one of these (say
@@ -184,10 +212,17 @@ enum ReceiptParser {
     }
 
     private static func isPaymentBrandOnly(_ line: String) -> Bool {
-        let cleaned = line.lowercased()
+        var cleaned = line.lowercased()
             .replacingOccurrences(of: "bank", with: " ")
             .trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
             .trimmingCharacters(in: .whitespaces)
+        // "<App> by <Bank>" logo lockups (Qita by BRI, Livin by Mandiri, Wondr
+        // by BNI, Bale by BTN…) frequently OCR as just the "by <bank>" tail.
+        // Drop the leading "by " so the bank behind it matches — for every app,
+        // not only the ones we happened to list.
+        if cleaned.hasPrefix("by ") {
+            cleaned = String(cleaned.dropFirst(3)).trimmingCharacters(in: .whitespaces)
+        }
         return paymentBrands.contains(cleaned)
     }
 
@@ -271,24 +306,32 @@ enum ReceiptParser {
                 if tail.count >= 3, !isPaymentBrandOnly(tail), !isIssuer(tail) { return tail }
             }
             // Otherwise the label is its own line (or a left column) and the
-            // value follows. Receipts wrap long names, so take up to two lines.
+            // value follows. Receipts wrap long names, so look a few lines down.
             var value = ""
-            for next in lines.dropFirst(i + 1).prefix(2) {
+            for next in lines.dropFirst(i + 1).prefix(4) {
                 let candidate = next.trimmingCharacters(in: .whitespaces)
                 guard !candidate.isEmpty else { continue }
                 let candLower = candidate.lowercased()
                 if payeeLabels.contains(where: { candLower.contains($0) }) { break }
                 if railLabels.contains(where: { candLower.contains($0) }) { break }
-                if isPaymentBrandOnly(candidate) || isIssuer(candidate) { break }
-                if isAccountHolder(candidate) || isStatusLine(candidate) { break }
-                // Stop at the next label/amount row rather than swallowing it.
+                // A bank watermark ("BRI" repeated across the slip), the account
+                // holder or a status word can land BETWEEN the label and its
+                // value. Skip such noise while still looking; only stop once the
+                // real value has started.
+                if isPaymentBrandOnly(candidate) || isIssuer(candidate)
+                    || isAccountHolder(candidate) || isStatusLine(candidate) {
+                    if value.isEmpty { continue } else { break }
+                }
+                // Stop at the next amount/number row rather than swallowing it.
                 if candidate.filter({ $0.isNumber }).count > candidate.filter({ $0.isLetter }).count { break }
                 value += (value.isEmpty ? "" : " ") + candidate
             }
             if value.count >= 3 { return value }
         }
 
-        let topLines = Array(lines.prefix(10))
+        // Wider than the classic 5-line header: on a QRIS e-receipt the shop
+        // name sits below the status banner, the amount and the card block.
+        let topLines = Array(lines.prefix(14))
 
         // Pass 1: known merchants. This catches Indomaret/Alfamart/etc. even if
         // they appear lower than line 1 (sometimes there's a logo region first).
@@ -673,10 +716,42 @@ enum ReceiptParser {
     /// Try multiple date formats. Indonesian receipts use dd/mm/yyyy almost
     /// universally — we try that first. If we ever expand to US receipts we'd
     /// need disambiguation logic for ambiguous dates like 03/04/2026.
+    /// Overlays a time of day onto a parsed date. Receipts state the clock
+    /// time ("14:18:54 WIB"), and the date parser fixes the hour at midday so a
+    /// timezone shift cannot slide the day — which threw the real time away.
+    /// A time carrying a WIB/WITA/WIT marker wins; otherwise the first valid
+    /// HH:mm(:ss) is used. Colons are rare on a receipt outside the timestamp,
+    /// so this is safe. Components are applied locally — no timezone conversion,
+    /// so the day never slides.
+    private static func applyTime(to date: Date, from text: String) -> Date {
+        guard let regex = try? NSRegularExpression(
+            pattern: #"\b([01]?\d|2[0-3]):([0-5]\d)(?::([0-5]\d))?\b"#) else { return date }
+        let ns = text as NSString
+        var picked: (h: Int, m: Int, s: Int)? = nil
+        for match in regex.matches(in: text, range: NSRange(location: 0, length: ns.length)) {
+            let h = Int(ns.substring(with: match.range(at: 1))) ?? 0
+            let mn = Int(ns.substring(with: match.range(at: 2))) ?? 0
+            let sc = match.range(at: 3).location != NSNotFound
+                ? (Int(ns.substring(with: match.range(at: 3))) ?? 0) : 0
+            let end = match.range.location + match.range.length
+            let tail = end < ns.length
+                ? ns.substring(with: NSRange(location: end, length: min(6, ns.length - end))).lowercased()
+                : ""
+            if tail.contains("wib") || tail.contains("wita") || tail.contains("wit") {
+                picked = (h, mn, sc); break            // an Indonesian TZ marker is decisive
+            }
+            if picked == nil { picked = (h, mn, sc) }  // else remember the first
+        }
+        guard let t = picked else { return date }
+        var c = Calendar.current.dateComponents([.year, .month, .day], from: date)
+        c.hour = t.h; c.minute = t.m; c.second = t.s
+        return Calendar.current.date(from: c) ?? date
+    }
+
     private static func extractDate(from text: String, fallback: Date) -> Date {
         // Spelled-out months first: they are unambiguous, while "12/09" could
         // be either order.
-        if let named = extractMonthNameDate(from: text) { return named }
+        if let named = extractMonthNameDate(from: text) { return applyTime(to: named, from: text) }
 
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")  // unambiguous parsing
@@ -698,7 +773,7 @@ enum ReceiptParser {
                     let now = Date()
                     if d <= now.addingTimeInterval(86400) &&
                        d >= now.addingTimeInterval(-86400 * 365 * 5) {
-                        return d
+                        return applyTime(to: d, from: text)
                     }
                 }
             }

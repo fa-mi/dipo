@@ -75,6 +75,84 @@ final class ReceiptParsingTests: XCTestCase {
         XCTAssertEqual(r.merchantName, "COTR CALF 99 QR")
     }
 
+    /// The full BRI Qita QRIS e-receipt (Fahmi's Warung Kopi RDTX scan): the
+    /// "by BRI" logo lockup was read as the shop, the clock time was thrown
+    /// away for a midday default, and the category never auto-filled.
+    func testQitaByBriReceiptReadsShopTimeAndCategory() {
+        let text = """
+        Qita
+        by BRI
+        Transaksi Berhasil
+        Rp4.000
+        15 Sep 2026, 14:18:54 WIB
+        Detail Transaksi
+        FAHMI AQUINAS
+        BRI - 0319 **** **** 507
+        Warung Kopi RDTX
+        QRIS Bayar - ID 610260344
+        No. Referensi 213220767093
+        Jenis Transaksi QRIS Bayar
+        Nama Merchant Warung Kopi RDTX
+        Lokasi Merchant JAKARTA SELATAN
+        Nama Penerbit BRI
+        Nama Pengakuisisi QRIS BNI
+        ID Terminal 610260344
+        Nominal Pembayaran Rp4.000
+        """
+        let r = ReceiptParser.parse(rawText: text, fallbackCurrency: "IDR")
+        XCTAssertEqual(r.merchantName, "Warung Kopi RDTX")
+        XCTAssertNotEqual(r.merchantName.lowercased(), "by bri")
+        // "warung" earns Food & Drinks, exactly like a typed entry would.
+        XCTAssertEqual(r.category, .food)
+        let c = Calendar.current.dateComponents([.hour, .minute], from: r.date)
+        XCTAssertEqual(c.hour, 14, "the receipt's real time, not a midday default")
+        XCTAssertEqual(c.minute, 18)
+    }
+
+    /// Every "<App> by <Bank>" logo lockup (Livin by Mandiri, Wondr by BNI,
+    /// Bale by BTN, OCTO by CIMB, digibank by DBS…) has the same trap as Qita
+    /// by BRI: the "by <bank>" fragment must never be read as the shop.
+    func testByBankLogoLockupsAreNeverTheMerchant() {
+        for lockup in ["by Mandiri", "by BNI", "by BTN", "by BSI", "by BCA",
+                       "by CIMB", "by DBS", "by UOB"] {
+            let text = """
+            \(lockup)
+            Transaksi Berhasil
+            Rp12.000
+            13 Sep 2026, 09:15:00 WIB
+            Detail Transaksi
+            Warung Sate Pak Kumis
+            QRIS Bayar
+            Total Rp12.000
+            """
+            let r = ReceiptParser.parse(rawText: text, fallbackCurrency: "IDR")
+            XCTAssertEqual(r.merchantName, "Warung Sate Pak Kumis",
+                           "\(lockup) should never win the merchant")
+        }
+    }
+
+    /// The rail registry now covers e-wallets and neobanks too, so a slip
+    /// headed GoPay / OVO / DANA / ShopeePay / SeaBank / Jago never files the
+    /// wallet as the shop.
+    func testEWalletAndNeobankRailsAreNeverTheMerchant() {
+        for rail in ["GoPay", "OVO", "DANA", "ShopeePay", "LinkAja",
+                     "SeaBank", "Jago", "Jenius", "QRIS"] {
+            let text = """
+            \(rail)
+            Transaksi Berhasil
+            Rp25.000
+            13 Sep 2026, 08:00:00 WIB
+            Detail Transaksi
+            Warung Sate Pak Kumis
+            QRIS Bayar
+            Total Rp25.000
+            """
+            let r = ReceiptParser.parse(rawText: text, fallbackCurrency: "IDR")
+            XCTAssertEqual(r.merchantName, "Warung Sate Pak Kumis",
+                           "\(rail) should never win the merchant")
+        }
+    }
+
     /// Every banking app leads with one, and it is the first wordy line once
     /// the app name and the bank are excluded.
     func testStatusBannerIsNotTheMerchant() {
