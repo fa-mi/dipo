@@ -122,6 +122,12 @@ struct DailyBucket: Equatable {
     /// either convention without committing the whole app to one.
     var grossExpenseByCategory: [CatCur: Double] = [:]
 
+    /// GROSS inflow by currency: every non-transfer amount ≥ 0 (normal income
+    /// AND refunds). HomeView's month-flow counts any positive as "income", a
+    /// looser rule than `incomeByCurrency` (normal only) — keeping both lets the
+    /// rollup match either screen.
+    var grossInflowByCurrency: [String: Double] = [:]
+
     /// Every transaction that fell on this day, transfers included — a cheap
     /// change-signal, matching `statTxCount`.
     var txCount: Int = 0
@@ -148,6 +154,10 @@ struct RollupTotals: Equatable {
     var incomeByCategory: [String: Double] = [:]
     /// Category rawValue → gross expense (target currency), refunds not netted.
     var grossExpenseByCategory: [String: Double] = [:]
+    /// Total gross expense (target currency): every non-transfer outflow.
+    var grossExpense: Double = 0
+    /// Total gross inflow (target currency): every non-transfer amount ≥ 0.
+    var grossInflow: Double = 0
     var txCount: Int = 0
 }
 
@@ -186,6 +196,11 @@ enum RollupEngine {
                 // Gross expense: any non-transfer outflow, refunds not netted.
                 if f.amount < 0 {
                     b.grossExpenseByCategory[CatCur(category: f.category, currency: ccy), default: 0] += mag
+                }
+                // Gross inflow: any non-transfer amount >= 0 (HomeView counts a
+                // refund's positive amount as income too).
+                if f.amount >= 0 {
+                    b.grossInflowByCurrency[ccy, default: 0] += f.amount
                 }
                 // Income model (identical to filteredIncome): normal & positive.
                 if f.subtype == "normal" && f.amount > 0 {
@@ -230,8 +245,11 @@ enum RollupEngine {
                 out.incomeByCategory[key.category, default: 0] += toTarget(v, key.currency)
             }
             for (key, v) in b.grossExpenseByCategory {
-                out.grossExpenseByCategory[key.category, default: 0] += toTarget(v, key.currency)
+                let converted = toTarget(v, key.currency)
+                out.grossExpenseByCategory[key.category, default: 0] += converted
+                out.grossExpense += converted
             }
+            for (ccy, v) in b.grossInflowByCurrency { out.grossInflow += toTarget(v, ccy) }
             out.txCount += b.txCount
         }
         return out

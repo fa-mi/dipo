@@ -287,17 +287,19 @@ struct HomeView: View {
 
         guard let card = selectedCard else { monthIncome = 0; monthExpense = 0; return }
         let cur = card.resolvedCurrency
-        var income = 0.0
-        var expense = 0.0
-        for tx in card.transactions where tx.date >= windowStart && tx.txSubtype != .transfer {
-            // Transfers are money moving between the user's own accounts. Counting
-            // them would inflate both sides and make the cycle look twice as busy
-            // as it was.
-            let v = CurrencyManager.shared.convert(tx.amount, from: tx.currency, to: cur)
-            if v >= 0 { income += v } else { expense -= v }
-        }
-        monthIncome = income
-        monthExpense = expense
+        // Read the pre-aggregated daily buckets instead of scanning the card's
+        // whole ledger (see RollupEngine). This runs on the tx-count / balance /
+        // payday change signals — off the render path — so keeping the cache
+        // fresh here is safe. Transfers are already excluded from the rollup's
+        // inflow/expense totals, and the figures match the former per-tx scan:
+        // gross inflow counts any amount >= 0 (a refund's positive included) and
+        // gross expense sums every outflow, the same rule this screen used.
+        let buckets = RollupStore.shared.rebuildIfStale(context: context, txCount: totalTxCount)
+        let window = RollupEngine.buckets(buckets, cardID: card.id.uuidString, from: windowStart)
+        let totals = RollupEngine.totals(for: window, targetCurrency: cur,
+                                         convert: { CurrencyManager.shared.convert($0, from: $1, to: $2) })
+        monthIncome = totals.grossInflow
+        monthExpense = totals.grossExpense
     }
 
     private func recomputeHomeInsights() {
