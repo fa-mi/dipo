@@ -28,6 +28,10 @@ struct SmartBudgetSettingsSheet: View {
     /// and Mortgage Payer are both 50/20/30 — never light up together. nil
     /// means "no preset is the active choice" (custom/manual ratios).
     @State private var selectedPreset: BudgetProfile? = nil
+    /// Daily rollup buckets, read instead of scanning every transaction. Seeded
+    /// from the shared store on appear and refreshed when the ledger changes, so
+    /// a body evaluation never rebuilds (which would mutate the store mid-render).
+    @State private var rollupBuckets: [DailyBucket] = []
 
     enum BudgetTab: String, CaseIterable {
         case overview, settings, simulate
@@ -177,12 +181,28 @@ struct SmartBudgetSettingsSheet: View {
         return Date().formatted(.dateTime.month(.wide).year())
     }
 
+    /// Total transactions across cards — the cheap change-signal that tells the
+    /// rollup cache whether it must recompute (mirrors StatisticsView.statTxCount).
+    private var totalTxCount: Int { cards.reduce(0) { $0 + $1.transactions.count } }
+
+    /// Refresh the local buckets from the shared store, recomputing only when the
+    /// ledger changed. Called from lifecycle hooks, never from a body read.
+    private func refreshRollup() {
+        rollupBuckets = RollupStore.shared.rebuildIfStale(context: context, txCount: totalTxCount)
+    }
+
     // Over-budget groups using ratios for the selected card (per-card with global fallback)
     private var overGroups: [(group: BudgetGroup, spent: Double, limit: Double, ratio: Double)] {
         guard monthlyIncome > 0 else { return [] }
         let r = SmartBudgetManager.shared.ratios(forCardID: selectedCardID, configs: cardConfigs)
         return BudgetGroup.allCases.compactMap { grp in
-            let s = budgetTx.filter { $0.amount < 0 && $0.txSubtype != .transfer && $0.date >= periodStart && SmartBudgetManager.shared.categories(for: grp).contains($0.category) }.reduce(0) { $0 + CurrencyManager.shared.convert(abs($1.amount), from: $1.currency, to: cardCurrency) }
+            // Gross expense (refunds excluded via amount<0) over the pay cycle,
+            // scoped to the selected card — read from the rollup, identical to the
+            // former `budgetTx.filter { amount<0 … }.reduce` scan.
+            let s = SmartBudgetManager.shared.spent(in: grp, buckets: rollupBuckets,
+                                                    targetCurrency: cardCurrency,
+                                                    periodStart: periodStart,
+                                                    cardID: selectedCardID, gross: true)
             let ratio: Double = {
                 switch grp {
                 case .daily:      return r.daily
@@ -380,7 +400,14 @@ struct SmartBudgetSettingsSheet: View {
 
             // Highlight whichever preset matches the loaded ratios.
             reconcileSelectedPreset()
+
+            // Seed the rollup buckets the over-budget list reads from.
+            refreshRollup()
         }
+        // Keep the buckets fresh if a transaction is added/removed while the
+        // sheet is open (e.g. via a deep link), so the over-budget list can't
+        // read a stale figure.
+        .onChange(of: totalTxCount) { _, _ in refreshRollup() }
         // Any ratio change that isn't a preset tap (manual +/-, numeric quick
         // presets, switching cards) keeps the highlighted preset in sync. The
         // reconcile is a no-op when an explicitly-tapped preset still matches.

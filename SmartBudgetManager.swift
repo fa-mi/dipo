@@ -178,6 +178,47 @@ final class SmartBudgetManager {
             }
     }
 
+    // MARK: Rollup-backed twins
+    //
+    // Same figures as the `transactions:` methods above, computed from the
+    // pre-aggregated daily buckets (see RollupEngine) instead of scanning every
+    // transaction on each call. The window is `date >= monthStart` with no upper
+    // bound, so whole-day buckets reproduce the transaction filter EXACTLY —
+    // provided `periodStart` is a start-of-day, which every caller's period
+    // boundary is (payCycleRange/anchoredStart/month-start are all startOfDay).
+    // `convert` is injected so the arithmetic can be tested without the shared
+    // CurrencyManager. Parity with the transaction path is pinned by
+    // SmartBudgetRollupTests.
+
+    /// `gross: true` sums every non-transfer outflow (refunds NOT netted) — the
+    /// convention the Smart Budget views use; `false` (default) subtracts refunds,
+    /// matching the canonical `spent(in:transactions:)` and `filteredExpenses`.
+    func spent(in group: BudgetGroup, buckets: [DailyBucket],
+               targetCurrency: String? = nil, periodStart: Date? = nil,
+               cardID: String? = nil, gross: Bool = false,
+               convert: (Double, String, String) -> Double = {
+                   CurrencyManager.shared.convert($0, from: $1, to: $2)
+               }) -> Double {
+        let cal = Calendar.current
+        let monthStart = periodStart
+            ?? cal.safeDate(from: cal.dateComponents([.year, .month], from: Date()))
+        let target = targetCurrency ?? CurrencyManager.shared.preferredCurrency
+        let cats = Set(categories(for: group).map(\.rawValue))
+        let window = RollupEngine.buckets(buckets, cardID: cardID, from: monthStart)
+        let totals = RollupEngine.totals(for: window, targetCurrency: target, convert: convert)
+        let byCat = gross ? totals.grossExpenseByCategory : totals.expenseByCategory
+        return byCat.reduce(0.0) { $0 + (cats.contains($1.key) ? $1.value : 0) }
+    }
+
+    func percentUsed(in group: BudgetGroup, buckets: [DailyBucket], income: Double,
+                     targetCurrency: String? = nil, periodStart: Date? = nil,
+                     cardID: String? = nil) -> Double {
+        let limit = monthlyLimit(for: group, income: income)
+        guard limit > 0 else { return 0 }
+        return min(spent(in: group, buckets: buckets, targetCurrency: targetCurrency,
+                         periodStart: periodStart, cardID: cardID) / limit, 1.5)
+    }
+
     func categories(for group: BudgetGroup) -> [TxCategory] {
         switch group {
         case .daily:      return Self.dailyCategories
