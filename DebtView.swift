@@ -401,8 +401,11 @@ struct DebtView: View {
             try? context.save()
         }
         .sheet(item: $logSpendCard) { card in
-            // Cross-link: log a purchase with this credit card pre-selected.
-            AddTransactionSheet(vm: txViewModel(), preselectedCardID: card.id)
+            // Cross-link: log a purchase on THIS credit card. Lock the card —
+            // the flow is "spend on this card", so swiping to another would log
+            // the purchase on the wrong account.
+            AddTransactionSheet(vm: txViewModel(), preselectedCardID: card.id,
+                                lockToPreselectedCard: true)
                 .presentationDetents([.large]).presentationDragIndicator(.visible)
                 .presentationBackground(AppTheme.bg).preferredColorScheme(appColorScheme())
         }

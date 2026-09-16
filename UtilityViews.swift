@@ -1003,6 +1003,12 @@ struct AddTransactionSheet: View {
     var preselectedCategory: TxCategory? = nil
     /// Pre-select a specific card (e.g. "Log a purchase" from a credit card).
     var preselectedCardID: UUID? = nil
+    /// Lock the card to `preselectedCardID` so it can't be swiped away. Set by the
+    /// credit-card "Log a purchase" entry: that flow exists to record a spend on
+    /// THAT card, so letting the user swipe to another card silently logs the
+    /// purchase somewhere else. Off for the generic add-transaction entry, where
+    /// preselect is only a starting point the user is free to change.
+    var lockToPreselectedCard: Bool = false
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
     @Query private var activeDebts: [DebtRecord]
@@ -1530,12 +1536,21 @@ struct AddTransactionSheet: View {
                 // For a credit card the face states the room left on the limit,
                 // not what is owed — at the moment of spending, that is the
                 // number that matters.
-                CardSwipePicker(cards: vm.cards, selectedIndex: $selectedCardIndex) { card in
+                CardSwipePicker(cards: vm.cards, selectedIndex: $selectedCardIndex,
+                                locked: lockToPreselectedCard) { card in
                     card.isCreditCard
                         ? (loc("cc.available"),
                            CurrencyManager.shared.formatted(card.availableCredit(allInstallments),
                                                             currency: card.resolvedCurrency))
                         : (loc("home.balance_total"), card.formattedBalance)
+                }
+                // Say WHY the card can't be changed here, so a locked picker reads
+                // as intentional rather than broken.
+                if lockToPreselectedCard {
+                    Label(loc("tx.card_locked_cc"), systemImage: "lock.fill")
+                        .font(.system(.caption2))
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .padding(.horizontal, 22)
                 }
             }
         }
