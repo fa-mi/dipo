@@ -142,6 +142,11 @@ final class WebSyncService {
         // spinner for both.
         var stageStart = Date()
         let source = fetchSource(context: context)
+        // Refresh the daily rollup from the source of truth before building the
+        // payload, so the monthly aggregate it carries reflects the very latest
+        // transactions (this is an explicit user action, so a full rebuild is
+        // the right call).
+        RollupStore.shared.rebuild(context: context)
         await enter(.building, since: stageStart)
 
         stageStart = Date()
@@ -384,8 +389,37 @@ final class WebSyncService {
         let cycle: (start: Date, end: Date)? = MainCard.payDay(salaries)
             .map { StatPeriod.payCycleRange(payDay: $0) }
 
+        // ── Monthly rollup — compact aggregates that scale past the raw window ──
+        //
+        // The raw `transactions` above are capped at `historyMonths` because a
+        // Firestore document is 1 MiB and a heavy spender's six months can
+        // approach it. These per-month buckets carry the SAME figures the
+        // dashboard's cashflow and category charts need — in a handful of rows
+        // instead of thousands — so the charts can cover the FULL history without
+        // the size risk. Same main-card scope and the same gross convention the
+        // raw rows use (any amount >= 0 is income, any outflow is expense; a
+        // refund's positive counts as income exactly as `kind` above assigns it),
+        // already converted to base currency. Read from the rollup refreshed at
+        // the top of `sync`.
+        let mainID = MainCard.resolve(in: cards)?.id.uuidString
+        let monthly: [[String: Any]] = RollupEngine
+            .groupByMonth(RollupEngine.buckets(RollupStore.shared.buckets,
+                                               cardID: mainID, from: .distantPast))
+            .sorted { $0.key < $1.key }
+            .map { month, buckets in
+                let t = RollupEngine.totals(for: buckets, targetCurrency: base,
+                                            convert: { cm.convert($0, from: $1, to: $2) })
+                return [
+                    "month":      month,                    // "YYYY-MM"
+                    "income":     t.grossInflow,
+                    "expense":    t.grossExpense,
+                    "byCategory": t.grossExpenseByCategory, // [categoryRaw: amount], base currency
+                ]
+            }
+
         var out: [String: Any] = [
             "baseCurrency": base,
+            "monthly":      monthly,
             // The phone's timezone, so the dashboard can render the phone's
             // days rather than the browser's.
             //
