@@ -541,6 +541,13 @@ struct HomeView: View {
                 // Centred AND capped. Without the cap the column simply
                 // stretched to 626 pt on the Duo's inner display.
                 .phoneWidthCapped()
+                // Pin the column to the scroll view's OWN width. Under iOS 26 a
+                // vertical ScrollView proposes an unbounded width to its content,
+                // so every `.frame(maxWidth: .infinity)` child (the income/expense
+                // card, the category row) expanded to its ideal size instead of
+                // the viewport — the column grew past the screen and the whole
+                // page could be dragged sideways. This clamps it to the container.
+                .containerRelativeFrame(.horizontal)
             }
             
             // Receipt scan moved into AddTransactionSheet as an entry button at
