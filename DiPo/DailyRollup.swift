@@ -38,6 +38,9 @@ final class DailyRollup {
     /// Gross expense (refunds not netted) — the convention the Smart Budget
     /// views use. Defaulted so adding it is a lightweight, additive migration.
     var grossExpenseByCategory: [String: Double] = [:]
+    /// Gross inflow by currency (every non-transfer amount >= 0) — HomeView's
+    /// month-flow income rule. Defaulted for a lightweight, additive migration.
+    var grossInflowByCurrency: [String: Double] = [:]
 
     var txCount: Int
     var updatedAt: Date
@@ -52,6 +55,7 @@ final class DailyRollup {
         self.expenseByCategory = DailyRollup.encodeCats(b.expenseByCategory)
         self.incomeByCategory = DailyRollup.encodeCats(b.incomeByCategory)
         self.grossExpenseByCategory = DailyRollup.encodeCats(b.grossExpenseByCategory)
+        self.grossInflowByCurrency = b.grossInflowByCurrency
         self.txCount = b.txCount
         self.updatedAt = .now
     }
@@ -87,6 +91,7 @@ final class DailyRollup {
                     expenseByCategory: DailyRollup.decodeCats(expenseByCategory),
                     incomeByCategory: DailyRollup.decodeCats(incomeByCategory),
                     grossExpenseByCategory: DailyRollup.decodeCats(grossExpenseByCategory),
+                    grossInflowByCurrency: grossInflowByCurrency,
                     txCount: txCount)
     }
 }

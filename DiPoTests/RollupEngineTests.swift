@@ -166,6 +166,28 @@ final class RollupEngineTests: XCTestCase {
         XCTAssertEqual(RollupEngine.monthKey(for: date(2026, 12, 31), calendar: cal), "2026-12")
     }
 
+    // MARK: Gross vs net (HomeView month-flow convention)
+
+    /// HomeView.recomputeMonthFlow counts ANY amount >= 0 as income (a refund's
+    /// positive included) and ANY amount < 0 as expense; transfers excluded.
+    /// That differs from the refund-netted, normal-only convention — the rollup
+    /// carries both so it can match either screen.
+    func testGrossInflowIncludesRefundsAndGrossExpenseSumsOutflows() {
+        let facts = [
+            TxFact(date: date(2026, 9, 2), amount: 5_000_000, currency: "IDR", category: "salary", subtype: "normal", cardID: "A"),
+            TxFact(date: date(2026, 9, 3), amount: 100_000, currency: "IDR", category: "shopping", subtype: "refund", cardID: "A"),
+            TxFact(date: date(2026, 9, 4), amount: -250_000, currency: "IDR", category: "food", subtype: "normal", cardID: "A"),
+            TxFact(date: date(2026, 9, 4), amount: -500_000, currency: "IDR", category: "other", subtype: "transfer", cardID: "A"),
+        ]
+        let t = totalsIDR(RollupEngine.daily(from: facts, calendar: cal))
+        // Home month-flow figures:
+        XCTAssertEqual(t.grossInflow, 5_100_000, accuracy: 0.001)   // salary + refund positive
+        XCTAssertEqual(t.grossExpense, 250_000, accuracy: 0.001)    // food only; transfer excluded
+        // Canonical figures still available and distinct:
+        XCTAssertEqual(t.income, 5_000_000, accuracy: 0.001)        // normal-only (no refund)
+        XCTAssertEqual(t.expenses, 150_000, accuracy: 0.001)        // 250k − 100k refund
+    }
+
     // MARK: Card dimension (screens are per-card)
 
     func testBucketsAreScopedPerCard() {
