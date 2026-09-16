@@ -190,9 +190,12 @@ final class SmartBudgetManager {
     // CurrencyManager. Parity with the transaction path is pinned by
     // SmartBudgetRollupTests.
 
+    /// `gross: true` sums every non-transfer outflow (refunds NOT netted) — the
+    /// convention the Smart Budget views use; `false` (default) subtracts refunds,
+    /// matching the canonical `spent(in:transactions:)` and `filteredExpenses`.
     func spent(in group: BudgetGroup, buckets: [DailyBucket],
                targetCurrency: String? = nil, periodStart: Date? = nil,
-               cardID: String? = nil,
+               cardID: String? = nil, gross: Bool = false,
                convert: (Double, String, String) -> Double = {
                    CurrencyManager.shared.convert($0, from: $1, to: $2)
                }) -> Double {
@@ -203,7 +206,8 @@ final class SmartBudgetManager {
         let cats = Set(categories(for: group).map(\.rawValue))
         let window = RollupEngine.buckets(buckets, cardID: cardID, from: monthStart)
         let totals = RollupEngine.totals(for: window, targetCurrency: target, convert: convert)
-        return totals.expenseByCategory.reduce(0.0) { $0 + (cats.contains($1.key) ? $1.value : 0) }
+        let byCat = gross ? totals.grossExpenseByCategory : totals.expenseByCategory
+        return byCat.reduce(0.0) { $0 + (cats.contains($1.key) ? $1.value : 0) }
     }
 
     func percentUsed(in group: BudgetGroup, buckets: [DailyBucket], income: Double,

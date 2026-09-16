@@ -56,6 +56,31 @@ final class SmartBudgetRollupTests: XCTestCase {
         XCTAssertEqual(fromBuckets, 130_000, accuracy: 0.001)
     }
 
+    /// Gross vs net: the Smart Budget VIEWS (overGroups/currentCycleSnapshot)
+    /// exclude refunds via `amount < 0`, so `gross: true` must NOT subtract a
+    /// refund, while the default (canonical) path does.
+    func testGrossSpentDoesNotSubtractRefunds() {
+        let sb = SmartBudgetManager.shared
+        guard let cat = sb.categories(for: .daily).first else {
+            return XCTFail("no categories in .daily")
+        }
+        let monthStart = day(2026, 9, 1)
+        let txs = [
+            TxRecord(name: "Buy", date: day(2026, 9, 3), amount: -100_000,
+                     type: "tx.type.purchase", icon: "", iconBgHex: "", category: cat, currency: "IDR"),
+            TxRecord(name: "Refund", date: day(2026, 9, 4), amount: 30_000,
+                     type: "tx.type.purchase", icon: "", iconBgHex: "", category: cat, currency: "IDR",
+                     subtype: .refund),
+        ]
+        let buckets = RollupEngine.daily(from: txs.map { TxFact($0, cardID: "C") }, calendar: cal)
+        let net = sb.spent(in: .daily, buckets: buckets, targetCurrency: "IDR",
+                           periodStart: monthStart, cardID: "C", gross: false, convert: { v, _, _ in v })
+        let gross = sb.spent(in: .daily, buckets: buckets, targetCurrency: "IDR",
+                             periodStart: monthStart, cardID: "C", gross: true, convert: { v, _, _ in v })
+        XCTAssertEqual(net, 70_000, accuracy: 0.001)     // 100k − 30k refund (canonical)
+        XCTAssertEqual(gross, 100_000, accuracy: 0.001)  // refund not netted (the views' convention)
+    }
+
     /// A different card's spend must never leak into this card's figure.
     func testBucketSpentIsScopedToTheCard() {
         let sb = SmartBudgetManager.shared

@@ -115,6 +115,13 @@ struct DailyBucket: Equatable {
     /// `categoryBreakdown` on the income tab.
     var incomeByCategory: [CatCur: Double] = [:]
 
+    /// GROSS expense split by category: every non-transfer outflow (amount < 0),
+    /// with refunds NOT subtracted. This is the convention the Smart Budget
+    /// views use (`overGroups`/`currentCycleSnapshot` filter `amount < 0`), kept
+    /// alongside the refund-netted `expenseByCategory` so a rollup can reproduce
+    /// either convention without committing the whole app to one.
+    var grossExpenseByCategory: [CatCur: Double] = [:]
+
     /// Every transaction that fell on this day, transfers included — a cheap
     /// change-signal, matching `statTxCount`.
     var txCount: Int = 0
@@ -139,6 +146,8 @@ struct RollupTotals: Equatable {
     var expenseByCategory: [String: Double] = [:]
     /// Category rawValue → income (target currency).
     var incomeByCategory: [String: Double] = [:]
+    /// Category rawValue → gross expense (target currency), refunds not netted.
+    var grossExpenseByCategory: [String: Double] = [:]
     var txCount: Int = 0
 }
 
@@ -173,6 +182,10 @@ enum RollupEngine {
                 } else if f.amount < 0 {
                     b.expenseByCurrency[ccy, default: 0] += mag
                     b.expenseByCategory[CatCur(category: f.category, currency: ccy), default: 0] += mag
+                }
+                // Gross expense: any non-transfer outflow, refunds not netted.
+                if f.amount < 0 {
+                    b.grossExpenseByCategory[CatCur(category: f.category, currency: ccy), default: 0] += mag
                 }
                 // Income model (identical to filteredIncome): normal & positive.
                 if f.subtype == "normal" && f.amount > 0 {
@@ -215,6 +228,9 @@ enum RollupEngine {
             }
             for (key, v) in b.incomeByCategory   {
                 out.incomeByCategory[key.category, default: 0] += toTarget(v, key.currency)
+            }
+            for (key, v) in b.grossExpenseByCategory {
+                out.grossExpenseByCategory[key.category, default: 0] += toTarget(v, key.currency)
             }
             out.txCount += b.txCount
         }

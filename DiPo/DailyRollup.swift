@@ -35,6 +35,9 @@ final class DailyRollup {
     /// currency code never contain "|", so the first "|" splits them cleanly.
     var expenseByCategory: [String: Double]
     var incomeByCategory: [String: Double]
+    /// Gross expense (refunds not netted) — the convention the Smart Budget
+    /// views use. Defaulted so adding it is a lightweight, additive migration.
+    var grossExpenseByCategory: [String: Double] = [:]
 
     var txCount: Int
     var updatedAt: Date
@@ -48,6 +51,7 @@ final class DailyRollup {
         self.transferNetByCurrency = b.transferNetByCurrency
         self.expenseByCategory = DailyRollup.encodeCats(b.expenseByCategory)
         self.incomeByCategory = DailyRollup.encodeCats(b.incomeByCategory)
+        self.grossExpenseByCategory = DailyRollup.encodeCats(b.grossExpenseByCategory)
         self.txCount = b.txCount
         self.updatedAt = .now
     }
@@ -82,6 +86,7 @@ final class DailyRollup {
                     transferNetByCurrency: transferNetByCurrency,
                     expenseByCategory: DailyRollup.decodeCats(expenseByCategory),
                     incomeByCategory: DailyRollup.decodeCats(incomeByCategory),
+                    grossExpenseByCategory: DailyRollup.decodeCats(grossExpenseByCategory),
                     txCount: txCount)
     }
 }
