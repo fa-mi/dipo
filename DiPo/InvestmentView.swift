@@ -74,7 +74,9 @@ struct InvestmentView: View {
                             PortfolioOverviewCard(totals: totals, currency: pref)
                             VStack(spacing: 10) {
                                 ForEach(holdings) { h in
-                                    NavigationLink { HoldingDetailView(holding: h) } label: {
+                                    // Push as a PlanRoute value so it appends to the tab's
+                                    // typed path; a value-less link crashes the nav path.
+                                    NavigationLink(value: PlanRoute.holding(h)) {
                                         HoldingRow(holding: h, displayCurrency: pref)
                                     }
                                     .buttonStyle(ScaleButtonStyle())

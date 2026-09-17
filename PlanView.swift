@@ -66,6 +66,7 @@ struct PlanView: View {
                 case .bills:  RecurringExpensesView().pushedFeature()
                 case .goals:  WishlistView().pushedFeature()
                 case .investments: InvestmentView().pushedFeature()
+                case .holding(let h): HoldingDetailView(holding: h).pushedFeature()
                 }
             }
             .sheet(isPresented: $showPaywall) {
