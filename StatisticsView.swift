@@ -456,6 +456,61 @@ struct StatisticsView: View {
             }
     }
     
+    /// The same expense rule as `filteredExpenses`, applied to any slice — so
+    /// today's figure and the weekly bars agree with the period total instead of
+    /// each inventing their own definition of "spent".
+    private func expenseSum(_ txs: [TxRecord]) -> Double {
+        txs.filter { $0.txSubtype != .transfer }
+            .reduce(0.0) { sum, tx in
+                let amt = abs(convertedAmount(tx))
+                if tx.txSubtype == .refund { return sum - amt }
+                return tx.amount < 0 ? sum + amt : sum
+            }
+    }
+
+    /// Spent so far today. Deliberately NOT period-filtered — "today" is today
+    /// whichever window the user is looking at.
+    private var todaySpend: Double {
+        guard let card = selectedCard else { return 0 }
+        let cal = Calendar.current
+        return expenseSum(card.transactions.filter { cal.isDateInToday($0.date) })
+    }
+
+    /// This calendar week's spend per day, Monday first — the Weekly tile's bars.
+    private var weekBars: [(label: String, value: Double)] {
+        guard let card = selectedCard else { return [] }
+        var cal = Calendar.current
+        cal.locale = LanguageManager.shared.currentLocale
+        cal.firstWeekday = 2                               // Monday
+        guard let week = cal.dateInterval(of: .weekOfYear, for: Date()) else { return [] }
+        let symbols = cal.veryShortWeekdaySymbols          // Sunday-first
+        return (0..<7).compactMap { i in
+            guard let day = cal.date(byAdding: .day, value: i, to: week.start) else { return nil }
+            let spend = expenseSum(card.transactions.filter { cal.isDate($0.date, inSameDayAs: day) })
+            return (symbols[(i + 1) % 7], spend)
+        }
+    }
+
+    private var weekTotal: Double { weekBars.reduce(0) { $0 + $1.value } }
+
+    /// Expense per completed cycle/month — the Trends tile's bars.
+    private var trendBars: [(label: String, value: Double)] {
+        netWorthTrend.suffix(7).map { (String($0.label.prefix(1)), $0.expense) }
+    }
+    private var trendTotal: Double { netWorthTrend.last?.expense ?? 0 }
+
+    /// What's left of the period's income after what's gone out. Nil when no
+    /// income landed in the window — then the hero reports spending instead of
+    /// inventing a budget the user never set.
+    private var leftToSpend: Double? {
+        filteredIncome > 0 ? filteredIncome - filteredExpenses : nil
+    }
+
+    /// Share of the period's income already spent, 0...1.
+    private var spentRatio: Double {
+        filteredIncome > 0 ? min(filteredExpenses / filteredIncome, 1) : 0
+    }
+
     /// Paid once a month rather than day to day: rent and kos, standing family
     /// transfers, subscriptions, investments, debt instalments.
     ///
@@ -1143,12 +1198,12 @@ struct StatisticsView: View {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 16) {
                     header
-                    summaryCard
+                    spendHero
+                    metricStrip
+                    dualCards
                     if tidyableCount > 0 { tidyRow }
                     categoriesCard
                     notesCard
-                    SpendingTrendCard(trend: netWorthTrend, currency: displayCurrency,
-                                      byPayCycle: payCycleDay != nil)
                     detailLink
                     Spacer(minLength: 110)
                 }
@@ -1219,46 +1274,55 @@ struct StatisticsView: View {
         }
     }
 
-    // MARK: 1 · How much went out, and am I fine
+    // MARK: 0 · The headline, at a glance
+    //
+    // A hero figure with the period's progress under it, a strip of the four
+    // numbers people check daily, and two tiles that show the shape of the week
+    // and of the months. The working stays one tap away in Full analysis.
 
-    private var expenseChange: Double? {
-        guard let prev = previousPeriodExpenses, prev > 0 else { return nil }
-        return (filteredExpenses - prev) / prev * 100
-    }
-
-    private var summaryCard: some View {
-        VStack(alignment: .leading, spacing: 14) {
+    private var spendHero: some View {
+        VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 4) {
-                Text(loc("stats.expenses"))
-                    .font(.system(.subheadline, weight: .semibold))
+                Text(leftToSpend != nil ? loc("stats.left_to_spend") : loc("stats.expenses"))
+                    .font(.system(.footnote, weight: .medium))
                     .foregroundStyle(AppTheme.textSecondary)
-                Text(money(filteredExpenses))
-                    .font(.system(size: 36, weight: .bold, design: .rounded))
+                Text(money(max(leftToSpend ?? filteredExpenses, 0)))
+                    .font(.system(size: 40, weight: .bold))
                     .foregroundStyle(AppTheme.textPrimary)
-                    .lineLimit(1).minimumScaleFactor(0.55)
                     .contentTransition(.numericText())
-                if let change = expenseChange {
-                    let up = change >= 0
-                    Label(String(format: loc(up ? "stats.vs_prev_up" : "stats.vs_prev_down"),
-                                 Int(abs(change).rounded())),
-                          systemImage: up ? "arrow.up.right" : "arrow.down.right")
-                        .font(.system(.caption, weight: .semibold))
-                        .foregroundStyle(up ? AppTheme.red : AppTheme.accent)
-                        .padding(.horizontal, 9).padding(.vertical, 4)
-                        .background((up ? AppTheme.red : AppTheme.accent).opacity(0.12), in: Capsule())
-                        .padding(.top, 2)
-                }
+                    .minimumScaleFactor(0.5).lineLimit(1)
             }
 
             if filteredIncome > 0 {
-                incomeBar
-            } else {
-                Label(loc("stats.no_income_hint"), systemImage: "info.circle")
-                    .font(.system(.caption))
-                    .foregroundStyle(AppTheme.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                VStack(alignment: .leading, spacing: 8) {
+                    // The existing gauge, not a plain bar: it carries the tick for
+                    // how much of the period has elapsed, so spending ahead of the
+                    // calendar is visible rather than merely counted.
+                    SpendGauge(fraction: spentRatio,
+                               timeMarker: periodProgress.map { Double($0.elapsed) / Double($0.total) })
+
+                    HStack(spacing: 8) {
+                        Text(String(format: loc("stats.spent_of"),
+                                    money(filteredExpenses), money(filteredIncome)))
+                            .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
+                            .lineLimit(1).minimumScaleFactor(0.7)
+                        Spacer(minLength: 4)
+                        if let c = expenseChange, abs(c) >= 1 {
+                            HStack(spacing: 3) {
+                                Image(systemName: c >= 0 ? "arrow.up.right" : "arrow.down.right")
+                                    .font(.system(.caption2, weight: .bold))
+                                Text(String(format: "%.0f%%", abs(c)))
+                                    .font(.system(.caption2, weight: .bold))
+                            }
+                            .foregroundStyle(c >= 0 ? AppTheme.red : AppTheme.accent)
+                            .padding(.horizontal, 8).padding(.vertical, 4)
+                            .background((c >= 0 ? AppTheme.red : AppTheme.accent).opacity(0.15), in: Capsule())
+                        }
+                    }
+                }
             }
 
+            // Where this period is heading, in one sentence.
             if let line = paceLine {
                 HStack(alignment: .top, spacing: 8) {
                     Image(systemName: line.ok ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
@@ -1273,44 +1337,109 @@ struct StatisticsView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background((line.ok ? AppTheme.accent : AppTheme.orange).opacity(0.10),
                             in: RoundedRectangle(cornerRadius: AppRadius.md))
+            } else if filteredIncome <= 0 {
+                Label(loc("stats.no_income_hint"), systemImage: "info.circle")
+                    .font(.system(.caption))
+                    .foregroundStyle(AppTheme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.xl))
+        .padding(18)
+        .background {
+            RoundedRectangle(cornerRadius: AppRadius.xl).fill(AppTheme.cardDark)
+                .overlay {
+                    LinearGradient(colors: [AppTheme.accent.opacity(0.20),
+                                            AppTheme.blue.opacity(0.06), .clear],
+                                   startPoint: .topTrailing, endPoint: .bottomLeading)
+                }
+                .clipShape(RoundedRectangle(cornerRadius: AppRadius.xl))
+        }
     }
 
-    /// Income as a bar the spending eats into, with a tick for how much of the
-    /// period has passed: spending behind the tick is ahead of the calendar.
-    private var incomeBar: some View {
-        let used = filteredExpenses / filteredIncome
-        let left = filteredIncome - filteredExpenses
-        return VStack(alignment: .leading, spacing: 8) {
-            SpendGauge(fraction: used,
-                       timeMarker: periodProgress.map { Double($0.elapsed) / Double($0.total) })
-
-            HStack(alignment: .firstTextBaseline) {
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(loc("stats.income"))
-                        .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
-                    Text(money(filteredIncome))
-                        .font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
-                }
-                Spacer()
-                if let p = periodProgress {
-                    Text(String(format: loc("stats.day_of"), p.elapsed, p.total))
-                        .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
-                    Spacer()
-                }
-                VStack(alignment: .trailing, spacing: 1) {
-                    Text(loc(left >= 0 ? "stats.left" : "stats.over"))
-                        .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
-                    Text(money(abs(left)))
-                        .font(.system(.subheadline, weight: .semibold))
-                        .foregroundStyle(SpendGauge.tone(for: used))
-                }
-            }
+    private var metricStrip: some View {
+        let top = topCategories.first
+        return HStack(spacing: 0) {
+            metricCell("chart.pie.fill", AppTheme.accent,
+                       filteredIncome > 0 ? "\(Int(spentRatio * 100))%" : "—",
+                       loc("stats.metric_budget"))
+            metricDivider
+            metricCell("sun.max.fill", AppTheme.amber, money(todaySpend), loc("common.today"))
+            metricDivider
+            metricCell("scope", AppTheme.blue, money(typicalDailySpend), loc("stats.metric_per_day"))
+            metricDivider
+            metricCell("tag.fill", top?.category.color ?? AppTheme.purple,
+                       money(top?.amount ?? 0),
+                       top?.category.displayLabel ?? loc("stats.metric_top"))
         }
+        .padding(.vertical, 12)
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+    }
+
+    private func metricCell(_ icon: String, _ tint: Color, _ value: String, _ label: String) -> some View {
+        VStack(spacing: 5) {
+            Image(systemName: icon).font(.system(.caption, weight: .bold)).foregroundStyle(tint)
+            Text(value).font(.system(.subheadline, weight: .bold))
+                .foregroundStyle(AppTheme.textPrimary)
+                .lineLimit(1).minimumScaleFactor(0.5)
+            Text(label).font(.system(size: 10, weight: .medium))
+                .foregroundStyle(AppTheme.textSecondary)
+                .lineLimit(1).minimumScaleFactor(0.7)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 4)
+    }
+
+    private var metricDivider: some View {
+        Rectangle().fill(AppTheme.cardMid.opacity(0.7)).frame(width: 1, height: 32)
+    }
+
+    private var dualCards: some View {
+        HStack(spacing: 12) {
+            miniStatCard(loc("stats.weekly"), loc("stats.this_week"), weekTotal,
+                         "chart.bar.fill", AppTheme.blue, weekBars, highlightLast: false)
+            miniStatCard(loc("stats.trends"), loc("stats.this_month"), trendTotal,
+                         "chart.line.uptrend.xyaxis", AppTheme.accent, trendBars, highlightLast: true)
+        }
+    }
+
+    private func miniStatCard(_ title: String, _ subtitle: String, _ value: Double,
+                              _ icon: String, _ tint: Color,
+                              _ bars: [(label: String, value: Double)],
+                              highlightLast: Bool) -> some View {
+        Button {
+            HapticManager.shared.tap()
+            appVM.statsPath.append(.analysis)
+        } label: {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 6) {
+                    Image(systemName: icon).font(.system(.caption, weight: .bold)).foregroundStyle(tint)
+                    Text(title).font(.system(.subheadline, weight: .bold))
+                        .foregroundStyle(AppTheme.textPrimary).lineLimit(1)
+                    Spacer(minLength: 2)
+                    Image(systemName: "chevron.right").font(.system(.caption2, weight: .semibold))
+                        .foregroundStyle(AppTheme.textSecondary.opacity(0.6))
+                }
+                Text(subtitle).font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
+                Text(money(value)).font(.system(.title3, weight: .bold))
+                    .foregroundStyle(tint).lineLimit(1).minimumScaleFactor(0.5)
+                    .padding(.bottom, 2)
+                MiniBars(values: bars.map(\.value), labels: bars.map(\.label),
+                         tint: tint, highlightLast: highlightLast)
+                    .frame(height: 54)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(14)
+            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+        }
+        .buttonStyle(ScaleButtonStyle())
+    }
+
+    // MARK: 1 · How much went out, and am I fine
+
+    private var expenseChange: Double? {
+        guard let prev = previousPeriodExpenses, prev > 0 else { return nil }
+        return (filteredExpenses - prev) / prev * 100
     }
 
     /// One sentence on where this is heading, for a period still running.
@@ -1630,6 +1759,11 @@ struct StatisticsView: View {
                                       progress: periodProgress,
                                       previousExpenses: previousPeriodExpenses)
 
+                    // The trend's working lives here now: the main page carries a
+                    // compact "Trends" tile, and this is the one tap away.
+                    SpendingTrendCard(trend: netWorthTrend, currency: displayCurrency,
+                                      byPayCycle: payCycleDay != nil)
+
                     if filteredExpenses > 0 {
                         let insightsCard = SmartInsightsCard(
                             weeklyAverage: weeklyAverage,
@@ -1697,6 +1831,48 @@ struct StatisticsView: View {
         .navigationTitle(loc("stats.detail_title"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(AppTheme.bg, for: .navigationBar)
+    }
+}
+
+// MARK: - Mini bar chart
+//
+// Seven-ish bars with their labels — the shape of a week or of the months, at
+// tile size. The tallest bar (or the current one) is the only one at full
+// strength, so the eye lands on the answer rather than reading every column.
+
+private struct MiniBars: View {
+    let values: [Double]
+    let labels: [String]
+    let tint: Color
+    var highlightLast: Bool = false
+
+    var body: some View {
+        let peak = max(values.max() ?? 0, 1)
+        let hotIndex = highlightLast
+            ? values.count - 1
+            : (values.firstIndex(of: values.max() ?? 0) ?? -1)
+        VStack(spacing: 6) {
+            HStack(alignment: .bottom, spacing: 4) {
+                ForEach(Array(values.enumerated()), id: \.offset) { i, v in
+                    Capsule()
+                        .fill(i == hotIndex ? tint : tint.opacity(0.28))
+                        .frame(maxWidth: .infinity)
+                        // A floor of 3pt so an empty day still reads as a day.
+                        .frame(height: max(CGFloat(v / peak) * 36, 3))
+                }
+            }
+            .frame(height: 36, alignment: .bottom)
+            HStack(spacing: 4) {
+                ForEach(Array(labels.enumerated()), id: \.offset) { i, l in
+                    Text(l)
+                        .font(.system(size: 9, weight: i == hotIndex ? .bold : .medium))
+                        .foregroundStyle(i == hotIndex ? AppTheme.textPrimary
+                                                       : AppTheme.textSecondary.opacity(0.8))
+                        .lineLimit(1)
+                        .frame(maxWidth: .infinity)
+                }
+            }
+        }
     }
 }
 
