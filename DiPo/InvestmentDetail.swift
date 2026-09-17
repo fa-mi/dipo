@@ -9,6 +9,7 @@ struct HoldingDetailView: View {
     @Bindable var holding: InvestmentHolding
 
     @State private var addKind: InvestmentLotKind? = nil
+    @State private var editLot: InvestmentLot? = nil
     @State private var showPrice = false
     @State private var confirmDeleteHolding = false
 
@@ -35,6 +36,11 @@ struct HoldingDetailView: View {
             .featureBar(pushed: pushed)
             .sheet(item: $addKind) { kind in
                 AddLotSheet(holding: holding, initialKind: kind)
+                    .presentationDetents([.large]).presentationDragIndicator(.visible)
+                    .presentationBackground(AppTheme.bg).preferredColorScheme(appColorScheme())
+            }
+            .sheet(item: $editLot) { lot in
+                EditLotSheet(holding: holding, lot: lot)
                     .presentationDetents([.large]).presentationDragIndicator(.visible)
                     .presentationBackground(AppTheme.bg).preferredColorScheme(appColorScheme())
             }
@@ -208,13 +214,19 @@ struct HoldingDetailView: View {
                 VStack(spacing: 0) {
                     let sorted = holding.lots.sorted { $0.date > $1.date }
                     ForEach(Array(sorted.enumerated()), id: \.element.id) { i, lot in
-                        LotRow(lot: lot, holding: holding)
-                            .contextMenu {
-                                Button(role: .destructive) {
-                                    InvestmentCash.reverse(lot.linkedCardTxID, context: context)
-                                    context.delete(lot); try? context.save(); HapticManager.shared.tap()
-                                } label: { Label(loc("invest.delete_lot"), systemImage: "trash") }
+                        Button { HapticManager.shared.tap(); editLot = lot } label: {
+                            LotRow(lot: lot, holding: holding)
+                        }
+                        .buttonStyle(ScaleButtonStyle())
+                        .contextMenu {
+                            Button { editLot = lot } label: {
+                                Label(loc("invest.edit_lot"), systemImage: "pencil")
                             }
+                            Button(role: .destructive) {
+                                InvestmentCash.reverse(lot.linkedCardTxID, context: context)
+                                context.delete(lot); try? context.save(); HapticManager.shared.tap()
+                            } label: { Label(loc("invest.delete_lot"), systemImage: "trash") }
+                        }
                         if i < sorted.count - 1 {
                             Rectangle().fill(AppTheme.cardMid.opacity(0.7)).frame(height: 1).padding(.leading, 52)
                         }

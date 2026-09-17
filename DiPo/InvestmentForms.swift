@@ -533,6 +533,151 @@ struct AddLotSheet: View {
     }
 }
 
+// MARK: - Edit an existing lot (fix a typo in a recorded transaction)
+
+struct EditLotSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var context
+    @Query(sort: \BankCard.sortOrder) private var cards: [BankCard]
+    @Bindable var holding: InvestmentHolding
+    @Bindable var lot: InvestmentLot
+
+    @State private var fundCardID: String? = nil
+    @State private var units = ""
+    @State private var price = ""
+    @State private var fee = ""
+    @State private var amount = ""   // amount-based buy/sell, or cash for income/fee
+    @State private var date = Date()
+    @State private var note = ""
+    @State private var loaded = false
+
+    private var cur: String { holding.currency }
+    private var curSymbol: String { cur == "IDR" ? "Rp" : cur }
+    private var kind: InvestmentLotKind { lot.kind }
+
+    private var canSave: Bool {
+        if kind.isCash { return parseNumber(amount) > 0 }
+        if holding.type.isAmountBased { return parseNumber(amount) > 0 }
+        return parseNumber(units) > 0 && parseNumber(price) > 0
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 18) {
+                    kindBadge
+                    if kind.isCash {
+                        MoneyField(label: loc("invest.field.amount"), prefix: curSymbol, text: $amount)
+                    } else if holding.type.isAmountBased {
+                        MoneyField(label: loc("invest.field.amount"), prefix: curSymbol, text: $amount)
+                    } else {
+                        HStack(spacing: 12) {
+                            MoneyField(label: loc("invest.field.units"), suffix: holding.type.unitLabel, text: $units)
+                            MoneyField(label: loc("invest.field.price"), prefix: curSymbol, text: $price)
+                        }
+                        MoneyField(label: loc("invest.field.fee"), prefix: curSymbol, text: $fee)
+                    }
+                    if kind == .buy && !cards.isEmpty {
+                        CardFundPicker(cards: cards, selectedID: $fundCardID)
+                    }
+                    DatePicker(loc("invest.field.date"), selection: $date, in: ...Date(), displayedComponents: .date)
+                        .font(.system(.subheadline, weight: .medium)).tint(AppTheme.accent)
+                    PlainField(label: loc("invest.field.note"), text: $note)
+                    Spacer(minLength: 20)
+                }
+                .padding(22)
+            }
+            .background(AppTheme.bg)
+            .navigationTitle(loc("invest.edit_lot"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(loc("common.cancel")) { dismiss() }.foregroundStyle(AppTheme.textSecondary)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(loc("invest.save")) { save() }
+                        .font(.system(.body, weight: .bold))
+                        .foregroundStyle(canSave ? AppTheme.accent : AppTheme.textSecondary)
+                        .disabled(!canSave)
+                }
+            }
+            .onAppear(perform: preload)
+        }
+    }
+
+    /// The kind is fixed on edit (changing buy↔sell would rewrite the maths and
+    /// card funding) — show it as a read-only badge so the user knows what row
+    /// they're fixing.
+    private var kindBadge: some View {
+        HStack(spacing: 7) {
+            Image(systemName: "pencil").font(.system(.caption2, weight: .bold))
+            Text(loc("invest.kind.\(lot.kindRaw)")).font(.system(.subheadline, weight: .semibold))
+        }
+        .foregroundStyle(AppTheme.textSecondary)
+        .padding(.horizontal, 12).padding(.vertical, 8)
+        .background(AppTheme.cardDark, in: Capsule())
+    }
+
+    private func preload() {
+        guard !loaded else { return }
+        loaded = true
+        date = lot.date
+        note = lot.note
+        if kind.isCash {
+            amount = num(lot.cashAmount)
+        } else if holding.type.isAmountBased {
+            amount = num(lot.units)
+        } else {
+            units = num(lot.units)
+            price = num(lot.pricePerUnit)
+            fee = lot.fee > 0 ? num(lot.fee) : ""
+        }
+        // Pre-select the card that currently funds this lot, if any.
+        if !lot.linkedCardTxID.isEmpty, let uuid = UUID(uuidString: lot.linkedCardTxID) {
+            fundCardID = cards.first { c in c.transactions.contains { $0.id == uuid } }?.id.uuidString
+        }
+    }
+
+    /// Whole numbers plain; fractional units use a comma decimal so `parseNumber`
+    /// (id-ID) round-trips them (e.g. 0.005 → "0,005", not misread as thousands).
+    private func num(_ v: Double) -> String {
+        if v == v.rounded() { return String(Int(v)) }
+        return String(v).replacingOccurrences(of: ".", with: ",")
+    }
+
+    private func save() {
+        if kind.isCash {
+            lot.cashAmount = parseNumber(amount)
+        } else if holding.type.isAmountBased {
+            lot.units = parseNumber(amount)
+            lot.pricePerUnit = 1
+        } else {
+            lot.units = parseNumber(units)
+            lot.pricePerUnit = parseNumber(price)
+            lot.fee = parseNumber(fee)
+        }
+        lot.date = date
+        lot.note = note
+
+        // Re-sync the card movement for buys: reverse the old one, then record a
+        // fresh outflow if a card is (still) selected. Uniform across all cases —
+        // same card, switched card, added, or removed.
+        if kind == .buy {
+            InvestmentCash.reverse(lot.linkedCardTxID, context: context)
+            lot.linkedCardTxID = ""
+            if let id = fundCardID, let card = cards.first(where: { $0.id.uuidString == id }) {
+                let cost = holding.type.isAmountBased
+                    ? parseNumber(amount)
+                    : parseNumber(units) * parseNumber(price) + parseNumber(fee)
+                lot.linkedCardTxID = InvestmentCash.recordOutflow(holding: holding, cost: cost, card: card, date: date)
+            }
+        }
+        try? context.save()
+        HapticManager.shared.success()
+        dismiss()
+    }
+}
+
 // MARK: - Update current price
 
 struct UpdatePriceSheet: View {
