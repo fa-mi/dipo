@@ -155,6 +155,8 @@ struct StatisticsView: View {
     /// Which day of the Weekly page is open, and which of its rows was tapped.
     @State private var expandedDay: Date? = nil
     @State private var inspectedTx: TxRecord? = nil
+    /// Category filter on the cycle page. Cleared whenever a different cycle opens.
+    @State private var cycleCategoryFilter: TxCategory? = nil
 
     /// Count of "Other" expenses the categoriser could confidently re-map.
     private var tidyableCount: Int {
@@ -2050,7 +2052,13 @@ struct StatisticsView: View {
             .reduce(0.0) { $0 + convertedAmount($1) }
         let expense = expenseSum(txs)
         let spend = txs.filter { $0.txSubtype != .transfer && ($0.amount < 0 || $0.txSubtype == .refund) }
-        let groups = Dictionary(grouping: spend) { Calendar.current.startOfDay(for: $0.date) }
+        // Only the categories this cycle actually has, biggest first — a filter
+        // offering empty options is a filter that wastes taps.
+        let catTotals = Dictionary(grouping: spend, by: \.category)
+            .map { (cat: $0.key, total: expenseSum($0.value)) }
+            .sorted { $0.total > $1.total }
+        let shown = cycleCategoryFilter.map { f in spend.filter { $0.category == f } } ?? spend
+        let groups = Dictionary(grouping: shown) { Calendar.current.startOfDay(for: $0.date) }
             .map { (day: $0.key, rows: $0.value.sorted { $0.date > $1.date }) }
             .sorted { $0.day > $1.day }
 
@@ -2090,8 +2098,36 @@ struct StatisticsView: View {
                             .clipShape(RoundedRectangle(cornerRadius: AppRadius.xl))
                     }
 
+                    if !catTotals.isEmpty {
+                        VStack(alignment: .leading, spacing: 10) {
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 8) {
+                                    categoryChip(loc("stats.filter_all"), nil, AppTheme.blue,
+                                                 isOn: cycleCategoryFilter == nil)
+                                    ForEach(catTotals, id: \.cat) { c in
+                                        categoryChip(c.cat.displayLabel, c.cat, c.cat.color,
+                                                     isOn: cycleCategoryFilter == c.cat)
+                                    }
+                                }
+                                .padding(.vertical, 2)
+                            }
+                            // What the filter currently adds up to, so the list is
+                            // never a set of rows with no total attached.
+                            HStack {
+                                Text(cycleCategoryFilter?.displayLabel ?? loc("stats.filter_all"))
+                                    .font(.system(.caption, weight: .semibold))
+                                    .foregroundStyle(AppTheme.textPrimary)
+                                Spacer()
+                                Text("\(money(expenseSum(shown))) · \(String(format: loc("stats.tx_count"), shown.count))")
+                                    .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
+                                    .lineLimit(1).minimumScaleFactor(0.7)
+                            }
+                        }
+                    }
+
                     if groups.isEmpty {
-                        Text(loc("stats.cycle_empty"))
+                        Text(loc(cycleCategoryFilter == nil ? "stats.cycle_empty"
+                                                            : "stats.cycle_empty_cat"))
                             .font(.system(.footnote)).foregroundStyle(AppTheme.textSecondary)
                             .frame(maxWidth: .infinity).padding(.vertical, 28)
                             .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.xl))
@@ -2133,6 +2169,9 @@ struct StatisticsView: View {
         }
         .navigationTitle(label)
         .navigationBarTitleDisplayMode(.inline)
+        // Keyed to the cycle, not to appearing: opening a different cycle starts
+        // unfiltered, but coming back from a transaction sheet keeps your filter.
+        .task(id: label) { cycleCategoryFilter = nil }
         .sheet(item: $inspectedTx) { tx in
             TransactionDetailSheet(tx: tx)
                 .presentationDetents([.medium, .large])
@@ -2140,6 +2179,24 @@ struct StatisticsView: View {
                 .presentationBackground(AppTheme.bg)
                 .preferredColorScheme(appColorScheme())
         }
+    }
+
+    private func categoryChip(_ label: String, _ cat: TxCategory?, _ tint: Color, isOn: Bool) -> some View {
+        Button {
+            HapticManager.shared.tap()
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                // Tapping the active chip clears back to All.
+                cycleCategoryFilter = isOn ? nil : cat
+            }
+        } label: {
+            Text(label)
+                .font(.system(.caption, weight: .semibold))
+                .foregroundStyle(isOn ? AppTheme.onVividFill : AppTheme.textSecondary)
+                .lineLimit(1)
+                .padding(.horizontal, 13).padding(.vertical, 8)
+                .background(isOn ? tint : AppTheme.cardDark, in: Capsule())
+        }
+        .buttonStyle(.plain)
     }
 
     private func trendFigure(_ label: String, _ value: Double, _ tint: Color) -> some View {
