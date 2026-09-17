@@ -9,17 +9,29 @@ private enum DetailSheet: Identifiable {
     case addLot(InvestmentLotKind)
     case editLot(InvestmentLot)
     case price
-    case deleteLot(InvestmentLot)
-    case deleteHolding
     var id: String {
         switch self {
         case .addLot(let k):    return "add-\(k.rawValue)"
         case .editLot(let l):   return "edit-\(l.id.uuidString)"
         case .price:            return "price"
-        case .deleteLot(let l): return "del-\(l.id.uuidString)"
-        case .deleteHolding:    return "del-holding"
         }
     }
+}
+
+/// What a delete confirmation targets. Drives the centered modal.
+private enum DeleteTarget: Identifiable {
+    case lot(InvestmentLot)
+    case holding
+    var id: String {
+        switch self {
+        case .lot(let l): return "lot-\(l.id.uuidString)"
+        case .holding:    return "holding"
+        }
+    }
+    var title: String { loc(self.isLot ? "invest.delete_lot" : "invest.delete_holding") }
+    var message: String { loc(self.isLot ? "invest.delete_lot_msg" : "invest.delete_holding_msg") }
+    var confirmLabel: String { title }
+    private var isLot: Bool { if case .lot = self { return true }; return false }
 }
 
 struct HoldingDetailView: View {
@@ -28,6 +40,7 @@ struct HoldingDetailView: View {
     @Bindable var holding: InvestmentHolding
 
     @State private var sheet: DetailSheet? = nil
+    @State private var pendingDelete: DeleteTarget? = nil
 
     private var s: HoldingStats { holding.stats() }
     private var cur: String { holding.currency }
@@ -67,20 +80,27 @@ struct HoldingDetailView: View {
                     UpdatePriceSheet(holding: holding)
                         .presentationDetents([.height(320)]).presentationDragIndicator(.visible)
                         .presentationBackground(AppTheme.bg).preferredColorScheme(appColorScheme())
-                case .deleteLot(let lot):
-                    DangerConfirmSheet(icon: "trash.fill", tone: .danger,
-                                       title: loc("invest.delete_lot"),
-                                       message: loc("invest.delete_lot_msg"),
-                                       confirmLabel: loc("invest.delete_lot"),
-                                       onConfirm: { deleteLot(lot) })
-                        .preferredColorScheme(appColorScheme())
-                case .deleteHolding:
-                    DangerConfirmSheet(icon: "trash.fill", tone: .danger,
-                                       title: loc("invest.delete_holding"),
-                                       message: loc("invest.delete_holding_msg"),
-                                       confirmLabel: loc("invest.delete_holding"),
-                                       onConfirm: deleteHolding)
-                        .preferredColorScheme(appColorScheme())
+                }
+            }
+            // Delete confirmation is a CENTERED modal, not a bottom sheet — no
+            // leftover space above the home indicator, and it reads as a decision.
+            .overlay {
+                if let target = pendingDelete {
+                    CenterConfirmModal(
+                        title: target.title,
+                        message: target.message,
+                        confirmLabel: target.confirmLabel,
+                        onConfirm: {
+                            withAnimation(.easeOut(duration: 0.2)) { pendingDelete = nil }
+                            switch target {
+                            case .lot(let lot): deleteLot(lot)
+                            case .holding:      deleteHolding()
+                            }
+                        },
+                        onCancel: { withAnimation(.easeOut(duration: 0.2)) { pendingDelete = nil } }
+                    )
+                    .transition(.opacity)
+                    .zIndex(10)
                 }
             }
         }
@@ -105,7 +125,9 @@ struct HoldingDetailView: View {
             }
             Spacer(minLength: 8)
             Menu {
-                Button(role: .destructive) { sheet = .deleteHolding } label: {
+                Button(role: .destructive) {
+                    withAnimation(.easeOut(duration: 0.2)) { pendingDelete = .holding }
+                } label: {
                     Label(loc("invest.delete_holding"), systemImage: "trash")
                 }
             } label: {
@@ -245,30 +267,33 @@ struct HoldingDetailView: View {
     // One card holding the transaction rows — same recipe as Home's list, so the
     // swipe reveals the SAME round red Delete button. Rows share the card's fill,
     // so they slide cleanly under it and the corners stay rounded (no clip needed).
+    // Hairline dividers separate the header and each row so the list reads as one.
     private var lotsSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 0) {
             Text(loc("invest.lots")).font(.system(.body, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
+                .padding(.bottom, 12)
             if holding.lots.isEmpty {
                 Text(loc("invest.empty_lots")).font(.system(.footnote))
-                    .foregroundStyle(AppTheme.textSecondary).frame(maxWidth: .infinity).padding(.vertical, 16)
+                    .foregroundStyle(AppTheme.textSecondary).frame(maxWidth: .infinity).padding(.vertical, 12)
             } else {
                 let sorted = holding.lots.sorted { $0.date > $1.date }
-                VStack(spacing: 10) {
-                    ForEach(sorted, id: \.id) { lot in
-                        // Tap to edit, swipe left for the round Delete (then confirm).
-                        SwipeToDeleteRow(
-                            onTap: { HapticManager.shared.tap(); sheet = .editLot(lot) },
-                            onDelete: { sheet = .deleteLot(lot) }
-                        ) {
-                            LotRow(lot: lot, holding: holding)
+                ForEach(Array(sorted.enumerated()), id: \.element.id) { i, lot in
+                    lotDivider   // line under the header, and between rows
+                    // Tap to edit, swipe left for the round Delete (then confirm).
+                    SwipeToDeleteRow(
+                        onTap: { HapticManager.shared.tap(); sheet = .editLot(lot) },
+                        onDelete: { withAnimation(.easeOut(duration: 0.2)) { pendingDelete = .lot(lot) } }
+                    ) {
+                        LotRow(lot: lot, holding: holding)
+                    }
+                    .contextMenu {
+                        Button { sheet = .editLot(lot) } label: {
+                            Label(loc("invest.edit_lot"), systemImage: "pencil")
                         }
-                        .contextMenu {
-                            Button { sheet = .editLot(lot) } label: {
-                                Label(loc("invest.edit_lot"), systemImage: "pencil")
-                            }
-                            Button(role: .destructive) { sheet = .deleteLot(lot) } label: {
-                                Label(loc("invest.delete_lot"), systemImage: "trash")
-                            }
+                        Button(role: .destructive) {
+                            withAnimation(.easeOut(duration: 0.2)) { pendingDelete = .lot(lot) }
+                        } label: {
+                            Label(loc("invest.delete_lot"), systemImage: "trash")
                         }
                     }
                 }
@@ -277,6 +302,10 @@ struct HoldingDetailView: View {
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.xl))
+    }
+
+    private var lotDivider: some View {
+        Rectangle().fill(AppTheme.cardMid.opacity(0.6)).frame(height: 1)
     }
 }
 
@@ -330,6 +359,80 @@ private struct LotRow: View {
         if lot.kind.isCash { return investMoney(lot.cashAmount, holding.currency) }
         let gross = lot.units * lot.pricePerUnit
         return investMoney(gross, holding.currency)
+    }
+}
+
+// MARK: - Centered confirm modal
+//
+// A decision that sits in the middle of the screen instead of a bottom sheet:
+// no wasted space above the home indicator, and a dimmed backdrop that reads as
+// "stop and choose". Tap the backdrop or Cancel to back out.
+
+private struct CenterConfirmModal: View {
+    let title: String
+    let message: String
+    let confirmLabel: String
+    let onConfirm: () -> Void
+    let onCancel: () -> Void
+    @State private var shown = false
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(shown ? 0.5 : 0).ignoresSafeArea()
+                .contentShape(Rectangle())
+                .onTapGesture { onCancel() }
+            card
+                .scaleEffect(shown ? 1 : 0.9)
+                .opacity(shown ? 1 : 0)
+        }
+        .onAppear {
+            HapticManager.shared.warning()
+            withAnimation(.spring(response: 0.34, dampingFraction: 0.82)) { shown = true }
+        }
+    }
+
+    private var card: some View {
+        VStack(spacing: 0) {
+            ZStack {
+                Circle().fill(AppTheme.red.opacity(0.12)).frame(width: 76, height: 76)
+                Circle().stroke(AppTheme.red.opacity(0.25), lineWidth: 1.5).frame(width: 76, height: 76)
+                Image(systemName: "trash.fill").font(.system(size: 30, weight: .semibold)).foregroundStyle(AppTheme.red)
+            }
+            .padding(.top, 26)
+
+            VStack(spacing: 8) {
+                Text(title).font(.system(.title3, weight: .bold))
+                    .foregroundStyle(AppTheme.textPrimary).multilineTextAlignment(.center)
+                Text(message).font(.system(.subheadline))
+                    .foregroundStyle(AppTheme.textSecondary).multilineTextAlignment(.center)
+                    .lineSpacing(3).fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.horizontal, 24).padding(.top, 16)
+
+            VStack(spacing: 10) {
+                Button { onConfirm() } label: {
+                    Text(confirmLabel).font(.system(.body, weight: .bold))
+                        .foregroundStyle(AppTheme.onVividFill)
+                        .frame(maxWidth: .infinity).padding(.vertical, 15)
+                        .background(AppTheme.red, in: RoundedRectangle(cornerRadius: AppRadius.md))
+                }
+                .buttonStyle(ScaleButtonStyle())
+                Button { onCancel() } label: {
+                    Text(loc("common.cancel")).font(.system(.body, weight: .semibold))
+                        .foregroundStyle(AppTheme.textPrimary)
+                        .frame(maxWidth: .infinity).padding(.vertical, 15)
+                        .background(AppTheme.bg, in: RoundedRectangle(cornerRadius: AppRadius.md))
+                        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.cardMid, lineWidth: 1))
+                }
+                .buttonStyle(ScaleButtonStyle())
+            }
+            .padding(.horizontal, 20).padding(.top, 22).padding(.bottom, 22)
+        }
+        .frame(maxWidth: 360)
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 28))
+        .overlay(RoundedRectangle(cornerRadius: 28).stroke(AppTheme.cardMid.opacity(0.5), lineWidth: 1))
+        .shadow(color: .black.opacity(0.3), radius: 30, y: 10)
+        .padding(.horizontal, 36)
     }
 }
 
