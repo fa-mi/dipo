@@ -1135,6 +1135,8 @@ struct StatisticsView: View {
                     case .analysis: fullAnalysis
                     case .weekly:   weeklyDetail
                     case .trends:   trendsDetail
+                    case .cycle(let s, let e, let label):
+                        cycleDetail(start: s, end: e, label: label)
                     }
                 }
         }
@@ -1968,35 +1970,45 @@ struct StatisticsView: View {
 
                     VStack(spacing: 10) {
                         ForEach(points.reversed()) { p in
-                            VStack(spacing: 10) {
-                                HStack {
-                                    HStack(spacing: 6) {
-                                        Text(p.label)
-                                            .font(.system(.subheadline, weight: .bold))
-                                            .foregroundStyle(AppTheme.textPrimary)
-                                        if p.isRunning {
-                                            Text(loc("stats.trend_running"))
-                                                .font(.system(.caption2, weight: .bold))
-                                                .foregroundStyle(AppTheme.orange)
-                                                .padding(.horizontal, 5).padding(.vertical, 2)
-                                                .background(AppTheme.orange.opacity(0.15), in: Capsule())
+                            Button {
+                                HapticManager.shared.tap()
+                                appVM.statsPath.append(.cycle(start: p.start, end: p.end, label: p.label))
+                            } label: {
+                                VStack(spacing: 10) {
+                                    HStack {
+                                        HStack(spacing: 6) {
+                                            Text(p.label)
+                                                .font(.system(.subheadline, weight: .bold))
+                                                .foregroundStyle(AppTheme.textPrimary)
+                                            if p.isRunning {
+                                                Text(loc("stats.trend_running"))
+                                                    .font(.system(.caption2, weight: .bold))
+                                                    .foregroundStyle(AppTheme.orange)
+                                                    .padding(.horizontal, 5).padding(.vertical, 2)
+                                                    .background(AppTheme.orange.opacity(0.15), in: Capsule())
+                                            }
                                         }
+                                        Spacer()
+                                        Text(String(format: loc("stats.tx_count"), p.txCount))
+                                            .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
+                                        Image(systemName: "chevron.right")
+                                            .font(.system(.caption2, weight: .semibold))
+                                            .foregroundStyle(AppTheme.textSecondary.opacity(0.6))
                                     }
-                                    Spacer()
-                                    Text(String(format: loc("stats.tx_count"), p.txCount))
-                                        .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
+                                    HStack(spacing: 0) {
+                                        trendFigure(loc("stats.income"), p.income, AppTheme.accent)
+                                        metricDivider
+                                        trendFigure(loc("stats.expenses"), p.expense, AppTheme.red)
+                                        metricDivider
+                                        trendFigure(loc("stats.net"), p.net,
+                                                    p.net >= 0 ? AppTheme.accent : AppTheme.red)
+                                    }
                                 }
-                                HStack(spacing: 0) {
-                                    trendFigure(loc("stats.income"), p.income, AppTheme.accent)
-                                    metricDivider
-                                    trendFigure(loc("stats.expenses"), p.expense, AppTheme.red)
-                                    metricDivider
-                                    trendFigure(loc("stats.net"), p.net,
-                                                p.net >= 0 ? AppTheme.accent : AppTheme.red)
-                                }
+                                .padding(14)
+                                .contentShape(Rectangle())
+                                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
                             }
-                            .padding(14)
-                            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+                            .buttonStyle(ScaleButtonStyle())
                         }
                     }
 
@@ -2007,6 +2019,127 @@ struct StatisticsView: View {
         }
         .navigationTitle(loc("stats.trends"))
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    // MARK: One cycle, opened up
+    //
+    // A bar on the Trends chart is a conclusion; this is the spending it was
+    // drawn from, grouped by day. Built from the same rules as every other
+    // figure on the screen so the days add up to the cycle.
+
+    private func rangeLabel(_ start: Date, _ end: Date) -> String {
+        let df = DateFormatter()
+        df.locale = LanguageManager.shared.currentLocale
+        df.dateFormat = DateFormatter.dateFormat(fromTemplate: "dMMM", options: 0,
+                                                 locale: LanguageManager.shared.currentLocale)
+        // Half-open window: the last day covered is the day before it ends.
+        let last = Calendar.current.safeDate(byAdding: .day, value: -1, to: end)
+        return "\(df.string(from: start)) – \(df.string(from: last))"
+    }
+
+    private func dayLabel(_ day: Date) -> String {
+        let cal = Calendar.current
+        if cal.isDateInToday(day) { return loc("common.today") }
+        if cal.isDateInYesterday(day) { return loc("common.yesterday") }
+        return DateFormatterCache.template("EEEEdMMM").string(from: day)
+    }
+
+    private func cycleDetail(start: Date, end: Date, label: String) -> some View {
+        let txs = (selectedCard?.transactions ?? []).filter { $0.date >= start && $0.date < end }
+        let income = txs.filter { $0.amount > 0 && $0.txSubtype == .normal }
+            .reduce(0.0) { $0 + convertedAmount($1) }
+        let expense = expenseSum(txs)
+        let spend = txs.filter { $0.txSubtype != .transfer && ($0.amount < 0 || $0.txSubtype == .refund) }
+        let groups = Dictionary(grouping: spend) { Calendar.current.startOfDay(for: $0.date) }
+            .map { (day: $0.key, rows: $0.value.sorted { $0.date > $1.date }) }
+            .sorted { $0.day > $1.day }
+
+        return ZStack {
+            AppTheme.bg.ignoresSafeArea()
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 14) {
+                    VStack(spacing: 12) {
+                        VStack(spacing: 2) {
+                            Text(label).font(.system(.subheadline, weight: .bold))
+                                .foregroundStyle(AppTheme.textPrimary)
+                            Text(rangeLabel(start, end))
+                                .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
+                        }
+                        Text(money(expense))
+                            .font(.system(size: 34, weight: .bold))
+                            .foregroundStyle(AppTheme.textPrimary)
+                            .lineLimit(1).minimumScaleFactor(0.5)
+                        HStack(spacing: 0) {
+                            trendFigure(loc("stats.income"), income, AppTheme.accent)
+                            metricDivider
+                            trendFigure(loc("stats.expenses"), expense, AppTheme.red)
+                            metricDivider
+                            trendFigure(loc("stats.net"), income - expense,
+                                        income - expense >= 0 ? AppTheme.accent : AppTheme.red)
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(18)
+                    .background {
+                        RoundedRectangle(cornerRadius: AppRadius.xl).fill(AppTheme.cardDark)
+                            .overlay {
+                                LinearGradient(colors: [AppTheme.accent.opacity(0.18),
+                                                        AppTheme.accent.opacity(0.04), .clear],
+                                               startPoint: .topTrailing, endPoint: .bottomLeading)
+                            }
+                            .clipShape(RoundedRectangle(cornerRadius: AppRadius.xl))
+                    }
+
+                    if groups.isEmpty {
+                        Text(loc("stats.cycle_empty"))
+                            .font(.system(.footnote)).foregroundStyle(AppTheme.textSecondary)
+                            .frame(maxWidth: .infinity).padding(.vertical, 28)
+                            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.xl))
+                    } else {
+                        ForEach(groups, id: \.day) { g in
+                            VStack(alignment: .leading, spacing: 8) {
+                                HStack {
+                                    Text(dayLabel(g.day))
+                                        .font(.system(.footnote, weight: .semibold))
+                                        .foregroundStyle(AppTheme.textSecondary)
+                                    Spacer()
+                                    Text(money(expenseSum(g.rows)))
+                                        .font(.system(.caption, weight: .bold))
+                                        .foregroundStyle(AppTheme.textSecondary)
+                                }
+                                VStack(spacing: 10) {
+                                    ForEach(g.rows) { tx in
+                                        Button {
+                                            HapticManager.shared.tap()
+                                            inspectedTx = tx
+                                        } label: {
+                                            TxRow(tx: tx, sourceCard: selectedCard,
+                                                  showCard: false, animateEntrance: false)
+                                                .contentShape(Rectangle())
+                                        }
+                                        .buttonStyle(ScaleButtonStyle())
+                                    }
+                                }
+                                .padding(14)
+                                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+                            }
+                        }
+                    }
+
+                    Spacer(minLength: 100)
+                }
+                .padding(.horizontal, 22).padding(.top, 8)
+            }
+        }
+        .navigationTitle(label)
+        .navigationBarTitleDisplayMode(.inline)
+        .sheet(item: $inspectedTx) { tx in
+            TransactionDetailSheet(tx: tx)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+                .presentationBackground(AppTheme.bg)
+                .preferredColorScheme(appColorScheme())
+        }
     }
 
     private func trendFigure(_ label: String, _ value: Double, _ tint: Color) -> some View {

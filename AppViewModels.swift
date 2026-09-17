@@ -204,4 +204,7 @@ enum StatsRoute: Hashable {
     case weekly
     /// The Trends tile's own page — cycle by cycle.
     case trends
+    /// One cycle from the Trends page, opened up. Carries the window rather than
+    /// the trend point so the route stays Hashable for the typed path.
+    case cycle(start: Date, end: Date, label: String)
 }
