@@ -152,6 +152,9 @@ struct StatisticsView: View {
     @State private var showExportSheet = false
     @State private var showTidy = false
     @State private var showAllCategories = false
+    /// Which day of the Weekly page is open, and which of its rows was tapped.
+    @State private var expandedDay: Date? = nil
+    @State private var inspectedTx: TxRecord? = nil
 
     /// Count of "Other" expenses the categoriser could confidently re-map.
     private var tidyableCount: Int {
@@ -504,14 +507,26 @@ struct StatisticsView: View {
         let full = cal.weekdaySymbols
         return (0..<7).compactMap { i in
             guard let day = cal.date(byAdding: .day, value: i, to: week.start) else { return nil }
-            let txs = card.transactions.filter {
-                cal.isDate($0.date, inSameDayAs: day) && $0.txSubtype != .transfer && $0.amount < 0
-            }
             let idx = (i + 1) % 7
             return WeekDay(date: day, short: short[idx], full: full[idx],
                            amount: expenseSum(card.transactions.filter { cal.isDate($0.date, inSameDayAs: day) }),
-                           txCount: txs.count)
+                           txCount: spendTx(on: day).count)
         }
+    }
+
+    /// The rows that make up a day's spend — exactly the ones `expenseSum` counts
+    /// (refunds included, transfers and income left out), so the list opened under
+    /// a day adds up to the figure printed beside it.
+    private func spendTx(on day: Date) -> [TxRecord] {
+        guard let card = selectedCard else { return [] }
+        let cal = weekCalendar
+        return card.transactions
+            .filter {
+                cal.isDate($0.date, inSameDayAs: day)
+                    && $0.txSubtype != .transfer
+                    && ($0.amount < 0 || $0.txSubtype == .refund)
+            }
+            .sorted { $0.date > $1.date }
     }
 
     private var weekBars: [(label: String, value: Double)] {
@@ -1824,33 +1839,7 @@ struct StatisticsView: View {
 
                     VStack(spacing: 0) {
                         ForEach(Array(weekDays.enumerated()), id: \.element.id) { i, d in
-                            HStack(spacing: 12) {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    HStack(spacing: 6) {
-                                        Text(d.full)
-                                            .font(.system(.subheadline, weight: d.isToday ? .bold : .medium))
-                                            .foregroundStyle(AppTheme.textPrimary)
-                                        if d.isToday {
-                                            Text(loc("common.today"))
-                                                .font(.system(.caption2, weight: .bold))
-                                                .foregroundStyle(AppTheme.blue)
-                                                .padding(.horizontal, 6).padding(.vertical, 2)
-                                                .background(AppTheme.blue.opacity(0.15), in: Capsule())
-                                        }
-                                    }
-                                    Text(d.isFuture ? loc("stats.day_ahead")
-                                                    : String(format: loc("stats.tx_count"), d.txCount))
-                                        .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
-                                }
-                                Spacer(minLength: 8)
-                                Text(d.isFuture ? "—" : money(d.amount))
-                                    .font(.system(.subheadline, weight: .bold))
-                                    .foregroundStyle(d.amount > 0 ? AppTheme.textPrimary
-                                                                  : AppTheme.textSecondary)
-                                    .lineLimit(1).minimumScaleFactor(0.6)
-                            }
-                            .padding(.vertical, 13)
-                            .opacity(d.isFuture ? 0.5 : 1)
+                            dayRow(d)
                             if i < weekDays.count - 1 {
                                 Rectangle().fill(AppTheme.cardMid.opacity(0.6)).frame(height: 1)
                             }
@@ -1866,6 +1855,85 @@ struct StatisticsView: View {
         }
         .navigationTitle(loc("stats.weekly"))
         .navigationBarTitleDisplayMode(.inline)
+        // Attached HERE, not on the root: the stats screen already stacks four
+        // sheets, and SwiftUI drops later ones when too many share a view.
+        .sheet(item: $inspectedTx) { tx in
+            TransactionDetailSheet(tx: tx)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+                .presentationBackground(AppTheme.bg)
+                .preferredColorScheme(appColorScheme())
+        }
+    }
+
+    /// One day of the week: tap it to open the transactions behind its figure.
+    @ViewBuilder
+    private func dayRow(_ d: WeekDay) -> some View {
+        let rows = expandedDay == d.date ? spendTx(on: d.date) : []
+        let openable = !d.isFuture && d.txCount > 0
+        VStack(spacing: 0) {
+            Button {
+                guard openable else { return }
+                HapticManager.shared.tap()
+                withAnimation(.spring(response: 0.32, dampingFraction: 0.85)) {
+                    expandedDay = (expandedDay == d.date) ? nil : d.date
+                }
+            } label: {
+                HStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(spacing: 6) {
+                            Text(d.full)
+                                .font(.system(.subheadline, weight: d.isToday ? .bold : .medium))
+                                .foregroundStyle(AppTheme.textPrimary)
+                            if d.isToday {
+                                Text(loc("common.today"))
+                                    .font(.system(.caption2, weight: .bold))
+                                    .foregroundStyle(AppTheme.blue)
+                                    .padding(.horizontal, 6).padding(.vertical, 2)
+                                    .background(AppTheme.blue.opacity(0.15), in: Capsule())
+                            }
+                        }
+                        Text(d.isFuture ? loc("stats.day_ahead")
+                                        : String(format: loc("stats.tx_count"), d.txCount))
+                            .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
+                    }
+                    Spacer(minLength: 8)
+                    Text(d.isFuture ? "—" : money(d.amount))
+                        .font(.system(.subheadline, weight: .bold))
+                        .foregroundStyle(d.amount > 0 ? AppTheme.textPrimary : AppTheme.textSecondary)
+                        .lineLimit(1).minimumScaleFactor(0.6)
+                    // Only days with something to show carry the affordance.
+                    Image(systemName: "chevron.down")
+                        .font(.system(.caption2, weight: .bold))
+                        .foregroundStyle(AppTheme.textSecondary.opacity(0.7))
+                        .rotationEffect(.degrees(expandedDay == d.date ? 180 : 0))
+                        .opacity(openable ? 1 : 0)
+                }
+                .padding(.vertical, 13)
+                .contentShape(Rectangle())
+                .opacity(d.isFuture ? 0.5 : 1)
+            }
+            .buttonStyle(.plain)
+            .disabled(!openable)
+
+            if !rows.isEmpty {
+                VStack(spacing: 10) {
+                    ForEach(rows) { tx in
+                        Button {
+                            HapticManager.shared.tap()
+                            inspectedTx = tx
+                        } label: {
+                            TxRow(tx: tx, sourceCard: selectedCard,
+                                  showCard: false, animateEntrance: false)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(ScaleButtonStyle())
+                    }
+                }
+                .padding(.vertical, 12)
+                .padding(.leading, 6)
+            }
+        }
     }
 
     // MARK: Trends · its own page
