@@ -230,6 +230,10 @@ struct DiPoApp: App {
             // Deliberate choices the user declared per pay cycle, so the engine
             // reports them instead of scoring them as mistakes.
             CycleIntent.self,
+            // Investment portfolio (Royal). Holdings + their buy/sell/income lots
+            // (see Investment.swift). Valued by PortfolioEngine; prices cached on
+            // the holding.
+            InvestmentHolding.self, InvestmentLot.self,
             // Pre-aggregated daily buckets (see RollupEngine). A derived cache of
             // the ledger — always rebuildable from TxRecord — that lets screens
             // read O(days) instead of scanning every transaction on each render.
