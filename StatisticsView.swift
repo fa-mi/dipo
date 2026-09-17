@@ -476,22 +476,61 @@ struct StatisticsView: View {
         return expenseSum(card.transactions.filter { cal.isDateInToday($0.date) })
     }
 
-    /// This calendar week's spend per day, Monday first — the Weekly tile's bars.
-    private var weekBars: [(label: String, value: Double)] {
-        guard let card = selectedCard else { return [] }
+    /// A Monday-first calendar, in the app's language.
+    private var weekCalendar: Calendar {
         var cal = Calendar.current
         cal.locale = LanguageManager.shared.currentLocale
-        cal.firstWeekday = 2                               // Monday
+        cal.firstWeekday = 2
+        return cal
+    }
+
+    struct WeekDay: Identifiable {
+        let id = UUID()
+        let date: Date
+        let short: String       // "M"
+        let full: String        // "Monday"
+        let amount: Double
+        let txCount: Int
+        var isToday: Bool { Calendar.current.isDateInToday(date) }
+        var isFuture: Bool { date > Date() }
+    }
+
+    /// This calendar week, day by day — the Weekly tile's bars and its page.
+    private var weekDays: [WeekDay] {
+        guard let card = selectedCard else { return [] }
+        let cal = weekCalendar
         guard let week = cal.dateInterval(of: .weekOfYear, for: Date()) else { return [] }
-        let symbols = cal.veryShortWeekdaySymbols          // Sunday-first
+        let short = cal.veryShortWeekdaySymbols            // Sunday-first
+        let full = cal.weekdaySymbols
         return (0..<7).compactMap { i in
             guard let day = cal.date(byAdding: .day, value: i, to: week.start) else { return nil }
-            let spend = expenseSum(card.transactions.filter { cal.isDate($0.date, inSameDayAs: day) })
-            return (symbols[(i + 1) % 7], spend)
+            let txs = card.transactions.filter {
+                cal.isDate($0.date, inSameDayAs: day) && $0.txSubtype != .transfer && $0.amount < 0
+            }
+            let idx = (i + 1) % 7
+            return WeekDay(date: day, short: short[idx], full: full[idx],
+                           amount: expenseSum(card.transactions.filter { cal.isDate($0.date, inSameDayAs: day) }),
+                           txCount: txs.count)
         }
     }
 
-    private var weekTotal: Double { weekBars.reduce(0) { $0 + $1.value } }
+    private var weekBars: [(label: String, value: Double)] {
+        weekDays.map { ($0.short, $0.amount) }
+    }
+
+    private var weekTotal: Double { weekDays.reduce(0) { $0 + $1.amount } }
+
+    /// Last week's total, for the Weekly page's comparison.
+    private var previousWeekTotal: Double {
+        guard let card = selectedCard else { return 0 }
+        let cal = weekCalendar
+        guard let thisWeek = cal.dateInterval(of: .weekOfYear, for: Date()),
+              let lastWeekDay = cal.date(byAdding: .day, value: -7, to: thisWeek.start),
+              let lastWeek = cal.dateInterval(of: .weekOfYear, for: lastWeekDay) else { return 0 }
+        return expenseSum(card.transactions.filter {
+            $0.date >= lastWeek.start && $0.date < lastWeek.end
+        })
+    }
 
     /// Expense per completed cycle/month — the Trends tile's bars.
     private var trendBars: [(label: String, value: Double)] {
@@ -1076,7 +1115,13 @@ struct StatisticsView: View {
             mainPage
                 .navigationTitle(loc("stats.title"))
                 .toolbar(.hidden, for: .navigationBar)
-                .navigationDestination(for: StatsRoute.self) { _ in fullAnalysis }
+                .navigationDestination(for: StatsRoute.self) { route in
+                    switch route {
+                    case .analysis: fullAnalysis
+                    case .weekly:   weeklyDetail
+                    case .trends:   trendsDetail
+                    }
+                }
         }
         .onAppear {
             statsVM.animateIn()
@@ -1397,19 +1442,21 @@ struct StatisticsView: View {
     private var dualCards: some View {
         HStack(spacing: 12) {
             miniStatCard(loc("stats.weekly"), loc("stats.this_week"), weekTotal,
-                         "chart.bar.fill", AppTheme.blue, weekBars, highlightLast: false)
+                         "chart.bar.fill", AppTheme.blue, weekBars,
+                         highlightLast: false, route: .weekly)
             miniStatCard(loc("stats.trends"), loc("stats.this_month"), trendTotal,
-                         "chart.line.uptrend.xyaxis", AppTheme.accent, trendBars, highlightLast: true)
+                         "chart.line.uptrend.xyaxis", AppTheme.accent, trendBars,
+                         highlightLast: true, route: .trends)
         }
     }
 
     private func miniStatCard(_ title: String, _ subtitle: String, _ value: Double,
                               _ icon: String, _ tint: Color,
                               _ bars: [(label: String, value: Double)],
-                              highlightLast: Bool) -> some View {
+                              highlightLast: Bool, route: StatsRoute) -> some View {
         Button {
             HapticManager.shared.tap()
-            appVM.statsPath.append(.analysis)
+            appVM.statsPath.append(route)
         } label: {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 6) {
@@ -1731,6 +1778,243 @@ struct StatisticsView: View {
         .buttonStyle(ScaleButtonStyle())
     }
 
+    // MARK: Weekly · its own page
+    //
+    // The tile answers "how much this week"; this page answers "which days, and
+    // is that unusual" — the same figures, opened up, day by day.
+
+    private var weekRangeLabel: String {
+        let cal = weekCalendar
+        guard let w = cal.dateInterval(of: .weekOfYear, for: Date()) else { return "" }
+        let df = DateFormatter()
+        df.locale = LanguageManager.shared.currentLocale
+        df.dateFormat = DateFormatter.dateFormat(fromTemplate: "dMMM", options: 0,
+                                                 locale: LanguageManager.shared.currentLocale)
+        let last = cal.safeDate(byAdding: .day, value: -1, to: w.end)
+        return "\(df.string(from: w.start)) – \(df.string(from: last))"
+    }
+
+    private var weeklyDetail: some View {
+        let elapsed = weekDays.filter { !$0.isFuture }
+        let change: Double? = previousWeekTotal > 0
+            ? (weekTotal - previousWeekTotal) / previousWeekTotal * 100 : nil
+        let avg = elapsed.isEmpty ? 0 : weekTotal / Double(elapsed.count)
+        let busiest = weekDays.max { $0.amount < $1.amount }
+        let quietCount = elapsed.filter { $0.amount <= 0 }.count
+
+        return ZStack {
+            AppTheme.bg.ignoresSafeArea()
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 14) {
+                    statHero(title: loc("stats.this_week"), subtitle: weekRangeLabel,
+                             value: weekTotal, tint: AppTheme.blue,
+                             change: change, changeCaption: loc("stats.vs_last_week"),
+                             previous: previousWeekTotal)
+
+                    chartCard(values: weekDays.map(\.amount), labels: weekDays.map(\.short),
+                              tint: AppTheme.blue, highlightLast: false)
+
+                    HStack(spacing: 10) {
+                        factTile(loc("stats.daily_avg"), money(avg), AppTheme.blue)
+                        factTile(loc("stats.busiest_day"),
+                                 (busiest?.amount ?? 0) > 0 ? (busiest?.full ?? "—") : "—",
+                                 AppTheme.orange)
+                        factTile(loc("stats.no_spend_days"), "\(quietCount)", AppTheme.accent)
+                    }
+
+                    VStack(spacing: 0) {
+                        ForEach(Array(weekDays.enumerated()), id: \.element.id) { i, d in
+                            HStack(spacing: 12) {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    HStack(spacing: 6) {
+                                        Text(d.full)
+                                            .font(.system(.subheadline, weight: d.isToday ? .bold : .medium))
+                                            .foregroundStyle(AppTheme.textPrimary)
+                                        if d.isToday {
+                                            Text(loc("common.today"))
+                                                .font(.system(.caption2, weight: .bold))
+                                                .foregroundStyle(AppTheme.blue)
+                                                .padding(.horizontal, 6).padding(.vertical, 2)
+                                                .background(AppTheme.blue.opacity(0.15), in: Capsule())
+                                        }
+                                    }
+                                    Text(d.isFuture ? loc("stats.day_ahead")
+                                                    : String(format: loc("stats.tx_count"), d.txCount))
+                                        .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
+                                }
+                                Spacer(minLength: 8)
+                                Text(d.isFuture ? "—" : money(d.amount))
+                                    .font(.system(.subheadline, weight: .bold))
+                                    .foregroundStyle(d.amount > 0 ? AppTheme.textPrimary
+                                                                  : AppTheme.textSecondary)
+                                    .lineLimit(1).minimumScaleFactor(0.6)
+                            }
+                            .padding(.vertical, 13)
+                            .opacity(d.isFuture ? 0.5 : 1)
+                            if i < weekDays.count - 1 {
+                                Rectangle().fill(AppTheme.cardMid.opacity(0.6)).frame(height: 1)
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.xl))
+
+                    Spacer(minLength: 100)
+                }
+                .padding(.horizontal, 22).padding(.top, 8)
+            }
+        }
+        .navigationTitle(loc("stats.weekly"))
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    // MARK: Trends · its own page
+
+    private var trendsDetail: some View {
+        let points = netWorthTrend
+        let done = points.filter { !$0.isRunning }
+        let avg = done.isEmpty ? 0 : done.reduce(0.0) { $0 + $1.expense } / Double(done.count)
+        let highest = done.max { $0.expense < $1.expense }
+        let lowest = done.min { $0.expense < $1.expense }
+        let prev = points.count >= 2 ? points[points.count - 2].expense : 0
+        let change: Double? = prev > 0 ? (trendTotal - prev) / prev * 100 : nil
+
+        return ZStack {
+            AppTheme.bg.ignoresSafeArea()
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 14) {
+                    statHero(title: points.last?.label ?? loc("stats.this_month"),
+                             subtitle: loc(payCycleDay != nil ? "stats.trend_by_cycle" : "stats.trend_by_month"),
+                             value: trendTotal, tint: AppTheme.accent,
+                             change: change, changeCaption: loc("stats.vs_prev_period"),
+                             previous: prev)
+
+                    chartCard(values: points.map(\.expense), labels: points.map { String($0.label.prefix(3)) },
+                              tint: AppTheme.accent, highlightLast: true)
+
+                    HStack(spacing: 10) {
+                        factTile(loc("stats.trend_avg"), money(avg), AppTheme.accent)
+                        factTile(loc("stats.trend_highest"), highest.map { money($0.expense) } ?? "—", AppTheme.red)
+                        factTile(loc("stats.trend_lowest"), lowest.map { money($0.expense) } ?? "—", AppTheme.blue)
+                    }
+
+                    VStack(spacing: 10) {
+                        ForEach(points.reversed()) { p in
+                            VStack(spacing: 10) {
+                                HStack {
+                                    HStack(spacing: 6) {
+                                        Text(p.label)
+                                            .font(.system(.subheadline, weight: .bold))
+                                            .foregroundStyle(AppTheme.textPrimary)
+                                        if p.isRunning {
+                                            Text(loc("stats.trend_running"))
+                                                .font(.system(.caption2, weight: .bold))
+                                                .foregroundStyle(AppTheme.orange)
+                                                .padding(.horizontal, 5).padding(.vertical, 2)
+                                                .background(AppTheme.orange.opacity(0.15), in: Capsule())
+                                        }
+                                    }
+                                    Spacer()
+                                    Text(String(format: loc("stats.tx_count"), p.txCount))
+                                        .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
+                                }
+                                HStack(spacing: 0) {
+                                    trendFigure(loc("stats.income"), p.income, AppTheme.accent)
+                                    metricDivider
+                                    trendFigure(loc("stats.expenses"), p.expense, AppTheme.red)
+                                    metricDivider
+                                    trendFigure(loc("stats.net"), p.net,
+                                                p.net >= 0 ? AppTheme.accent : AppTheme.red)
+                                }
+                            }
+                            .padding(14)
+                            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+                        }
+                    }
+
+                    Spacer(minLength: 100)
+                }
+                .padding(.horizontal, 22).padding(.top, 8)
+            }
+        }
+        .navigationTitle(loc("stats.trends"))
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func trendFigure(_ label: String, _ value: Double, _ tint: Color) -> some View {
+        VStack(spacing: 3) {
+            Text(label).font(.system(size: 10, weight: .medium)).foregroundStyle(AppTheme.textSecondary)
+            Text(money(abs(value))).font(.system(.footnote, weight: .bold)).foregroundStyle(tint)
+                .lineLimit(1).minimumScaleFactor(0.5)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    // MARK: Shared pieces for the two detail pages
+
+    private func statHero(title: String, subtitle: String, value: Double, tint: Color,
+                          change: Double?, changeCaption: String, previous: Double) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.system(.subheadline, weight: .semibold))
+                    .foregroundStyle(AppTheme.textPrimary)
+                Text(subtitle).font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
+            }
+            Text(money(value))
+                .font(.system(size: 36, weight: .bold))
+                .foregroundStyle(AppTheme.textPrimary)
+                .lineLimit(1).minimumScaleFactor(0.5)
+                .contentTransition(.numericText())
+            if let c = change {
+                HStack(spacing: 6) {
+                    HStack(spacing: 3) {
+                        Image(systemName: c >= 0 ? "arrow.up.right" : "arrow.down.right")
+                            .font(.system(.caption2, weight: .bold))
+                        Text(String(format: "%.0f%%", abs(c))).font(.system(.caption2, weight: .bold))
+                    }
+                    .foregroundStyle(c >= 0 ? AppTheme.red : AppTheme.accent)
+                    .padding(.horizontal, 8).padding(.vertical, 4)
+                    .background((c >= 0 ? AppTheme.red : AppTheme.accent).opacity(0.15), in: Capsule())
+                    Text("\(changeCaption) · \(money(previous))")
+                        .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
+                        .lineLimit(1).minimumScaleFactor(0.7)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(18)
+        .background {
+            RoundedRectangle(cornerRadius: AppRadius.xl).fill(AppTheme.cardDark)
+                .overlay {
+                    LinearGradient(colors: [tint.opacity(0.20), tint.opacity(0.05), .clear],
+                                   startPoint: .topTrailing, endPoint: .bottomLeading)
+                }
+                .clipShape(RoundedRectangle(cornerRadius: AppRadius.xl))
+        }
+    }
+
+    private func chartCard(values: [Double], labels: [String], tint: Color,
+                           highlightLast: Bool) -> some View {
+        MiniBars(values: values, labels: labels, tint: tint,
+                 highlightLast: highlightLast, height: 130, maxBarWidth: 34)
+            .frame(maxWidth: .infinity)
+            .padding(16)
+            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.xl))
+    }
+
+    private func factTile(_ label: String, _ value: String, _ tint: Color) -> some View {
+        VStack(spacing: 4) {
+            Text(value).font(.system(.subheadline, weight: .bold)).foregroundStyle(tint)
+                .lineLimit(1).minimumScaleFactor(0.5)
+            Text(label).font(.system(size: 10, weight: .medium))
+                .foregroundStyle(AppTheme.textSecondary)
+                .multilineTextAlignment(.center).lineLimit(2).minimumScaleFactor(0.8)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 14).padding(.horizontal, 6)
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+    }
+
     /// Every figure the summary is built from, for anyone who wants to check it:
     /// the balance reconciliation, the daily allowance and its audit, fixed
     /// payments priced in goal-time, the net trend and every pattern.
@@ -1845,6 +2129,9 @@ private struct MiniBars: View {
     let labels: [String]
     let tint: Color
     var highlightLast: Bool = false
+    var height: CGFloat = 36
+    /// Capped so a chart with only three bars draws bars, not lozenges.
+    var maxBarWidth: CGFloat = 22
 
     var body: some View {
         let peak = max(values.max() ?? 0, 1)
@@ -1854,14 +2141,15 @@ private struct MiniBars: View {
         VStack(spacing: 6) {
             HStack(alignment: .bottom, spacing: 4) {
                 ForEach(Array(values.enumerated()), id: \.offset) { i, v in
-                    Capsule()
+                    RoundedRectangle(cornerRadius: 4)
                         .fill(i == hotIndex ? tint : tint.opacity(0.28))
-                        .frame(maxWidth: .infinity)
                         // A floor of 3pt so an empty day still reads as a day.
-                        .frame(height: max(CGFloat(v / peak) * 36, 3))
+                        .frame(height: max(CGFloat(v / peak) * height, 3))
+                        .frame(maxWidth: maxBarWidth)
+                        .frame(maxWidth: .infinity)
                 }
             }
-            .frame(height: 36, alignment: .bottom)
+            .frame(height: height, alignment: .bottom)
             HStack(spacing: 4) {
                 ForEach(Array(labels.enumerated()), id: \.offset) { i, l in
                     Text(l)

@@ -198,4 +198,10 @@ enum PlanRoute: Hashable {
     // InvestmentHolding is a PersistentModel, so it's Hashable for the path.
     case holding(InvestmentHolding)
 }
-enum StatsRoute: Hashable { case analysis }
+enum StatsRoute: Hashable {
+    case analysis
+    /// The Weekly tile's own page — this week, day by day.
+    case weekly
+    /// The Trends tile's own page — cycle by cycle.
+    case trends
+}
