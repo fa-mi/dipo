@@ -190,5 +190,5 @@ enum AppTab: Int, CaseIterable {
 
 enum HomeRoute: Hashable { case profile }
 enum WalletRoute: Hashable { case obligations }
-enum PlanRoute: Hashable { case budget, salary, bills, goals }
+enum PlanRoute: Hashable { case budget, salary, bills, goals, investments }
 enum StatsRoute: Hashable { case analysis }

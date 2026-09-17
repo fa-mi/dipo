@@ -86,9 +86,10 @@ enum InvestmentType: String, CaseIterable, Codable {
     var priceIsFixed: Bool { self == .deposit }
 }
 
-enum InvestmentLotKind: String, CaseIterable, Codable {
+enum InvestmentLotKind: String, CaseIterable, Codable, Identifiable {
     case buy, sell, dividend, coupon, fee
 
+    var id: String { rawValue }
     var isIncome: Bool { self == .dividend || self == .coupon }
     var isCash: Bool { self == .dividend || self == .coupon || self == .fee }
 }
