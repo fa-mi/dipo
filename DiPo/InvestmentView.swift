@@ -39,8 +39,19 @@ struct InvestmentView: View {
     @Query(sort: \InvestmentHolding.sortOrder) private var holdings: [InvestmentHolding]
     @State private var showAdd = false
     @State private var appeared = false
+    @State private var didAutoRefresh = false
+    @State private var refreshing = false
 
     private var pref: String { CurrencyManager.shared.preferredCurrency }
+    private var hasAutoPriced: Bool {
+        holdings.contains { $0.type.supportsAutoPrice && !$0.manualPrice && !$0.symbol.isEmpty }
+    }
+
+    private func doRefresh() async {
+        refreshing = true
+        await PriceService.refresh(holdings, context: context)
+        refreshing = false
+    }
 
     private var totals: PortfolioTotals {
         let cm = CurrencyManager.shared
@@ -76,9 +87,16 @@ struct InvestmentView: View {
                     .opacity(appeared ? 1 : 0)
                     .offset(y: appeared ? 0 : 16)
                 }
+                .refreshable { await doRefresh() }
             }
             .featureBar(pushed: pushed)
             .onAppear { withAnimation(.spring(response: 0.55, dampingFraction: 0.85)) { appeared = true } }
+            // Pull the latest crypto/stock prices once when the menu opens.
+            .task {
+                guard !didAutoRefresh else { return }
+                didAutoRefresh = true
+                await doRefresh()
+            }
             .sheet(isPresented: $showAdd) {
                 AddHoldingSheet(nextOrder: (holdings.map(\.sortOrder).max() ?? -1) + 1)
                     .presentationDetents([.large]).presentationDragIndicator(.visible)
@@ -99,6 +117,23 @@ struct InvestmentView: View {
                     .lineLimit(2)
             }
             Spacer(minLength: 12)
+            if hasAutoPriced {
+                Button {
+                    HapticManager.shared.tap()
+                    Task { await doRefresh() }
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(.body, weight: .bold))
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .frame(width: 40, height: 40)
+                        .background(AppTheme.cardDark, in: Circle())
+                        .rotationEffect(.degrees(refreshing ? 360 : 0))
+                        .animation(refreshing ? .linear(duration: 0.8).repeatForever(autoreverses: false) : .default,
+                                   value: refreshing)
+                }
+                .buttonStyle(ScaleButtonStyle())
+                .disabled(refreshing)
+            }
             if !holdings.isEmpty {
                 Button {
                     HapticManager.shared.tap(); showAdd = true

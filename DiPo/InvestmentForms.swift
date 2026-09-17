@@ -14,6 +14,62 @@ extension InvestmentType {
     var isAmountBased: Bool { self == .deposit || self == .bond }
 }
 
+// MARK: - Card top-up
+//
+// Investments are tracked standalone, but a purchase can optionally be funded
+// from a card — the money really left that account. It's recorded as a TRANSFER
+// (not a spend): it moved into an asset, so it must not count against the budget.
+// The lot keeps the transaction's id so deleting the lot reverses the outflow.
+
+enum InvestmentCash {
+    @MainActor @discardableResult
+    static func recordOutflow(holding: InvestmentHolding, cost: Double, card: BankCard, date: Date) -> String {
+        let amt = CurrencyManager.shared.convert(cost, from: holding.currency, to: card.resolvedCurrency)
+        let tx = TxRecord(name: holding.name, date: date, amount: -abs(amt),
+                          type: "tx.type.purchase", icon: holding.type.icon, iconBgHex: "#1DB87A",
+                          category: .other, currency: card.resolvedCurrency, subtype: .transfer)
+        card.transactions.append(tx)
+        return tx.id.uuidString
+    }
+
+    @MainActor
+    static func reverse(_ txID: String, context: ModelContext) {
+        guard !txID.isEmpty, let uuid = UUID(uuidString: txID) else { return }
+        let d = FetchDescriptor<TxRecord>(predicate: #Predicate { $0.id == uuid })
+        if let tx = try? context.fetch(d).first { context.delete(tx) }
+    }
+}
+
+/// A row of card chips (plus "don't deduct") for funding a purchase.
+struct CardFundPicker: View {
+    let cards: [BankCard]
+    @Binding var selectedID: String?
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(loc("invest.fund_from")).font(.system(.caption, weight: .medium))
+                .foregroundStyle(AppTheme.textSecondary)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    chip(loc("invest.fund_none"), nil)
+                    ForEach(cards, id: \.id) { c in chip(c.pickerLabel, c.id.uuidString) }
+                }
+            }
+        }
+    }
+    private func chip(_ title: String, _ id: String?) -> some View {
+        let on = selectedID == id
+        return Button {
+            HapticManager.shared.tap(); selectedID = id
+        } label: {
+            Text(title).font(.system(.caption, weight: .semibold))
+                .foregroundStyle(on ? AppTheme.onVividFill : AppTheme.textSecondary)
+                .padding(.horizontal, 12).padding(.vertical, 8)
+                .background((on ? AppTheme.accent : AppTheme.cardDark), in: Capsule())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
 /// A labelled numeric input styled like the rest of the app's forms.
 private struct MoneyField: View {
     let label: String
@@ -71,8 +127,10 @@ private func parseNumber(_ s: String) -> Double {
 struct AddHoldingSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
+    @Query(sort: \BankCard.sortOrder) private var cards: [BankCard]
     let nextOrder: Int
 
+    @State private var fundCardID: String? = nil
     @State private var type: InvestmentType = .gold
     @State private var name = ""
     @State private var symbol = ""
@@ -119,6 +177,10 @@ struct AddHoldingSheet: View {
                             MoneyField(label: loc("invest.field.fee"), text: $fee)
                             MoneyField(label: loc("invest.field.current"), placeholder: buyPrice.isEmpty ? "0" : buyPrice, text: $current)
                         }
+                    }
+
+                    if !cards.isEmpty {
+                        CardFundPicker(cards: cards, selectedID: $fundCardID)
                     }
 
                     DatePicker(loc("invest.field.date"), selection: $date, in: ...Date(), displayedComponents: .date)
@@ -199,6 +261,11 @@ struct AddHoldingSheet: View {
         context.insert(h)
         let lot = InvestmentLot(kind: .buy, date: date, units: holdingUnits,
                                 pricePerUnit: price, fee: parseNumber(fee))
+        // Optionally take the cost out of a card, as a transfer.
+        if let id = fundCardID, let card = cards.first(where: { $0.id.uuidString == id }) {
+            let cost = holdingUnits * price + parseNumber(fee)
+            lot.linkedCardTxID = InvestmentCash.recordOutflow(holding: h, cost: cost, card: card, date: date)
+        }
         h.lots.append(lot)
         try? context.save()
         HapticManager.shared.success()
@@ -211,9 +278,11 @@ struct AddHoldingSheet: View {
 struct AddLotSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
+    @Query(sort: \BankCard.sortOrder) private var cards: [BankCard]
     @Bindable var holding: InvestmentHolding
     let initialKind: InvestmentLotKind
 
+    @State private var fundCardID: String? = nil
     @State private var kind: InvestmentLotKind = .buy
     @State private var units = ""
     @State private var price = ""
@@ -256,6 +325,9 @@ struct AddLotSheet: View {
                             MoneyField(label: loc("invest.field.price"), text: $price)
                         }
                         MoneyField(label: loc("invest.field.fee"), text: $fee)
+                    }
+                    if kind == .buy && !cards.isEmpty {
+                        CardFundPicker(cards: cards, selectedID: $fundCardID)
                     }
                     DatePicker(loc("invest.field.date"), selection: $date, in: ...Date(), displayedComponents: .date)
                         .font(.system(.subheadline, weight: .medium)).tint(AppTheme.accent)
@@ -310,6 +382,13 @@ struct AddLotSheet: View {
         } else {
             lot = InvestmentLot(kind: kind, date: date, units: parseNumber(units),
                                 pricePerUnit: parseNumber(price), fee: parseNumber(fee), note: note)
+        }
+        // A buy can be funded from a card (transfer out).
+        if kind == .buy, let id = fundCardID, let card = cards.first(where: { $0.id.uuidString == id }) {
+            let cost = holding.type.isAmountBased
+                ? parseNumber(amount)
+                : parseNumber(units) * parseNumber(price) + parseNumber(fee)
+            lot.linkedCardTxID = InvestmentCash.recordOutflow(holding: holding, cost: cost, card: card, date: date)
         }
         holding.lots.append(lot)
         try? context.save()

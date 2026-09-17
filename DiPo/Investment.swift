@@ -60,13 +60,14 @@ enum InvestmentType: String, CaseIterable, Codable {
         }
     }
 
-    /// Whether the price CAN be fetched (the app still lets the user override).
-    /// Reksadana NAB and bond prices have no reliable free feed, so those are
-    /// user-maintained by default; deposits never move.
+    /// Whether the price can be fetched automatically. Only the instruments with
+    /// a reliable free feed the app can reach directly: crypto (CoinGecko) and
+    /// IDX stocks (Yahoo, delayed). Gold (Antam), reksadana NAB and bond prices
+    /// have no such feed, so they're user-maintained; deposits never move.
     var supportsAutoPrice: Bool {
         switch self {
-        case .gold, .stock, .crypto: return true
-        case .mutualFund, .bond, .deposit: return false
+        case .stock, .crypto: return true
+        case .gold, .mutualFund, .bond, .deposit: return false
         }
     }
 

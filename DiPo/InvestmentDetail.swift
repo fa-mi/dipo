@@ -44,6 +44,7 @@ struct HoldingDetailView: View {
             }
             .confirmationDialog(loc("invest.delete_holding"), isPresented: $confirmDeleteHolding, titleVisibility: .visible) {
                 Button(loc("invest.delete_holding"), role: .destructive) {
+                    for lot in holding.lots { InvestmentCash.reverse(lot.linkedCardTxID, context: context) }
                     context.delete(holding); try? context.save()
                     HapticManager.shared.success(); dismiss()
                 }
@@ -178,6 +179,7 @@ struct HoldingDetailView: View {
                         LotRow(lot: lot, holding: holding)
                             .contextMenu {
                                 Button(role: .destructive) {
+                                    InvestmentCash.reverse(lot.linkedCardTxID, context: context)
                                     context.delete(lot); try? context.save(); HapticManager.shared.tap()
                                 } label: { Label(loc("invest.delete_lot"), systemImage: "trash") }
                             }
