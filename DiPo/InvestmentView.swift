@@ -50,20 +50,27 @@ struct InvestmentView: View {
     private func doRefresh(announce: Bool = false) async {
         guard !refreshing else { return }
         refreshing = true
-        let updated = await PriceService.refresh(holdings, context: context)
+        let r = await PriceService.refresh(holdings, context: context)
         // Let the spin be seen even when the feed answers instantly, so a refresh
         // reads as something that happened rather than a dead tap.
         try? await Task.sleep(nanoseconds: 450_000_000)
         refreshing = false
         guard announce else { return }
         HapticManager.shared.success()
-        ActionFeedbackCenter.shared.show(
-            icon: "checkmark.circle.fill",
-            tint: AppTheme.accent,
-            title: loc("invest.refresh_done"),
-            detail: updated > 0
-                ? String(format: loc("invest.refresh_count"), updated)
-                : loc("invest.refresh_uptodate"))
+        // Say what actually happened: a fetch that returns the same last price
+        // (market closed, no trades) is NOT an update, and claiming otherwise
+        // leaves the user hunting for a number that never moved.
+        if r.changed > 0 {
+            ActionFeedbackCenter.shared.show(
+                icon: "checkmark.circle.fill", tint: AppTheme.accent,
+                title: loc("invest.refresh_done"),
+                detail: String(format: loc("invest.refresh_count"), r.changed))
+        } else {
+            ActionFeedbackCenter.shared.show(
+                icon: "clock.arrow.circlepath", tint: AppTheme.textSecondary,
+                title: loc("invest.refresh_nochange"),
+                detail: r.checked > 0 ? loc("invest.refresh_uptodate") : loc("invest.refresh_none"))
+        }
     }
 
     private var totals: PortfolioTotals {

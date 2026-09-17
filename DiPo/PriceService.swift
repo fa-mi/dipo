@@ -20,24 +20,35 @@ enum PriceService {
 
     struct Quote { let price: Double; let prevClose: Double }
 
-    /// Refresh every auto-priced holding that has a symbol. Returns how many were
-    /// actually updated, so the UI can say "nothing to refresh" honestly.
+    /// What a refresh actually did. `checked` counts holdings we got a quote for;
+    /// `changed` counts the ones whose price genuinely moved. They differ often —
+    /// outside market hours a successful fetch returns the same last price — and
+    /// reporting only `checked` made the UI claim an update that never happened.
+    struct Outcome {
+        var checked = 0
+        var changed = 0
+    }
+
+    /// Refresh every auto-priced holding that has a symbol.
     @discardableResult
-    static func refresh(_ holdings: [InvestmentHolding], context: ModelContext) async -> Int {
-        var updated = 0
+    static func refresh(_ holdings: [InvestmentHolding], context: ModelContext) async -> Outcome {
+        var out = Outcome()
         for h in holdings where h.type.supportsAutoPrice && !h.manualPrice
                               && !h.symbol.trimmingCharacters(in: .whitespaces).isEmpty {
             guard let q = await quote(for: h) else { continue }
+            out.checked += 1
+            // Compare before overwriting — a hundredth of a rupiah is noise.
+            if abs(q.price - h.lastPrice) > 0.005 { out.changed += 1 }
             // Keep the reported previous close when the feed gives one, else fall
             // back to the last price we held so "today" still means something.
             h.prevClose = q.prevClose > 0 ? q.prevClose : (h.lastPrice > 0 ? h.lastPrice : q.price)
             h.lastPrice = q.price
             h.pushPrice(q.price)
             h.priceUpdatedAt = .now
-            updated += 1
         }
-        if updated > 0 { try? context.save() }
-        return updated
+        // Even an unchanged price moves `priceUpdatedAt`, so save on any check.
+        if out.checked > 0 { try? context.save() }
+        return out
     }
 
     private static func quote(for h: InvestmentHolding) async -> Quote? {

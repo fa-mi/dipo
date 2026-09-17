@@ -208,6 +208,12 @@ struct HoldingDetailView: View {
             }
             rowDivider
             detailRow(loc("invest.invested"), investMoney(s.costBasis, cur))
+            // Proof the refresh ran even when the price itself didn't move.
+            if let t = holding.priceUpdatedAt {
+                rowDivider
+                detailRow(loc("invest.last_updated"),
+                          t.formatted(date: .abbreviated, time: .shortened))
+            }
         }
         .padding(.vertical, 4)
         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
@@ -331,6 +337,9 @@ private struct LotRow: View {
         // Vertical only — the enclosing card supplies the horizontal inset, so a
         // swipe slides the row cleanly under the card edge (same as Home's list).
         .padding(.vertical, 12)
+        // The swipe action (44pt circle + its "Delete" caption) is taller than the
+        // text; without this floor it grew the row and spilled over the dividers.
+        .frame(minHeight: 76)
     }
 
     private var tint: Color {
