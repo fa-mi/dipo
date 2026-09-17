@@ -47,10 +47,23 @@ struct InvestmentView: View {
         holdings.contains { $0.type.supportsAutoPrice && !$0.manualPrice && !$0.symbol.isEmpty }
     }
 
-    private func doRefresh() async {
+    private func doRefresh(announce: Bool = false) async {
+        guard !refreshing else { return }
         refreshing = true
-        await PriceService.refresh(holdings, context: context)
+        let updated = await PriceService.refresh(holdings, context: context)
+        // Let the spin be seen even when the feed answers instantly, so a refresh
+        // reads as something that happened rather than a dead tap.
+        try? await Task.sleep(nanoseconds: 450_000_000)
         refreshing = false
+        guard announce else { return }
+        HapticManager.shared.success()
+        ActionFeedbackCenter.shared.show(
+            icon: "checkmark.circle.fill",
+            tint: AppTheme.accent,
+            title: loc("invest.refresh_done"),
+            detail: updated > 0
+                ? String(format: loc("invest.refresh_count"), updated)
+                : loc("invest.refresh_uptodate"))
     }
 
     private var totals: PortfolioTotals {
@@ -89,7 +102,7 @@ struct InvestmentView: View {
                     .opacity(appeared ? 1 : 0)
                     .offset(y: appeared ? 0 : 16)
                 }
-                .refreshable { await doRefresh() }
+                .refreshable { await doRefresh(announce: true) }
             }
             .featureBar(pushed: pushed)
             .onAppear { withAnimation(.spring(response: 0.55, dampingFraction: 0.85)) { appeared = true } }
@@ -122,7 +135,7 @@ struct InvestmentView: View {
             if hasAutoPriced {
                 Button {
                     HapticManager.shared.tap()
-                    Task { await doRefresh() }
+                    Task { await doRefresh(announce: true) }
                 } label: {
                     Image(systemName: "arrow.clockwise")
                         .font(.system(.body, weight: .bold))

@@ -3,14 +3,27 @@ import SwiftData
 
 // MARK: - Holding detail
 
+/// The one sheet the detail screen presents, routed through a single binding so
+/// stacked .sheet modifiers can't clobber one another.
+private enum DetailSheet: Identifiable {
+    case addLot(InvestmentLotKind)
+    case editLot(InvestmentLot)
+    case price
+    var id: String {
+        switch self {
+        case .addLot(let k):  return "add-\(k.rawValue)"
+        case .editLot(let l): return "edit-\(l.id.uuidString)"
+        case .price:          return "price"
+        }
+    }
+}
+
 struct HoldingDetailView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
     @Bindable var holding: InvestmentHolding
 
-    @State private var addKind: InvestmentLotKind? = nil
-    @State private var editLot: InvestmentLot? = nil
-    @State private var showPrice = false
+    @State private var sheet: DetailSheet? = nil
     @State private var confirmDeleteHolding = false
 
     private var s: HoldingStats { holding.stats() }
@@ -34,29 +47,31 @@ struct HoldingDetailView: View {
                 }
             }
             .featureBar(pushed: pushed)
-            .sheet(item: $addKind) { kind in
-                AddLotSheet(holding: holding, initialKind: kind)
-                    .presentationDetents([.large]).presentationDragIndicator(.visible)
-                    .presentationBackground(AppTheme.bg).preferredColorScheme(appColorScheme())
-            }
-            .sheet(item: $editLot) { lot in
-                EditLotSheet(holding: holding, lot: lot)
-                    .presentationDetents([.large]).presentationDragIndicator(.visible)
-                    .presentationBackground(AppTheme.bg).preferredColorScheme(appColorScheme())
-            }
-            .sheet(isPresented: $showPrice) {
-                UpdatePriceSheet(holding: holding)
-                    .presentationDetents([.height(320)]).presentationDragIndicator(.visible)
-                    .presentationBackground(AppTheme.bg).preferredColorScheme(appColorScheme())
-            }
-            .confirmationDialog(loc("invest.delete_holding"), isPresented: $confirmDeleteHolding, titleVisibility: .visible) {
-                Button(loc("invest.delete_holding"), role: .destructive) {
-                    for lot in holding.lots { InvestmentCash.reverse(lot.linkedCardTxID, context: context) }
-                    context.delete(holding); try? context.save()
-                    HapticManager.shared.success(); dismiss()
+            // One sheet, enum-driven. Stacking several .sheet modifiers on one
+            // view is a known SwiftUI footgun (later ones may silently fail to
+            // present) — routing all of them through a single binding is reliable.
+            .sheet(item: $sheet) { which in
+                switch which {
+                case .addLot(let kind):
+                    AddLotSheet(holding: holding, initialKind: kind)
+                        .presentationDetents([.large]).presentationDragIndicator(.visible)
+                        .presentationBackground(AppTheme.bg).preferredColorScheme(appColorScheme())
+                case .editLot(let lot):
+                    EditLotSheet(holding: holding, lot: lot)
+                        .presentationDetents([.large]).presentationDragIndicator(.visible)
+                        .presentationBackground(AppTheme.bg).preferredColorScheme(appColorScheme())
+                case .price:
+                    UpdatePriceSheet(holding: holding)
+                        .presentationDetents([.height(320)]).presentationDragIndicator(.visible)
+                        .presentationBackground(AppTheme.bg).preferredColorScheme(appColorScheme())
                 }
-                Button(loc("common.cancel"), role: .cancel) {}
             }
+            .confirmSheet(isPresented: $confirmDeleteHolding,
+                          icon: "trash.fill", tone: .danger,
+                          title: loc("invest.delete_holding"),
+                          message: loc("invest.delete_holding_msg"),
+                          confirmLabel: loc("invest.delete_holding"),
+                          onConfirm: deleteHolding)
         }
     }
 
@@ -181,14 +196,26 @@ struct HoldingDetailView: View {
 
     private var actionRow: some View {
         HStack(spacing: 10) {
-            actionButton(loc("invest.buy_more"), "plus", AppTheme.accent) { addKind = .buy }
+            actionButton(loc("invest.buy_more"), "plus", AppTheme.accent) { sheet = .addLot(.buy) }
             if s.unitsHeld > 0 {
-                actionButton(loc("invest.sell"), "arrow.up.right", AppTheme.blue) { addKind = .sell }
+                actionButton(loc("invest.sell"), "arrow.up.right", AppTheme.blue) { sheet = .addLot(.sell) }
             }
             if !holding.type.priceIsFixed {
-                actionButton(loc("invest.update_price"), "arrow.triangle.2.circlepath", AppTheme.textSecondary) { showPrice = true }
+                actionButton(loc("invest.update_price"), "arrow.triangle.2.circlepath", AppTheme.textSecondary) { sheet = .price }
             }
         }
+    }
+
+    private func deleteLot(_ lot: InvestmentLot) {
+        InvestmentCash.reverse(lot.linkedCardTxID, context: context)
+        context.delete(lot); try? context.save()
+        HapticManager.shared.success()
+    }
+
+    private func deleteHolding() {
+        for lot in holding.lots { InvestmentCash.reverse(lot.linkedCardTxID, context: context) }
+        context.delete(holding); try? context.save()
+        HapticManager.shared.success(); dismiss()
     }
 
     private func actionButton(_ title: String, _ icon: String, _ tint: Color, _ action: @escaping () -> Void) -> some View {
@@ -214,18 +241,21 @@ struct HoldingDetailView: View {
                 VStack(spacing: 0) {
                     let sorted = holding.lots.sorted { $0.date > $1.date }
                     ForEach(Array(sorted.enumerated()), id: \.element.id) { i, lot in
-                        Button { HapticManager.shared.tap(); editLot = lot } label: {
+                        // Tap a row to edit it; swipe left to delete. Long-press
+                        // still offers Edit for discoverability.
+                        SwipeToDeleteRow(
+                            onTap: { HapticManager.shared.tap(); sheet = .editLot(lot) },
+                            onDelete: { deleteLot(lot) }
+                        ) {
                             LotRow(lot: lot, holding: holding)
                         }
-                        .buttonStyle(ScaleButtonStyle())
                         .contextMenu {
-                            Button { editLot = lot } label: {
+                            Button { sheet = .editLot(lot) } label: {
                                 Label(loc("invest.edit_lot"), systemImage: "pencil")
                             }
-                            Button(role: .destructive) {
-                                InvestmentCash.reverse(lot.linkedCardTxID, context: context)
-                                context.delete(lot); try? context.save(); HapticManager.shared.tap()
-                            } label: { Label(loc("invest.delete_lot"), systemImage: "trash") }
+                            Button(role: .destructive) { deleteLot(lot) } label: {
+                                Label(loc("invest.delete_lot"), systemImage: "trash")
+                            }
                         }
                         if i < sorted.count - 1 {
                             Rectangle().fill(AppTheme.cardMid.opacity(0.7)).frame(height: 1).padding(.leading, 52)
@@ -233,6 +263,7 @@ struct HoldingDetailView: View {
                     }
                 }
                 .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+                .clipShape(RoundedRectangle(cornerRadius: AppRadius.lg))
             }
         }
     }
@@ -253,6 +284,9 @@ private struct LotRow: View {
             Spacer(minLength: 8)
             Text(amountText).font(.system(.subheadline, weight: .bold)).foregroundStyle(tint)
                 .lineLimit(1).minimumScaleFactor(0.7)
+            // Signals the row is tappable (opens Edit).
+            Image(systemName: "chevron.right").font(.system(.caption2, weight: .semibold))
+                .foregroundStyle(AppTheme.textSecondary.opacity(0.5))
         }
         .padding(12)
     }
