@@ -172,11 +172,11 @@ struct PortfolioOverviewCard: View {
             HStack(spacing: 10) {
                 figure(loc("invest.pl"),
                        investSigned(totals.unrealizedPL, currency) + "  " + investPct(totals.unrealizedPct),
-                       investPLColor(totals.unrealizedPL))
+                       investPLColor(totals.unrealizedPL), arrowUp: totals.unrealizedPL >= 0)
                 Rectangle().fill(AppTheme.cardMid).frame(width: 1, height: 34)
                 figure(loc("invest.today"),
                        investSigned(totals.todayChange, currency),
-                       investPLColor(totals.todayChange))
+                       investPLColor(totals.todayChange), arrowUp: totals.todayChange >= 0)
             }
 
             HStack(spacing: 14) {
@@ -198,11 +198,17 @@ struct PortfolioOverviewCard: View {
         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
     }
 
-    private func figure(_ label: String, _ value: String, _ tint: Color) -> some View {
+    private func figure(_ label: String, _ value: String, _ tint: Color, arrowUp: Bool? = nil) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(label).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
-            Text(value).font(.system(.subheadline, weight: .bold)).foregroundStyle(tint)
-                .contentTransition(.numericText()).minimumScaleFactor(0.7).lineLimit(1)
+            HStack(spacing: 3) {
+                if let arrowUp {
+                    Image(systemName: arrowUp ? "arrow.up.right" : "arrow.down.right")
+                        .font(.system(.caption2, weight: .bold)).foregroundStyle(tint)
+                }
+                Text(value).font(.system(.subheadline, weight: .bold)).foregroundStyle(tint)
+                    .contentTransition(.numericText()).minimumScaleFactor(0.7).lineLimit(1)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -292,9 +298,14 @@ struct HoldingRow: View {
                 Text(investMoney(convertedValue(s), displayCurrency))
                     .font(.system(.subheadline, weight: .bold))
                     .foregroundStyle(AppTheme.textPrimary).lineLimit(1).minimumScaleFactor(0.7)
-                Text(investPct(s.unrealizedPct))
-                    .font(.system(.caption2, weight: .semibold))
-                    .foregroundStyle(investPLColor(s.unrealizedPL))
+                HStack(spacing: 3) {
+                    Image(systemName: s.unrealizedPL >= 0 ? "arrow.up.right" : "arrow.down.right")
+                        .font(.system(.caption2, weight: .bold))
+                    Text(investPct(s.unrealizedPct)).font(.system(.caption2, weight: .bold))
+                }
+                .foregroundStyle(investPLColor(s.unrealizedPL))
+                .padding(.horizontal, 7).padding(.vertical, 3)
+                .background(investPLColor(s.unrealizedPL).opacity(0.14), in: Capsule())
             }
         }
         .padding(12)

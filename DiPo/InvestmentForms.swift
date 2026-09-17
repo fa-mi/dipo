@@ -40,50 +40,120 @@ enum InvestmentCash {
     }
 }
 
-/// A row of card chips (plus "don't deduct") for funding a purchase.
+/// A row of card chips (plus "don't deduct") for funding a purchase. Each card
+/// wears its own bank gradient so it reads like the card it is, not a word.
 struct CardFundPicker: View {
     let cards: [BankCard]
     @Binding var selectedID: String?
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
             Text(loc("invest.fund_from")).font(.system(.caption, weight: .medium))
                 .foregroundStyle(AppTheme.textSecondary)
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    chip(loc("invest.fund_none"), nil)
-                    ForEach(cards, id: \.id) { c in chip(c.pickerLabel, c.id.uuidString) }
+                HStack(spacing: 10) {
+                    noneChip
+                    ForEach(cards, id: \.id) { cardChip($0) }
                 }
+                .padding(.vertical, 3)   // breathing room for the selected ring
             }
         }
     }
-    private func chip(_ title: String, _ id: String?) -> some View {
-        let on = selectedID == id
-        return Button {
-            HapticManager.shared.tap(); selectedID = id
-        } label: {
-            Text(title).font(.system(.caption, weight: .semibold))
-                .foregroundStyle(on ? AppTheme.onVividFill : AppTheme.textSecondary)
-                .padding(.horizontal, 12).padding(.vertical, 8)
-                .background((on ? AppTheme.accent : AppTheme.cardDark), in: Capsule())
+
+    private var noneChip: some View {
+        let on = selectedID == nil
+        return Button { HapticManager.shared.tap(); selectedID = nil } label: {
+            HStack(spacing: 9) {
+                Image(systemName: "nosign")
+                    .font(.system(.footnote, weight: .semibold))
+                    .foregroundStyle(on ? AppTheme.accent : AppTheme.textSecondary)
+                    .frame(width: 34, height: 24)
+                    .background(AppTheme.cardMid.opacity(0.45), in: RoundedRectangle(cornerRadius: 6))
+                Text(loc("invest.fund_none"))
+                    .font(.system(.caption, weight: .semibold))
+                    .foregroundStyle(on ? AppTheme.textPrimary : AppTheme.textSecondary)
+            }
+            .padding(.horizontal, 12).padding(.vertical, 9)
+            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+            .overlay(RoundedRectangle(cornerRadius: AppRadius.md)
+                .stroke(on ? AppTheme.accent : Color.clear, lineWidth: 2))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func cardChip(_ c: BankCard) -> some View {
+        let on = selectedID == c.id.uuidString
+        let g = BankIssuer.resolveGradient(issuerID: c.issuerID, cardNumber: c.cardNumber)
+        let name = c.isDigitalWallet && !c.walletProvider.isEmpty ? c.walletProvider
+                 : (c.holderName.isEmpty ? loc("card.untitled") : c.holderName)
+        return Button { HapticManager.shared.tap(); selectedID = c.id.uuidString } label: {
+            HStack(spacing: 9) {
+                // A mini card face — the bank's gradient with a chip glint.
+                RoundedRectangle(cornerRadius: 5)
+                    .fill(LinearGradient(colors: [Color(hex: g.start), Color(hex: g.end)],
+                                         startPoint: .topLeading, endPoint: .bottomTrailing))
+                    .frame(width: 34, height: 24)
+                    .overlay(alignment: .topLeading) {
+                        RoundedRectangle(cornerRadius: 1.5).fill(.white.opacity(0.55))
+                            .frame(width: 7, height: 5).padding(4)
+                    }
+                    .overlay(RoundedRectangle(cornerRadius: 5).stroke(.white.opacity(0.15), lineWidth: 0.5))
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(name).font(.system(.caption, weight: .semibold))
+                        .foregroundStyle(AppTheme.textPrimary).lineLimit(1)
+                    if !c.last4.isEmpty {
+                        Text("•• \(c.last4)").font(.system(.caption2))
+                            .foregroundStyle(AppTheme.textSecondary)
+                    }
+                }
+            }
+            .padding(.horizontal, 12).padding(.vertical, 8)
+            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+            .overlay(RoundedRectangle(cornerRadius: AppRadius.md)
+                .stroke(on ? AppTheme.accent : Color.clear, lineWidth: 2))
+            .overlay(alignment: .topTrailing) {
+                if on {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(.caption))
+                        .foregroundStyle(AppTheme.accent)
+                        .background(Circle().fill(AppTheme.bg).padding(-1))
+                        .offset(x: 6, y: -6)
+                }
+            }
         }
         .buttonStyle(.plain)
     }
 }
 
-/// A labelled numeric input styled like the rest of the app's forms.
+/// A labelled numeric input styled like the rest of the app's forms, with an
+/// optional currency prefix ("Rp") or unit suffix ("gr") sitting inside the box.
 private struct MoneyField: View {
     let label: String
     var placeholder: String = "0"
+    var prefix: String? = nil
+    var suffix: String? = nil
     @Binding var text: String
+    @FocusState private var focused: Bool
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(label).font(.system(.caption, weight: .medium)).foregroundStyle(AppTheme.textSecondary)
-            TextField(placeholder, text: $text)
-                .keyboardType(.decimalPad)
-                .font(.system(.body, weight: .semibold))
-                .foregroundStyle(AppTheme.textPrimary)
-                .padding(.horizontal, 14).padding(.vertical, 12)
-                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+            HStack(spacing: 6) {
+                if let prefix {
+                    Text(prefix).font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.textSecondary)
+                }
+                TextField(placeholder, text: $text)
+                    .keyboardType(.decimalPad)
+                    .font(.system(.body, weight: .semibold))
+                    .foregroundStyle(AppTheme.textPrimary)
+                    .focused($focused)
+                if let suffix {
+                    Text(suffix).font(.system(.caption, weight: .semibold)).foregroundStyle(AppTheme.textSecondary)
+                }
+            }
+            .padding(.horizontal, 14).padding(.vertical, 12)
+            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+            .overlay(RoundedRectangle(cornerRadius: AppRadius.md)
+                .stroke(focused ? AppTheme.accent.opacity(0.6) : Color.clear, lineWidth: 1.5))
         }
     }
 }
@@ -143,6 +213,7 @@ struct AddHoldingSheet: View {
     @State private var date = Date()
 
     private var cur: String { CurrencyManager.shared.preferredCurrency }
+    private var curSymbol: String { cur == "IDR" ? "Rp" : cur }
 
     private var canSave: Bool {
         guard !name.trimmingCharacters(in: .whitespaces).isEmpty else { return false }
@@ -164,18 +235,18 @@ struct AddHoldingSheet: View {
                         .foregroundStyle(AppTheme.textPrimary).padding(.top, 4)
 
                     if type.isAmountBased {
-                        MoneyField(label: loc("invest.field.amount"), text: $amount)
+                        MoneyField(label: loc("invest.field.amount"), prefix: curSymbol, text: $amount)
                         if !type.priceIsFixed {
-                            MoneyField(label: loc("invest.field.current"), text: $currentValue)
+                            MoneyField(label: loc("invest.field.current"), prefix: curSymbol, text: $currentValue)
                         }
                     } else {
                         HStack(spacing: 12) {
-                            MoneyField(label: "\(loc("invest.field.units")) (\(type.unitLabel))", text: $units)
-                            MoneyField(label: loc("invest.field.price"), text: $buyPrice)
+                            MoneyField(label: loc("invest.field.units"), suffix: type.unitLabel, text: $units)
+                            MoneyField(label: loc("invest.field.price"), prefix: curSymbol, text: $buyPrice)
                         }
                         HStack(spacing: 12) {
-                            MoneyField(label: loc("invest.field.fee"), text: $fee)
-                            MoneyField(label: loc("invest.field.current"), placeholder: buyPrice.isEmpty ? "0" : buyPrice, text: $current)
+                            MoneyField(label: loc("invest.field.fee"), prefix: curSymbol, text: $fee)
+                            MoneyField(label: loc("invest.field.current"), placeholder: buyPrice.isEmpty ? "0" : buyPrice, prefix: curSymbol, text: $current)
                         }
                     }
 
@@ -292,6 +363,7 @@ struct AddLotSheet: View {
     @State private var note = ""
 
     private var cur: String { holding.currency }
+    private var curSymbol: String { cur == "IDR" ? "Rp" : cur }
     private var availableKinds: [InvestmentLotKind] {
         var ks: [InvestmentLotKind] = [.buy]
         if holding.stats().unitsHeld > 0 { ks.append(.sell) }
@@ -316,15 +388,15 @@ struct AddLotSheet: View {
                 VStack(alignment: .leading, spacing: 18) {
                     kindPicker
                     if kind.isCash {
-                        MoneyField(label: loc("invest.field.amount"), text: $amount)
+                        MoneyField(label: loc("invest.field.amount"), prefix: curSymbol, text: $amount)
                     } else if holding.type.isAmountBased {
-                        MoneyField(label: loc("invest.field.amount"), text: $amount)
+                        MoneyField(label: loc("invest.field.amount"), prefix: curSymbol, text: $amount)
                     } else {
                         HStack(spacing: 12) {
-                            MoneyField(label: "\(loc("invest.field.units")) (\(holding.type.unitLabel))", text: $units)
-                            MoneyField(label: loc("invest.field.price"), text: $price)
+                            MoneyField(label: loc("invest.field.units"), suffix: holding.type.unitLabel, text: $units)
+                            MoneyField(label: loc("invest.field.price"), prefix: curSymbol, text: $price)
                         }
-                        MoneyField(label: loc("invest.field.fee"), text: $fee)
+                        MoneyField(label: loc("invest.field.fee"), prefix: curSymbol, text: $fee)
                     }
                     if kind == .buy && !cards.isEmpty {
                         CardFundPicker(cards: cards, selectedID: $fundCardID)
@@ -413,7 +485,7 @@ struct UpdatePriceSheet: View {
             VStack(alignment: .leading, spacing: 16) {
                 Text(amountBased ? loc("invest.total_value") : loc("invest.current_price"))
                     .font(.system(.caption, weight: .medium)).foregroundStyle(AppTheme.textSecondary)
-                MoneyField(label: holding.name, text: $priceText)
+                MoneyField(label: holding.name, prefix: holding.currency == "IDR" ? "Rp" : holding.currency, text: $priceText)
                 Text(String(format: loc("invest.per_unit"), holding.type.unitLabel))
                     .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                 Spacer()
