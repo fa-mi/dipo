@@ -1833,27 +1833,11 @@ struct DangerConfirmSheet: View {
             .padding(.horizontal, 28)
             .padding(.top, 22)
 
-            Spacer(minLength: 18)
+            Spacer(minLength: 20)
 
-            // Buttons
-            HStack(spacing: 12) {
-                Button {
-                    HapticManager.shared.tap()
-                    dismiss()
-                } label: {
-                    Text(loc("common.cancel"))
-                        .font(.system(.subheadline, weight: .semibold))
-                        .foregroundStyle(AppTheme.textPrimary)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 15)
-                        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: AppRadius.md)
-                                .stroke(AppTheme.cardMid, lineWidth: 1)
-                        )
-                }
-                .buttonStyle(ScaleButtonStyle())
-
+            // Buttons — stacked full-width so the panel reads as filled edge to
+            // edge, primary action first (matches the delete sheet on Home).
+            VStack(spacing: 10) {
                 Button {
                     // Dismiss first so the sheet's exit animation overlaps with
                     // any UI changes the confirm action triggers (sign-out,
@@ -1865,16 +1849,33 @@ struct DangerConfirmSheet: View {
                     }
                 } label: {
                     Text(confirmLabel)
-                        .font(.system(.subheadline, weight: .bold))
+                        .font(.system(.body, weight: .bold))
                         .foregroundStyle(AppTheme.onVividFill)
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 15)
+                        .padding(.vertical, 17)
                         .background(tone.color, in: RoundedRectangle(cornerRadius: AppRadius.md))
                 }
                 .buttonStyle(ScaleButtonStyle())
+
+                Button {
+                    HapticManager.shared.tap()
+                    dismiss()
+                } label: {
+                    Text(loc("common.cancel"))
+                        .font(.system(.body, weight: .semibold))
+                        .foregroundStyle(AppTheme.textPrimary)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 17)
+                        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: AppRadius.md)
+                                .stroke(AppTheme.cardMid, lineWidth: 1)
+                        )
+                }
+                .buttonStyle(ScaleButtonStyle())
             }
-            .padding(.horizontal, 22)
-            .padding(.bottom, 22)
+            .padding(.horizontal, 20)
+            .padding(.bottom, 16)
         }
         .frame(maxWidth: .infinity)
         .fixedSize(horizontal: false, vertical: true)

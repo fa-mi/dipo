@@ -242,34 +242,41 @@ struct HoldingDetailView: View {
         .buttonStyle(ScaleButtonStyle())
     }
 
+    // One card holding the transaction rows — same recipe as Home's list, so the
+    // swipe reveals the SAME round red Delete button. Rows share the card's fill,
+    // so they slide cleanly under it and the corners stay rounded (no clip needed).
     private var lotsSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
             Text(loc("invest.lots")).font(.system(.body, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
             if holding.lots.isEmpty {
                 Text(loc("invest.empty_lots")).font(.system(.footnote))
-                    .foregroundStyle(AppTheme.textSecondary).frame(maxWidth: .infinity).padding(.vertical, 24)
-                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+                    .foregroundStyle(AppTheme.textSecondary).frame(maxWidth: .infinity).padding(.vertical, 16)
             } else {
-                // Each transaction is its own card: tap to edit, swipe left to
-                // delete (which then asks for confirmation). Long-press offers both.
                 let sorted = holding.lots.sorted { $0.date > $1.date }
-                ForEach(sorted, id: \.id) { lot in
-                    LotSwipeCard(
-                        lot: lot, holding: holding,
-                        onTap: { HapticManager.shared.tap(); sheet = .editLot(lot) },
-                        onDelete: { sheet = .deleteLot(lot) }
-                    )
-                    .contextMenu {
-                        Button { sheet = .editLot(lot) } label: {
-                            Label(loc("invest.edit_lot"), systemImage: "pencil")
+                VStack(spacing: 10) {
+                    ForEach(sorted, id: \.id) { lot in
+                        // Tap to edit, swipe left for the round Delete (then confirm).
+                        SwipeToDeleteRow(
+                            onTap: { HapticManager.shared.tap(); sheet = .editLot(lot) },
+                            onDelete: { sheet = .deleteLot(lot) }
+                        ) {
+                            LotRow(lot: lot, holding: holding)
                         }
-                        Button(role: .destructive) { sheet = .deleteLot(lot) } label: {
-                            Label(loc("invest.delete_lot"), systemImage: "trash")
+                        .contextMenu {
+                            Button { sheet = .editLot(lot) } label: {
+                                Label(loc("invest.edit_lot"), systemImage: "pencil")
+                            }
+                            Button(role: .destructive) { sheet = .deleteLot(lot) } label: {
+                                Label(loc("invest.delete_lot"), systemImage: "trash")
+                            }
                         }
                     }
                 }
             }
         }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.xl))
     }
 }
 
@@ -292,7 +299,9 @@ private struct LotRow: View {
             Image(systemName: "chevron.right").font(.system(.caption2, weight: .semibold))
                 .foregroundStyle(AppTheme.textSecondary.opacity(0.5))
         }
-        .padding(12)
+        // Vertical only — the enclosing card supplies the horizontal inset, so a
+        // swipe slides the row cleanly under the card edge (same as Home's list).
+        .padding(.vertical, 12)
     }
 
     private var tint: Color {
@@ -321,101 +330,6 @@ private struct LotRow: View {
         if lot.kind.isCash { return investMoney(lot.cashAmount, holding.currency) }
         let gross = lot.units * lot.pricePerUnit
         return investMoney(gross, holding.currency)
-    }
-}
-
-// MARK: - Swipeable transaction card
-//
-// A self-contained rounded card: tap to edit, swipe left to delete. The red
-// action sits UNDER the card sharing its rounded footprint, so sliding the card
-// left reveals a clean rounded red edge — no clipping, no square corners.
-
-private struct LotSwipeCard: View {
-    let lot: InvestmentLot
-    let holding: InvestmentHolding
-    var onTap: () -> Void
-    var onDelete: () -> Void
-
-    @State private var offset: CGFloat = 0
-    @State private var start: CGFloat? = nil
-    @State private var crossedFull = false
-
-    private let actionWidth: CGFloat = 84
-    private let openThreshold: CGFloat = 44
-    private let fullThreshold: CGFloat = 220
-    private var revealed: CGFloat { max(0, -offset) }
-    private var isFull: Bool { revealed >= fullThreshold }
-
-    var body: some View {
-        ZStack(alignment: .trailing) {
-            RoundedRectangle(cornerRadius: AppRadius.lg)
-                .fill(AppTheme.red)
-                .overlay(alignment: .trailing) {
-                    Button {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { offset = 0 }
-                        onDelete()
-                    } label: {
-                        VStack(spacing: 4) {
-                            Image(systemName: "trash.fill").font(.system(.body, weight: .semibold))
-                            Text(loc("common.delete")).font(.system(.caption2, weight: .bold))
-                        }
-                        .foregroundStyle(AppTheme.onVividFill)
-                        .frame(width: actionWidth)
-                        .scaleEffect(isFull ? 1.12 : 1)
-                        .opacity(revealed > 6 ? 1 : 0)
-                        .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isFull)
-                    }
-                    .buttonStyle(.plain)
-                }
-
-            LotRow(lot: lot, holding: holding)
-                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
-                .offset(x: offset)
-                .gesture(drag)
-                .onTapGesture {
-                    if offset != 0 {
-                        withAnimation(.spring(response: 0.3)) { offset = 0 }
-                    } else {
-                        onTap()
-                    }
-                }
-        }
-    }
-
-    private var drag: some Gesture {
-        DragGesture(minimumDistance: 16)
-            .onChanged { v in
-                if start == nil {
-                    guard abs(v.translation.width) > abs(v.translation.height) else { return }
-                    start = offset
-                }
-                guard let s = start else { return }
-                var next = s + v.translation.width
-                if next > 0 { next = 0 }
-                if next < -actionWidth {                       // rubber-band past the button
-                    next = -actionWidth - (-(next) - actionWidth) * 0.45
-                }
-                offset = next
-                if revealed >= fullThreshold, !crossedFull {
-                    crossedFull = true; HapticManager.shared.tap()
-                } else if revealed < fullThreshold, crossedFull {
-                    crossedFull = false
-                }
-            }
-            .onEnded { _ in
-                start = nil
-                let didFull = revealed >= fullThreshold
-                crossedFull = false
-                if didFull {
-                    HapticManager.shared.warning()
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { offset = 0 }
-                    onDelete()
-                } else {
-                    withAnimation(.spring(response: 0.32, dampingFraction: 0.8)) {
-                        offset = revealed >= openThreshold ? -actionWidth : 0
-                    }
-                }
-            }
     }
 }
 
