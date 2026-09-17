@@ -193,9 +193,21 @@ struct PortfolioOverviewCard: View {
                 AllocationBar(valueByType: totals.valueByType, total: totals.marketValue)
             }
         }
-        .padding(16)
+        .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+        .background {
+            let tint = investPLColor(totals.unrealizedPL)
+            RoundedRectangle(cornerRadius: AppRadius.lg)
+                .fill(AppTheme.cardDark)
+                .overlay {
+                    // A soft glow in the holding's fortune colour — green when up,
+                    // red when down — for a premium, at-a-glance read.
+                    LinearGradient(colors: [tint.opacity(0.22), tint.opacity(0.04), .clear],
+                                   startPoint: .topTrailing, endPoint: .bottomLeading)
+                }
+                .overlay(RoundedRectangle(cornerRadius: AppRadius.lg).stroke(tint.opacity(0.18), lineWidth: 1))
+                .clipShape(RoundedRectangle(cornerRadius: AppRadius.lg))
+        }
     }
 
     private func figure(_ label: String, _ value: String, _ tint: Color, arrowUp: Bool? = nil) -> some View {
@@ -285,26 +297,27 @@ struct HoldingRow: View {
             Image(systemName: holding.type.icon)
                 .font(.system(.body, weight: .semibold))
                 .foregroundStyle(holding.type.color)
-                .frame(width: 42, height: 42)
+                .frame(width: 44, height: 44)
                 .background(holding.type.color.opacity(0.15), in: RoundedRectangle(cornerRadius: AppRadius.md))
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text(holding.name).font(.system(.subheadline, weight: .semibold))
                     .foregroundStyle(AppTheme.textPrimary).lineLimit(1)
-                Text("\(investUnits(s.unitsHeld)) \(holding.type.unitLabel)")
-                    .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
+                Text(subtitle).font(.system(.caption2))
+                    .foregroundStyle(AppTheme.textSecondary).lineLimit(1)
             }
             Spacer(minLength: 8)
-            VStack(alignment: .trailing, spacing: 2) {
+            VStack(alignment: .trailing, spacing: 5) {
                 Text(investMoney(convertedValue(s), displayCurrency))
                     .font(.system(.subheadline, weight: .bold))
                     .foregroundStyle(AppTheme.textPrimary).lineLimit(1).minimumScaleFactor(0.7)
+                // The up/down badge — the one thing the user checks first.
                 HStack(spacing: 3) {
                     Image(systemName: s.unrealizedPL >= 0 ? "arrow.up.right" : "arrow.down.right")
                         .font(.system(.caption2, weight: .bold))
                     Text(investPct(s.unrealizedPct)).font(.system(.caption2, weight: .bold))
                 }
                 .foregroundStyle(investPLColor(s.unrealizedPL))
-                .padding(.horizontal, 7).padding(.vertical, 3)
+                .padding(.horizontal, 8).padding(.vertical, 4)
                 .background(investPLColor(s.unrealizedPL).opacity(0.14), in: Capsule())
             }
         }
@@ -312,9 +325,57 @@ struct HoldingRow: View {
         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
     }
 
+    /// "Stocks · Auto · BBRI" — type, whether the price is live or hand-kept, and
+    /// the lookup symbol, matching how portfolio apps label a row.
+    private var subtitle: String {
+        var parts = [holding.type.displayName]
+        if holding.type.supportsAutoPrice {
+            parts.append(holding.manualPrice ? loc("invest.manual") : loc("invest.auto"))
+        }
+        if !holding.symbol.isEmpty { parts.append(holding.symbol.uppercased()) }
+        return parts.joined(separator: " · ")
+    }
+
     private func convertedValue(_ s: HoldingStats) -> Double {
         holding.currency == displayCurrency
             ? s.marketValue
             : CurrencyManager.shared.convert(s.marketValue, from: holding.currency, to: displayCurrency)
+    }
+}
+
+// MARK: - Sparkline
+
+/// A tiny price trail. Green when the holding is up, red when down. Renders only
+/// with two or more points — otherwise there is no trend to draw.
+struct MiniSparkline: View {
+    let values: [Double]
+    let up: Bool
+
+    var body: some View {
+        GeometryReader { g in
+            if values.count >= 2, let lo = values.min(), let hi = values.max() {
+                let range = hi - lo
+                let stroke = up ? AppTheme.accent : AppTheme.red
+                let pts: [CGPoint] = values.enumerated().map { i, v in
+                    let x = g.size.width * CGFloat(i) / CGFloat(values.count - 1)
+                    let y = range > 0 ? g.size.height * (1 - CGFloat((v - lo) / range)) : g.size.height / 2
+                    return CGPoint(x: x, y: y)
+                }
+                ZStack {
+                    // Faint fill under the line for a little depth.
+                    Path { p in
+                        p.move(to: CGPoint(x: pts[0].x, y: g.size.height))
+                        pts.forEach { p.addLine(to: $0) }
+                        p.addLine(to: CGPoint(x: pts.last!.x, y: g.size.height))
+                        p.closeSubpath()
+                    }
+                    .fill(stroke.opacity(0.12))
+                    Path { p in
+                        p.move(to: pts[0]); pts.dropFirst().forEach { p.addLine(to: $0) }
+                    }
+                    .stroke(stroke, style: StrokeStyle(lineWidth: 1.6, lineCap: .round, lineJoin: .round))
+                }
+            }
+        }
     }
 }

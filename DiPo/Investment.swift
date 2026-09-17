@@ -117,6 +117,11 @@ final class InvestmentHolding {
     /// The user maintains the price by hand (auto-fetch off or unavailable).
     var manualPrice: Bool
 
+    /// A short trail of recent prices for the row sparkline. Grows as the price
+    /// is refreshed or updated; capped so it never bloats. Defaulted, so adding
+    /// it is a lightweight migration.
+    var priceHistory: [Double] = []
+
     var sortOrder: Int
 
     @Relationship(deleteRule: .cascade)
@@ -150,6 +155,15 @@ final class InvestmentHolding {
     /// Convenience: fully valued stats for this holding.
     func stats() -> HoldingStats {
         PortfolioEngine.stats(lots: facts, lastPrice: effectivePrice, prevClose: prevClose)
+    }
+
+    /// Append a price point for the sparkline, keeping the trail bounded and
+    /// skipping exact repeats so a flat line doesn't accumulate noise.
+    func pushPrice(_ p: Double) {
+        guard p > 0 else { return }
+        if let last = priceHistory.last, abs(last - p) < 1e-9 { return }
+        priceHistory.append(p)
+        if priceHistory.count > 40 { priceHistory.removeFirst(priceHistory.count - 40) }
     }
 }
 

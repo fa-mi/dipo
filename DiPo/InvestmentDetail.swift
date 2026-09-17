@@ -22,8 +22,9 @@ struct HoldingDetailView: View {
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 18) {
                         header.padding(.top, 20)
-                        valueCard
-                        statsGrid
+                        heroCard
+                        if holding.priceHistory.count >= 2 { priceChartCard }
+                        detailRows
                         actionRow
                         lotsSection
                         Spacer(minLength: 100)
@@ -91,54 +92,85 @@ struct HoldingDetailView: View {
         }
     }
 
-    private var valueCard: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(loc("invest.total_value")).font(.system(.caption, weight: .medium))
+    private var heroCard: some View {
+        VStack(spacing: 12) {
+            VStack(spacing: 4) {
+                Text(loc("invest.market_value")).font(.system(.caption, weight: .medium))
                     .foregroundStyle(AppTheme.textSecondary)
                 Text(investMoney(s.marketValue, cur)).font(.system(.largeTitle, weight: .bold))
                     .foregroundStyle(AppTheme.textPrimary)
-                    .contentTransition(.numericText()).minimumScaleFactor(0.7).lineLimit(1)
+                    .contentTransition(.numericText()).minimumScaleFactor(0.6).lineLimit(1)
             }
-            HStack(spacing: 10) {
-                pill(investSigned(s.unrealizedPL, cur) + "  " + investPct(s.unrealizedPct), investPLColor(s.unrealizedPL))
+            HStack(spacing: 8) {
+                plChip(investSigned(s.unrealizedPL, cur) + " (" + investPct(s.unrealizedPct) + ")",
+                       investPLColor(s.unrealizedPL), up: s.unrealizedPL >= 0)
                 if s.todayChange != 0 {
-                    pill(loc("invest.today") + " " + investSigned(s.todayChange, cur), investPLColor(s.todayChange))
+                    plChip(loc("invest.today") + " " + investSigned(s.todayChange, cur),
+                           investPLColor(s.todayChange), up: s.todayChange >= 0)
                 }
-                Spacer(minLength: 0)
             }
+        }
+        .frame(maxWidth: .infinity).padding(18)
+        .background {
+            let tint = investPLColor(s.unrealizedPL)
+            RoundedRectangle(cornerRadius: AppRadius.lg).fill(AppTheme.cardDark)
+                .overlay { LinearGradient(colors: [tint.opacity(0.22), tint.opacity(0.04), .clear],
+                                          startPoint: .topTrailing, endPoint: .bottomLeading) }
+                .overlay(RoundedRectangle(cornerRadius: AppRadius.lg).stroke(tint.opacity(0.18), lineWidth: 1))
+                .clipShape(RoundedRectangle(cornerRadius: AppRadius.lg))
+        }
+    }
+
+    private func plChip(_ text: String, _ tint: Color, up: Bool) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: up ? "arrow.up.right" : "arrow.down.right").font(.system(.caption2, weight: .bold))
+            Text(text).font(.system(.caption, weight: .bold))
+        }
+        .foregroundStyle(tint).padding(.horizontal, 10).padding(.vertical, 5)
+        .background(tint.opacity(0.15), in: Capsule())
+    }
+
+    private var priceChartCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(loc("invest.price_chart")).font(.system(.caption, weight: .medium))
+                .foregroundStyle(AppTheme.textSecondary)
+            MiniSparkline(values: holding.priceHistory, up: s.unrealizedPL >= 0).frame(height: 70)
         }
         .padding(16).frame(maxWidth: .infinity, alignment: .leading)
         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
     }
 
-    private func pill(_ text: String, _ tint: Color) -> some View {
-        Text(text).font(.system(.caption, weight: .bold)).foregroundStyle(tint)
-            .padding(.horizontal, 10).padding(.vertical, 5)
-            .background(tint.opacity(0.14), in: Capsule())
-    }
-
-    private var statsGrid: some View {
-        let priceRight = holding.type.priceIsFixed
-            ? investMoney(1, cur)
+    private var detailRows: some View {
+        let priceNow = holding.type.priceIsFixed ? investMoney(1, cur)
             : (holding.lastPrice > 0 ? investMoney(holding.lastPrice, cur) : "—")
-        return LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-            statTile(loc("invest.avg_cost"), s.avgCost > 0 ? investMoney(s.avgCost, cur) : "—")
-            statTile(loc("invest.current_price"), priceRight)
-            statTile(loc("invest.units_held"), "\(investUnits(s.unitsHeld)) \(holding.type.unitLabel)")
-            statTile(loc("invest.invested"), investMoney(s.costBasis, cur))
+        return VStack(spacing: 0) {
+            detailRow(loc("invest.avg_cost"), s.avgCost > 0 ? investMoney(s.avgCost, cur) : "—")
+            if !holding.type.priceIsFixed { rowDivider; detailRow(loc("invest.current_price"), priceNow) }
+            rowDivider
+            detailRow(loc("invest.volume"), "\(investUnits(s.unitsHeld)) \(holding.type.unitLabel)")
+            if holding.type == .stock {
+                rowDivider
+                detailRow(loc("invest.lot"), "\(investUnits((s.unitsHeld / 100).rounded(.down))) Lot")
+            }
+            rowDivider
+            detailRow(loc("invest.invested"), investMoney(s.costBasis, cur))
         }
+        .padding(.vertical, 4)
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
     }
 
-    private func statTile(_ label: String, _ value: String) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(label).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
-            Text(value).font(.system(.subheadline, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
+    private func detailRow(_ label: String, _ value: String, tint: Color? = nil) -> some View {
+        HStack {
+            Text(label).font(.system(.subheadline)).foregroundStyle(AppTheme.textSecondary)
+            Spacer(minLength: 8)
+            Text(value).font(.system(.subheadline, weight: .bold)).foregroundStyle(tint ?? AppTheme.textPrimary)
                 .lineLimit(1).minimumScaleFactor(0.6)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(12)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .padding(.horizontal, 16).padding(.vertical, 12)
+    }
+
+    private var rowDivider: some View {
+        Rectangle().fill(AppTheme.cardMid.opacity(0.6)).frame(height: 1).padding(.leading, 16)
     }
 
     private var actionRow: some View {

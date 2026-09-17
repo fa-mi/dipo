@@ -132,10 +132,12 @@ private struct MoneyField: View {
     var placeholder: String = "0"
     var prefix: String? = nil
     var suffix: String? = nil
+    var hint: String? = nil
+    var bg: Color = AppTheme.cardDark
     @Binding var text: String
     @FocusState private var focused: Bool
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 5) {
             Text(label).font(.system(.caption, weight: .medium)).foregroundStyle(AppTheme.textSecondary)
             HStack(spacing: 6) {
                 if let prefix {
@@ -151,9 +153,12 @@ private struct MoneyField: View {
                 }
             }
             .padding(.horizontal, 14).padding(.vertical, 12)
-            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+            .background(bg, in: RoundedRectangle(cornerRadius: AppRadius.md))
             .overlay(RoundedRectangle(cornerRadius: AppRadius.md)
-                .stroke(focused ? AppTheme.accent.opacity(0.6) : Color.clear, lineWidth: 1.5))
+                .stroke(focused ? AppTheme.accent.opacity(0.7) : Color.clear, lineWidth: 1.5))
+            if let hint {
+                Text(hint).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary.opacity(0.85))
+            }
         }
     }
 }
@@ -161,15 +166,20 @@ private struct MoneyField: View {
 private struct PlainField: View {
     let label: String
     var placeholder: String = ""
+    var bg: Color = AppTheme.cardDark
     @Binding var text: String
+    @FocusState private var focused: Bool
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(label).font(.system(.caption, weight: .medium)).foregroundStyle(AppTheme.textSecondary)
             TextField(placeholder, text: $text)
                 .font(.system(.body, weight: .semibold))
                 .foregroundStyle(AppTheme.textPrimary)
+                .focused($focused)
                 .padding(.horizontal, 14).padding(.vertical, 12)
-                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+                .background(bg, in: RoundedRectangle(cornerRadius: AppRadius.md))
+                .overlay(RoundedRectangle(cornerRadius: AppRadius.md)
+                    .stroke(focused ? AppTheme.accent.opacity(0.7) : Color.clear, lineWidth: 1.5))
         }
     }
 }
@@ -224,29 +234,44 @@ struct AddHoldingSheet: View {
     var body: some View {
         NavigationStack {
             ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 18) {
+                VStack(alignment: .leading, spacing: 16) {
                     typePicker
-                    PlainField(label: loc("invest.field.name"), placeholder: loc("invest.field.name_ph"), text: $name)
-                    if type.supportsAutoPrice {
-                        PlainField(label: loc("invest.field.symbol"), placeholder: loc("invest.field.symbol_ph"), text: $symbol)
+
+                    // What it is — name + (for auto types) the lookup symbol.
+                    groupCard {
+                        PlainField(label: loc("invest.field.name"), placeholder: loc("invest.field.name_ph"),
+                                   bg: AppTheme.bg, text: $name)
+                        if type.supportsAutoPrice {
+                            PlainField(label: loc("invest.field.symbol"), placeholder: loc("invest.field.symbol_ph"),
+                                       bg: AppTheme.bg, text: $symbol)
+                        }
                     }
 
-                    Text(loc("invest.first_buy")).font(.system(.body, weight: .bold))
-                        .foregroundStyle(AppTheme.textPrimary).padding(.top, 4)
-
-                    if type.isAmountBased {
-                        MoneyField(label: loc("invest.field.amount"), prefix: curSymbol, text: $amount)
-                        if !type.priceIsFixed {
-                            MoneyField(label: loc("invest.field.current"), prefix: curSymbol, text: $currentValue)
-                        }
-                    } else {
-                        HStack(spacing: 12) {
-                            MoneyField(label: loc("invest.field.units"), suffix: type.unitLabel, text: $units)
-                            MoneyField(label: loc("invest.field.price"), prefix: curSymbol, text: $buyPrice)
-                        }
-                        HStack(spacing: 12) {
-                            MoneyField(label: loc("invest.field.fee"), prefix: curSymbol, text: $fee)
-                            MoneyField(label: loc("invest.field.current"), placeholder: buyPrice.isEmpty ? "0" : buyPrice, prefix: curSymbol, text: $current)
+                    // First purchase — what you put in, grouped in its own card.
+                    groupCard {
+                        sectionHeader(loc("invest.first_buy"))
+                        if type.isAmountBased {
+                            MoneyField(label: loc("invest.field.amount"), prefix: curSymbol, bg: AppTheme.bg, text: $amount)
+                            if !type.priceIsFixed {
+                                MoneyField(label: loc("invest.field.current"), prefix: curSymbol,
+                                           hint: loc("invest.field.current_hint"), bg: AppTheme.bg, text: $currentValue)
+                            }
+                        } else {
+                            HStack(spacing: 12) {
+                                MoneyField(label: loc("invest.field.units"), suffix: type.unitLabel,
+                                           hint: loc("invest.field.units_hint"), bg: AppTheme.bg, text: $units)
+                                MoneyField(label: loc("invest.field.price"), prefix: curSymbol, bg: AppTheme.bg, text: $buyPrice)
+                            }
+                            MoneyField(label: loc("invest.field.fee"), prefix: curSymbol, bg: AppTheme.bg, text: $fee)
+                            // Auto-priced instruments fetch the current price themselves,
+                            // so there's nothing to type — say so instead of asking.
+                            if type.supportsAutoPrice {
+                                autoNote
+                            } else {
+                                MoneyField(label: loc("invest.field.current"),
+                                           placeholder: buyPrice.isEmpty ? "0" : buyPrice, prefix: curSymbol,
+                                           hint: loc("invest.field.current_hint"), bg: AppTheme.bg, text: $current)
+                            }
                         }
                     }
 
@@ -254,9 +279,7 @@ struct AddHoldingSheet: View {
                         CardFundPicker(cards: cards, selectedID: $fundCardID)
                     }
 
-                    DatePicker(loc("invest.field.date"), selection: $date, in: ...Date(), displayedComponents: .date)
-                        .font(.system(.subheadline, weight: .medium))
-                        .tint(AppTheme.accent)
+                    dateRow
 
                     Spacer(minLength: 20)
                 }
@@ -282,29 +305,69 @@ struct AddHoldingSheet: View {
     private var typePicker: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(loc("invest.field.type")).font(.system(.caption, weight: .medium)).foregroundStyle(AppTheme.textSecondary)
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 10) {
-                    ForEach(InvestmentType.allCases, id: \.self) { t in
-                        Button {
-                            HapticManager.shared.tap()
-                            withAnimation(.spring(response: 0.3)) { type = t }
-                        } label: {
-                            VStack(spacing: 6) {
-                                Image(systemName: t.icon).font(.system(.title3))
-                                Text(t.displayName).font(.system(.caption2, weight: .semibold)).lineLimit(1)
-                            }
-                            .foregroundStyle(type == t ? t.color : AppTheme.textSecondary)
-                            .frame(width: 78, height: 64)
-                            .background((type == t ? t.color.opacity(0.15) : AppTheme.cardDark),
-                                        in: RoundedRectangle(cornerRadius: AppRadius.md))
-                            .overlay(RoundedRectangle(cornerRadius: AppRadius.md)
-                                .stroke(type == t ? t.color : .clear, lineWidth: 1.5))
+            // A 3-column grid shows all six at once — no cut-off horizontal scroll.
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 10) {
+                ForEach(InvestmentType.allCases, id: \.self) { t in
+                    Button {
+                        HapticManager.shared.tap()
+                        withAnimation(.spring(response: 0.3)) { type = t }
+                    } label: {
+                        VStack(spacing: 7) {
+                            Image(systemName: t.icon).font(.system(.title3))
+                                .foregroundStyle(type == t ? t.color : AppTheme.textSecondary)
+                                .frame(width: 40, height: 40)
+                                .background((type == t ? t.color.opacity(0.18) : AppTheme.cardMid.opacity(0.45)), in: Circle())
+                            Text(t.displayName).font(.system(.caption2, weight: .semibold))
+                                .foregroundStyle(type == t ? AppTheme.textPrimary : AppTheme.textSecondary)
+                                .lineLimit(1).minimumScaleFactor(0.8)
                         }
-                        .buttonStyle(.plain)
+                        .frame(maxWidth: .infinity).padding(.vertical, 12)
+                        .background((type == t ? t.color.opacity(0.08) : AppTheme.cardDark),
+                                    in: RoundedRectangle(cornerRadius: AppRadius.md))
+                        .overlay(RoundedRectangle(cornerRadius: AppRadius.md)
+                            .stroke(type == t ? t.color : Color.clear, lineWidth: 1.5))
                     }
+                    .buttonStyle(.plain)
                 }
             }
         }
+    }
+
+    // A grouped card: fields sit on the screen ground inside an elevated card,
+    // giving each logical section a clear boundary without nesting same-tone fills.
+    @ViewBuilder
+    private func groupCard<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 12) { content() }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(14)
+            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+    }
+
+    private func sectionHeader(_ t: String) -> some View {
+        Text(t).font(.system(.subheadline, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
+    }
+
+    private var autoNote: some View {
+        HStack(spacing: 7) {
+            Image(systemName: "bolt.fill").font(.system(.caption2, weight: .bold))
+            Text(loc("invest.auto_price_note")).font(.system(.caption, weight: .medium))
+        }
+        .foregroundStyle(AppTheme.accent)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 12).padding(.vertical, 10)
+        .background(AppTheme.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: AppRadius.md))
+    }
+
+    private var dateRow: some View {
+        HStack {
+            Text(loc("invest.field.date")).font(.system(.subheadline, weight: .medium))
+                .foregroundStyle(AppTheme.textPrimary)
+            Spacer()
+            DatePicker("", selection: $date, in: ...Date(), displayedComponents: .date)
+                .labelsHidden().tint(AppTheme.accent)
+        }
+        .padding(.horizontal, 14).padding(.vertical, 10)
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
     }
 
     private func save() {
@@ -329,6 +392,7 @@ struct AddHoldingSheet: View {
                                   lastPrice: lastPrice, prevClose: lastPrice,
                                   sortOrder: nextOrder)
         h.priceUpdatedAt = .now
+        h.pushPrice(price); h.pushPrice(lastPrice)   // seed the sparkline: buy → now
         context.insert(h)
         let lot = InvestmentLot(kind: .buy, date: date, units: holdingUnits,
                                 pricePerUnit: price, fee: parseNumber(fee))
@@ -524,6 +588,7 @@ struct UpdatePriceSheet: View {
         // since the user last updated it.
         holding.prevClose = holding.lastPrice > 0 ? holding.lastPrice : newPrice
         holding.lastPrice = newPrice
+        holding.pushPrice(newPrice)
         holding.priceUpdatedAt = .now
         try? context.save()
         HapticManager.shared.success()

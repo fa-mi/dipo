@@ -32,6 +32,7 @@ enum PriceService {
             // back to the last price we held so "today" still means something.
             h.prevClose = q.prevClose > 0 ? q.prevClose : (h.lastPrice > 0 ? h.lastPrice : q.price)
             h.lastPrice = q.price
+            h.pushPrice(q.price)
             h.priceUpdatedAt = .now
             updated += 1
         }
