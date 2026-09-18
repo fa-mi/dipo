@@ -148,9 +148,7 @@ struct StatisticsView: View {
     @State private var selectedCardID: String? = nil // Kept only as a recompute trigger; the card itself comes from MainCard.
     /// Observed so switching the main card in the Wallet redraws this screen.
     @State private var sb = SmartBudgetManager.shared
-    @State private var showSpendingAudit = false
     @State private var showExportSheet = false
-    @State private var showTidy = false
     @State private var showAllCategories = false
     /// Which day of the Weekly page is open, and which of its rows was tapped.
     @State private var expandedDay: Date? = nil
@@ -165,15 +163,6 @@ struct StatisticsView: View {
     @State private var cycleFilter: CycleFilter = .all
 
     /// Count of "Other" expenses the categoriser could confidently re-map.
-    private var tidyableCount: Int {
-        appVM.cards.flatMap { $0.transactions }.reduce(0) { count, tx in
-            guard tx.amount < 0, tx.txSubtype == .normal, tx.category == .other,
-                  let s = SmartBudgetManager.suggestCategory(for: tx.name, txType: "Expense"), s != .other
-            else { return count }
-            return count + 1
-        }
-    }
-
     /// Day-of-month the salary lands on (from the first active schedule), used
     /// to anchor the "Pay cycle" period. nil when the user has no active
     /// salary — in which case the Pay-cycle option is hidden entirely.
@@ -608,9 +597,16 @@ struct StatisticsView: View {
     /// Fixed monthly commitments are excluded by category — those are
     /// contractual, not behavioural. Everything else is the engine's call,
     /// overridable per transaction.
+    /// Shared with the cleanup tools, which have to reach the same verdict this
+    /// screen does — a second definition would quietly disagree with the first.
+    static func isDayToDay(_ tx: TxRecord, rhythm: SpendingRhythm,
+                           convert: (TxRecord) -> Double) -> Bool {
+        guard !fixedMonthlyCats.contains(tx.category) else { return false }
+        return !rhythm.verdict(for: tx, amount: abs(convert(tx))).isIrregular
+    }
+
     private func isDayToDay(_ tx: TxRecord) -> Bool {
-        guard !Self.fixedMonthlyCats.contains(tx.category) else { return false }
-        return !rhythm.verdict(for: tx, amount: abs(convertedAmount(tx))).isIrregular
+        Self.isDayToDay(tx, rhythm: rhythm, convert: convertedAmount)
     }
 
     /// Everything the daily-rate figures need, computed in ONE pass.
@@ -635,14 +631,21 @@ struct StatisticsView: View {
     }
 
     private func computeFigures() -> SpendingFigures {
+        Self.figures(for: cachedFilteredTx, rhythm: rhythm, convert: convertedAmount)
+    }
+
+    /// The median-day machinery, over any slice. Static so the cleanup tools can
+    /// show the very figures they are correcting.
+    static func figures(for txs: [TxRecord], rhythm: SpendingRhythm,
+                        convert: (TxRecord) -> Double) -> SpendingFigures {
         var f = SpendingFigures()
         var perDay: [Date: Double] = [:]
         let cal = Calendar.current
-        for tx in cachedFilteredTx where tx.txSubtype != .transfer {
-            let amt = abs(convertedAmount(tx))
+        for tx in txs where tx.txSubtype != .transfer {
+            let amt = abs(convert(tx))
             guard tx.amount < 0 || tx.txSubtype == .refund else { continue }
             let signed = tx.txSubtype == .refund ? -amt : amt
-            if isDayToDay(tx) {
+            if isDayToDay(tx, rhythm: rhythm, convert: convert) {
                 f.variable += signed
                 if tx.amount < 0 {
                     let day = cal.startOfDay(for: tx.date)
@@ -656,7 +659,7 @@ struct StatisticsView: View {
                 f.fixed += signed
                 // Fixed monthly commitments are excluded by contract; the
                 // irregular tally is only the engine's calls and the user's.
-                if !Self.fixedMonthlyCats.contains(tx.category), tx.amount < 0 {
+                if !fixedMonthlyCats.contains(tx.category), tx.amount < 0 {
                     f.irregularCount += 1
                     f.irregularTotal += amt
                 }
@@ -1174,21 +1177,6 @@ struct StatisticsView: View {
             selectedCardID = newID
         }
         .trackScreen(.statistics)
-        .sheet(isPresented: $showSpendingAudit) {
-            SpendingAuditSheet(transactions: filteredTx,
-                               rhythm: rhythm,
-                               typicalDaily: typicalDailySpend,
-                               weekly: weeklyAverage,
-                               dailyAllowance: dailyAllowance,
-                               currency: displayCurrency)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-                .presentationBackground(AppTheme.bg)
-                .preferredColorScheme(appColorScheme())
-                // A swipe inside the sheet changes which transactions the rate
-                // is built from, so the figures behind it have to be rebuilt.
-                .onDisappear { recomputeStats() }
-        }
         .onChange(of: statsVM.selectedStatTab) { _, _ in
             statsVM.selectedSliceIndex = nil
             showAllCategories = false
@@ -1251,13 +1239,6 @@ struct StatisticsView: View {
             .presentationBackground(AppTheme.bg)
             .preferredColorScheme(appColorScheme())
         }
-        .sheet(isPresented: $showTidy) {
-            TidyCategoriesView(cards: appVM.cards)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-                .presentationBackground(AppTheme.bg)
-                .preferredColorScheme(appColorScheme())
-        }
     }
 
     // MARK: Main page
@@ -1271,7 +1252,6 @@ struct StatisticsView: View {
                     spendHero
                     metricStrip
                     dualCards
-                    if tidyableCount > 0 { tidyRow }
                     categoriesCard
                     notesCard
                     detailLink
@@ -1522,29 +1502,6 @@ struct StatisticsView: View {
         }
         return (false, String(format: loc("stats.pace_over"), money(projected),
                               money(projected - filteredIncome)))
-    }
-
-    private var tidyRow: some View {
-        Button {
-            HapticManager.shared.tap(); showTidy = true
-        } label: {
-            HStack(spacing: 10) {
-                Image(systemName: "wand.and.stars")
-                    .font(.system(.subheadline, weight: .semibold))
-                    .foregroundStyle(AppTheme.purple)
-                Text(String(format: loc("tidy.chip"), tidyableCount))
-                    .font(.system(.footnote, weight: .semibold))
-                    .foregroundStyle(AppTheme.textPrimary)
-                    .multilineTextAlignment(.leading)
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.system(.caption, weight: .semibold))
-                    .foregroundStyle(AppTheme.textSecondary)
-            }
-            .padding(.horizontal, 16).padding(.vertical, 13)
-            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
-        }
-        .buttonStyle(ScaleButtonStyle())
     }
 
     // MARK: 2 · Where it went
@@ -2322,11 +2279,7 @@ struct StatisticsView: View {
                             totalExpenses: filteredExpenses,
                             currency: displayCurrency,
                             isPartialPeriod: isPartialWeeklyPeriod,
-                            periodDays: periodDays,
-                            onAudit: {
-                                HapticManager.shared.tap()
-                                showSpendingAudit = true
-                            }
+                            periodDays: periodDays
                         )
                         if premiumMgr.canAccess(.smartBudget) {
                             insightsCard

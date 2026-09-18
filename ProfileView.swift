@@ -150,6 +150,7 @@ struct ProfileView: View {
     @State private var emailText          = ""
     @State private var showBackTapGuide = false
     @State private var showWebSync        = false
+    @State private var showCleanup        = false
     @State private var showPaywall        = false
     @State private var appearanceMode: String = UserDefaults.standard.string(forKey: "appearance_mode") ?? "system"
     @State private var voiceLanguage = VoiceLanguage.saved
@@ -439,6 +440,13 @@ struct ProfileView: View {
             .presentationBackground(AppTheme.bg)
             .presentationCornerRadius(28)
             .preferredColorScheme(appColorScheme())
+        }
+        .sheet(isPresented: $showCleanup) {
+            DataCleanupView()
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+                .presentationBackground(AppTheme.bg)
+                .preferredColorScheme(appColorScheme())
         }
         .sheet(isPresented: $showBackTapGuide) {
             BackTapGuideView()
@@ -876,6 +884,19 @@ struct ProfileView: View {
                 iconOverride: "hand.tap.fill",
                 tintOverride: AppTheme.orange,
                 showPaywall: $showPaywall) { showBackTapGuide = true }
+
+            // Tidy and the spending audit moved off Statistics: that screen
+            // reports conclusions, and rewriting the rows behind them is a
+            // separate job. Gated as it was there — the audit only ever
+            // appeared inside the Royal-locked insights card.
+            PremiumLockedFeatureLink(
+                feature: .smartBudget, title: loc("cleanup.title"),
+                subtitle: premiumMgr.canAccess(.smartBudget)
+                    ? loc("cleanup.sub")
+                    : loc("profile.requires_royal"),
+                iconOverride: "wand.and.stars",
+                tintOverride: AppTheme.purple,
+                showPaywall: $showPaywall) { showCleanup = true }
         }
         .padding(16)
         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
