@@ -79,6 +79,7 @@ struct CardChip: View {
                         Text(loc("main.badge"))
                             .font(.system(.caption2, weight: .bold))
                             .foregroundStyle(selected ? AppTheme.bg.opacity(0.8) : AppTheme.accent)
+                            .lineLimit(1).fixedSize()
                     }
                 }
                 HStack(spacing: 5) {
@@ -174,6 +175,7 @@ struct CardListRow: View {
                             .foregroundStyle(AppTheme.accent)
                             .padding(.horizontal, 6).padding(.vertical, 2)
                             .background(AppTheme.accent.opacity(0.15), in: Capsule())
+                            .lineLimit(1).fixedSize()
                     }
                 }
                 HStack(spacing: 6) {

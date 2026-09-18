@@ -190,5 +190,21 @@ enum AppTab: Int, CaseIterable {
 
 enum HomeRoute: Hashable { case profile }
 enum WalletRoute: Hashable { case obligations }
-enum PlanRoute: Hashable { case budget, salary, bills, goals }
-enum StatsRoute: Hashable { case analysis }
+enum PlanRoute: Hashable {
+    case budget, salary, bills, goals, investments
+    // A specific holding's detail. Carried as a PlanRoute (not a bare view push)
+    // so it appends to the tab's typed `[PlanRoute]` path — a value-less
+    // NavigationLink here crashes with AnyNavigationPath.comparisonTypeMismatch.
+    // InvestmentHolding is a PersistentModel, so it's Hashable for the path.
+    case holding(InvestmentHolding)
+}
+enum StatsRoute: Hashable {
+    case analysis
+    /// The Weekly tile's own page — this week, day by day.
+    case weekly
+    /// The Trends tile's own page — cycle by cycle.
+    case trends
+    /// One cycle from the Trends page, opened up. Carries the window rather than
+    /// the trend point so the route stays Hashable for the typed path.
+    case cycle(start: Date, end: Date, label: String)
+}

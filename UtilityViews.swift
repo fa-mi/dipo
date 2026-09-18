@@ -373,6 +373,7 @@ struct SearchView: View {
                                 }
                                 .padding(.bottom, 40)
                             }
+                            .containerRelativeFrame(.horizontal)
                         }
                     }
                 }
@@ -614,6 +615,7 @@ struct TransactionDetailSheet: View {
                         }
                     }
                     .padding(.top, 8)
+                    .containerRelativeFrame(.horizontal)
                 }
             }
             .navigationTitle(isEditing ? loc("tx.edit.title") : loc("tx.detail.title"))
@@ -1656,6 +1658,7 @@ struct AddTransactionSheet: View {
                         Spacer(minLength: 40)
                     }
                     .padding(.top, 6)
+                    .containerRelativeFrame(.horizontal)
                     // One entrance for the whole form. Each section used to
                     // carry its own `.opacity(appeared)` + `.animation`, which
                     // is eight animations driven by one boolean.

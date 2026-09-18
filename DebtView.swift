@@ -320,6 +320,7 @@ struct DebtView: View {
                 .opacity(appeared ? 1 : 0)
                 .offset(y: appeared ? 0 : 16)
                 .animation(AppMotion.appear, value: appeared)
+                .containerRelativeFrame(.horizontal)
             }
         }
         .onAppear {
@@ -479,6 +480,7 @@ struct AllDebtsView: View {
                         }
                     }
                     .padding(.vertical, 16)
+                    .containerRelativeFrame(.horizontal)
                 }
             }
             .navigationTitle(loc("debt.your_debts"))
@@ -808,6 +810,7 @@ struct AllocationCard: View {
                                 CurrencyManager.shared.formatted(totalBalance, currency: CurrencyManager.shared.preferredCurrency),
                                 String(format: "%.1f", balanceCoversMonths)))
                         .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary).lineSpacing(2)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 .padding(.top, 2)
             }
@@ -818,6 +821,7 @@ struct AllocationCard: View {
                     Text(String(format: loc("debt.extra_recommended"),
                                 CurrencyManager.shared.formatted(engine.extraPaymentAvailable, currency: CurrencyManager.shared.preferredCurrency)))
                         .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary).lineSpacing(2)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
         }
@@ -1249,6 +1253,7 @@ struct DebtEmptyState: View {
                     .font(.system(.subheadline))
                     .foregroundStyle(AppTheme.textSecondary)
                     .multilineTextAlignment(.center).lineSpacing(3)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             Button { HapticManager.shared.tap(); vm.resetForm(); vm.showAddSheet = true } label: {
                 HStack(spacing: 8) {
@@ -1484,6 +1489,7 @@ struct DebtFormSheet: View {
 
                         Spacer(minLength: 40)
                     }.padding(.top, 8)
+                    .containerRelativeFrame(.horizontal)
                 }
             }
             .navigationTitle(vm.isEditing ? loc("debt.edit") : loc("debt.add"))
@@ -2223,6 +2229,7 @@ struct PayoffSimulatorSheet: View {
                         Spacer(minLength: 40)
                     }
                     .padding(.top, 8)
+                    .containerRelativeFrame(.horizontal)
                 }
             }
             .navigationTitle(loc("debt.payoff_sim"))

@@ -23,6 +23,7 @@ struct HomeView: View {
     /// Instalment principal counts as owed. Without it net worth read as if a
     /// 12-month instalment were not debt at all until each charge posted.
     @Query private var installments: [CardInstallment]
+    @Query private var investmentHoldings: [InvestmentHolding]
     /// Declared Monthly Expenses — surfaced on Home when a charge is imminent,
     /// so the balance drop never comes as a surprise.
     @Query private var recurringExpenses: [RecurringExpense]
@@ -147,8 +148,20 @@ struct HomeView: View {
         }
     }
 
-    /// Net worth = cash + savings goals + receivables − liabilities.
-    private var netWorth: Double { totalBalance + goalSavings + receivableAssets - totalLiabilities }
+    /// Current market value of every investment holding, in the preferred
+    /// currency. Royal-only, so a free user's query is empty and this is 0.
+    private var investmentValue: Double {
+        let cm = CurrencyManager.shared
+        let pref = cm.preferredCurrency
+        return investmentHoldings.reduce(0.0) {
+            $0 + cm.convert($1.stats().marketValue, from: $1.currency, to: pref)
+        }
+    }
+
+    /// Net worth = cash + savings goals + receivables + investments − liabilities.
+    private var netWorth: Double {
+        totalBalance + goalSavings + receivableAssets + investmentValue - totalLiabilities
+    }
 
     // Transactions for the currently selected card only
     private var selectedCard: BankCard? {
@@ -500,6 +513,14 @@ struct HomeView: View {
                                     .font(.system(.caption2))
                                     .foregroundStyle(AppTheme.textSecondary.opacity(0.75))
                                     .fixedSize(horizontal: false, vertical: true)
+                                // Investments live in their own menu, so name their
+                                // share of net worth here rather than leaving the
+                                // total unexplained.
+                                if investmentValue > 0.5 {
+                                    Text(String(format: loc("invest.networth_line"), fmt(investmentValue)))
+                                        .font(.system(.caption2, weight: .medium))
+                                        .foregroundStyle(AppTheme.accent)
+                                }
                             }
                             .padding(.horizontal, 16).padding(.vertical, 11)
                             .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))

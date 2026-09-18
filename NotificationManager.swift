@@ -218,9 +218,13 @@ final class NotificationManager {
     /// lingering (e.g. an old "in 7 days" next to the current "in 2 days").
     /// No device push is fired here; the actual payday push reminders are
     /// scheduled separately by NotificationScheduler.
-    func postPayday(label: String, amount: String, daysUntil: Int) {
+    /// `card` names where the money lands. With two schedules sharing a payday
+    /// the rows differed only by label, which reads as the same reminder twice —
+    /// naming the account tells them apart at a glance.
+    func postPayday(label: String, amount: String, daysUntil: Int, card: String? = nil) {
         let key = "payday:\(label)"
-        let icon: String, hex: String, title: String, body: String, time: String
+        let icon: String, hex: String, title: String, time: String
+        var body: String
         switch daysUntil {
         case 0:
             icon = "banknote.fill"; hex = "#1DB87A"
@@ -237,6 +241,9 @@ final class NotificationManager {
             title = String(format: loc("notif.payday.future_title"), daysUntil)
             body  = String(format: loc("notif.payday.future_body"), label)
             time  = String(format: loc("notif.time.in_days"), daysUntil)
+        }
+        if let card, !card.isEmpty {
+            body += " " + String(format: loc("notif.payday.into_card"), card)
         }
 
         // Already showing this exact reminder → no-op (avoids needless redraws).
@@ -889,6 +896,7 @@ extension ISO8601DateFormatter {
 struct NotificationCenterView: View {
     @Environment(\.dismiss) private var dismiss
     @Query(sort: \SalarySchedule.createdAt) private var schedules: [SalarySchedule]
+    @Query(sort: \BankCard.sortOrder) private var cards: [BankCard]
     @State private var mgr = NotificationManager.shared
     /// Drives the detail sheet — set on row tap. `AppNotificationItem` is
     /// Identifiable so `.sheet(item:)` binds to it directly.
@@ -916,6 +924,7 @@ struct NotificationCenterView: View {
                             Spacer(minLength: 40)
                         }
                         .padding(.top, 8)
+                        .containerRelativeFrame(.horizontal)
                     }
                 }
             }
@@ -1022,6 +1031,7 @@ struct NotificationCenterView: View {
             Text(loc("notif.info"))
                 .font(.system(.footnote)).foregroundStyle(AppTheme.textSecondary.opacity(0.7))
                 .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -1030,7 +1040,8 @@ struct NotificationCenterView: View {
             let days = SalaryDateEngine.daysUntilPay(dayOfMonth: s.dayOfMonth)
             if days <= 7 {
                 let amt = CurrencyManager.shared.formatted(s.amount, currency: s.currency)
-                mgr.postPayday(label: s.label, amount: amt, daysUntil: days)
+                let card = cards.first { $0.id == s.cardID }?.pickerLabel
+                mgr.postPayday(label: s.label, amount: amt, daysUntil: days, card: card)
             }
         }
     }
@@ -1214,6 +1225,7 @@ struct NotificationDetailView: View {
                         Spacer(minLength: 20)
                     }
                     .padding(22)
+                    .containerRelativeFrame(.horizontal)
                 }
             }
             .navigationTitle(loc("notif.detail_title"))

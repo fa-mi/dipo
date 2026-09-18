@@ -341,6 +341,7 @@ struct WalletCardActions: View {
                     Text(subtitle)
                         .font(.system(.subheadline, weight: .semibold))
                         .foregroundStyle(AppTheme.textPrimary).lineLimit(1)
+                        .minimumScaleFactor(0.8)
                     // Which account the whole app is reasoning about, stated on
                     // the account itself. Anywhere else and the user has to
                     // remember a setting to read their own numbers.
@@ -350,6 +351,7 @@ struct WalletCardActions: View {
                             .foregroundStyle(AppTheme.accent)
                             .padding(.horizontal, 6).padding(.vertical, 2)
                             .background(AppTheme.accent.opacity(0.15), in: Capsule())
+                            .lineLimit(1).fixedSize()
                     }
                 }
                 Text(String(format: loc(txCount == 1 ? "cards.tx_count" : "cards.tx_counts"), txCount))

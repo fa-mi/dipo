@@ -148,6 +148,7 @@ struct ReceiptScanFlow: View {
             Button(loc("common.cancel"), role: .cancel) { }
         } message: {
             Text(loc("receipt.permission.denied_body"))
+                .fixedSize(horizontal: false, vertical: true)
         }
         // Entered with a screenshot already in hand: skip the landing screen
         // and go straight to reading it. Guarded on `.landing` so a re-render
@@ -335,6 +336,7 @@ private struct LandingView: View {
                             .foregroundStyle(AppTheme.textSecondary)
                             .multilineTextAlignment(.center)
                             .padding(.horizontal, 32)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
 
                     Spacer(minLength: 8)
@@ -347,6 +349,7 @@ private struct LandingView: View {
                             .font(.system(.caption, weight: .medium))
                             .foregroundStyle(AppTheme.accent)
                             .multilineTextAlignment(.leading)
+                            .fixedSize(horizontal: false, vertical: true)
                         Spacer()
                     }
                     .padding(.horizontal, 14)

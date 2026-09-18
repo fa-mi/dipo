@@ -192,6 +192,7 @@ struct ObligationLoadCard: View {
                 Text(String(format: loc("oblig.of_income"),
                             money(shown.total), money(load.monthlyIncome)))
                     .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
 
                 ratioBar
 

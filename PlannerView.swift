@@ -367,6 +367,7 @@ struct CalculatorSheet: View {
                 Text(loc("planner.dependants_hint"))
                     .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             .padding(.horizontal, 22)
         }

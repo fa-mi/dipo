@@ -236,6 +236,7 @@ struct SmartBudgetSettingsSheet: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(loc("profile.budget")).font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
                             Text(loc("budget.sub")).font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
                         Spacer()
                         Toggle("", isOn: $isEnabled).tint(AppTheme.accentFill).labelsHidden()
@@ -270,6 +271,7 @@ struct SmartBudgetSettingsSheet: View {
                                             .font(.system(.footnote, weight: .bold)).foregroundStyle(AppTheme.red)
                                         Text(String(format: loc("budget.over_detail"), actualPct, overPct, targetPct))
                                             .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
+                                            .fixedSize(horizontal: false, vertical: true)
                                     }
                                     Spacer()
                                 }
@@ -457,11 +459,13 @@ struct SmartBudgetSettingsSheet: View {
                 Text(loc("budget.choose_card"))
                     .font(.system(.body, weight: .semibold))
                     .foregroundStyle(AppTheme.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
                 Text(loc("budget.card_hint"))
                     .font(.system(.subheadline))
                     .foregroundStyle(AppTheme.textSecondary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 32)
+                    .fixedSize(horizontal: false, vertical: true)
                 Button {
                     HapticManager.shared.tap()
                     withAnimation(.spring(response: 0.3)) { selectedTab = .settings }
@@ -497,6 +501,7 @@ struct SmartBudgetSettingsSheet: View {
                 HStack(spacing: 4) {
                     Image(systemName: "exclamationmark.circle").font(.system(.caption)).foregroundStyle(AppTheme.orange)
                     Text(loc("budget.log_income")).font(.system(.caption)).foregroundStyle(AppTheme.orange)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
         }
@@ -571,6 +576,7 @@ struct SmartBudgetSettingsSheet: View {
                 .font(.system(.caption))
                 .foregroundStyle(AppTheme.textSecondary)
                 .padding(.horizontal, 22)
+                .fixedSize(horizontal: false, vertical: true)
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 10) {
@@ -621,6 +627,7 @@ struct SmartBudgetSettingsSheet: View {
                     .foregroundStyle(AppTheme.accent)
                     .padding(.horizontal, 6).padding(.vertical, 2)
                     .background(AppTheme.accent.opacity(0.15), in: Capsule())
+                    .lineLimit(1).fixedSize()
             }
             .padding(.horizontal, 14).padding(.vertical, 11)
             .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
@@ -1205,6 +1212,7 @@ struct BudgetGroupDetailView: View {
                                 Image(systemName: "calendar").font(.system(.caption)).foregroundStyle(group.color)
                                 Text(String(format: loc("budget.pace_hint"), fmt(remaining / Double(daysLeft)), daysLeft, targetPct))
                                     .font(.system(.caption, weight: .medium)).foregroundStyle(AppTheme.textSecondary)
+                                    .fixedSize(horizontal: false, vertical: true)
                                 Spacer()
                             }.padding(.horizontal, 18).padding(.vertical, 12)
                         }

@@ -14,6 +14,7 @@ struct PlanView: View {
     @Query(sort: \SalarySchedule.createdAt) private var schedules: [SalarySchedule]
     @Query private var bills: [RecurringExpense]
     @Query private var goals: [SavingsGoal]
+    @Query private var holdings: [InvestmentHolding]
     @State private var pm = PremiumManager.shared
     @State private var budget = SmartBudgetManager.shared
     @State private var showPaywall = false
@@ -41,6 +42,10 @@ struct PlanView: View {
                             row(.goals, icon: "target", tint: AppTheme.teal,
                                 title: loc("profile.savings"), status: goalsStatus,
                                 feature: .savingsGoals)
+                            divider
+                            row(.investments, icon: "chart.line.uptrend.xyaxis", tint: AppTheme.accent,
+                                title: loc("premium.feature.investments"), status: investStatus,
+                                feature: .investments)
                         }
                         section(loc("plan.section_help")) {
                             askRow
@@ -60,6 +65,8 @@ struct PlanView: View {
                 case .salary: SalaryView().pushedFeature()
                 case .bills:  RecurringExpensesView().pushedFeature()
                 case .goals:  WishlistView().pushedFeature()
+                case .investments: InvestmentView().pushedFeature()
+                case .holding(let h): HoldingDetailView(holding: h).pushedFeature()
                 }
             }
             .sheet(isPresented: $showPaywall) {
@@ -118,6 +125,17 @@ struct PlanView: View {
         guard pm.canAccess(.savingsGoals) else { return loc("profile.requires_royal") }
         let active = goals.filter { !$0.isCompleted }.count
         return active == 0 ? loc("savings.no_goals") : String(format: loc("savings.active_goals"), active)
+    }
+
+    private var investStatus: String {
+        guard pm.canAccess(.investments) else { return loc("profile.requires_royal") }
+        guard !holdings.isEmpty else { return loc("invest.status.empty") }
+        let cm = CurrencyManager.shared
+        let pref = cm.preferredCurrency
+        let entries = holdings.map { (type: $0.typeRaw, currency: $0.currency, stats: $0.stats()) }
+        let total = PortfolioEngine.portfolio(entries, targetCurrency: pref,
+                                              convert: { cm.convert($0, from: $1, to: $2) }).marketValue
+        return String(format: loc("invest.status.summary"), holdings.count, cm.formatted(total, currency: pref))
     }
 
     // MARK: Building blocks

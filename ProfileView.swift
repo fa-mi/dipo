@@ -59,6 +59,11 @@ struct PremiumLockedFeatureLink: View {
                     Text(subtitle)
                         .font(.system(.caption))
                         .foregroundStyle(AppTheme.textSecondary)
+                        // Without this the Text reports its single-line ideal
+                        // width, which pushes the row — and with it the whole
+                        // page — wider than the screen. Only showed up once a
+                        // subtitle got long, and sooner in Indonesian.
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer()
                 Image(systemName: isLocked ? "lock.fill" : "chevron.right")
@@ -98,6 +103,11 @@ struct ProfileFeatureLink: View {
                     Text(subtitle)
                         .font(.system(.caption))
                         .foregroundStyle(AppTheme.textSecondary)
+                        // Without this the Text reports its single-line ideal
+                        // width, which pushes the row — and with it the whole
+                        // page — wider than the screen. Only showed up once a
+                        // subtitle got long, and sooner in Indonesian.
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer()
                 Image(systemName: "chevron.right")
@@ -150,6 +160,7 @@ struct ProfileView: View {
     @State private var emailText          = ""
     @State private var showBackTapGuide = false
     @State private var showWebSync        = false
+    @State private var showCleanup        = false
     @State private var showPaywall        = false
     @State private var appearanceMode: String = UserDefaults.standard.string(forKey: "appearance_mode") ?? "system"
     @State private var voiceLanguage = VoiceLanguage.saved
@@ -275,6 +286,13 @@ struct ProfileView: View {
                     supportSection
                     Spacer(minLength: 110)
                 }
+                // Hard-clamp the column to the scroll viewport. A card without
+                // maxWidth takes its content's natural width, so one unbreakable
+                // string (an email address, a long translated line) widened the
+                // whole page — and a vertical ScrollView still scrolls sideways
+                // once its content is wider than its bounds. Clamping makes the
+                // children compress instead, whichever one misbehaves.
+                .containerRelativeFrame(.horizontal)
             }
         }
         // Pushed from the avatar on Home: the bar carries the back button.
@@ -439,6 +457,13 @@ struct ProfileView: View {
             .presentationBackground(AppTheme.bg)
             .presentationCornerRadius(28)
             .preferredColorScheme(appColorScheme())
+        }
+        .sheet(isPresented: $showCleanup) {
+            DataCleanupView()
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+                .presentationBackground(AppTheme.bg)
+                .preferredColorScheme(appColorScheme())
         }
         .sheet(isPresented: $showBackTapGuide) {
             BackTapGuideView()
@@ -815,6 +840,7 @@ struct ProfileView: View {
                         ? loc("free.title")
                         : loc("royal.title")
                     Text(subtitle).font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer()
                 if premiumMgr.plan == .free {
@@ -876,6 +902,19 @@ struct ProfileView: View {
                 iconOverride: "hand.tap.fill",
                 tintOverride: AppTheme.orange,
                 showPaywall: $showPaywall) { showBackTapGuide = true }
+
+            // Tidy and the spending audit moved off Statistics: that screen
+            // reports conclusions, and rewriting the rows behind them is a
+            // separate job. Gated as it was there — the audit only ever
+            // appeared inside the Royal-locked insights card.
+            PremiumLockedFeatureLink(
+                feature: .smartBudget, title: loc("cleanup.title"),
+                subtitle: premiumMgr.canAccess(.smartBudget)
+                    ? loc("cleanup.sub")
+                    : loc("profile.requires_royal"),
+                iconOverride: "wand.and.stars",
+                tintOverride: AppTheme.purple,
+                showPaywall: $showPaywall) { showCleanup = true }
         }
         .padding(16)
         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
@@ -920,6 +959,7 @@ struct ProfileView: View {
                             Text(item.label)
                                 .font(.system(size: 11, weight: appearanceMode == item.mode ? .semibold : .regular))
                                 .foregroundStyle(appearanceMode == item.mode ? AppTheme.onVividFill : AppTheme.textSecondary)
+                                .lineLimit(1).minimumScaleFactor(0.7)
                         }
                         .frame(maxWidth: .infinity).padding(.vertical, 10)
                         .background(appearanceMode == item.mode ? AppTheme.accentFill : Color.clear,
@@ -1176,6 +1216,7 @@ struct ProfileView: View {
                                 .font(.system(.caption2))
                                 .foregroundStyle(AppTheme.textSecondary)
                                 .multilineTextAlignment(.leading)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
                         Spacer()
                         Image(systemName: "chevron.right")

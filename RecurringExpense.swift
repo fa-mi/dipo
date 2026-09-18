@@ -1389,6 +1389,7 @@ struct OrphanedAutoChargesView: View {
                                 .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .padding(.horizontal, 22).padding(.bottom, 4)
+                                .fixedSize(horizontal: false, vertical: true)
                             ForEach(orphans) { tx in
                                 row(tx)
                             }
@@ -1581,6 +1582,7 @@ struct PhantomAutoChargesView: View {
                                 .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .padding(.horizontal, 22).padding(.bottom, 4)
+                                .fixedSize(horizontal: false, vertical: true)
                             ForEach(phantoms) { p in
                                 row(p)
                             }

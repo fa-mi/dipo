@@ -280,6 +280,7 @@ struct ReceivablesView: View {
             Text(loc("receivable.empty_sub"))
                 .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                 .multilineTextAlignment(.center).padding(.horizontal, 40)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .padding(.top, 40)
     }
