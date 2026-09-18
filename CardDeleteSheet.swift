@@ -52,7 +52,6 @@ struct CardDeleteSheet: View {
                     actions
                 }
             }
-            .trackScreen(.cards)
             .navigationTitle(loc("cards.delete_title"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(AppTheme.bg, for: .navigationBar)
