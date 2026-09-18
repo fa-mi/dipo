@@ -1832,13 +1832,13 @@ struct StatisticsView: View {
             AppTheme.bg.ignoresSafeArea()
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 14) {
+                    categoryFilterBar(split, selection: $weekFilter,
+                                      total: total, count: shownCount)
+
                     statHero(title: loc("stats.this_week"), subtitle: weekRangeLabel,
                              value: total, tint: AppTheme.blue,
                              change: change, changeCaption: loc("stats.vs_last_week"),
                              previous: prev)
-
-                    categoryFilterBar(split, selection: $weekFilter,
-                                      total: total, count: shownCount)
 
                     chartCard(values: days.map(\.amount), labels: days.map(\.short),
                               tint: AppTheme.blue, highlightLast: false)
@@ -2056,6 +2056,9 @@ struct StatisticsView: View {
             AppTheme.bg.ignoresSafeArea()
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 14) {
+                    categoryFilterBar(split, selection: $cycleFilter,
+                                      total: expenseSum(shown), count: shown.count)
+
                     VStack(spacing: 12) {
                         VStack(spacing: 2) {
                             Text(label).font(.system(.subheadline, weight: .bold))
@@ -2087,9 +2090,6 @@ struct StatisticsView: View {
                             }
                             .clipShape(RoundedRectangle(cornerRadius: AppRadius.xl))
                     }
-
-                    categoryFilterBar(split, selection: $cycleFilter,
-                                      total: expenseSum(shown), count: shown.count)
 
                     if groups.isEmpty {
                         Text(loc(cycleFilter == .all ? "stats.cycle_empty" : "stats.cycle_empty_cat"))
