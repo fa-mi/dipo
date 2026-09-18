@@ -446,6 +446,13 @@ struct AddLotSheet: View {
         return parseNumber(units) > 0 && parseNumber(price) > 0
     }
 
+    /// A sale is not a purchase: the field has to say which price it is asking
+    /// for, or the number typed into "Harga beli" on the Jual tab is the wrong
+    /// one entirely.
+    private var priceLabel: String {
+        loc(kind == .sell ? "invest.field.price_sell" : "invest.field.price")
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView(showsIndicators: false) {
@@ -458,7 +465,7 @@ struct AddLotSheet: View {
                     } else {
                         HStack(spacing: 12) {
                             MoneyField(label: loc("invest.field.units"), suffix: holding.type.unitLabel, text: $units)
-                            MoneyField(label: loc("invest.field.price"), prefix: curSymbol, text: $price)
+                            MoneyField(label: priceLabel, prefix: curSymbol, text: $price)
                         }
                         MoneyField(label: loc("invest.field.fee"), prefix: curSymbol, text: $fee)
                     }
@@ -561,6 +568,13 @@ struct EditLotSheet: View {
         return parseNumber(units) > 0 && parseNumber(price) > 0
     }
 
+    /// A sale is not a purchase: the field has to say which price it is asking
+    /// for, or the number typed into "Harga beli" on the Jual tab is the wrong
+    /// one entirely.
+    private var priceLabel: String {
+        loc(kind == .sell ? "invest.field.price_sell" : "invest.field.price")
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView(showsIndicators: false) {
@@ -573,7 +587,7 @@ struct EditLotSheet: View {
                     } else {
                         HStack(spacing: 12) {
                             MoneyField(label: loc("invest.field.units"), suffix: holding.type.unitLabel, text: $units)
-                            MoneyField(label: loc("invest.field.price"), prefix: curSymbol, text: $price)
+                            MoneyField(label: priceLabel, prefix: curSymbol, text: $price)
                         }
                         MoneyField(label: loc("invest.field.fee"), prefix: curSymbol, text: $fee)
                     }

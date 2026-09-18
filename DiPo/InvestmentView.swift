@@ -43,6 +43,10 @@ func investSigned(_ v: Double, _ cur: String) -> String {
     default: return body
     }
 }
+/// Percentage with no sign — for a line where a signed amount and an arrow
+/// already state the direction, so it isn't stated three times.
+func investPctAbs(_ p: Double) -> String { String(format: "%.2f%%", abs(p) * 100) }
+
 func investPct(_ p: Double) -> String {
     let sign = ["-": "−", "0": "", "1": "+"][String(investTrendPct(p))] ?? ""
     return String(format: "%@%.2f%%", sign, abs(p) * 100)
@@ -223,6 +227,15 @@ struct PortfolioOverviewCard: View {
     let totals: PortfolioTotals
     let currency: String
 
+    /// Every rupiah the portfolio has made: what the open positions are up or
+    /// down, plus gains already banked and income received.
+    private var totalReturn: Double {
+        totals.unrealizedPL + totals.realizedPL + totals.income
+    }
+    private var totalReturnPct: Double {
+        totals.costBasis > 0 ? totalReturn / totals.costBasis : 0
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 4) {
@@ -236,15 +249,12 @@ struct PortfolioOverviewCard: View {
                     .minimumScaleFactor(0.7).lineLimit(1)
             }
 
-            HStack(spacing: 10) {
-                figure(loc("invest.pl"),
-                       investSigned(totals.unrealizedPL, currency) + "  " + investPct(totals.unrealizedPct),
-                       investPLColor(totals.unrealizedPL), trend: investTrend(totals.unrealizedPL))
-                Rectangle().fill(AppTheme.cardMid).frame(width: 1, height: 34)
-                figure(loc("invest.today"),
-                       investSigned(totals.todayChange, currency),
-                       investPLColor(totals.todayChange), trend: investTrend(totals.todayChange))
-            }
+            // One figure up here: everything the portfolio has made, realised
+            // gains and income included. The per-holding breakdown — return and
+            // today's move — belongs on the rows, where it can be acted on.
+            figure(loc("invest.total"),
+                   investSigned(totalReturn, currency) + "  " + investPct(totalReturnPct),
+                   investPLColor(totalReturn), trend: investTrend(totalReturn))
 
             HStack(spacing: 14) {
                 mini(loc("invest.invested"), investMoney(totals.costBasis, currency), AppTheme.textPrimary)
@@ -263,7 +273,7 @@ struct PortfolioOverviewCard: View {
         .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background {
-            let tint = investPLColor(totals.unrealizedPL)
+            let tint = investPLColor(totalReturn)
             RoundedRectangle(cornerRadius: AppRadius.lg)
                 .fill(AppTheme.cardDark)
                 .overlay {
@@ -385,29 +395,14 @@ struct HoldingRow: View {
                 Text(investMoney(convertedValue(s), displayCurrency))
                     .font(.system(.subheadline, weight: .bold))
                     .foregroundStyle(AppTheme.textPrimary).lineLimit(1).minimumScaleFactor(0.7)
-                // Today's move when the price moved today, otherwise the total
-                // return — so a manually-priced holding still says something
-                // instead of sitting at a flat 0%. Both are LABELLED below, so
-                // the figure never has to be guessed at.
-                let isToday = investTrendPct(todayPct) != 0
-                let pct = isToday ? todayPct : s.unrealizedPct
-                let amount = converted(isToday ? s.todayChange : s.unrealizedPL)
-
-                HStack(spacing: 3) {
-                    if let arrow = investArrow(investTrendPct(pct)) {
-                        Image(systemName: arrow).font(.system(.caption2, weight: .bold))
-                    }
-                    Text(investPct(pct)).font(.system(.caption2, weight: .bold))
+                // Both measures live here now that the summary carries only the
+                // portfolio total: what this holding is up or down overall, and
+                // how its price moved today. Each on one line, amount and
+                // percentage together, named so neither can be mistaken.
+                metricLine(loc("invest.pl_short"), converted(s.unrealizedPL), s.unrealizedPct)
+                if investTrendPct(todayPct) != 0 {
+                    metricLine(loc("invest.today"), converted(s.todayChange), todayPct)
                 }
-                .foregroundStyle(investPLColorPct(pct))
-                .padding(.horizontal, 8).padding(.vertical, 4)
-                .background(investPLColorPct(pct).opacity(0.14), in: Capsule())
-
-                Text(investSigned(amount, displayCurrency) + " · "
-                     + loc(isToday ? "invest.today" : "invest.total_short"))
-                    .font(.system(.caption2))
-                    .foregroundStyle(AppTheme.textSecondary)
-                    .lineLimit(1).minimumScaleFactor(0.8)
             }
         }
         .padding(12)
@@ -423,6 +418,22 @@ struct HoldingRow: View {
         }
         if !holding.symbol.isEmpty { parts.append(holding.symbol.uppercased()) }
         return parts.joined(separator: " · ")
+    }
+
+    /// "Imbal hasil  ↘ −Rp 18.000 · 0,31%" — label, direction, money, percentage.
+    /// The arrow and the signed amount already carry the direction, so the
+    /// percentage is printed unsigned rather than saying it a third time.
+    private func metricLine(_ label: String, _ amount: Double, _ pct: Double) -> some View {
+        let tint = investPLColorPct(pct)
+        return HStack(spacing: 4) {
+            Text(label).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
+            if let arrow = investArrow(investTrendPct(pct)) {
+                Image(systemName: arrow).font(.system(size: 9, weight: .bold)).foregroundStyle(tint)
+            }
+            Text(investSigned(amount, displayCurrency) + " · " + investPctAbs(pct))
+                .font(.system(.caption2, weight: .semibold)).foregroundStyle(tint)
+        }
+        .lineLimit(1).minimumScaleFactor(0.7)
     }
 
     private func convertedValue(_ s: HoldingStats) -> Double { converted(s.marketValue) }
