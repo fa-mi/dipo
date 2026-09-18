@@ -161,6 +161,7 @@ struct StatisticsView: View {
         case others
     }
     @State private var cycleFilter: CycleFilter = .all
+    @State private var weekFilter: CycleFilter = .all
 
     /// Count of "Other" expenses the categoriser could confidently re-map.
     /// Day-of-month the salary lands on (from the first active schedule), used
@@ -507,18 +508,33 @@ struct StatisticsView: View {
     }
 
     /// This calendar week, day by day — the Weekly tile's bars and its page.
-    private var weekDays: [WeekDay] {
-        guard let card = selectedCard else { return [] }
+    private var weekDays: [WeekDay] { weekDays { _ in true } }
+
+    /// This week day by day, keeping only the rows the filter admits — so the
+    /// chart, the day figures and the lists under them all narrow together.
+    private func weekDays(_ keep: (TxRecord) -> Bool) -> [WeekDay] {
         let cal = weekCalendar
-        guard let week = cal.dateInterval(of: .weekOfYear, for: Date()) else { return [] }
+        guard selectedCard != nil,
+              let week = cal.dateInterval(of: .weekOfYear, for: Date()) else { return [] }
         let short = cal.veryShortWeekdaySymbols            // Sunday-first
         let full = cal.weekdaySymbols
         return (0..<7).compactMap { i in
             guard let day = cal.date(byAdding: .day, value: i, to: week.start) else { return nil }
+            let rows = spendTx(on: day).filter(keep)
             let idx = (i + 1) % 7
             return WeekDay(date: day, short: short[idx], full: full[idx],
-                           amount: expenseSum(card.transactions.filter { cal.isDate($0.date, inSameDayAs: day) }),
-                           txCount: spendTx(on: day).count)
+                           amount: expenseSum(rows), txCount: rows.count)
+        }
+    }
+
+    /// Every row this week that counts as spending — what the chips are built from.
+    private var weekSpendTx: [TxRecord] {
+        let cal = weekCalendar
+        guard let card = selectedCard,
+              let w = cal.dateInterval(of: .weekOfYear, for: Date()) else { return [] }
+        return card.transactions.filter {
+            $0.date >= w.start && $0.date < w.end
+                && $0.txSubtype != .transfer && ($0.amount < 0 || $0.txSubtype == .refund)
         }
     }
 
@@ -543,15 +559,15 @@ struct StatisticsView: View {
 
     private var weekTotal: Double { weekDays.reduce(0) { $0 + $1.amount } }
 
-    /// Last week's total, for the Weekly page's comparison.
-    private var previousWeekTotal: Double {
+    /// Last week's total under the same filter, for the Weekly page's comparison.
+    private func previousWeekTotal(_ keep: (TxRecord) -> Bool) -> Double {
         guard let card = selectedCard else { return 0 }
         let cal = weekCalendar
         guard let thisWeek = cal.dateInterval(of: .weekOfYear, for: Date()),
               let lastWeekDay = cal.date(byAdding: .day, value: -7, to: thisWeek.start),
               let lastWeek = cal.dateInterval(of: .weekOfYear, for: lastWeekDay) else { return 0 }
         return expenseSum(card.transactions.filter {
-            $0.date >= lastWeek.start && $0.date < lastWeek.end
+            $0.date >= lastWeek.start && $0.date < lastWeek.end && keep($0)
         })
     }
 
@@ -1800,23 +1816,31 @@ struct StatisticsView: View {
     }
 
     private var weeklyDetail: some View {
-        let elapsed = weekDays.filter { !$0.isFuture }
-        let change: Double? = previousWeekTotal > 0
-            ? (weekTotal - previousWeekTotal) / previousWeekTotal * 100 : nil
-        let avg = elapsed.isEmpty ? 0 : weekTotal / Double(elapsed.count)
-        let busiest = weekDays.max { $0.amount < $1.amount }
+        let split = categorySplit(weekSpendTx)
+        let keep = matches(weekFilter, tailCats: split.tailCats)
+        let days = weekDays(keep)
+        let total = days.reduce(0.0) { $0 + $1.amount }
+        let prev = previousWeekTotal(keep)
+        let elapsed = days.filter { !$0.isFuture }
+        let change: Double? = prev > 0 ? (total - prev) / prev * 100 : nil
+        let avg = elapsed.isEmpty ? 0 : total / Double(elapsed.count)
+        let busiest = days.max { $0.amount < $1.amount }
         let quietCount = elapsed.filter { $0.amount <= 0 }.count
+        let shownCount = weekSpendTx.filter(keep).count
 
         return ZStack {
             AppTheme.bg.ignoresSafeArea()
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 14) {
                     statHero(title: loc("stats.this_week"), subtitle: weekRangeLabel,
-                             value: weekTotal, tint: AppTheme.blue,
+                             value: total, tint: AppTheme.blue,
                              change: change, changeCaption: loc("stats.vs_last_week"),
-                             previous: previousWeekTotal)
+                             previous: prev)
 
-                    chartCard(values: weekDays.map(\.amount), labels: weekDays.map(\.short),
+                    categoryFilterBar(split, selection: $weekFilter,
+                                      total: total, count: shownCount)
+
+                    chartCard(values: days.map(\.amount), labels: days.map(\.short),
                               tint: AppTheme.blue, highlightLast: false)
 
                     HStack(spacing: 10) {
@@ -1828,9 +1852,9 @@ struct StatisticsView: View {
                     }
 
                     VStack(spacing: 0) {
-                        ForEach(Array(weekDays.enumerated()), id: \.element.id) { i, d in
-                            dayRow(d)
-                            if i < weekDays.count - 1 {
+                        ForEach(Array(days.enumerated()), id: \.element.id) { i, d in
+                            dayRow(d, keep: keep)
+                            if i < days.count - 1 {
                                 Rectangle().fill(AppTheme.cardMid.opacity(0.6)).frame(height: 1)
                             }
                         }
@@ -1849,8 +1873,8 @@ struct StatisticsView: View {
 
     /// One day of the week: tap it to open the transactions behind its figure.
     @ViewBuilder
-    private func dayRow(_ d: WeekDay) -> some View {
-        let rows = expandedDay == d.date ? spendTx(on: d.date) : []
+    private func dayRow(_ d: WeekDay, keep: (TxRecord) -> Bool) -> some View {
+        let rows = expandedDay == d.date ? spendTx(on: d.date).filter(keep) : []
         let openable = !d.isFuture && d.txCount > 0
         VStack(spacing: 0) {
             Button {
@@ -2022,37 +2046,8 @@ struct StatisticsView: View {
             .reduce(0.0) { $0 + convertedAmount($1) }
         let expense = expenseSum(txs)
         let spend = txs.filter { $0.txSubtype != .transfer && ($0.amount < 0 || $0.txSubtype == .refund) }
-        // Only the categories this cycle actually has, biggest first — a filter
-        // offering empty options is a filter that wastes taps.
-        let catTotals = Dictionary(grouping: spend, by: \.category)
-            .map { (cat: $0.key, total: expenseSum($0.value)) }
-            .sorted { $0.total > $1.total }
-        let top = Array(catTotals.prefix(4))
-        let tail = Array(catTotals.dropFirst(4))
-        let tailCats = Set(tail.map(\.cat))
-        // Once you're looking at the tail, its own chips appear — otherwise a
-        // small category below the top four could never be isolated.
-        let showTail: Bool = {
-            switch cycleFilter {
-            case .others:          return true
-            case .category(let c): return tailCats.contains(c)
-            case .all:             return false
-            }
-        }()
-        let shown: [TxRecord] = {
-            switch cycleFilter {
-            case .all:             return spend
-            case .category(let c): return spend.filter { $0.category == c }
-            case .others:          return spend.filter { tailCats.contains($0.category) }
-            }
-        }()
-        let filterLabel: String = {
-            switch cycleFilter {
-            case .all:             return loc("stats.filter_all")
-            case .category(let c): return c.displayLabel
-            case .others:          return loc("stats.filter_others")
-            }
-        }()
+        let split = categorySplit(spend)
+        let shown = spend.filter(matches(cycleFilter, tailCats: split.tailCats))
         let groups = Dictionary(grouping: shown) { Calendar.current.startOfDay(for: $0.date) }
             .map { (day: $0.key, rows: $0.value.sorted { $0.date > $1.date }) }
             .sorted { $0.day > $1.day }
@@ -2093,44 +2088,8 @@ struct StatisticsView: View {
                             .clipShape(RoundedRectangle(cornerRadius: AppRadius.xl))
                     }
 
-                    if !catTotals.isEmpty {
-                        VStack(alignment: .leading, spacing: 10) {
-                            // Full-bleed like the Search filters: the scroll view
-                            // spans the screen and the 22pt inset lives on its
-                            // content, so chips run to the edge and scroll past it
-                            // instead of being clipped 22pt in.
-                            ScrollView(.horizontal, showsIndicators: false) {
-                                HStack(spacing: 8) {
-                                    categoryChip(loc("stats.filter_all"), .all, AppTheme.blue)
-                                    ForEach(top, id: \.cat) { c in
-                                        categoryChip(c.cat.displayLabel, .category(c.cat), c.cat.color)
-                                    }
-                                    if !tail.isEmpty {
-                                        categoryChip(loc("stats.filter_others"), .others, AppTheme.purple)
-                                        if showTail {
-                                            ForEach(tail, id: \.cat) { c in
-                                                categoryChip(c.cat.displayLabel, .category(c.cat), c.cat.color)
-                                            }
-                                        }
-                                    }
-                                }
-                                .padding(.horizontal, 22)
-                                .padding(.vertical, 2)
-                            }
-                            .padding(.horizontal, -22)
-                            // What the filter currently adds up to, so the list is
-                            // never a set of rows with no total attached.
-                            HStack {
-                                Text(filterLabel)
-                                    .font(.system(.caption, weight: .semibold))
-                                    .foregroundStyle(AppTheme.textPrimary)
-                                Spacer()
-                                Text("\(money(expenseSum(shown))) · \(String(format: loc("stats.tx_count"), shown.count))")
-                                    .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
-                                    .lineLimit(1).minimumScaleFactor(0.7)
-                            }
-                        }
-                    }
+                    categoryFilterBar(split, selection: $cycleFilter,
+                                      total: expenseSum(shown), count: shown.count)
 
                     if groups.isEmpty {
                         Text(loc(cycleFilter == .all ? "stats.cycle_empty" : "stats.cycle_empty_cat"))
@@ -2173,13 +2132,104 @@ struct StatisticsView: View {
         .task(id: label) { cycleFilter = .all }
     }
 
-    private func categoryChip(_ label: String, _ value: CycleFilter, _ tint: Color) -> some View {
-        let isOn = cycleFilter == value
+    /// The categories present in a slice, biggest first, split into the four
+    /// shown as chips and the tail that hides behind "Others".
+    private struct CategorySplit {
+        var top: [(cat: TxCategory, total: Double)] = []
+        var tail: [(cat: TxCategory, total: Double)] = []
+        var tailCats: Set<TxCategory> = []
+        var isEmpty: Bool { top.isEmpty && tail.isEmpty }
+    }
+
+    private func categorySplit(_ rows: [TxRecord]) -> CategorySplit {
+        let totals = Dictionary(grouping: rows, by: \.category)
+            .map { (cat: $0.key, total: expenseSum($0.value)) }
+            .sorted { $0.total > $1.total }
+        let tail = Array(totals.dropFirst(4))
+        return CategorySplit(top: Array(totals.prefix(4)),
+                             tail: tail,
+                             tailCats: Set(tail.map(\.cat)))
+    }
+
+    /// The rule a filter puts on a row. Returned as a predicate so the caller can
+    /// apply the SAME test to its chart, its totals and its list.
+    private func matches(_ filter: CycleFilter,
+                         tailCats: Set<TxCategory>) -> (TxRecord) -> Bool {
+        switch filter {
+        case .all:             return { _ in true }
+        case .category(let c): return { $0.category == c }
+        case .others:          return { tailCats.contains($0.category) }
+        }
+    }
+
+    /// The chip bar shared by the cycle and weekly pages, so the two read alike.
+    @ViewBuilder
+    private func categoryFilterBar(_ split: CategorySplit,
+                                   selection: Binding<CycleFilter>,
+                                   total: Double, count: Int) -> some View {
+        if !split.isEmpty {
+            let showTail: Bool = {
+                switch selection.wrappedValue {
+                case .others:          return true
+                case .category(let c): return split.tailCats.contains(c)
+                case .all:             return false
+                }
+            }()
+            let label: String = {
+                switch selection.wrappedValue {
+                case .all:             return loc("stats.filter_all")
+                case .category(let c): return c.displayLabel
+                case .others:          return loc("stats.filter_others")
+                }
+            }()
+            VStack(alignment: .leading, spacing: 10) {
+                // Full-bleed like the Search filters: the scroll view spans the
+                // screen and the 22pt inset lives on its content, so chips run to
+                // the edge and scroll past it instead of being clipped 22pt in.
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        categoryChip(loc("stats.filter_all"), .all, AppTheme.blue, selection)
+                        ForEach(split.top, id: \.cat) { c in
+                            categoryChip(c.cat.displayLabel, .category(c.cat), c.cat.color, selection)
+                        }
+                        if !split.tail.isEmpty {
+                            categoryChip(loc("stats.filter_others"), .others, AppTheme.purple, selection)
+                            // Once you're looking at the tail, its own chips appear —
+                            // otherwise a small category could never be isolated.
+                            if showTail {
+                                ForEach(split.tail, id: \.cat) { c in
+                                    categoryChip(c.cat.displayLabel, .category(c.cat), c.cat.color, selection)
+                                }
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 22)
+                    .padding(.vertical, 2)
+                }
+                .padding(.horizontal, -22)
+                // What the filter currently adds up to, so the page is never a set
+                // of figures with no total attached.
+                HStack {
+                    Text(label)
+                        .font(.system(.caption, weight: .semibold))
+                        .foregroundStyle(AppTheme.textPrimary)
+                    Spacer()
+                    Text("\(money(total)) · \(String(format: loc("stats.tx_count"), count))")
+                        .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
+                        .lineLimit(1).minimumScaleFactor(0.7)
+                }
+            }
+        }
+    }
+
+    private func categoryChip(_ label: String, _ value: CycleFilter, _ tint: Color,
+                              _ selection: Binding<CycleFilter>) -> some View {
+        let isOn = selection.wrappedValue == value
         return Button {
             HapticManager.shared.tap()
             withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
                 // Tapping the active chip clears back to All.
-                cycleFilter = isOn ? .all : value
+                selection.wrappedValue = isOn ? .all : value
             }
         } label: {
             Text(label)
