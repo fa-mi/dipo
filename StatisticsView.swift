@@ -156,8 +156,8 @@ struct StatisticsView: View {
     @State private var expandedDay: Date? = nil
     @State private var inspectedTx: TxRecord? = nil
     /// Category filter on the cycle page. Cleared whenever a different cycle opens.
-    /// `others` is the tail below the top six, kept as its own case so the chips
-    /// stay a single row and the totals still reconcile: all = top six + others.
+    /// `others` is the tail below the top four, kept as its own case so the chips
+    /// stay a single row and the totals still reconcile: all = top four + others.
     private enum CycleFilter: Hashable {
         case all
         case category(TxCategory)
@@ -2064,11 +2064,11 @@ struct StatisticsView: View {
         let catTotals = Dictionary(grouping: spend, by: \.category)
             .map { (cat: $0.key, total: expenseSum($0.value)) }
             .sorted { $0.total > $1.total }
-        let top = Array(catTotals.prefix(6))
-        let tail = Array(catTotals.dropFirst(6))
+        let top = Array(catTotals.prefix(4))
+        let tail = Array(catTotals.dropFirst(4))
         let tailCats = Set(tail.map(\.cat))
         // Once you're looking at the tail, its own chips appear — otherwise a
-        // small category below the top six could never be isolated.
+        // small category below the top four could never be isolated.
         let showTail: Bool = {
             switch cycleFilter {
             case .others:          return true
