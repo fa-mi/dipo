@@ -154,7 +154,6 @@ struct StatisticsView: View {
     @State private var showAllCategories = false
     /// Which day of the Weekly page is open, and which of its rows was tapped.
     @State private var expandedDay: Date? = nil
-    @State private var inspectedTx: TxRecord? = nil
     /// Category filter on the cycle page. Cleared whenever a different cycle opens.
     /// `others` is the tail below the top four, kept as its own case so the chips
     /// stay a single row and the totals still reconcile: all = top four + others.
@@ -1866,15 +1865,6 @@ struct StatisticsView: View {
         }
         .navigationTitle(loc("stats.weekly"))
         .navigationBarTitleDisplayMode(.inline)
-        // Attached HERE, not on the root: the stats screen already stacks four
-        // sheets, and SwiftUI drops later ones when too many share a view.
-        .sheet(item: $inspectedTx) { tx in
-            TransactionDetailSheet(tx: tx)
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
-                .presentationBackground(AppTheme.bg)
-                .preferredColorScheme(appColorScheme())
-        }
     }
 
     /// One day of the week: tap it to open the transactions behind its figure.
@@ -1930,15 +1920,8 @@ struct StatisticsView: View {
             if !rows.isEmpty {
                 VStack(spacing: 10) {
                     ForEach(rows) { tx in
-                        Button {
-                            HapticManager.shared.tap()
-                            inspectedTx = tx
-                        } label: {
-                            TxRow(tx: tx, sourceCard: selectedCard,
-                                  showCard: false, animateEntrance: false)
-                                .contentShape(Rectangle())
-                        }
-                        .buttonStyle(ScaleButtonStyle())
+                        TxRow(tx: tx, sourceCard: selectedCard,
+                              showCard: false, animateEntrance: false)
                     }
                 }
                 .padding(.vertical, 12)
@@ -2182,15 +2165,8 @@ struct StatisticsView: View {
                                 }
                                 VStack(spacing: 10) {
                                     ForEach(g.rows) { tx in
-                                        Button {
-                                            HapticManager.shared.tap()
-                                            inspectedTx = tx
-                                        } label: {
-                                            TxRow(tx: tx, sourceCard: selectedCard,
-                                                  showCard: false, animateEntrance: false)
-                                                .contentShape(Rectangle())
-                                        }
-                                        .buttonStyle(ScaleButtonStyle())
+                                        TxRow(tx: tx, sourceCard: selectedCard,
+                                              showCard: false, animateEntrance: false)
                                     }
                                 }
                                 .padding(14)
@@ -2209,13 +2185,6 @@ struct StatisticsView: View {
         // Keyed to the cycle, not to appearing: opening a different cycle starts
         // unfiltered, but coming back from a transaction sheet keeps your filter.
         .task(id: label) { cycleFilter = .all }
-        .sheet(item: $inspectedTx) { tx in
-            TransactionDetailSheet(tx: tx)
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
-                .presentationBackground(AppTheme.bg)
-                .preferredColorScheme(appColorScheme())
-        }
     }
 
     private func categoryChip(_ label: String, _ value: CycleFilter, _ tint: Color) -> some View {
