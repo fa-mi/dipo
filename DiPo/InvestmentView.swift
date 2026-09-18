@@ -381,15 +381,18 @@ struct HoldingRow: View {
                     .foregroundStyle(AppTheme.textSecondary).lineLimit(1)
             }
             Spacer(minLength: 8)
-            VStack(alignment: .trailing, spacing: 5) {
+            VStack(alignment: .trailing, spacing: 4) {
                 Text(investMoney(convertedValue(s), displayCurrency))
                     .font(.system(.subheadline, weight: .bold))
                     .foregroundStyle(AppTheme.textPrimary).lineLimit(1).minimumScaleFactor(0.7)
-                // The up/down badge — the one thing the user checks first.
-                // Today's move when the price moved today; otherwise the total
-                // return, so a manually-priced holding still says something
-                // rather than sitting at a flat 0%.
-                let pct = investTrendPct(todayPct) != 0 ? todayPct : s.unrealizedPct
+                // Today's move when the price moved today, otherwise the total
+                // return — so a manually-priced holding still says something
+                // instead of sitting at a flat 0%. Both are LABELLED below, so
+                // the figure never has to be guessed at.
+                let isToday = investTrendPct(todayPct) != 0
+                let pct = isToday ? todayPct : s.unrealizedPct
+                let amount = converted(isToday ? s.todayChange : s.unrealizedPL)
+
                 HStack(spacing: 3) {
                     if let arrow = investArrow(investTrendPct(pct)) {
                         Image(systemName: arrow).font(.system(.caption2, weight: .bold))
@@ -399,6 +402,12 @@ struct HoldingRow: View {
                 .foregroundStyle(investPLColorPct(pct))
                 .padding(.horizontal, 8).padding(.vertical, 4)
                 .background(investPLColorPct(pct).opacity(0.14), in: Capsule())
+
+                Text(investSigned(amount, displayCurrency) + " · "
+                     + loc(isToday ? "invest.today" : "invest.total_short"))
+                    .font(.system(.caption2))
+                    .foregroundStyle(AppTheme.textSecondary)
+                    .lineLimit(1).minimumScaleFactor(0.8)
             }
         }
         .padding(12)
@@ -416,10 +425,12 @@ struct HoldingRow: View {
         return parts.joined(separator: " · ")
     }
 
-    private func convertedValue(_ s: HoldingStats) -> Double {
+    private func convertedValue(_ s: HoldingStats) -> Double { converted(s.marketValue) }
+
+    private func converted(_ v: Double) -> Double {
         holding.currency == displayCurrency
-            ? s.marketValue
-            : CurrencyManager.shared.convert(s.marketValue, from: holding.currency, to: displayCurrency)
+            ? v
+            : CurrencyManager.shared.convert(v, from: holding.currency, to: displayCurrency)
     }
 }
 
