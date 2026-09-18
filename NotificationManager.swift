@@ -1022,6 +1022,7 @@ struct NotificationCenterView: View {
             Text(loc("notif.info"))
                 .font(.system(.footnote)).foregroundStyle(AppTheme.textSecondary.opacity(0.7))
                 .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 

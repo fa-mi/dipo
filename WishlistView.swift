@@ -1065,6 +1065,7 @@ struct GoalsEmptyState: View {
                     .font(.system(.subheadline))
                     .foregroundStyle(AppTheme.textSecondary)
                     .multilineTextAlignment(.center).lineSpacing(3)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             Button { HapticManager.shared.tap(); onAdd() } label: {
                 HStack(spacing: 8) {

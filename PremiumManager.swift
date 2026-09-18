@@ -708,6 +708,7 @@ struct PaywallView: View {
                             .padding(.horizontal, 32)
                             .opacity(appeared ? 1 : 0)
                             .animation(AppMotion.appear, value: appeared)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                     .padding(.top, 32)
 
@@ -937,6 +938,7 @@ struct PaywallView: View {
                             .font(.system(.caption2))
                             .foregroundStyle(AppTheme.textSecondary.opacity(0.5))
                             .multilineTextAlignment(.center)
+                            .fixedSize(horizontal: false, vertical: true)
 
                         // App Store Guideline 3.1.2(c): the subscription
                         // purchase flow MUST contain functional links to

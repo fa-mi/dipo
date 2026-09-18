@@ -659,6 +659,7 @@ struct FinancialBriefingView: View {
                             Text(loc("brief.disclaimer"))
                                 .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary.opacity(0.7))
                                 .padding(.horizontal, 22)
+                                .fixedSize(horizontal: false, vertical: true)
 
                             Spacer(minLength: 30)
                         }

@@ -1485,6 +1485,7 @@ struct CardTransferSheet: View {
             }
             Text(loc("transfer.subtitle")).font(.system(.footnote)).foregroundStyle(AppTheme.textSecondary)
                 .multilineTextAlignment(.center).padding(.horizontal, 32)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .padding(.bottom, 2)
     }

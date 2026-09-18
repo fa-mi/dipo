@@ -838,6 +838,7 @@ private struct UnityEmptyCard: View {
             Text(loc("unity.empty")).font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
             Text(loc("unity.empty_sub")).font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                 .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
             Button {
                 HapticManager.shared.tap(); onCreate()
             } label: {
@@ -1297,6 +1298,7 @@ struct InviteSheet: View {
                             .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
                             .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.purple.opacity(0.3), lineWidth: 1))
                         Text(loc("unity.invite_hint")).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary.opacity(0.8))
+                            .fixedSize(horizontal: false, vertical: true)
                     }.padding(.horizontal, 22)
 
                     if let r = result {

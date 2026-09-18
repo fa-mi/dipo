@@ -833,6 +833,7 @@ struct ProfileView: View {
                         ? loc("free.title")
                         : loc("royal.title")
                     Text(subtitle).font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer()
                 if premiumMgr.plan == .free {
@@ -1208,6 +1209,7 @@ struct ProfileView: View {
                                 .font(.system(.caption2))
                                 .foregroundStyle(AppTheme.textSecondary)
                                 .multilineTextAlignment(.leading)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
                         Spacer()
                         Image(systemName: "chevron.right")

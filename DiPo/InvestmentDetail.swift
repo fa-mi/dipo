@@ -462,6 +462,7 @@ struct InvestEmptyState: View {
                 Text(loc("invest.empty_sub")).font(.system(.footnote))
                     .foregroundStyle(AppTheme.textSecondary).multilineTextAlignment(.center)
                     .padding(.horizontal, 20)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             Button { HapticManager.shared.tap(); onAdd() } label: {
                 HStack(spacing: 8) {
