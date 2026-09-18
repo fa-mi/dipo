@@ -57,6 +57,17 @@ func investUnits(_ v: Double) -> String {
     f.decimalSeparator = ","
     return f.string(from: v as NSNumber) ?? "\(v)"
 }
+/// Colour for a RATIO, judged at the precision percentages are printed at.
+/// `investPLColor` uses a rupiah-sized epsilon; handing it 0.003 would paint a
+/// printed "−0.30%" grey, so ratios get their own threshold.
+func investPLColorPct(_ p: Double) -> Color {
+    switch investTrendPct(p) {
+    case 1:  return AppTheme.accent
+    case -1: return AppTheme.red
+    default: return AppTheme.textSecondary
+    }
+}
+
 func investPLColor(_ v: Double) -> Color {
     switch investTrend(v) {
     case 1:  return AppTheme.accent
@@ -347,6 +358,14 @@ struct HoldingRow: View {
     let holding: InvestmentHolding
     let displayCurrency: String
 
+    /// Today's move against the previous close. This is what answers "which of
+    /// my holdings is down": the total return can sit at zero — bought at 3.270,
+    /// still 3.270 — while the price fell all day, which is how BRI read as flat.
+    private var todayPct: Double {
+        guard !holding.type.priceIsFixed, holding.prevClose > 0 else { return 0 }
+        return (holding.lastPrice - holding.prevClose) / holding.prevClose
+    }
+
     var body: some View {
         let s = holding.stats()
         HStack(spacing: 12) {
@@ -367,15 +386,19 @@ struct HoldingRow: View {
                     .font(.system(.subheadline, weight: .bold))
                     .foregroundStyle(AppTheme.textPrimary).lineLimit(1).minimumScaleFactor(0.7)
                 // The up/down badge — the one thing the user checks first.
+                // Today's move when the price moved today; otherwise the total
+                // return, so a manually-priced holding still says something
+                // rather than sitting at a flat 0%.
+                let pct = investTrendPct(todayPct) != 0 ? todayPct : s.unrealizedPct
                 HStack(spacing: 3) {
-                    if let arrow = investArrow(investTrendPct(s.unrealizedPct)) {
+                    if let arrow = investArrow(investTrendPct(pct)) {
                         Image(systemName: arrow).font(.system(.caption2, weight: .bold))
                     }
-                    Text(investPct(s.unrealizedPct)).font(.system(.caption2, weight: .bold))
+                    Text(investPct(pct)).font(.system(.caption2, weight: .bold))
                 }
-                .foregroundStyle(investPLColor(s.unrealizedPL))
+                .foregroundStyle(investPLColorPct(pct))
                 .padding(.horizontal, 8).padding(.vertical, 4)
-                .background(investPLColor(s.unrealizedPL).opacity(0.14), in: Capsule())
+                .background(investPLColorPct(pct).opacity(0.14), in: Capsule())
             }
         }
         .padding(12)

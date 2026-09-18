@@ -243,7 +243,7 @@ struct HoldingDetailView: View {
                 actionButton(loc("invest.sell"), "arrow.up.right", AppTheme.blue) { sheet = .addLot(.sell) }
             }
             if !holding.type.priceIsFixed {
-                actionButton(loc("invest.update_price"), "arrow.triangle.2.circlepath", AppTheme.textSecondary) { sheet = .price }
+                actionButton(loc("invest.update_price_short"), "arrow.triangle.2.circlepath", AppTheme.textSecondary) { sheet = .price }
             }
         }
     }
@@ -264,7 +264,7 @@ struct HoldingDetailView: View {
         Button { HapticManager.shared.tap(); action() } label: {
             HStack(spacing: 6) {
                 Image(systemName: icon).font(.system(.caption, weight: .bold))
-                Text(title).font(.system(.caption, weight: .semibold)).lineLimit(1).minimumScaleFactor(0.8)
+                Text(title).font(.system(.caption, weight: .semibold)).lineLimit(1).minimumScaleFactor(0.95)
             }
             .foregroundStyle(tint)
             .frame(maxWidth: .infinity).padding(.vertical, 12)
