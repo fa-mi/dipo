@@ -30,12 +30,27 @@ enum PriceService {
     }
 
     /// Refresh every auto-priced holding that has a symbol.
+    ///
+    /// One request to the Worker covers the whole portfolio and is served from
+    /// the edge cache, so refreshing costs the upstreams almost nothing however
+    /// many people do it. Anything the Worker doesn't answer for falls back to
+    /// the direct call below — a Worker mid-deploy shouldn't mean no prices.
     @discardableResult
     static func refresh(_ holdings: [InvestmentHolding], context: ModelContext) async -> Outcome {
         var out = Outcome()
-        for h in holdings where h.type.supportsAutoPrice && !h.manualPrice
-                              && !h.symbol.trimmingCharacters(in: .whitespaces).isEmpty {
-            guard let q = await quote(for: h) else { continue }
+        let targets = holdings.filter {
+            $0.type.supportsAutoPrice && !$0.manualPrice
+                && !$0.symbol.trimmingCharacters(in: .whitespaces).isEmpty
+        }
+        guard !targets.isEmpty else { return out }
+
+        var quotes = await workerQuotes(for: targets)
+        for h in targets where quotes[cacheKey(for: h)] == nil {
+            if let q = await quote(for: h) { quotes[cacheKey(for: h)] = q }
+        }
+
+        for h in targets {
+            guard let q = quotes[cacheKey(for: h)] else { continue }
             out.checked += 1
             // Compare before overwriting — a hundredth of a rupiah is noise.
             if abs(q.price - h.lastPrice) > 0.005 { out.changed += 1 }
@@ -50,6 +65,54 @@ enum PriceService {
         if out.checked > 0 { try? context.save() }
         return out
     }
+
+    // MARK: Worker (cached, batched)
+
+    private static let pricesURL =
+        "https://dipo-receipt-scanner.fahmi-aquinas.workers.dev/api/prices"
+
+    /// Must match the key the Worker builds, or every quote looks like a miss.
+    private static func cacheKey(for h: InvestmentHolding) -> String {
+        let kind = h.type == .crypto ? "crypto" : "stock"
+        return "\(kind):\(h.symbol.trimmingCharacters(in: .whitespaces).lowercased()):\(h.currency.lowercased())"
+    }
+
+    /// One round trip for the whole portfolio. Returns whatever came back; a
+    /// symbol the Worker couldn't price is simply absent, never zero.
+    private static func workerQuotes(for holdings: [InvestmentHolding]) async -> [String: Quote] {
+        guard let url = URL(string: pricesURL) else { return [:] }
+        let items: [[String: String]] = holdings.map {
+            ["type": $0.type == .crypto ? "crypto" : "stock",
+             "symbol": $0.symbol.trimmingCharacters(in: .whitespaces),
+             "currency": $0.currency]
+        }
+        var req = URLRequest(url: url, timeoutInterval: 12)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try? JSONSerialization.data(withJSONObject: ["items": items])
+
+        do {
+            let (data, resp) = try await URLSession.shared.data(for: req)
+            guard let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode),
+                  let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let prices = obj["prices"] as? [String: Any]
+            else { return [:] }
+
+            var out: [String: Quote] = [:]
+            for (key, value) in prices {
+                guard let node = value as? [String: Any],
+                      let price = (node["price"] as? NSNumber)?.doubleValue, price > 0
+                else { continue }
+                let prev = (node["prevClose"] as? NSNumber)?.doubleValue ?? 0
+                out[key] = Quote(price: price, prevClose: prev)
+            }
+            return out
+        } catch {
+            return [:]
+        }
+    }
+
+    // MARK: Direct (fallback)
 
     private static func quote(for h: InvestmentHolding) async -> Quote? {
         switch h.type {
