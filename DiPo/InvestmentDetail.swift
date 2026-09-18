@@ -157,7 +157,11 @@ struct HoldingDetailView: View {
                     .contentTransition(.numericText()).minimumScaleFactor(0.6).lineLimit(1)
             }
             HStack(spacing: 8) {
-                plChip(investSigned(s.unrealizedPL, cur) + " (" + investPct(s.unrealizedPct) + ")",
+                // Labelled, because two bare chips side by side don't say which
+                // figure is which: one is the gain against your average buy, the
+                // other is today's move against the previous close.
+                plChip(loc("invest.pl_short") + " " + investSigned(s.unrealizedPL, cur)
+                       + " (" + investPct(s.unrealizedPct) + ")",
                        investPLColor(s.unrealizedPL), trend: investTrend(s.unrealizedPL))
                 if investTrend(s.todayChange) != 0 {
                     plChip(loc("invest.today") + " " + investSigned(s.todayChange, cur),
@@ -182,6 +186,7 @@ struct HoldingDetailView: View {
                 Image(systemName: arrow).font(.system(.caption2, weight: .bold))
             }
             Text(text).font(.system(.caption, weight: .bold))
+                .lineLimit(1).minimumScaleFactor(0.75)
         }
         .foregroundStyle(tint).padding(.horizontal, 10).padding(.vertical, 5)
         .background(tint.opacity(0.15), in: Capsule())
