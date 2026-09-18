@@ -993,6 +993,7 @@ struct PaywallView: View {
             // Dismiss when plan upgrades (free→paid or premium→royal)
             if newPlan != oldPlan && newPlan != .free { dismiss() }
         }
+        .trackScreen(.paywall)
     }
 
     /// Single Royal hero card. Used to be one of two tappable plan cards

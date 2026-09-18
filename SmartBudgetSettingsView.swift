@@ -445,6 +445,7 @@ struct SmartBudgetSettingsSheet: View {
                 .preferredColorScheme(appColorScheme())
         }
         }
+        .trackScreen(.smartBudgetSettings)
     }
 
     // MARK: - Overview Tab

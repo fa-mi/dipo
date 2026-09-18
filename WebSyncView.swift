@@ -72,6 +72,7 @@ struct WebSyncView: View {
                       confirmLabel: loc("websync.revoke_action")) {
             Task { await service.revoke() }
         }
+        .trackScreen(.webSync)
     }
 
     // MARK: Header

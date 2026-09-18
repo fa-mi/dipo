@@ -112,6 +112,7 @@ struct ContactAdminSheet: View {
             TicketThreadView(ticket: ticket)
                 .onDisappear { Task { await svc.fetchTickets() } }
         }
+        .trackScreen(.support)
     }
 
     // MARK: - Ticket List

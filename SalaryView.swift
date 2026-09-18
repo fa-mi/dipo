@@ -500,6 +500,7 @@ struct SalaryView: View {
                 .preferredColorScheme(appColorScheme())
             }
         }
+        .trackScreen(.salarySchedule)
     }
 
     private var header: some View {
