@@ -535,6 +535,7 @@ struct RecurringExpensesView: View {
                     .preferredColorScheme(appColorScheme())
             }
         }
+        .trackScreen(.recurring)
     }
 
     private var header: some View {

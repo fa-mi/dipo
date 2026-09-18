@@ -674,6 +674,7 @@ struct TransactionDetailSheet: View {
                 onCancel: { pendingDelete = nil })
             .preferredColorScheme(appColorScheme())
         }
+        .trackScreen(.transactionDetail)
     }
 
     // MARK: Detail view
@@ -1773,6 +1774,7 @@ struct AddTransactionSheet: View {
             creditOverConfirmed = true
             saveTransaction()
         }
+        .trackScreen(.addTransaction)
     }
 
     private var budgetAlertMessage: String {

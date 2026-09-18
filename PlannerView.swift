@@ -194,17 +194,22 @@ struct PlannerView: View {
     private let columns = [GridItem(.flexible(), spacing: 14), GridItem(.flexible(), spacing: 14)]
 
     var body: some View {
-        if embedded {
-            content
-        } else {
-            NavigationStack {
+        // Grouped so the counter attaches to the screen rather than to one
+        // branch: a ViewBuilder if/else is not itself a view you can modify.
+        Group {
+            if embedded {
                 content
-                    .navigationTitle(loc("planner.nav"))
-                    .navigationBarTitleDisplayMode(.inline)
-                    .toolbarBackground(AppTheme.bg, for: .navigationBar)
-                    .doneToolbar { dismiss() }
+            } else {
+                NavigationStack {
+                    content
+                        .navigationTitle(loc("planner.nav"))
+                        .navigationBarTitleDisplayMode(.inline)
+                        .toolbarBackground(AppTheme.bg, for: .navigationBar)
+                        .doneToolbar { dismiss() }
+                }
             }
         }
+        .trackScreen(.planner)
     }
 
     private var content: some View {

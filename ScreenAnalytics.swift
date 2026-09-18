@@ -27,7 +27,7 @@ enum Screen: String {
     case smartBudget, smartBudgetSettings, budgetRecommendation
     case spendingAudit, obligations, debts, receivables, planner
     case salarySchedule, recurring, savingsGoals, unitySavings
-    case cards, cardForm, transfer, mainCardGate
+    case cardForm, transfer, mainCardGate
     case askDiPo, receiptScan, backup, webSync, support, paywall
 }
 

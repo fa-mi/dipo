@@ -158,6 +158,7 @@ struct ReceiptScanFlow: View {
             phase = .scanning(img)
             runScan(image: img)
         }
+        .trackScreen(.receiptScan)
     }
 
     // MARK: - Actions

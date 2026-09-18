@@ -359,6 +359,7 @@ struct SmartRecommendationView: View {
                 .presentationBackground(AppTheme.bg)
                 .preferredColorScheme(appColorScheme())
         }
+        .trackScreen(.budgetRecommendation)
     }
 
     // MARK: Header

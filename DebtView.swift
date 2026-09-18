@@ -233,6 +233,7 @@ struct DebtView: View {
         PremiumGate(feature: .smartDebt) {
             debtContent
         }
+        .trackScreen(.debts)
     }
 
     private var activeDebts: [DebtRecord] { debts.filter(\.isActive) }

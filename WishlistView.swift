@@ -356,6 +356,7 @@ struct WishlistView: View {
         }
         } // end FeatureStack
         } // end PremiumGate
+        .trackScreen(.savingsGoals)
     }
 
     private var header: some View {

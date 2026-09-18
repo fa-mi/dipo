@@ -769,6 +769,7 @@ struct AllSharedGoalsView: View {
         .navigationTitle(loc("unity.title"))
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { unity.start() }
+        .trackScreen(.unitySavings)
     }
 }
 

@@ -516,6 +516,7 @@ struct ProfileView: View {
         .onAppear {
             withAnimation(.spring(response: 0.6, dampingFraction: 0.75).delay(0.1)) { appeared = true }
         }
+        .trackScreen(.profile)
     }
 
     // MARK: - Sub-Views

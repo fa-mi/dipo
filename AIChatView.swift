@@ -355,6 +355,7 @@ struct AIChatView: View {
                 .presentationBackground(AppTheme.bg)
                 .preferredColorScheme(appColorScheme())
         }
+        .trackScreen(.askDiPo)
     }
 
     // MARK: Header

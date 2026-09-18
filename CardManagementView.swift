@@ -440,6 +440,7 @@ struct CardListView: View {
                 .presentationBackground(AppTheme.bg)
                 .preferredColorScheme(appColorScheme())
         }
+        .trackScreen(.wallet)
     }
 }
 
@@ -1092,6 +1093,7 @@ struct CardFormSheet: View {
             guard !issuerTouched, !isWallet else { return }
             selectedIssuerID = BankIssuer.detect(from: cardNumber)?.id
         }
+        .trackScreen(.cardForm)
     }
 
     private func save() {
@@ -1404,6 +1406,7 @@ struct CardTransferSheet: View {
                     .preferredColorScheme(appColorScheme())
             }
         }
+        .trackScreen(.transfer)
     }
 
     /// One end of the transfer, drawn as a small standing card so the pair

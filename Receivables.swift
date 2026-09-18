@@ -175,17 +175,22 @@ struct ReceivablesView: View {
     }
 
     var body: some View {
-        if embedded {
-            content
-        } else {
-            NavigationStack {
+        // Grouped so the counter attaches to the screen rather than to one
+        // branch: a ViewBuilder if/else is not itself a view you can modify.
+        Group {
+            if embedded {
                 content
-                    .navigationTitle(loc("receivable.nav"))
-                    .navigationBarTitleDisplayMode(.inline)
-                    .toolbarBackground(AppTheme.bg, for: .navigationBar)
-                    .doneToolbar { dismiss() }
+            } else {
+                NavigationStack {
+                    content
+                        .navigationTitle(loc("receivable.nav"))
+                        .navigationBarTitleDisplayMode(.inline)
+                        .toolbarBackground(AppTheme.bg, for: .navigationBar)
+                        .doneToolbar { dismiss() }
+                }
             }
         }
+        .trackScreen(.receivables)
     }
 
     private var content: some View {
