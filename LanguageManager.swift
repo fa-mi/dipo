@@ -2030,6 +2030,7 @@ final class LanguageManager {
         "notif.payday.tomorrow_body":   "%@ arrives tomorrow.",
         "notif.payday.future_title":    "Payday in %d days",
         "notif.payday.future_body":     "%@ is coming up.",
+        "notif.payday.into_card":       "Into %@.",
         // Budget alert
         "notif.budget_alert_title":     "%@ over budget",
         "notif.budget_alert_body":      "You are %@ past your %@ target of %@ this pay period.",
@@ -4442,6 +4443,7 @@ final class LanguageManager {
         "notif.payday.tomorrow_body":   "%@ akan masuk besok.",
         "notif.payday.future_title":    "Gajian %d hari lagi",
         "notif.payday.future_body":     "%@ akan datang.",
+        "notif.payday.into_card":       "Masuk ke %@.",
         // Budget alert
         "notif.budget_alert_title":     "%@ melebihi anggaran",
         "notif.budget_alert_body": "Kamu lewat %@ dari target %@ sebesar %@ periode ini.",
