@@ -286,6 +286,13 @@ struct ProfileView: View {
                     supportSection
                     Spacer(minLength: 110)
                 }
+                // Hard-clamp the column to the scroll viewport. A card without
+                // maxWidth takes its content's natural width, so one unbreakable
+                // string (an email address, a long translated line) widened the
+                // whole page — and a vertical ScrollView still scrolls sideways
+                // once its content is wider than its bounds. Clamping makes the
+                // children compress instead, whichever one misbehaves.
+                .containerRelativeFrame(.horizontal)
             }
         }
         // Pushed from the avatar on Home: the bar carries the back button.
