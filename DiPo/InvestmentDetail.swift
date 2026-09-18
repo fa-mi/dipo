@@ -158,10 +158,10 @@ struct HoldingDetailView: View {
             }
             HStack(spacing: 8) {
                 plChip(investSigned(s.unrealizedPL, cur) + " (" + investPct(s.unrealizedPct) + ")",
-                       investPLColor(s.unrealizedPL), up: s.unrealizedPL >= 0)
-                if s.todayChange != 0 {
+                       investPLColor(s.unrealizedPL), trend: investTrend(s.unrealizedPL))
+                if investTrend(s.todayChange) != 0 {
                     plChip(loc("invest.today") + " " + investSigned(s.todayChange, cur),
-                           investPLColor(s.todayChange), up: s.todayChange >= 0)
+                           investPLColor(s.todayChange), trend: investTrend(s.todayChange))
                 }
             }
         }
@@ -176,9 +176,11 @@ struct HoldingDetailView: View {
         }
     }
 
-    private func plChip(_ text: String, _ tint: Color, up: Bool) -> some View {
+    private func plChip(_ text: String, _ tint: Color, trend: Int) -> some View {
         HStack(spacing: 4) {
-            Image(systemName: up ? "arrow.up.right" : "arrow.down.right").font(.system(.caption2, weight: .bold))
+            if let arrow = investArrow(trend) {
+                Image(systemName: arrow).font(.system(.caption2, weight: .bold))
+            }
             Text(text).font(.system(.caption, weight: .bold))
         }
         .foregroundStyle(tint).padding(.horizontal, 10).padding(.vertical, 5)
@@ -189,7 +191,7 @@ struct HoldingDetailView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text(loc("invest.price_chart")).font(.system(.caption, weight: .medium))
                 .foregroundStyle(AppTheme.textSecondary)
-            MiniSparkline(values: holding.priceHistory, up: s.unrealizedPL >= 0).frame(height: 70)
+            MiniSparkline(values: holding.priceHistory, trend: investTrend(s.unrealizedPL)).frame(height: 70)
         }
         .padding(16).frame(maxWidth: .infinity, alignment: .leading)
         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))

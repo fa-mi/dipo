@@ -13,12 +13,39 @@ import SwiftData
 func investMoney(_ v: Double, _ cur: String) -> String {
     CurrencyManager.shared.formatted(v, currency: cur)
 }
-/// A gain/loss figure with an explicit sign, so −0 never shows as a bare 0.
+/// Which way a figure moved: −1 down, 0 flat, +1 up.
+///
+/// Splitting on `>= 0` made a position that had not moved wear the colour and
+/// the arrow of a gain — BRI bought at 3.270 and still worth 3.270 read as
+/// "↗ +0.00%", green, while it had actually fallen that day. Flat is its own
+/// state, so a loss is the only thing that looks like a loss.
+func investTrend(_ v: Double, epsilon: Double = 0.005) -> Int {
+    abs(v) < epsilon ? 0 : (v > 0 ? 1 : -1)
+}
+/// Trend of a ratio (0.0123 = +1.23%), judged at the precision we print.
+func investTrendPct(_ p: Double) -> Int { investTrend(p, epsilon: 0.00005) }
+
+/// The arrow for a trend — nil when flat, because there is no direction to draw.
+func investArrow(_ trend: Int) -> String? {
+    switch trend {
+    case 1:  return "arrow.up.right"
+    case -1: return "arrow.down.right"
+    default: return nil
+    }
+}
+
+/// A gain/loss figure with an explicit sign. No sign when it rounds to nothing.
 func investSigned(_ v: Double, _ cur: String) -> String {
-    (v >= 0 ? "+" : "−") + CurrencyManager.shared.formatted(abs(v), currency: cur)
+    let body = CurrencyManager.shared.formatted(abs(v), currency: cur)
+    switch investTrend(v) {
+    case 1:  return "+" + body
+    case -1: return "−" + body
+    default: return body
+    }
 }
 func investPct(_ p: Double) -> String {
-    String(format: "%@%.2f%%", p >= 0 ? "+" : "−", abs(p) * 100)
+    let sign = ["-": "−", "0": "", "1": "+"][String(investTrendPct(p))] ?? ""
+    return String(format: "%@%.2f%%", sign, abs(p) * 100)
 }
 /// Units with just enough precision: whole where whole, up to 4 dp for grams/coins.
 func investUnits(_ v: Double) -> String {
@@ -30,7 +57,13 @@ func investUnits(_ v: Double) -> String {
     f.decimalSeparator = ","
     return f.string(from: v as NSNumber) ?? "\(v)"
 }
-func investPLColor(_ v: Double) -> Color { v >= 0 ? AppTheme.accent : AppTheme.red }
+func investPLColor(_ v: Double) -> Color {
+    switch investTrend(v) {
+    case 1:  return AppTheme.accent
+    case -1: return AppTheme.red
+    default: return AppTheme.textSecondary
+    }
+}
 
 // MARK: - Root
 
@@ -195,11 +228,11 @@ struct PortfolioOverviewCard: View {
             HStack(spacing: 10) {
                 figure(loc("invest.pl"),
                        investSigned(totals.unrealizedPL, currency) + "  " + investPct(totals.unrealizedPct),
-                       investPLColor(totals.unrealizedPL), arrowUp: totals.unrealizedPL >= 0)
+                       investPLColor(totals.unrealizedPL), trend: investTrend(totals.unrealizedPL))
                 Rectangle().fill(AppTheme.cardMid).frame(width: 1, height: 34)
                 figure(loc("invest.today"),
                        investSigned(totals.todayChange, currency),
-                       investPLColor(totals.todayChange), arrowUp: totals.todayChange >= 0)
+                       investPLColor(totals.todayChange), trend: investTrend(totals.todayChange))
             }
 
             HStack(spacing: 14) {
@@ -233,12 +266,12 @@ struct PortfolioOverviewCard: View {
         }
     }
 
-    private func figure(_ label: String, _ value: String, _ tint: Color, arrowUp: Bool? = nil) -> some View {
+    private func figure(_ label: String, _ value: String, _ tint: Color, trend: Int? = nil) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(label).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
             HStack(spacing: 3) {
-                if let arrowUp {
-                    Image(systemName: arrowUp ? "arrow.up.right" : "arrow.down.right")
+                if let trend, let arrow = investArrow(trend) {
+                    Image(systemName: arrow)
                         .font(.system(.caption2, weight: .bold)).foregroundStyle(tint)
                 }
                 Text(value).font(.system(.subheadline, weight: .bold)).foregroundStyle(tint)
@@ -335,8 +368,9 @@ struct HoldingRow: View {
                     .foregroundStyle(AppTheme.textPrimary).lineLimit(1).minimumScaleFactor(0.7)
                 // The up/down badge — the one thing the user checks first.
                 HStack(spacing: 3) {
-                    Image(systemName: s.unrealizedPL >= 0 ? "arrow.up.right" : "arrow.down.right")
-                        .font(.system(.caption2, weight: .bold))
+                    if let arrow = investArrow(investTrendPct(s.unrealizedPct)) {
+                        Image(systemName: arrow).font(.system(.caption2, weight: .bold))
+                    }
                     Text(investPct(s.unrealizedPct)).font(.system(.caption2, weight: .bold))
                 }
                 .foregroundStyle(investPLColor(s.unrealizedPL))
@@ -372,13 +406,17 @@ struct HoldingRow: View {
 /// with two or more points — otherwise there is no trend to draw.
 struct MiniSparkline: View {
     let values: [Double]
-    let up: Bool
+    /// −1 down, 0 flat, +1 up — a flat line shouldn't be drawn in gain green.
+    let trend: Int
+    private var up: Bool { trend >= 0 }
+    private var stroke: Color {
+        trend == 0 ? AppTheme.textSecondary : (trend > 0 ? AppTheme.accent : AppTheme.red)
+    }
 
     var body: some View {
         GeometryReader { g in
             if values.count >= 2, let lo = values.min(), let hi = values.max() {
                 let range = hi - lo
-                let stroke = up ? AppTheme.accent : AppTheme.red
                 let pts: [CGPoint] = values.enumerated().map { i, v in
                     let x = g.size.width * CGFloat(i) / CGFloat(values.count - 1)
                     let y = range > 0 ? g.size.height * (1 - CGFloat((v - lo) / range)) : g.size.height / 2
