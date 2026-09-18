@@ -59,6 +59,11 @@ struct PremiumLockedFeatureLink: View {
                     Text(subtitle)
                         .font(.system(.caption))
                         .foregroundStyle(AppTheme.textSecondary)
+                        // Without this the Text reports its single-line ideal
+                        // width, which pushes the row — and with it the whole
+                        // page — wider than the screen. Only showed up once a
+                        // subtitle got long, and sooner in Indonesian.
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer()
                 Image(systemName: isLocked ? "lock.fill" : "chevron.right")
@@ -98,6 +103,11 @@ struct ProfileFeatureLink: View {
                     Text(subtitle)
                         .font(.system(.caption))
                         .foregroundStyle(AppTheme.textSecondary)
+                        // Without this the Text reports its single-line ideal
+                        // width, which pushes the row — and with it the whole
+                        // page — wider than the screen. Only showed up once a
+                        // subtitle got long, and sooner in Indonesian.
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer()
                 Image(systemName: "chevron.right")
@@ -941,6 +951,7 @@ struct ProfileView: View {
                             Text(item.label)
                                 .font(.system(size: 11, weight: appearanceMode == item.mode ? .semibold : .regular))
                                 .foregroundStyle(appearanceMode == item.mode ? AppTheme.onVividFill : AppTheme.textSecondary)
+                                .lineLimit(1).minimumScaleFactor(0.7)
                         }
                         .frame(maxWidth: .infinity).padding(.vertical, 10)
                         .background(appearanceMode == item.mode ? AppTheme.accentFill : Color.clear,
