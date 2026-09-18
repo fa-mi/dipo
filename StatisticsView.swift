@@ -2095,6 +2095,10 @@ struct StatisticsView: View {
 
                     if !catTotals.isEmpty {
                         VStack(alignment: .leading, spacing: 10) {
+                            // Full-bleed like the Search filters: the scroll view
+                            // spans the screen and the 22pt inset lives on its
+                            // content, so chips run to the edge and scroll past it
+                            // instead of being clipped 22pt in.
                             ScrollView(.horizontal, showsIndicators: false) {
                                 HStack(spacing: 8) {
                                     categoryChip(loc("stats.filter_all"), .all, AppTheme.blue)
@@ -2110,8 +2114,10 @@ struct StatisticsView: View {
                                         }
                                     }
                                 }
+                                .padding(.horizontal, 22)
                                 .padding(.vertical, 2)
                             }
+                            .padding(.horizontal, -22)
                             // What the filter currently adds up to, so the list is
                             // never a set of rows with no total attached.
                             HStack {
