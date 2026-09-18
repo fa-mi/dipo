@@ -60,6 +60,7 @@ struct HoldingDetailView: View {
                         Spacer(minLength: 100)
                     }
                     .padding(.horizontal, 22)
+                    .containerRelativeFrame(.horizontal)
                 }
             }
             .featureBar(pushed: pushed)

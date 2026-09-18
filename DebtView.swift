@@ -320,6 +320,7 @@ struct DebtView: View {
                 .opacity(appeared ? 1 : 0)
                 .offset(y: appeared ? 0 : 16)
                 .animation(AppMotion.appear, value: appeared)
+                .containerRelativeFrame(.horizontal)
             }
         }
         .onAppear {
@@ -479,6 +480,7 @@ struct AllDebtsView: View {
                         }
                     }
                     .padding(.vertical, 16)
+                    .containerRelativeFrame(.horizontal)
                 }
             }
             .navigationTitle(loc("debt.your_debts"))
@@ -1487,6 +1489,7 @@ struct DebtFormSheet: View {
 
                         Spacer(minLength: 40)
                     }.padding(.top, 8)
+                    .containerRelativeFrame(.horizontal)
                 }
             }
             .navigationTitle(vm.isEditing ? loc("debt.edit") : loc("debt.add"))
@@ -2226,6 +2229,7 @@ struct PayoffSimulatorSheet: View {
                         Spacer(minLength: 40)
                     }
                     .padding(.top, 8)
+                    .containerRelativeFrame(.horizontal)
                 }
             }
             .navigationTitle(loc("debt.payoff_sim"))

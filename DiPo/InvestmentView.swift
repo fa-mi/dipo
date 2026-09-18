@@ -108,6 +108,7 @@ struct InvestmentView: View {
                     .padding(.horizontal, 22)
                     .opacity(appeared ? 1 : 0)
                     .offset(y: appeared ? 0 : 16)
+                    .containerRelativeFrame(.horizontal)
                 }
                 .refreshable { await doRefresh(announce: true) }
             }

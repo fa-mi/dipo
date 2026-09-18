@@ -483,6 +483,7 @@ struct AIChatView: View {
                         }
                     }
                     .padding(.horizontal, 22).padding(.top, 12)
+                    .containerRelativeFrame(.horizontal)
                 }
             }
             .navigationTitle(loc("ai.add_to"))

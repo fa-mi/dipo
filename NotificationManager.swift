@@ -924,6 +924,7 @@ struct NotificationCenterView: View {
                             Spacer(minLength: 40)
                         }
                         .padding(.top, 8)
+                        .containerRelativeFrame(.horizontal)
                     }
                 }
             }
@@ -1224,6 +1225,7 @@ struct NotificationDetailView: View {
                         Spacer(minLength: 20)
                     }
                     .padding(22)
+                    .containerRelativeFrame(.horizontal)
                 }
             }
             .navigationTitle(loc("notif.detail_title"))

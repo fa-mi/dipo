@@ -285,6 +285,7 @@ struct WishlistView: View {
                 }
                 .opacity(appeared ? 1 : 0)
                 .offset(y: appeared ? 0 : 16)
+                .containerRelativeFrame(.horizontal)
             }
 
             if let goal = celebratingGoal {
@@ -454,6 +455,7 @@ struct AllPersonalGoalsView: View {
                 }
                 .padding(.horizontal, 22)
                 .padding(.vertical, 16)
+                .containerRelativeFrame(.horizontal)
             }
         }
         .navigationTitle(loc("savings.in_progress"))
@@ -784,6 +786,7 @@ struct DepositSheet: View {
                     }
                     .padding(.bottom, 8)
                 }
+                .containerRelativeFrame(.horizontal)
             }
 
             // Pinned — never scrolls out of reach.
@@ -1154,6 +1157,7 @@ struct GoalFormSheet: View {
                     .opacity(appeared ? 1 : 0)
                     .offset(y: appeared ? 0 : 16)
                     .animation(AppMotion.appear, value: appeared)
+                    .containerRelativeFrame(.horizontal)
                 }
             }
             .navigationTitle(isEditing ? loc("savings.edit_title") : loc("savings.new_title"))
@@ -1366,6 +1370,7 @@ struct GoalDetailView: View {
                 }
                 .padding(.horizontal, 22)
                 .padding(.top, 12)
+                .containerRelativeFrame(.horizontal)
             }
         }
         .navigationTitle(goal.name)
@@ -1705,6 +1710,7 @@ struct RecordPastDepositSheet: View {
                         Spacer(minLength: 20)
                     }
                     .padding(.top, 8)
+                    .containerRelativeFrame(.horizontal)
                 }
             }
             .navigationTitle(loc("savings.record_past"))

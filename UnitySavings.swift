@@ -763,6 +763,7 @@ struct AllSharedGoalsView: View {
                     }
                 }
                 .padding(.vertical, 16)
+                .containerRelativeFrame(.horizontal)
             }
         }
         .navigationTitle(loc("unity.title"))
@@ -1095,6 +1096,7 @@ struct SharedGoalDetailView: View {
 
                         Spacer(minLength: 24)
                     }
+                    .containerRelativeFrame(.horizontal)
                 }
             }
             .navigationTitle(loc("unity.title")).navigationBarTitleDisplayMode(.inline)
@@ -1460,6 +1462,7 @@ struct SharedGoalFormSheet: View {
 
                         Spacer(minLength: 30)
                     }
+                    .containerRelativeFrame(.horizontal)
                 }
             }
             .navigationTitle(loc("unity.new_title")).navigationBarTitleDisplayMode(.inline)

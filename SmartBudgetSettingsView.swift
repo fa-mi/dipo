@@ -627,6 +627,7 @@ struct SmartBudgetSettingsSheet: View {
                     .foregroundStyle(AppTheme.accent)
                     .padding(.horizontal, 6).padding(.vertical, 2)
                     .background(AppTheme.accent.opacity(0.15), in: Capsule())
+                    .lineLimit(1).fixedSize()
             }
             .padding(.horizontal, 14).padding(.vertical, 11)
             .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
