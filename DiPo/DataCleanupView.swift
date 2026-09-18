@@ -17,6 +17,7 @@ struct DataCleanupView: View {
     @Environment(\.dismiss) private var dismiss
     @Query(sort: \BankCard.sortOrder) private var cards: [BankCard]
     @Query(sort: \SalarySchedule.createdAt) private var salarySchedules: [SalarySchedule]
+    @Query private var recurringPlans: [RecurringExpense]
 
     @State private var showTidy = false
     @State private var showAudit = false
@@ -29,17 +30,36 @@ struct DataCleanupView: View {
         return CurrencyManager.shared.convert(tx.amount, from: c, to: currency)
     }
 
+    private var payDay: Int? { MainCard.payDay(salarySchedules) }
+
+    private var salaryDates: [Date] {
+        (mainCard?.transactions ?? []).filter { $0.category == .salary && $0.amount > 0 }.map(\.date)
+    }
+
     /// The same window Statistics opens on: the pay cycle when a salary is
     /// scheduled, otherwise this month. Moving the tool must not silently move
     /// the set of transactions it operates on.
     private var window: (start: Date, end: Date) {
-        if let day = MainCard.payDay(salarySchedules) {
+        if let day = payDay {
             let r = StatPeriod.payCycleRange(payDay: day)
-            let salaryDates = (mainCard?.transactions ?? [])
-                .filter { $0.category == .salary && $0.amount > 0 }.map(\.date)
             return (StatPeriod.anchoredStart(r.start, salaryDates: salaryDates), r.end)
         }
         return StatPeriod.thisMonth.dateRange()
+    }
+
+    /// What a day has to spend — the figure the audit is explaining. Taken from
+    /// the same shared definition Statistics prints, over the same cycle, so the
+    /// two screens cannot quote different numbers at each other.
+    private var dailyAllowance: Double? {
+        let (start, end) = window
+        guard let p = StatisticsView.progress(start: start, end: end,
+                                              payDay: payDay, salaryDates: salaryDates)
+        else { return nil }
+        return StatisticsView.dailyAllowance(cycleDays: p.total,
+                                             salarySchedules: salarySchedules,
+                                             recurringPlans: recurringPlans,
+                                             mainCardID: mainCard?.id,
+                                             currency: currency)
     }
 
     private var windowTx: [TxRecord] {
@@ -116,10 +136,7 @@ struct DataCleanupView: View {
                                    rhythm: rhythm,
                                    typicalDaily: f.typicalDaily,
                                    weekly: f.typicalDaily * 7,
-                                   // A daily allowance is a property of the period
-                                   // being reported, not of this tool — omitted
-                                   // rather than recomputed into disagreement.
-                                   dailyAllowance: nil,
+                                   dailyAllowance: dailyAllowance,
                                    currency: currency)
                     .presentationDetents([.large])
                     .presentationDragIndicator(.visible)

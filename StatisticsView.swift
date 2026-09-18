@@ -196,16 +196,20 @@ struct StatisticsView: View {
     /// payday) — never "start plus one calendar month", which drifts whenever a
     /// payday is pulled off a weekend or holiday. For this user's data the real
     /// gaps are 28 and 32 days, not two equal months.
-    private func cycleBoundary(monthsFromNow offset: Int) -> Date? {
-        guard let day = payCycleDay else { return nil }
+    static func cycleBoundary(monthsFromNow offset: Int, payDay: Int?, salaryDates: [Date]) -> Date? {
+        guard let day = payDay else { return nil }
         let cal = Calendar.current
         let base = StatPeriod.anchoredStart(StatPeriod.payCycleRange(payDay: day).start,
-                                            salaryDates: salaryTxDates)
+                                            salaryDates: salaryDates)
         let shifted = cal.safeDate(byAdding: .month, value: offset, to: base)
         let m = cal.component(.month, from: shifted), y = cal.component(.year, from: shifted)
         return StatPeriod.anchoredStart(
             cal.startOfDay(for: SalaryDateEngine.actualPayDate(dayOfMonth: day, month: m, year: y)),
-            salaryDates: salaryTxDates)
+            salaryDates: salaryDates)
+    }
+
+    private func cycleBoundary(monthsFromNow offset: Int) -> Date? {
+        Self.cycleBoundary(monthsFromNow: offset, payDay: payCycleDay, salaryDates: salaryTxDates)
     }
 
     private var effectiveRange: (start: Date, end: Date) {
@@ -220,16 +224,23 @@ struct StatisticsView: View {
     /// How far through the selected period we are, 0…1 — nil for finished
     /// periods. Without it, "73% saved" on day 8 of a 30-day cycle reads as an
     /// achievement when it just means the month hasn't happened yet.
-    private var periodProgress: (elapsed: Int, total: Int)? {
+    static func progress(start: Date, end: Date, payDay: Int?,
+                         salaryDates: [Date]) -> (elapsed: Int, total: Int)? {
         let cal = Calendar.current
-        let (start, end) = effectiveRange
         // A period that already ended needs no caveat.
         guard end > Date() || cal.isDateInToday(end) else { return nil }
         // Cycle length = this payday to the next one, not a calendar month.
-        let cycleEnd = cycleBoundary(monthsFromNow: 1) ?? (cal.date(byAdding: .month, value: 1, to: start) ?? end)
+        let cycleEnd = cycleBoundary(monthsFromNow: 1, payDay: payDay, salaryDates: salaryDates)
+            ?? (cal.date(byAdding: .month, value: 1, to: start) ?? end)
         let total = max(cal.dateComponents([.day], from: start, to: cycleEnd).day ?? 30, 1)
         let elapsed = min(max((cal.dateComponents([.day], from: start, to: Date()).day ?? 0) + 1, 1), total)
         return elapsed >= total ? nil : (elapsed, total)
+    }
+
+    private var periodProgress: (elapsed: Int, total: Int)? {
+        let (start, end) = effectiveRange
+        return Self.progress(start: start, end: end,
+                             payDay: payCycleDay, salaryDates: salaryTxDates)
     }
 
     /// Income over the same elapsed length one period back.
@@ -717,11 +728,15 @@ struct StatisticsView: View {
     /// The point of a daily figure is to answer "am I fine today", and that
     /// cannot be answered against gross income — the rent is already spoken
     /// for. This is the number the typical-day figure should be read against.
-    private var dailyAllowance: Double? {
-        guard let p = periodProgress, p.total > 0 else { return nil }
+    static func dailyAllowance(cycleDays total: Int,
+                               salarySchedules: [SalarySchedule],
+                               recurringPlans: [RecurringExpense],
+                               mainCardID: UUID?,
+                               currency: String) -> Double? {
+        guard total > 0 else { return nil }
         let cm = CurrencyManager.shared
         let income = MainCard.salaries(salarySchedules).reduce(0.0) {
-            $0 + cm.convert($1.amount, from: $1.currency, to: displayCurrency)
+            $0 + cm.convert($1.amount, from: $1.currency, to: currency)
         }
         guard income > 0 else { return nil }
 
@@ -738,11 +753,19 @@ struct StatisticsView: View {
         // a deduction FROM it. Using the plan total also makes the figure
         // stable: it is the same all cycle instead of stepping down each time a
         // bill posts.
-        let mainID = selectedCard?.id
         let committed = recurringPlans
-            .filter { $0.isActive && ($0.cardID == nil || $0.cardID == mainID) }
-            .reduce(0.0) { $0 + cm.convert(abs($1.amount), from: $1.currency, to: displayCurrency) }
-        return max(income - committed, 0) / Double(p.total)
+            .filter { $0.isActive && ($0.cardID == nil || $0.cardID == mainCardID) }
+            .reduce(0.0) { $0 + cm.convert(abs($1.amount), from: $1.currency, to: currency) }
+        return max(income - committed, 0) / Double(total)
+    }
+
+    private var dailyAllowance: Double? {
+        guard let p = periodProgress else { return nil }
+        return Self.dailyAllowance(cycleDays: p.total,
+                                   salarySchedules: salarySchedules,
+                                   recurringPlans: recurringPlans,
+                                   mainCardID: selectedCard?.id,
+                                   currency: displayCurrency)
     }
 
     /// Number of whole days spanned by the current period.
