@@ -89,11 +89,29 @@ struct ReceiptPreviewSheet: View {
                         receiptStrip
                             .padding(.horizontal, 22)
                         amountSection
-                        IconField(label: loc("receipt.field.vendor"),
-                                  icon: "storefront",
-                                  placeholder: loc("receipt.field.merchant_placeholder"),
-                                  text: $scan.merchantName)
-                            .padding(.horizontal, 22)
+                        VStack(alignment: .leading, spacing: 10) {
+                            IconField(label: loc("receipt.field.vendor"),
+                                      icon: "storefront",
+                                      placeholder: loc("receipt.field.merchant_placeholder"),
+                                      text: $scan.merchantName)
+                                // The scan guesses once, from what it read off
+                                // the paper. When the user corrects the name,
+                                // guess again the way Add Transaction does on
+                                // every keystroke — otherwise a fixed "famimart"
+                                // stays filed under whatever the misread got.
+                                .onChange(of: scan.merchantName) { _, newName in
+                                    if let suggested = CategorySuggestionHint.autoPick(
+                                        for: newName, transactions: allTransactions,
+                                        categories: expenseCategories) {
+                                        withAnimation(.spring(response: 0.3)) { scan.category = suggested }
+                                    }
+                                }
+                            CategorySuggestionHint(name: scan.merchantName,
+                                                   transactions: allTransactions,
+                                                   categories: expenseCategories,
+                                                   selection: $scan.category)
+                        }
+                        .padding(.horizontal, 22)
                         VStack(alignment: .leading, spacing: 10) {
                             FormSectionLabel(text: loc("common.category"))
                                 .padding(.horizontal, 22)

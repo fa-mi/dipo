@@ -1477,44 +1477,17 @@ struct AddTransactionSheet: View {
                     // The user's own history first, the shipped keyword map
                     // second — what this person actually does beats a guess.
                     if txType == .expense,
-                       let suggested = SmartBudgetManager.suggestCategory(
-                            for: newName, txType: "Expense", transactions: allTransactions),
-                       availableCategories.contains(suggested) {
+                       let suggested = CategorySuggestionHint.autoPick(
+                            for: newName, transactions: allTransactions,
+                            categories: availableCategories) {
                         withAnimation(.spring(response: 0.3)) { selectedCategory = suggested }
                     }
                 }
 
-            if txType == .expense,
-               let suggested = SmartBudgetManager.suggestCategory(
-                    for: name, txType: "Expense", transactions: allTransactions),
-               suggested != selectedCategory {
-                let learned = SmartBudgetManager.learnedCategory(
-                    for: name, transactions: allTransactions)
-                HStack(spacing: 8) {
-                    Image(systemName: suggested.icon).font(.system(.caption)).foregroundStyle(suggested.color)
-                    // Cite the evidence when it came from the user's own
-                    // history. "Because you did this 5 times" is trustworthy in
-                    // a way a bare "detected" never is.
-                    Text(learned.map {
-                            String(format: loc("tx.learned_from"), $0.count, $0.matchedTerm)
-                         } ?? String(format: loc("tx.auto_detected"), suggested.displayLabel))
-                        .font(.system(.caption, weight: .medium)).foregroundStyle(AppTheme.textSecondary)
-                    Spacer()
-                    Button {
-                        HapticManager.shared.tap()
-                        withAnimation { selectedCategory = suggested }
-                    } label: {
-                        // `onSolid`, not `onVividFill`: category colours are a
-                        // mix of fixed bright hexes and adaptive tokens that go
-                        // DARK in light mode, so the label has to invert with
-                        // the scheme. onVividFill never inverts.
-                        Text(loc("tx.apply")).font(.system(.caption2, weight: .semibold))
-                            .foregroundStyle(AppTheme.onSolid)
-                            .padding(.horizontal, 10).padding(.vertical, 4)
-                            .background(suggested.color, in: Capsule())
-                    }
-                }
-                .transition(.move(edge: .top).combined(with: .opacity))
+            if txType == .expense {
+                CategorySuggestionHint(name: name, transactions: allTransactions,
+                                       categories: availableCategories,
+                                       selection: $selectedCategory)
             }
         }
         .padding(.horizontal, 22)
