@@ -812,7 +812,7 @@ final class LanguageManager {
         "tx.learned_from":     "You picked this %d times for \"%@\"",
         "tx.auto_detected":     "Auto-detected: %@",
         "tx.valid_error":       "Enter a name and an amount",
-        "tx.add_type":          "Record",
+        "tx.add_type":          "Record %@",
 
         // Home
         "home.get_started":     "Get started",
@@ -991,7 +991,7 @@ final class LanguageManager {
         "stats.pattern.weekday_size":  "You do not buy more often on that day — each thing just costs more: %@ a purchase against %@ on other days.",
         "stats.pattern.weekday_freq":  "You buy more often on that day: %.1f times, against %.1f on other days.",
         "stats.pattern.weekday_plain": "That is %.1f times a normal day.",
-        "stats.pattern.weekday": "%@ hari paling boros — %@",
+        "stats.pattern.weekday": "%@ is your heaviest day — %@ on average",
         "stats.pattern.quiet":  "%d days without spending",
         "stats.pattern.quiet_sub": "out of %d so far",
         "stats.pattern.biggest": "Biggest single spend: %@",
@@ -3232,7 +3232,7 @@ final class LanguageManager {
         "tx.learned_from":     "Kamu pilih ini %d kali untuk \"%@\"",
         "tx.auto_detected":     "Terdeteksi otomatis: %@",
         "tx.valid_error":       "Isi nama dan jumlahnya",
-        "tx.add_type":          "Catat",
+        "tx.add_type":          "Catat %@",
 
         // Home
         "home.get_started":     "Mulai",
@@ -3408,7 +3408,7 @@ final class LanguageManager {
         "stats.pattern.weekday_size":  "Bukan karena kamu lebih sering jajan hari itu — tiap belanjanya saja yang lebih mahal: %@ sekali beli, dibanding %@ di hari lain.",
         "stats.pattern.weekday_freq":  "Kamu lebih sering jajan hari itu: %.1f kali, dibanding %.1f di hari lain.",
         "stats.pattern.weekday_plain": "Itu %.1f kali lipat hari biasa.",
-        "stats.pattern.weekday": "%@ paling mahal buatmu",
+        "stats.pattern.weekday": "%@ jadi hari paling boros — rata-rata %@",
         "stats.pattern.quiet":  "%d hari tanpa belanja",
         "stats.pattern.quiet_sub": "dari %d hari sejauh ini",
         "stats.pattern.biggest": "Belanja terbesar: %@",
