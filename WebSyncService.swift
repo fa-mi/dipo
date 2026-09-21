@@ -324,6 +324,11 @@ final class WebSyncService {
                 // its own localised names.
                 "category": tx.category.rawValue,
                 "type":     kind,
+                // "normal" or "refund" (transfers never reach this list). A
+                // refund is positive, so by sign alone it looks like income;
+                // the phone nets it against spending instead, and the web can
+                // only do the same if it is told which rows are refunds.
+                "subtype":  tx.txSubtype.rawValue,
                 "dateISO":  iso.string(from: tx.date),
             ]
             txRows.append(row)
@@ -389,6 +394,18 @@ final class WebSyncService {
         let cycle: (start: Date, end: Date)? = MainCard.payDay(salaries)
             .map { StatPeriod.payCycleRange(payDay: $0) }
 
+        // The hero figures themselves, from the functions the Statistics screen
+        // uses. The web rebuilt "left to spend" from the raw rows with its own
+        // rules and quoted a different number than the phone; now it shows
+        // these. Their window is the ANCHORED one — opening on the day the
+        // salary actually landed — and `cycleStartISO` below carries the same
+        // boundary, so the tiles the web still slices itself cover the same days.
+        let figures: StatisticsView.CycleFigures? = {
+            guard let card = MainCard.resolve(in: cards),
+                  let day = MainCard.payDay(salaries) else { return nil }
+            return StatisticsView.cycleFigures(card: card, payDay: day, currency: base)
+        }()
+
         // ── Monthly rollup — compact aggregates that scale past the raw window ──
         //
         // The raw `transactions` above are capped at `historyMonths` because a
@@ -444,7 +461,22 @@ final class WebSyncService {
             "salaries":     salaryRows,
         ]
 
-        if let cycle {
+        if let f = figures {
+            out["cycleStartISO"] = iso.string(from: f.start)
+            out["cycleEndISO"]   = iso.string(from: f.end)
+            var summary: [String: Any] = [
+                "income": f.income,
+                "spent":  f.spent,
+                "left":   f.left,
+            ]
+            if let p = f.progress {
+                summary["elapsedDays"] = p.elapsed
+                summary["totalDays"]   = p.total
+            }
+            if let v = f.previousIncome { summary["previousIncome"] = v }
+            if let v = f.previousSpent  { summary["previousSpent"]  = v }
+            out["cycleSummary"] = summary
+        } else if let cycle {
             out["cycleStartISO"] = iso.string(from: cycle.start)
             out["cycleEndISO"]   = iso.string(from: cycle.end)
         }

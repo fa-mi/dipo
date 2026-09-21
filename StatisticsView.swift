@@ -238,6 +238,107 @@ struct StatisticsView: View {
         return elapsed >= total ? nil : (elapsed, total)
     }
 
+    // MARK: Period figures — one definition, shared with the web dashboard
+    //
+    // The hero's income, spending and "same days last time" comparison, as
+    // functions rather than view state. The web dashboard rebuilt them in
+    // JavaScript with its own rules — refunds counted as income, the cycle
+    // opening on the 25th rather than the day the salary landed, a running
+    // cycle compared against a whole finished one — and so quoted a different
+    // "left to spend" from the phone for the same data. The phone now computes
+    // the figures once, here, and the sync sends them.
+
+    /// Money in: real income only. A transfer is your own money moving, and a
+    /// refund reverses an expense, so it is counted on that side instead.
+    static func income(_ txs: [TxRecord], convert: (TxRecord) -> Double) -> Double {
+        txs.filter { $0.amount > 0 && $0.txSubtype == .normal }
+            .reduce(0) { $0 + convert($1) }
+    }
+
+    /// Money out: outflows minus refunds, transfers skipped. The same model the
+    /// Smart Budget engine uses in `spent(in:)`, so card balance, stats and
+    /// budget agree.
+    static func expenses(_ txs: [TxRecord], convert: (TxRecord) -> Double) -> Double {
+        txs.filter { $0.txSubtype != .transfer }
+            .reduce(0.0) { sum, tx in
+                let amt = abs(convert(tx))
+                if tx.txSubtype == .refund { return sum - amt }
+                return tx.amount < 0 ? sum + amt : sum
+            }
+    }
+
+    /// Where the previous pay cycle began: last month's pay date, moved off a
+    /// weekend the way the salary itself is — not one calendar month back. For
+    /// a payday on the 25th, July 25 2026 is a Saturday and the salary lands
+    /// Friday July 24, one day BEFORE a naive window opens; the comparison then
+    /// misses a whole salary and reports a flat income as +400%.
+    static func previousCycleStart(before start: Date, payDay: Int) -> Date {
+        let cal = Calendar.current
+        let m = cal.component(.month, from: start)
+        let y = cal.component(.year,  from: start)
+        let pm = m == 1 ? 12 : m - 1
+        let py = m == 1 ? y - 1 : y
+        return cal.startOfDay(
+            for: SalaryDateEngine.actualPayDate(dayOfMonth: payDay, month: pm, year: py))
+    }
+
+    /// Income or spending over [from, to) under the SAME rules as the period
+    /// it is compared with. It used to sum raw outflows and every inflow, so a
+    /// refund made last cycle look richer and costlier than the one it was
+    /// set against. Nil when nothing moved that way — no data is not zero.
+    static func stretchTotal(_ txs: [TxRecord], from: Date, to: Date, income wantIncome: Bool,
+                             convert: (TxRecord) -> Double) -> Double? {
+        let slice = txs.filter { $0.date >= from && $0.date < to }
+        let moved = slice.contains {
+            wantIncome ? ($0.amount > 0 && $0.txSubtype == .normal)
+                       : ($0.amount < 0 && $0.txSubtype != .transfer)
+        }
+        guard moved else { return nil }
+        return wantIncome ? income(slice, convert: convert) : expenses(slice, convert: convert)
+    }
+
+    /// The pay-cycle hero's figures for one card, in one currency.
+    struct CycleFigures {
+        let start: Date
+        let end: Date
+        let income: Double
+        let spent: Double
+        var left: Double { income - spent }
+        /// Day N of M while the cycle runs; nil once it has ended.
+        let progress: (elapsed: Int, total: Int)?
+        /// The same days of the previous cycle — what the hero's chip compares.
+        let previousIncome: Double?
+        let previousSpent: Double?
+    }
+
+    /// Exactly what Statistics shows for the pay cycle — the anchored window,
+    /// the same rules, the same comparison — for a caller that is not this
+    /// screen. Built from the same pieces `effectiveRange`, `filteredTx` and
+    /// `previousPeriodTotal` use, so the two cannot drift.
+    static func cycleFigures(card: BankCard, payDay: Int, currency: String) -> CycleFigures {
+        let convert: (TxRecord) -> Double = { tx in
+            let from = tx.currency.isEmpty ? card.resolvedCurrency : tx.currency
+            return CurrencyManager.shared.convert(tx.amount, from: from, to: currency)
+        }
+        let all = card.transactions
+        let salaryDates = all.filter { $0.category == .salary && $0.amount > 0 }.map(\.date)
+        let r = StatPeriod.payCycleRange(payDay: payDay)
+        let start = StatPeriod.anchoredStart(r.start, salaryDates: salaryDates)
+        let window = all.filter { $0.date >= start && $0.date <= r.end }
+        let p = progress(start: start, end: r.end, payDay: payDay, salaryDates: salaryDates)
+        let prevStart = previousCycleStart(before: start, payDay: payDay)
+        let cutoff = p.flatMap {
+            Calendar.current.date(byAdding: .day, value: $0.elapsed, to: prevStart)
+        } ?? start
+        return CycleFigures(
+            start: start, end: r.end,
+            income: income(window, convert: convert),
+            spent: expenses(window, convert: convert),
+            progress: p,
+            previousIncome: stretchTotal(all, from: prevStart, to: cutoff, income: true, convert: convert),
+            previousSpent: stretchTotal(all, from: prevStart, to: cutoff, income: false, convert: convert))
+    }
+
     private var periodProgress: (elapsed: Int, total: Int)? {
         let (start, end) = effectiveRange
         return Self.progress(start: start, end: end,
@@ -256,22 +357,11 @@ struct StatisticsView: View {
         let cal = Calendar.current
         let (start, _) = effectiveRange
 
-        // The previous window has to begin where the previous CYCLE actually
-        // began, not one calendar month back. `payCycleRange` anchors the
-        // current cycle on the business-day-adjusted pay date, so subtracting a
-        // month here reintroduces exactly the drift that function exists to
-        // avoid: for a payday on the 25th, July 25 2026 is a Saturday and the
-        // salary lands Friday July 24 — one day BEFORE a naive window opens.
-        // The comparison then misses an entire month's salary and reports a
-        // flat, unchanged income as +400%.
+        // The previous window begins where the previous CYCLE actually began —
+        // see `previousCycleStart` for why that is not one calendar month back.
         let prevStart: Date
         if selectedPeriod == .payCycle, let day = payCycleDay {
-            let m = cal.component(.month, from: start)
-            let y = cal.component(.year,  from: start)
-            let pm = m == 1 ? 12 : m - 1
-            let py = m == 1 ? y - 1 : y
-            prevStart = cal.startOfDay(
-                for: SalaryDateEngine.actualPayDate(dayOfMonth: day, month: pm, year: py))
+            prevStart = Self.previousCycleStart(before: start, payDay: day)
         } else {
             guard let naive = cal.date(byAdding: .month, value: -1, to: start) else { return nil }
             prevStart = naive
@@ -280,12 +370,8 @@ struct StatisticsView: View {
             guard let p = periodProgress else { return start }
             return cal.date(byAdding: .day, value: p.elapsed, to: prevStart) ?? start
         }()
-        let tx = (selectedCard?.transactions ?? []).filter {
-            $0.date >= prevStart && $0.date < cutoff && $0.txSubtype != .transfer
-                && (positive ? $0.amount > 0 : $0.amount < 0)
-        }
-        guard !tx.isEmpty else { return nil }
-        return tx.reduce(0.0) { $0 + abs(convertedAmount($1)) }
+        return Self.stretchTotal(selectedCard?.transactions ?? [], from: prevStart, to: cutoff,
+                                 income: positive, convert: convertedAmount)
     }
 
 
@@ -448,9 +534,7 @@ struct StatisticsView: View {
     /// "great savings rate!" cards. Transfers are inter-account movement,
     /// not income at all.
     private var filteredIncome: Double {
-        filteredTx
-            .filter { $0.amount > 0 && $0.txSubtype == .normal }
-            .reduce(0) { $0 + convertedAmount($1) }
+        Self.income(filteredTx, convert: convertedAmount)
     }
 
     /// Expenses for the period. Skip transfers (movement between user's own
@@ -459,25 +543,14 @@ struct StatisticsView: View {
     /// engine uses in `spent(in:)` so card balance, stats, and budget all
     /// agree on the numbers.
     private var filteredExpenses: Double {
-        filteredTx
-            .filter { $0.txSubtype != .transfer }
-            .reduce(0.0) { sum, tx in
-                let amt = abs(convertedAmount(tx))
-                if tx.txSubtype == .refund { return sum - amt }
-                return tx.amount < 0 ? sum + amt : sum
-            }
+        Self.expenses(filteredTx, convert: convertedAmount)
     }
     
     /// The same expense rule as `filteredExpenses`, applied to any slice — so
     /// today's figure and the weekly bars agree with the period total instead of
     /// each inventing their own definition of "spent".
     private func expenseSum(_ txs: [TxRecord]) -> Double {
-        txs.filter { $0.txSubtype != .transfer }
-            .reduce(0.0) { sum, tx in
-                let amt = abs(convertedAmount(tx))
-                if tx.txSubtype == .refund { return sum - amt }
-                return tx.amount < 0 ? sum + amt : sum
-            }
+        Self.expenses(txs, convert: convertedAmount)
     }
 
     /// Spent so far today. Deliberately NOT period-filtered — "today" is today
