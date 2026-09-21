@@ -328,7 +328,24 @@ struct CategoryTilePicker: View {
                 .padding(.vertical, 4)
             }
             // Editing a transaction whose category sits off-screen: bring it in.
-            .onAppear { proxy.scrollTo(selection, anchor: .center) }
+            //
+            // Both guards below were earned. The first few tiles are already on
+            // screen, so scrolling to one of them can only move the row away
+            // from where it belongs — the create form always opens on the first
+            // category, and it opened with that tile sliced down the middle.
+            // And a `scrollTo` run in the first layout pass measures a viewport
+            // that has not been sized yet, so `.center` resolves against a width
+            // of almost nothing and parks the row at an offset nobody asked for;
+            // one runloop later the geometry is real. It also has to be silent:
+            // the form fades in on a delayed spring, and a row sliding sideways
+            // underneath that reads as the screen malfunctioning rather than as
+            // a helpful scroll.
+            .onAppear {
+                guard let i = categories.firstIndex(of: selection), i > 2 else { return }
+                DispatchQueue.main.async {
+                    withAnimation(nil) { proxy.scrollTo(selection, anchor: .center) }
+                }
+            }
         }
     }
 
