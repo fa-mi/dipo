@@ -1960,7 +1960,7 @@ struct StatisticsView: View {
 
                     HStack(spacing: 10) {
                         factTile(loc("stats.trend_avg"), money(avg), AppTheme.accent)
-                        factTile(loc("stats.trend_highest"), highest.map { money($0.expense) } ?? "—", AppTheme.red)
+                        factTile(loc("stats.trend_highest"), highest.map { money($0.expense) } ?? "—", AppTheme.orange)
                         factTile(loc("stats.trend_lowest"), lowest.map { money($0.expense) } ?? "—", AppTheme.blue)
                     }
 
@@ -2480,6 +2480,17 @@ struct SpendingTrendCard: View {
     }
     private var peak: Double { max(trend.map(\.expense).max() ?? 0, average ?? 0, 1) }
 
+    /// The bar colour answers one question: was this period above the usual
+    /// line? Spending itself is not a failure, so the chart no longer paints
+    /// every period in alarm red — a period that came in under the average now
+    /// looks like what it is. Only the period being reported on is drawn at
+    /// full strength; the ones behind it stay quiet so it reads as the subject.
+    private func barColor(_ point: CycleTrendPoint, isLast: Bool) -> Color {
+        let hot = average.map { point.expense > $0 } ?? false
+        let base = hot ? AppTheme.orange : AppTheme.accent
+        return isLast ? base : base.opacity(hot ? 0.34 : 0.22)
+    }
+
     var body: some View {
         if trend.contains(where: { $0.expense > 0 }) {
             Button {
@@ -2535,7 +2546,7 @@ struct SpendingTrendCard: View {
                         let h = max(chartH * CGFloat(point.expense / peak), point.expense > 0 ? 4 : 2)
                         VStack(spacing: 6) {
                             RoundedRectangle(cornerRadius: 6)
-                                .fill(isLast ? AppTheme.red : AppTheme.red.opacity(0.28))
+                                .fill(barColor(point, isLast: isLast))
                                 .frame(height: appeared ? h : 2)
                                 .animation(.spring(response: 0.6, dampingFraction: 0.8)
                                     .delay(Double(i) * 0.05), value: appeared)
