@@ -254,13 +254,25 @@ final class ReceiptScannerEngine {
                 return parsed
             }()
 
-            // Resolve category from hint, falling back to merchant lookup.
+            // Resolve the category the way a typed transaction would: the
+            // shipped merchant map first, the model's guess only for merchants
+            // the map doesn't know. The model's prompt files minimarkets under
+            // Shopping while the map files them under Food, so letting the hint
+            // win put the same Indomaret receipt in a different category
+            // depending on whether it was scanned or typed. "Other" from the
+            // model is not an answer, only the absence of one, so it never
+            // outranks a real match. (The user's own history is applied on top
+            // of this in ReceiptPreviewSheet, where it can still be changed.)
             let category: TxCategory = {
+                if let mapped = SmartBudgetManager.suggestCategory(
+                    for: response.merchantName, txType: "Expense") {
+                    return mapped
+                }
                 if let hint = response.categoryHint,
-                   let cat = TxCategory(rawValue: hint) {
+                   let cat = TxCategory(rawValue: hint), cat != .other {
                     return cat
                 }
-                return SmartBudgetManager.suggestCategory(for: response.merchantName, txType: "Expense") ?? .other
+                return .other
             }()
 
             // Sanity-check Haiku's currency answer. The model occasionally

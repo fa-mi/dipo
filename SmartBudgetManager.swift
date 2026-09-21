@@ -963,7 +963,7 @@ final class SmartBudgetManager {
     static let merchantMap: [(keywords: [String], category: TxCategory)] = [
         // Food — minimarkets, restaurants, cafes, food delivery, groceries
         (["indomaret", "alfamart", "alfamidi", "lawson", "7-eleven", "711", "circle k",
-          "family mart", "minimarket",
+          "family mart", "familymart", "minimarket",
           "warteg", "warung", "makan", "nasi", "mie", "bakso", "sate", "padang",
           "kfc", "mcdonald", "mcd", "burger king", "pizza hut", "domino", "wendy",
           "starbucks", "cafe", "coffee", "kopi kenangan", "janji jiwa", "fore",

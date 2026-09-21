@@ -346,6 +346,14 @@ struct CategoryTilePicker: View {
                     withAnimation(nil) { proxy.scrollTo(selection, anchor: .center) }
                 }
             }
+            // A category picked FOR the user — from a typed or scanned merchant
+            // name — can land on a tile that is off-screen, which looks like
+            // nothing happened. `anchor: nil` scrolls only as far as needed to
+            // show it, and not at all when it is already in view, so tapping a
+            // visible tile never sets the row moving.
+            .onChange(of: selection) { _, new in
+                withAnimation(.snappy) { proxy.scrollTo(new, anchor: nil) }
+            }
         }
     }
 
@@ -399,6 +407,65 @@ struct CategoryTilePicker: View {
         .buttonStyle(ScaleButtonStyle())
         .accessibilityLabel(cat.displayLabel)
         .accessibilityAddTraits(on ? .isSelected : [])
+    }
+}
+
+// MARK: - Category suggestion
+
+/// The category a merchant name points to, and the line that offers it —
+/// shared by Add Transaction and the receipt check so a merchant cannot land in
+/// one category when typed and another when scanned. The user's own history
+/// comes first, the shipped keyword map second.
+struct CategorySuggestionHint: View {
+    let name: String
+    let transactions: [TxRecord]
+    let categories: [TxCategory]
+    @Binding var selection: TxCategory
+
+    /// What a name edit should switch the category to, or nil to leave the
+    /// current choice alone — including a suggestion this form doesn't offer.
+    static func autoPick(for name: String, transactions: [TxRecord],
+                         categories: [TxCategory]) -> TxCategory? {
+        guard let s = SmartBudgetManager.suggestCategory(
+                for: name, txType: "Expense", transactions: transactions),
+              categories.contains(s)
+        else { return nil }
+        return s
+    }
+
+    var body: some View {
+        // Silent while the user agrees with it; it only speaks up once they
+        // have picked something else, so the offer is never noise.
+        if let suggested = Self.autoPick(for: name, transactions: transactions,
+                                         categories: categories),
+           suggested != selection {
+            let learned = SmartBudgetManager.learnedCategory(for: name, transactions: transactions)
+            HStack(spacing: 8) {
+                Image(systemName: suggested.icon).font(.system(.caption)).foregroundStyle(suggested.color)
+                // Cite the evidence when it came from the user's own
+                // history. "Because you did this 5 times" is trustworthy in
+                // a way a bare "detected" never is.
+                Text(learned.map {
+                        String(format: loc("tx.learned_from"), $0.count, $0.matchedTerm)
+                     } ?? String(format: loc("tx.auto_detected"), suggested.displayLabel))
+                    .font(.system(.caption, weight: .medium)).foregroundStyle(AppTheme.textSecondary)
+                Spacer()
+                Button {
+                    HapticManager.shared.tap()
+                    withAnimation { selection = suggested }
+                } label: {
+                    // `onSolid`, not `onVividFill`: category colours are a
+                    // mix of fixed bright hexes and adaptive tokens that go
+                    // DARK in light mode, so the label has to invert with
+                    // the scheme. onVividFill never inverts.
+                    Text(loc("tx.apply")).font(.system(.caption2, weight: .semibold))
+                        .foregroundStyle(AppTheme.onSolid)
+                        .padding(.horizontal, 10).padding(.vertical, 4)
+                        .background(suggested.color, in: Capsule())
+                }
+            }
+            .transition(.move(edge: .top).combined(with: .opacity))
+        }
     }
 }
 
