@@ -1435,7 +1435,9 @@ struct SharedGoalFormSheet: View {
                                 Image(systemName: "calendar").font(.system(.subheadline)).foregroundStyle(AppTheme.purple)
                                 Text(loc("unity.deadline")).font(.system(.subheadline, weight: .medium)).foregroundStyle(AppTheme.textPrimary)
                                 Spacer()
-                                Toggle("", isOn: $hasDeadline.animation(.spring(response: 0.3))).labelsHidden().tint(AppTheme.purple)
+                                DiPoSwitch(isOn: $hasDeadline.animation(.spring(response: 0.3)),
+                                           onIcon: "calendar", offIcon: "infinity",
+                                           tint: AppTheme.purple)
                             }
                             .padding(14)
                             .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))

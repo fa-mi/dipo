@@ -311,7 +311,7 @@ struct SmartRecommendationDetailView: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     Spacer(minLength: 8)
-                    Toggle("", isOn: $autoSaveOn).labelsHidden().tint(AppTheme.accentFill)
+                    DiPoSwitch(isOn: $autoSaveOn, onIcon: "bolt.fill", offIcon: "hand.point.up.left.fill")
                 }
             }
         }

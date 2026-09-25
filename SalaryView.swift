@@ -900,12 +900,9 @@ struct SalaryActionsSheet: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     Spacer(minLength: 6)
-                    Toggle("", isOn: $schedule.autoRecord)
-                        .labelsHidden()
-                        .tint(AppTheme.accentFill)
+                    DiPoSwitch(isOn: $schedule.autoRecord, onIcon: "bolt.fill", offIcon: "hand.point.up.left.fill")
                         .onChange(of: schedule.autoRecord) { _, _ in
                             try? context.save()
-                            HapticManager.shared.tap()
                         }
                 }
                 .padding(.horizontal, 14).padding(.vertical, 12)
@@ -1308,9 +1305,7 @@ struct SalaryFormSheet: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 6)
-            Toggle("", isOn: $vm.formAutoRecord)
-                .labelsHidden()
-                .tint(AppTheme.accentFill)
+            DiPoSwitch(isOn: $vm.formAutoRecord, onIcon: "bolt.fill", offIcon: "hand.point.up.left.fill")
         }
         .padding(14)
         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
