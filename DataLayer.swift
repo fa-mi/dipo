@@ -355,6 +355,11 @@ enum TxCategory: String, CaseIterable, Codable {
         }
     }
 
+    /// FROZEN, on the same terms as `AppTheme` — ask Fahmi before changing one.
+    /// These are what a person actually recognises a category by: the orange
+    /// circle IS "Shopping" on every screen it appears on, so changing one is a
+    /// change to something users have already learned.
+    /// Pinned by `DiPoTests/PaletteLockTests.swift`.
     var iconBg: String {
         switch self {
         case .shopping:    return "#F97316"

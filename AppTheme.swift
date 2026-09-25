@@ -1,6 +1,24 @@
 import SwiftUI
 
 // MARK: - Theme
+//
+// ┌─────────────────────────────────────────────────────────────────────────┐
+// │ THE PALETTE IS FROZEN. Do not change a value here — ask Fahmi first.     │
+// └─────────────────────────────────────────────────────────────────────────┘
+//
+// Not because these numbers are sacred, but because they were decided, and the
+// reasoning is written beside each one. A redesign, a revamp, a reference to
+// match, a contrast complaint — none of those is permission to edit a value in
+// this file. Say which token you would change, from what to what, and why, and
+// wait for an answer.
+//
+// Adding a NEW token for something that has no colour yet: fine. Using an
+// existing token somewhere new, or at an opacity: fine. Changing one that is
+// already here: ask.
+//
+// `DiPoTests/PaletteLockTests.swift` pins every value in both themes, so an
+// accidental edit fails there. Category hues in `TxCategory.iconBg` are frozen
+// on the same terms.
 
 struct AppTheme {
 
