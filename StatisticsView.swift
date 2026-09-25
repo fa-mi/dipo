@@ -1673,6 +1673,21 @@ struct StatisticsView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 18)
             } else {
+                // The ring answers "how is this divided", which a ranked list
+                // answers badly; the list below keeps the figures, which a ring
+                // cannot give to the rupiah. Neither replaces the other.
+                SpendDonut(slices: rows.map {
+                                DonutSlice(id: $0.category.rawValue,
+                                           label: $0.category.displayLabel,
+                                           amount: $0.amount,
+                                           color: Color(hex: $0.category.iconBg))
+                           },
+                           total: total,
+                           format: { money($0) },
+                           centerCaption: loc("stats.total"))
+                    .frame(height: 196)
+                    .padding(.bottom, 4)
+
                 VStack(spacing: 14) {
                     ForEach(Array(shown.enumerated()), id: \.element.category) { i, row in
                         categoryRow(row.category, amount: row.amount,
@@ -1927,8 +1942,16 @@ struct StatisticsView: View {
                              change: change, changeCaption: loc("stats.vs_last_week"),
                              previous: prev)
 
-                    chartCard(values: days.map(\.amount), labels: days.map(\.short),
-                              tint: AppTheme.blue, highlightLast: false)
+                    // Days inside one week are a continuous story; bars stay
+                    // on Trends, where each column is a period of its own.
+                    SpendLineChart(points: days.enumerated().map { i, d in
+                                       SpendLinePoint(id: i, label: d.short,
+                                                      value: d.amount, isFuture: d.isFuture)
+                                   },
+                                   tint: AppTheme.blue,
+                                   format: { money($0) })
+                        .padding(16)
+                        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.xl))
 
                     HStack(spacing: 10) {
                         factTile(loc("stats.daily_avg"), money(avg), AppTheme.blue)
