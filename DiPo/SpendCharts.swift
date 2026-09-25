@@ -33,19 +33,21 @@ struct SpendDonut: View {
 
     @State private var selectedID: String? = nil
 
-    // Proportions taken off a rendered comparison against the reference rather
-    // than guessed: the arcs sit on one mid-radius, each one is stroked with a
-    // weight that follows its share, and behind each sits a paler, narrower arc
-    // pushed outward and run a few degrees long. That pale tail is what makes
-    // the ring read as stacked paper instead of a painted band, and it was the
-    // piece missing from the first three attempts.
-    private let midR: CGFloat = 0.395      // × side
-    private let maxWeight: CGFloat = 0.155 // × side, the widest band
-    private let minWeight: CGFloat = 0.5   // × maxWeight, the narrowest
-    private let haloOut: CGFloat = 0.045   // × side, how far the pale layer sits out
-    private let haloWeight: CGFloat = 0.72 // × the band's own weight
-    private let gapDeg = 7.0
-    private let tailDeg = 7.0
+    // Every proportion below was read off a rendered comparison with the
+    // reference, not reasoned about. A slice is TWO things: a thin arc on the
+    // rim, and a pale wedge sitting inside it with a gap of card between them.
+    // The wedge's DEPTH carries the share — the big ones reach toward the
+    // middle and the small ones barely leave the rim — which is why the hole is
+    // not a circle. Three earlier attempts drew one band and varied its weight;
+    // that is a different chart.
+    private let arcWeight: CGFloat = 0.033   // × side
+    private let rimInset: CGFloat = 0.007    // × side, breathing room outside the arc
+    private let radialGap: CGFloat = 0.020   // × side, card showing between arc and wedge
+    private let baseDepth: CGFloat = 0.127   // × side, the shallowest wedge
+    private let spanDepth: CGFloat = 0.093   // × side, added at the largest share
+    private let roundness: CGFloat = 0.020   // × side, the wedge's corner radius
+    private let gapDeg = 8.0                 // between slices
+    private let wedgeInsetDeg = 1.8          // wedge sits inside its own arc
 
     /// Slices below this are drawn but not labelled — a "2%" printed across a
     /// sliver is unreadable and pushes into its neighbours.
@@ -74,39 +76,53 @@ struct SpendDonut: View {
     private var selected: Arc? { arcs.first { $0.id == selectedID } }
     private var largest: Double { arcs.map(\.fraction).max() ?? 1 }
 
-    private func weight(_ arc: Arc, side: CGFloat) -> CGFloat {
+    private func depth(_ arc: Arc, side: CGFloat) -> CGFloat {
         let t = largest > 0 ? arc.fraction / largest : 1
-        return side * maxWeight * (minWeight + (1 - minWeight) * CGFloat(t))
+        return side * (baseDepth + spanDepth * CGFloat(t))
     }
 
     var body: some View {
         GeometryReader { geo in
             let side = min(geo.size.width, geo.size.height)
+            let arcW = side * arcWeight
+            let rOut = side / 2 - arcW / 2 - side * rimInset
+            let wedgeOut = rOut - arcW / 2 - side * radialGap
+
             ZStack {
                 ForEach(arcs) { arc in
-                    let on = arc.id == selectedID
-                    let w = weight(arc, side: side) + (on ? side * 0.02 : 0)
+                    let on = selectedID == nil || arc.id == selectedID
                     let a0 = arc.start * 360 + gapDeg / 2
-                    let a1 = arc.end * 360 - gapDeg / 2
-                    // The pale layer, held to the slice's own span so it can
-                    // never run under the next one.
-                    ArcSegment(radius: side * midR + side * haloOut,
-                               from: a0, to: min(a1 + tailDeg, arc.end * 360 - 1))
-                        .stroke(arc.slice.color.opacity(0.32),
-                                style: StrokeStyle(lineWidth: w * haloWeight, lineCap: .round))
-                    ArcSegment(radius: side * midR, from: a0, to: max(a1, a0 + 0.5))
+                    let a1 = max(arc.end * 360 - gapDeg / 2, arc.start * 360 + gapDeg / 2 + 0.5)
+                    let wedgeIn = max(wedgeOut - depth(arc, side: side), side * 0.14)
+                    let wedge = WedgeSegment(inner: wedgeIn, outer: wedgeOut,
+                                             from: a0 + wedgeInsetDeg, to: max(a1 - wedgeInsetDeg,
+                                                                               a0 + wedgeInsetDeg + 0.5))
+                    // The rim.
+                    ArcSegment(radius: rOut, from: a0, to: a1)
                         .stroke(arc.slice.color,
-                                style: StrokeStyle(lineWidth: w, lineCap: .round))
-                        .opacity(selectedID == nil || on ? 1 : 0.4)
+                                style: StrokeStyle(lineWidth: arcW, lineCap: .round))
+                        .opacity(on ? 1 : 0.35)
+                    // The wedge, filled and then stroked in its own colour:
+                    // that stroke is what rounds the four corners, which a
+                    // plain annular sector does not have.
+                    wedge
+                        .fill(arc.slice.color.opacity(0.42))
+                        .opacity(on ? 1 : 0.35)
+                    wedge
+                        .stroke(arc.slice.color.opacity(0.42),
+                                style: StrokeStyle(lineWidth: side * roundness,
+                                                   lineCap: .round, lineJoin: .round))
+                        .opacity(on ? 1 : 0.35)
                 }
 
                 ForEach(arcs.filter { $0.fraction >= labelFloor }) { arc in
                     let mid = Angle(degrees: ((arc.start + arc.end) / 2) * 360 - 90)
+                    let wedgeIn = max(wedgeOut - depth(arc, side: side), side * 0.14)
+                    let r = (wedgeIn + wedgeOut) / 2
                     Text("\(Int((arc.fraction * 100).rounded()))%")
                         .font(.system(.caption2, weight: .bold))
                         .foregroundStyle(arc.slice.labelColor)
-                        .offset(x: cos(mid.radians) * side * midR,
-                                y: sin(mid.radians) * side * midR)
+                        .offset(x: cos(mid.radians) * r, y: sin(mid.radians) * r)
                 }
 
                 center
@@ -114,12 +130,12 @@ struct SpendDonut: View {
             .frame(width: side, height: side)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .contentShape(Circle())
-            // A tap anywhere on the band picks the slice under the finger, and
-            // a tap on the same slice puts it back — the centre has to be able
-            // to return to the total, or the first tap is a one-way door.
+            // A tap anywhere on a slice picks it, and a tap on the same slice
+            // puts it back — the centre has to be able to return to the total,
+            // or the first tap is a one-way door.
             .gesture(
                 DragGesture(minimumDistance: 0)
-                    .onEnded { v in select(at: v.location, side: side) }
+                    .onEnded { v in select(at: v.location, side: side, outer: rOut + arcW) }
             )
             .animation(.spring(response: 0.32, dampingFraction: 0.8), value: selectedID)
         }
@@ -133,26 +149,27 @@ struct SpendDonut: View {
                 .foregroundStyle(AppTheme.textSecondary)
                 .lineLimit(1)
             Text(format(selected?.slice.amount ?? total))
-                .font(.system(.subheadline, weight: .bold))
+                .font(.system(.footnote, weight: .bold))
                 .foregroundStyle(AppTheme.textPrimary)
-                .lineLimit(1).minimumScaleFactor(0.6)
+                .lineLimit(1).minimumScaleFactor(0.55)
             if let s = selected {
                 Text("\(Int((s.fraction * 100).rounded()))%")
                     .font(.system(.caption2, weight: .semibold))
                     .foregroundStyle(s.slice.color)
             }
         }
-        .padding(.horizontal, 30)
+        // The hole is small and uneven by design, so the figure inside it has
+        // to stay narrow.
+        .frame(maxWidth: 96)
     }
 
-    private func select(at point: CGPoint, side: CGFloat) {
+    private func select(at point: CGPoint, side: CGFloat, outer: CGFloat) {
         let dx = point.x - side / 2
         let dy = point.y - side / 2
         let radius = sqrt(dx * dx + dy * dy)
         // Ignore the hole: a tap in the middle is a tap on the figure, not on a
         // slice, and guessing one there would flip the centre at random.
-        let band = side * maxWeight
-        guard radius > side * midR - band, radius < side * midR + band else { return }
+        guard radius > side * 0.14, radius < outer else { return }
         var deg = atan2(dy, dx) * 180 / .pi + 90
         if deg < 0 { deg += 360 }
         let f = deg / 360
@@ -162,7 +179,7 @@ struct SpendDonut: View {
     }
 }
 
-/// One band of the ring. Degrees, clockwise, 0 at twelve o'clock — the way the
+/// One band of the rim. Degrees, clockwise, 0 at twelve o'clock — the way the
 /// chart is read rather than the way trigonometry numbers it.
 private struct ArcSegment: Shape {
     var radius: CGFloat
@@ -171,11 +188,28 @@ private struct ArcSegment: Shape {
 
     func path(in rect: CGRect) -> Path {
         var p = Path()
-        p.addArc(center: CGPoint(x: rect.midX, y: rect.midY),
-                 radius: radius,
-                 startAngle: .degrees(from - 90),
-                 endAngle: .degrees(to - 90),
-                 clockwise: false)
+        p.addArc(center: CGPoint(x: rect.midX, y: rect.midY), radius: radius,
+                 startAngle: .degrees(from - 90), endAngle: .degrees(to - 90), clockwise: false)
+        return p
+    }
+}
+
+/// The filled part of a slice: an annular sector, rounded by being stroked in
+/// its own colour rather than by any corner maths.
+private struct WedgeSegment: Shape {
+    var inner: CGFloat
+    var outer: CGFloat
+    var from: Double
+    var to: Double
+
+    func path(in rect: CGRect) -> Path {
+        let c = CGPoint(x: rect.midX, y: rect.midY)
+        var p = Path()
+        p.addArc(center: c, radius: outer,
+                 startAngle: .degrees(from - 90), endAngle: .degrees(to - 90), clockwise: false)
+        p.addArc(center: c, radius: inner,
+                 startAngle: .degrees(to - 90), endAngle: .degrees(from - 90), clockwise: true)
+        p.closeSubpath()
         return p
     }
 }
