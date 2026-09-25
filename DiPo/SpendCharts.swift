@@ -16,6 +16,10 @@ struct DonutSlice: Identifiable {
     let label: String
     let amount: Double
     let color: Color
+    /// What the share printed inside this slice is drawn in. Passed rather than
+    /// derived: only the caller knows how pale it made the fill, and white on a
+    /// pale slice is unreadable.
+    var labelColor: Color = .white
 }
 
 struct SpendDonut: View {
@@ -27,14 +31,19 @@ struct SpendDonut: View {
     let format: (Double) -> String
     var centerCaption: String
 
-    var ring: CGFloat = 26
+    /// The thickest a slice gets. Every arc grows INWARD from this, so the
+    /// hole stays put and the outer edge is what varies.
+    var ring: CGFloat = 30
     @State private var selectedID: String? = nil
 
     /// Slices below this are drawn but not labelled — a "2%" printed across a
     /// sliver is unreadable and pushes into its neighbours.
     private let labelFloor = 0.07
-    /// The gap between slices, as a fraction of the circle.
-    private let gap = 0.008
+    /// The gap between slices, as a fraction of the circle. Wide enough to read
+    /// as air between separate things rather than as a hairline.
+    private let gap = 0.016
+    /// The thinnest a slice is drawn, as a share of `ring`.
+    private let floorWidth = 0.55
 
     private struct Arc: Identifiable {
         let slice: DonutSlice
@@ -58,27 +67,44 @@ struct SpendDonut: View {
 
     private var selected: Arc? { arcs.first { $0.id == selectedID } }
 
+    private var largest: Double { arcs.map(\.fraction).max() ?? 1 }
+
+    /// Thickness follows the share, so the ring says which is biggest twice —
+    /// by how far it travels and by how heavy it is. A flat ring of even width
+    /// leaves the whole job to arc length, which is the hardest thing on a
+    /// circle to compare by eye.
+    private func width(_ arc: Arc) -> CGFloat {
+        let t = largest > 0 ? arc.fraction / largest : 1
+        return ring * CGFloat(floorWidth + (1 - floorWidth) * t)
+    }
+
     var body: some View {
         GeometryReader { geo in
             let side = min(geo.size.width, geo.size.height)
             ZStack {
                 ForEach(arcs) { arc in
                     let on = arc.id == selectedID
+                    let w = width(arc) + (on ? 6 : 0)
+                    // Inset so each arc keeps the same INNER edge whatever its
+                    // width: stroking a circle grows both ways, which would eat
+                    // into the hole and leave the middle figure crowded.
                     Circle()
+                        .inset(by: ring - w / 2)
                         .trim(from: min(arc.start + gap / 2, arc.end - 0.002),
                               to: max(arc.end - gap / 2, arc.start + 0.002))
                         .stroke(arc.slice.color,
-                                style: StrokeStyle(lineWidth: on ? ring + 7 : ring, lineCap: .butt))
-                        .opacity(selectedID == nil || on ? 1 : 0.45)
+                                style: StrokeStyle(lineWidth: w, lineCap: .round))
+                        .opacity(selectedID == nil || on ? 1 : 0.4)
                 }
                 .rotationEffect(.degrees(-90))
 
                 ForEach(arcs.filter { $0.fraction >= labelFloor }) { arc in
                     let mid = Angle(degrees: ((arc.start + arc.end) / 2) * 360 - 90)
-                    let r = (side - ring) / 2
+                    // The middle of THIS arc's band, which moves with its width.
+                    let r = side / 2 - ring + width(arc) / 2
                     Text("\(Int((arc.fraction * 100).rounded()))%")
                         .font(.system(.caption2, weight: .bold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(arc.slice.labelColor)
                         .offset(x: cos(mid.radians) * r, y: sin(mid.radians) * r)
                 }
 
@@ -124,7 +150,7 @@ struct SpendDonut: View {
         let radius = sqrt(dx * dx + dy * dy)
         // Ignore the hole: a tap in the middle is a tap on the figure, not on a
         // slice, and guessing one there would flip the centre at random.
-        guard radius > size.width / 2 - ring - 6, radius < size.width / 2 + 6 else { return }
+        guard radius > size.width / 2 - ring - 8, radius < size.width / 2 + 8 else { return }
         var deg = atan2(dy, dx) * 180 / .pi + 90
         if deg < 0 { deg += 360 }
         let f = deg / 360
