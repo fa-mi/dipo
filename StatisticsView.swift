@@ -1676,11 +1676,11 @@ struct StatisticsView: View {
                 // The ring answers "how is this divided", which a ranked list
                 // answers badly; the list below keeps the figures, which a ring
                 // cannot give to the rupiah. Neither replaces the other.
-                SpendDonut(slices: rows.enumerated().map { i, row in
-                                DonutSlice(id: row.category.rawValue,
-                                           label: row.category.displayLabel,
-                                           amount: row.amount,
-                                           color: shareShade(i, of: rows.count),
+                SpendDonut(slices: rows.map {
+                                DonutSlice(id: $0.category.rawValue,
+                                           label: $0.category.displayLabel,
+                                           amount: $0.amount,
+                                           color: Color(hex: $0.category.iconBg),
                                            // The share sits on the pale wedge,
                                            // never on the saturated rim.
                                            labelColor: AppTheme.textPrimary)
@@ -1694,8 +1694,7 @@ struct StatisticsView: View {
                 VStack(spacing: 14) {
                     ForEach(Array(shown.enumerated()), id: \.element.category) { i, row in
                         categoryRow(row.category, amount: row.amount,
-                                    share: total > 0 ? row.amount / total : 0, index: i,
-                                    shade: shareShade(i, of: rows.count))
+                                    share: total > 0 ? row.amount / total : 0, index: i)
                     }
                 }
                 if rows.count > Self.categoryPreview {
@@ -1744,20 +1743,13 @@ struct StatisticsView: View {
         .background(AppTheme.cardMid.opacity(0.7), in: Capsule())
     }
 
-    /// One hue for the whole breakdown, stepped by rank: the biggest share is
-    /// the deepest and each one after it is a step lighter.
-    ///
-    /// The ring and the bar under each row take their colour from here, so a
-    /// slice and its figure are the same shade. The icon circle keeps the
-    /// category's own colour — that one is the app's shorthand for "Food" on
-    /// every other screen, and a chart is no reason to redefine it here.
-    private func shareShade(_ rank: Int, of count: Int) -> Color {
-        let t = count > 1 ? Double(rank) / Double(count - 1) : 0
-        return AppTheme.accent.opacity(1 - 0.6 * t)
-    }
+    // One hue stepped by rank was tried here and dropped: the ring became a
+    // scale of greens while the rows beside it kept their category colours, so
+    // nothing tied a slice to its figure. The category colour is the app's
+    // shorthand for "Food" on every screen, and the chart uses it too.
 
-    private func categoryRow(_ cat: TxCategory, amount: Double, share: Double, index: Int,
-                             shade: Color) -> some View {
+    private func categoryRow(_ cat: TxCategory, amount: Double, share: Double, index: Int
+) -> some View {
         let hue = Color(hex: cat.iconBg)
         return HStack(spacing: 12) {
             Image(systemName: cat.icon)
@@ -1781,7 +1773,7 @@ struct StatisticsView: View {
                     GeometryReader { g in
                         ZStack(alignment: .leading) {
                             Capsule().fill(AppTheme.cardMid.opacity(0.8))
-                            Capsule().fill(shade)
+                            Capsule().fill(hue)
                                 .frame(width: max(g.size.width * CGFloat(share) * statsVM.chartProgress, 4))
                                 .animation(.spring(response: 0.7, dampingFraction: 0.85)
                                     .delay(Double(index) * 0.05), value: statsVM.chartProgress)
