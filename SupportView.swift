@@ -267,7 +267,12 @@ struct ContactAdminSheet: View {
                             .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                         Text("·")
                             .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
-                        Text(ticket.updatedAt.formatted(date: .abbreviated, time: .omitted))
+                        // `.formatted` reads the SYSTEM locale, so a phone set to
+                        // English printed English dates inside an app the user
+                        // had set to Indonesian. Five other screens already go
+                        // through DateFormatterCache, which follows the app.
+                        Text(DateFormatterCache.styles(date: .medium, time: .none)
+                                .string(from: ticket.updatedAt))
                             .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                         if !ticket.mediaBase64.isEmpty {
                             Image(systemName: "photo.fill")
@@ -292,11 +297,15 @@ struct ContactAdminSheet: View {
 
     @ViewBuilder
     private func ticketProgressBar(status: TicketStatusConfig) -> some View {
+        // Three dots for the three states a ticket can be in. It had four, and
+        // "In review" and "Answered" both lit at step >= 1 — so they never
+        // differed, and a ticket being read looked exactly like one already
+        // answered. There is no data behind a fourth state, and inventing one is
+        // how a progress bar starts lying about where your ticket is.
         let steps: [(label: String, icon: String, active: Bool)] = [
-            (loc("support.submitted_step"), "tray.fill",          status.step >= 0),
-            (loc("support.in_review"),      "magnifyingglass",     status.step >= 1),
+            (loc("support.submitted_step"), "tray.fill",            status.step >= 0),
             (loc("support.answered"),       "checkmark.circle.fill", status.step >= 1),
-            (loc("support.closed"),         "archivebox.fill",     status.step >= 2),
+            (loc("support.closed"),         "archivebox.fill",       status.step >= 2),
         ]
 
         HStack(spacing: 0) {
@@ -312,7 +321,10 @@ struct ContactAdminSheet: View {
                             .foregroundStyle(step.active ? AppTheme.onVividFill : AppTheme.textSecondary.opacity(0.5))
                     }
                     Text(step.label)
-                        .font(.system(size: 8, weight: step.active ? .semibold : .regular))
+                        // Was 8pt: below anything legible, and a fixed size
+                        // ignores Dynamic Type entirely. Three steps leave room
+                        // for a real text style.
+                        .font(.system(.caption2, weight: step.active ? .semibold : .regular))
                         .foregroundStyle(step.active ? AppTheme.accent : AppTheme.textSecondary.opacity(0.5))
                         .lineLimit(1)
                 }
@@ -352,7 +364,6 @@ struct NewTicketForm: View {
     @State private var isSubmitting    = false
     @State private var submitted       = false
     @State private var errorMsg:       String?
-    @State private var appeared        = false
 
     private var canSend: Bool {
         !subject.isEmpty && !message.isEmpty && !isSubmitting
@@ -372,7 +383,6 @@ struct NewTicketForm: View {
                     .foregroundStyle(AppTheme.textSecondary)
             }
         }
-        .onAppear { withAnimation(.spring(response: 0.6).delay(0.1)) { appeared = true } }
     }
 
     private var formView: some View {
@@ -412,7 +422,6 @@ struct NewTicketForm: View {
         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
         .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.accent.opacity(0.2), lineWidth: 1))
         .padding(.horizontal, 22)
-        .opacity(appeared ? 1 : 0).animation(AppMotion.appear, value: appeared)
     }
 
     private var formCategoryPicker: some View {
@@ -422,13 +431,14 @@ struct NewTicketForm: View {
             }
             .padding(.horizontal, 22)
         }
-        .opacity(appeared ? 1 : 0).animation(AppMotion.appear, value: appeared)
     }
 
     @ViewBuilder
     private func categoryChip(_ cat: SupportCategory) -> some View {
         let isSelected = (category == cat)
-        let fg: Color     = isSelected ? .white : AppTheme.textSecondary
+        // `onVividFill`, not white: it goes near-black in light mode, which is
+        // what a label on a saturated fill needs there.
+        let fg: Color     = isSelected ? AppTheme.onVividFill : AppTheme.textSecondary
         let bg: Color     = isSelected ? cat.color : AppTheme.cardDark
         let border: Color = isSelected ? Color.clear : AppTheme.cardMid
         Button {
@@ -456,7 +466,6 @@ struct NewTicketForm: View {
                 .padding(14).background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
         }
         .padding(.horizontal, 22)
-        .opacity(appeared ? 1 : 0).animation(AppMotion.appear, value: appeared)
     }
 
     private var formMessageField: some View {
@@ -476,7 +485,6 @@ struct NewTicketForm: View {
             }
         }
         .padding(.horizontal, 22)
-        .opacity(appeared ? 1 : 0).animation(AppMotion.appear, value: appeared)
     }
 
     private var formMediaPicker: some View {
@@ -495,7 +503,6 @@ struct NewTicketForm: View {
             mediaThumbnailRow
         }
         .padding(.horizontal, 22)
-        .opacity(appeared ? 1 : 0).animation(AppMotion.appear, value: appeared)
     }
 
     private var mediaThumbnailRow: some View {
@@ -552,18 +559,16 @@ struct NewTicketForm: View {
         .buttonStyle(ScaleButtonStyle())
         .disabled(!canSend)
         .padding(.horizontal, 22)
-        .opacity(appeared ? 1 : 0)
-        .animation(AppMotion.appear, value: appeared)
     }
 
     @ViewBuilder
     private var sendButtonLabel: some View {
         HStack(spacing: 10) {
-            if isSubmitting { ProgressView().tint(.white).scaleEffect(0.9) }
+            if isSubmitting { ProgressView().tint(AppTheme.onVividFill).scaleEffect(0.9) }
             else { Image(systemName: "paperplane.fill").font(.system(.callout)) }
             Text(isSubmitting ? loc("support.sending") : loc("support.send")).font(.system(.callout, weight: .bold))
         }
-        .foregroundStyle(.white).frame(maxWidth: .infinity).padding(.vertical, 16)
+        .foregroundStyle(AppTheme.onVividFill).frame(maxWidth: .infinity).padding(.vertical, 16)
     }
 
     private var sentView: some View {
@@ -832,12 +837,12 @@ struct TicketThreadView: View {
     private func progressTrack(step: Int) -> some View {
         let steps: [(icon: String, label: String)] = [
             ("tray.fill",             loc("support.submitted_step")),
-            ("eyes",                  loc("support.in_review")),
             ("checkmark.circle.fill", loc("support.answered")),
             ("archivebox.fill",       loc("support.closed")),
         ]
-        // step 0=open(shows submitted+in review), 1=answered, 2=closed
-        let activeUpTo = step == 0 ? 1 : step == 1 ? 2 : 3
+        // One dot per state: 0 submitted, 1 answered, 2 closed. No arithmetic,
+        // because there is nothing to translate any more.
+        let activeUpTo = step
 
         HStack(spacing: 0) {
             ForEach(Array(steps.enumerated()), id: \.offset) { i, s in
@@ -855,10 +860,10 @@ struct TicketThreadView: View {
                         }
                         Image(systemName: s.icon)
                             .font(.system(.caption2, weight: .bold)).imageScale(.small)
-                            .foregroundStyle(active ? .white : AppTheme.textSecondary.opacity(0.4))
+                            .foregroundStyle(active ? AppTheme.onVividFill : AppTheme.textSecondary.opacity(0.4))
                     }
                     Text(s.label)
-                        .font(.system(size: 8, weight: isCurrent ? .bold : .regular))
+                        .font(.system(.caption2, weight: isCurrent ? .bold : .regular))
                         .foregroundStyle(active ? (isCurrent ? AppTheme.accent : AppTheme.textSecondary) : AppTheme.textSecondary.opacity(0.4))
                         .lineLimit(1)
                 }
@@ -974,7 +979,8 @@ struct TicketThreadView: View {
         HStack {
             Spacer(minLength: 50)
             VStack(alignment: .trailing, spacing: 4) {
-                Text(reply.createdAt.formatted(date: .abbreviated, time: .shortened))
+                Text(DateFormatterCache.styles(date: .medium, time: .short)
+                        .string(from: reply.createdAt))
                     .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                 Text(reply.message).font(.system(.subheadline)).foregroundStyle(AppTheme.onVividFill).lineSpacing(4)
                     .padding(14)
