@@ -677,100 +677,136 @@ struct TransactionDetailSheet: View {
         .trackScreen(.transactionDetail)
     }
 
+    /// A short, stable handle for one transaction, taken from the id it already
+    /// has. Printed on the ticket so a person can point at a row when they ask
+    /// about it instead of describing "the coffee one, on Tuesday, I think".
+    private var reference: String {
+        "TRX-" + tx.id.uuidString.prefix(8)
+    }
+
+    /// One line of particulars. No rules between rows: on a ticket the columns
+    /// do that work, and a divider every 30pt turns paper back into a table.
+    private func ticketRow(_ label: String, _ value: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            Text(label)
+                .font(.system(.footnote))
+                .foregroundStyle(AppTheme.textSecondary)
+            Spacer(minLength: 8)
+            Text(value)
+                .font(.system(.footnote, weight: .medium))
+                .foregroundStyle(AppTheme.textPrimary)
+                .multilineTextAlignment(.trailing)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.vertical, 7)
+    }
+
     // MARK: Detail view
 
     var detailView: some View {
         VStack(spacing: 20) {
-            // Amount hero
-            VStack(spacing: 8) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: AppRadius.lg)
-                        .fill(tx.displayIconBg)
-                        .frame(width: 64, height: 64)
-                    Text(tx.icon)
-                        .font(.system(size: tx.icon.count == 1 ? 24 : 30))
-                        .foregroundStyle(.white)
-                }
-
-                // Subtype badge — appears above the amount when the tx has
-                // been marked as Refund or Transfer. Visual cue that this tx
-                // is treated specially in budget calculations (refund
-                // subtracts from bucket; transfer is ignored entirely).
-                if tx.txSubtype != .normal {
-                    HStack(spacing: 5) {
-                        Image(systemName: tx.txSubtype.icon)
-                            .font(.system(.caption2, weight: .semibold)).imageScale(.small)
-                        Text(tx.txSubtype.displayLabel)
-                            .font(.system(.caption2, weight: .bold))
+            // The transaction as the object it already is: one purchase, one
+            // moment, one piece of paper. Everything the stack of cards showed
+            // is still here — the same facts, printed rather than filed.
+            TicketCard {
+                VStack(spacing: 8) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: AppRadius.lg)
+                            .fill(tx.displayIconBg)
+                            .frame(width: 64, height: 64)
+                        Text(tx.icon)
+                            .font(.system(size: tx.icon.count == 1 ? 24 : 30))
+                            .foregroundStyle(.white)
                     }
-                    .foregroundStyle(AppTheme.orange)
-                    .padding(.horizontal, 10).padding(.vertical, 4)
-                    .background(AppTheme.orange.opacity(0.15), in: Capsule())
-                    .overlay(Capsule().stroke(AppTheme.orange.opacity(0.3), lineWidth: 1))
-                }
 
-                Text(tx.amount >= 0 ? "+\(formattedAmount)" : "-\(formattedAmount)")
-                    .font(.system(.largeTitle, weight: .bold))
-                    // The same money-in / money-out pair as Home's flow card.
-                    .foregroundStyle(tx.amount >= 0 ? AppTheme.flowIn : AppTheme.flowOut)
+                    // Subtype badge — appears above the amount when the tx has
+                    // been marked as Refund or Transfer. Visual cue that this tx
+                    // is treated specially in budget calculations (refund
+                    // subtracts from bucket; transfer is ignored entirely).
+                    if tx.txSubtype != .normal {
+                        HStack(spacing: 5) {
+                            Image(systemName: tx.txSubtype.icon)
+                                .font(.system(.caption2, weight: .semibold)).imageScale(.small)
+                            Text(tx.txSubtype.displayLabel)
+                                .font(.system(.caption2, weight: .bold))
+                                .lineLimit(1)
+                        }
+                        .foregroundStyle(AppTheme.orange)
+                        .padding(.horizontal, 10).padding(.vertical, 4)
+                        .background(AppTheme.orange.opacity(0.15), in: Capsule())
+                        .fixedSize()
+                    }
 
-                if tx.isFXConverted {
-                    // Settled row: show what was declared and the rate applied
-                    // on the charge day. This deliberately REPLACES the live
-                    // conversion below — re-converting an amount that was
-                    // already converted once would print a figure that
-                    // contradicts the one actually posted to the balance.
-                    VStack(spacing: 4) {
-                        Text(String(format: loc("tx.fx_original"),
-                                    CurrencyManager.shared.formatted(abs(tx.fxOriginalAmount),
-                                                                     currency: tx.fxOriginalCurrency)))
+                    Text(tx.amount >= 0 ? "+\(formattedAmount)" : "-\(formattedAmount)")
+                        .font(.system(.largeTitle, weight: .bold))
+                        // The same money-in / money-out pair as Home's flow card.
+                        .foregroundStyle(tx.amount >= 0 ? AppTheme.flowIn : AppTheme.flowOut)
+                        .lineLimit(1).minimumScaleFactor(0.6)
+
+                    Text(tx.name)
+                        .font(.system(.subheadline, weight: .medium))
+                        .foregroundStyle(AppTheme.textPrimary)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    if tx.isFXConverted {
+                        // Settled row: show what was declared and the rate applied
+                        // on the charge day. This deliberately REPLACES the live
+                        // conversion below — re-converting an amount that was
+                        // already converted once would print a figure that
+                        // contradicts the one actually posted to the balance.
+                        VStack(spacing: 4) {
+                            Text(String(format: loc("tx.fx_original"),
+                                        CurrencyManager.shared.formatted(abs(tx.fxOriginalAmount),
+                                                                         currency: tx.fxOriginalCurrency)))
+                                .font(.system(.subheadline))
+                                .foregroundStyle(AppTheme.textSecondary)
+                            Text(String(format: loc("tx.fx_rate_used"),
+                                        CurrencyManager.symbol(for: tx.fxOriginalCurrency),
+                                        CurrencyManager.shared.formatted(tx.fxRate, currency: tx.currency)))
+                                .font(.system(.caption2))
+                                .foregroundStyle(AppTheme.textSecondary)
+                        }
+                    } else {
+                        Text(convertedLabel)
                             .font(.system(.subheadline))
                             .foregroundStyle(AppTheme.textSecondary)
-                        Text(String(format: loc("tx.fx_rate_used"),
-                                    CurrencyManager.symbol(for: tx.fxOriginalCurrency),
-                                    CurrencyManager.shared.formatted(tx.fxRate, currency: tx.currency)))
-                            .font(.system(.caption2))
-                            .foregroundStyle(AppTheme.textSecondary)
-                    }
-                } else {
-                    Text(convertedLabel)
-                        .font(.system(.subheadline))
-                        .foregroundStyle(AppTheme.textSecondary)
 
-                    if CurrencyManager.shared.isLoading {
-                        HStack(spacing: 6) {
-                            ProgressView().scaleEffect(0.7).tint(AppTheme.textSecondary)
-                            Text(loc("common.updating_rate")).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
+                        if CurrencyManager.shared.isLoading {
+                            HStack(spacing: 6) {
+                                ProgressView().scaleEffect(0.7).tint(AppTheme.textSecondary)
+                                Text(loc("common.updating_rate")).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
+                            }
+                        } else if let updated = CurrencyManager.shared.lastUpdated {
+                            Text(String(format: loc("common.rate_as_of"),
+                                        CurrencyManager.shared.rateLabel,
+                                        Self.shortTimeString(from: updated)))
+                                .font(.system(.caption2))
+                                .foregroundStyle(AppTheme.textSecondary)
                         }
-                    } else if let updated = CurrencyManager.shared.lastUpdated {
-                        Text(String(format: loc("common.rate_as_of"),
-                                    CurrencyManager.shared.rateLabel,
-                                    Self.shortTimeString(from: updated)))
-                            .font(.system(.caption2))
-                            .foregroundStyle(AppTheme.textSecondary)
                     }
                 }
-            }
-            .padding(.top, 16)
+            } particulars: {
+                VStack(spacing: 0) {
+                    ticketRow(loc("common.date"), tx.displayDate)
+                    ticketRow(loc("common.category"), tx.category.displayLabel)
+                    ticketRow(loc("common.type"), tx.displayType)
+                    ticketRow(loc("common.currency"), tx.currency)
+                    if !tx.notes.isEmpty {
+                        ticketRow(loc("common.notes"), tx.displayNotes)
+                    }
+                    ticketRow(loc("tx.reference"), reference)
 
-            // Details card
-            VStack(spacing: 0) {
-                DetailRow(label: loc("common.name"), value: tx.name)
-                Divider().background(AppTheme.cardMid).padding(.horizontal, 18)
-                DetailRow(label: loc("common.date"), value: tx.displayDate)
-                Divider().background(AppTheme.cardMid).padding(.horizontal, 18)
-                DetailRow(label: loc("common.category"), value: tx.category.displayLabel)
-                Divider().background(AppTheme.cardMid).padding(.horizontal, 18)
-                DetailRow(label: loc("common.type"), value: tx.displayType)
-                Divider().background(AppTheme.cardMid).padding(.horizontal, 18)
-                DetailRow(label: loc("common.currency"), value: tx.currency)
-                if !tx.notes.isEmpty {
-                    Divider().background(AppTheme.cardMid).padding(.horizontal, 18)
-                    DetailRow(label: loc("common.notes"), value: tx.displayNotes)
+                    TicketBarcode(id: tx.id)
+                        .padding(.top, 14)
+                    Text(reference)
+                        .font(.system(.caption2, design: .monospaced))
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .padding(.top, 4)
                 }
             }
-            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
             .padding(.horizontal, 22)
+            .padding(.top, 8)
 
             // The engine's call on whether this is day-to-day spending, and a
             // way to disagree with it.

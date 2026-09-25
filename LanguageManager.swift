@@ -2002,6 +2002,7 @@ final class LanguageManager {
         "checkin.confirmed":   "Today: no spending",
         "checkin.pending":     "Nothing logged today yet",
         "checkin.streak":      "%d days in a row",
+        "tx.reference":        "Reference",
         "stats.unchecked_days": "%d days this week have no answer yet, so they are not counted here",
         "notif.info":  "Payday alerts, budget warnings\nand goal milestones appear here.",
 
@@ -4429,6 +4430,7 @@ final class LanguageManager {
         "checkin.confirmed":   "Hari ini tanpa pengeluaran",
         "checkin.pending":     "Hari ini belum ada catatan",
         "checkin.streak":      "%d hari berturut-turut",
+        "tx.reference":        "Nomor referensi",
         "stats.unchecked_days": "%d hari minggu ini belum dijawab, jadi tidak ikut dihitung",
         "notif.info":  "Pengingat gajian, peringatan anggaran,\ndan kabar target tabungan muncul di sini.",
 
