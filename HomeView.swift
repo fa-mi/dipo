@@ -2164,7 +2164,7 @@ struct TransactionSection: View {
                             }
 
                             VStack(spacing: 10) {
-                                ForEach(group.txs) { tx in
+                                ForEach(Array(group.txs.enumerated()), id: \.element.id) { i, tx in
                                     SwipeToDeleteRow(
                                         onTap: { selectedTx = tx },
                                         onDelete: { pendingDelete = tx }
@@ -2178,6 +2178,20 @@ struct TransactionSection: View {
                                     .transition(.asymmetric(
                                         insertion: .opacity.combined(with: .move(edge: .top)),
                                         removal: .scale(scale: 0.92).combined(with: .opacity)))
+                                    // A hairline between rows of the same day,
+                                    // starting where the name does — 44pt of
+                                    // avatar plus the row's 14pt gap — so it
+                                    // separates entries without drawing a table
+                                    // rule across the card. The last row of a day
+                                    // has none: the next day's header is the
+                                    // break there, and a line above it would read
+                                    // as belonging to that header.
+                                    if i < group.txs.count - 1 {
+                                        Rectangle()
+                                            .fill(AppTheme.cardMid.opacity(0.6))
+                                            .frame(height: 1)
+                                            .padding(.leading, 58)
+                                    }
                                 }
                             }
                         }
