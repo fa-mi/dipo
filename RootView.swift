@@ -585,8 +585,12 @@ struct RootView: View {
             // This is what allows notifications even when the app is fully closed.
             NotificationManager.registerForRemotePushNotifications()
             UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, _ in
-                if granted, UserDefaults.standard.bool(forKey: "daily_reminder_on") {
-                    NotificationManager.scheduleDailyReminder()
+                // Arm the evening check-in as soon as there is permission. The
+                // Home card corrects today's as soon as it renders, which is
+                // immediately — this only has to cover the first launch.
+                guard granted else { return }
+                Task { @MainActor in
+                    NotificationManager.refreshCheckInReminders(accountedToday: false)
                 }
             }
         }

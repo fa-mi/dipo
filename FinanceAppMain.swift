@@ -237,7 +237,11 @@ struct DiPoApp: App {
             // Pre-aggregated daily buckets (see RollupEngine). A derived cache of
             // the ledger — always rebuildable from TxRecord — that lets screens
             // read O(days) instead of scanning every transaction on each render.
-            DailyRollup.self
+            DailyRollup.self,
+            // One row per day the user confirmed as spend-free. Without it a
+            // day with no rows is indistinguishable from a day nobody logged,
+            // and every per-day figure quietly treats the second as the first.
+            DayCheckIn.self
         ])
         let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
         do {

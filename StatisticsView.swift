@@ -125,6 +125,9 @@ struct StatisticsView: View {
     @Query(sort: \SalarySchedule.createdAt) private var salarySchedules: [SalarySchedule]
     @Query private var recurringPlans: [RecurringExpense]
     @Query private var savingsGoals: [SavingsGoal]
+    /// The days the user answered as spend-free. Without them a week's quiet
+    /// days cannot be told from its unrecorded ones.
+    @Query private var checkIns: [DayCheckIn]
     @State private var selectedPeriod: StatPeriod = .thisMonth
     /// Held in @State so SwiftUI observes plan changes; reading
     /// `PremiumManager.shared` inline inside `body` registers no dependency,
@@ -1898,7 +1901,18 @@ struct StatisticsView: View {
         let change: Double? = prev > 0 ? (total - prev) / prev * 100 : nil
         let avg = elapsed.isEmpty ? 0 : total / Double(elapsed.count)
         let busiest = days.max { $0.amount < $1.amount }
-        let quietCount = elapsed.filter { $0.amount <= 0 }.count
+        // A day with no spending only counts as one if the day is KNOWN:
+        // either it carries rows, or the user answered DiPo's check-in. Counting
+        // every empty day here was the screen congratulating the user for days
+        // it knew nothing about — the week someone forgot to open the app scored
+        // best of all.
+        let loggedDays = DailyCheckIn.loggedDays(selectedCard?.transactions ?? [])
+        let answeredDays = Set(checkIns.map(\.dayKey))
+        let known = elapsed.filter {
+            DailyCheckIn.knowledge(of: $0.date, logged: loggedDays, answered: answeredDays) != .unknown
+        }
+        let quietCount = known.filter { $0.amount <= 0 }.count
+        let uncheckedCount = elapsed.count - known.count
         let shownCount = weekSpendTx.filter(keep).count
 
         return ZStack {
@@ -1922,6 +1936,17 @@ struct StatisticsView: View {
                                  (busiest?.amount ?? 0) > 0 ? (busiest?.full ?? "—") : "—",
                                  AppTheme.orange)
                         factTile(loc("stats.no_spend_days"), "\(quietCount)", AppTheme.accent)
+                    }
+
+                    // Said out loud rather than folded into the tile above it:
+                    // the figure is smaller than the week because some days have
+                    // no answer, and a reader deserves to know which.
+                    if uncheckedCount > 0 {
+                        Text(String(format: loc("stats.unchecked_days"), uncheckedCount))
+                            .font(.system(.caption2))
+                            .foregroundStyle(AppTheme.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.horizontal, 4)
                     }
 
                     VStack(spacing: 0) {

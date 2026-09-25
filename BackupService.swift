@@ -62,6 +62,10 @@ struct BackupPayload: Codable {
     var recurrings:   [BackupRecurring]? = nil
     /// Optional for the same reason — added when cycle intents shipped.
     var cycleIntents: [BackupCycleIntent]? = nil
+    /// Days the user confirmed as spend-free. Optional like the two above, and
+    /// worth carrying: without them a restore turns every confirmed quiet day
+    /// back into a day nobody accounted for.
+    var dayCheckIns:  [BackupDayCheckIn]? = nil
 }
 
 // MARK: - DTOs (mirror SwiftData @Model classes 1:1)
@@ -252,6 +256,11 @@ struct BackupCycleIntent: Codable {
     let createdAt: Date
 }
 
+struct BackupDayCheckIn: Codable {
+    let dayKey: String
+    let answeredAt: Date
+}
+
 struct BackupCardBudget: Codable {
     let cardID: String
     let dailyRatio: Double
@@ -434,6 +443,7 @@ enum BackupService {
         let configs:  [CardBudgetConfig] = (try? context.fetch(FetchDescriptor<CardBudgetConfig>())) ?? []
         let intents:  [CycleIntent] = (try? context.fetch(FetchDescriptor<CycleIntent>())) ?? []
         let recurrings: [RecurringExpense] = (try? context.fetch(FetchDescriptor<RecurringExpense>())) ?? []
+        let checkIns: [DayCheckIn] = (try? context.fetch(FetchDescriptor<DayCheckIn>())) ?? []
 
         // Build a card-id → list-of-tx index so we know which card each tx
         // belongs to without traversing relationships at write time.
@@ -554,6 +564,9 @@ enum BackupService {
                 BackupCycleIntent(kindRaw: i.kindRaw, cycleKey: i.cycleKey,
                                   note: i.note, isRecurring: i.isRecurring,
                                   createdAt: i.createdAt)
+            },
+            dayCheckIns: checkIns.map {
+                BackupDayCheckIn(dayKey: $0.dayKey, answeredAt: $0.answeredAt)
             }
         )
 
@@ -636,6 +649,7 @@ enum BackupService {
             try? context.delete(model: SavingsGoal.self)
             try? context.delete(model: CardBudgetConfig.self)
             try? context.delete(model: CycleIntent.self)
+            try? context.delete(model: DayCheckIn.self)
             try? context.delete(model: RecurringExpense.self)
             try context.save()
 
@@ -775,6 +789,10 @@ enum BackupService {
             context.insert(intent)
         }
 
+        for c in payload.dayCheckIns ?? [] {
+            context.insert(DayCheckIn(dayKey: c.dayKey, answeredAt: c.answeredAt))
+        }
+
         for cb in payload.cardBudgets {
             let cfg = CardBudgetConfig(
                 cardID: cb.cardID,
@@ -823,6 +841,7 @@ enum BackupService {
                 try? context.delete(model: SavingsGoal.self)
                 try? context.delete(model: CardBudgetConfig.self)
             try? context.delete(model: CycleIntent.self)
+                try? context.delete(model: DayCheckIn.self)
                 try? context.delete(model: RecurringExpense.self)
                 try? context.save()
                 NotificationManager.clearDeliveryDedupState()
@@ -950,6 +969,10 @@ enum BackupService {
                                      note: ci.note, isRecurring: ci.isRecurring)
             intent.createdAt = ci.createdAt
             context.insert(intent)
+        }
+
+        for c in payload.dayCheckIns ?? [] {
+            context.insert(DayCheckIn(dayKey: c.dayKey, answeredAt: c.answeredAt))
         }
 
         for cb in payload.cardBudgets {

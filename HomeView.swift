@@ -536,6 +536,11 @@ struct HomeView: View {
                             .offset(y: contentAppeared ? 0 : 20)
                             .animation(AppMotion.appear, value: contentAppeared)
 
+                        // Above the list it is about, and only ever one line
+                        // unless it has a question to ask.
+                        DailyCheckInCard(transactions: selectedCardTransactions)
+                            .padding(.horizontal, 22).padding(.top, 18)
+
                         TransactionSection(
                             transactions: selectedCardTransactions,
                             cards: queriedCards,

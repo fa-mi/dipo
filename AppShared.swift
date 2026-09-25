@@ -903,6 +903,7 @@ enum UserSwitchDetector {
             "app_notifications_v2",     // NotificationManager queue
             "profile_photo",            // Profile avatar
             "daily_reminder_on",        // Personal reminder toggle
+            "checkin_snoozed_day",      // "ask me later" — per person, per day
             // Smart Budget settings + ephemeral state
             "sb_enabled", "sb_daily", "sb_lifestyle", "sb_invest", "sb_card_id",
             // Per-user insight state — same-month dismissals and coaching
