@@ -40,7 +40,11 @@ struct DayNightToggle: View {
         }
         .frame(width: trackW, height: trackH)
         .clipShape(Capsule())
-        .overlay(Capsule().strokeBorder(.white.opacity(0.16), lineWidth: 1))
+        // No stroke on the rim. A 1pt white border reads as a seam against a
+        // light background, and it caught the eye exactly when the sky was
+        // crossfading from night to day — the one moment the control should
+        // look like a single moving thing. The shadow alone lifts it off the
+        // card.
         .shadow(color: .black.opacity(0.22), radius: 10, y: 4)
         // Drained of colour rather than dimmed to nothing: the user still needs
         // to read which way the system has gone.

@@ -754,10 +754,12 @@ struct ProfileView: View {
             }
             Spacer()
             if authVM.isBiometricAvailable {
-                Toggle("", isOn: $biometricEnabled).tint(AppTheme.accent).labelsHidden()
+                // The glyph in the knob says WHICH protection this is, which a
+                // bare capsule beside three other capsules cannot.
+                DiPoSwitch(isOn: $biometricEnabled,
+                           onIcon: authVM.biometricIcon, offIcon: "lock.open.fill")
                     .onChange(of: biometricEnabled) { _, on in
                         UserDefaults.standard.set(on, forKey: "biometric_enabled")
-                        HapticManager.shared.tap()
                     }
             }
         }
@@ -973,18 +975,15 @@ struct ProfileView: View {
                     .font(.system(.subheadline))
                     .foregroundStyle(AppTheme.textPrimary)
                 Spacer()
-                Toggle("", isOn: Binding(
+                DiPoSwitch(isOn: Binding(
                     get: { appearanceMode == "system" },
                     set: { on in
-                        HapticManager.shared.tap()
                         // Turning it off keeps what is on screen rather than
                         // snapping to a default the user did not ask for.
                         let next = on ? "system" : (colorScheme == .dark ? "dark" : "light")
                         withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) { appearanceMode = next }
                         performAppearanceTransition(to: next)
-                    }))
-                    .labelsHidden()
-                    .tint(AppTheme.accent)
+                    }), onIcon: "gearshape.fill", offIcon: "hand.point.up.left.fill")
             }
             .padding(.horizontal, 12).padding(.vertical, 10)
             .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: AppRadius.md))
@@ -1030,32 +1029,17 @@ struct ProfileView: View {
                 Spacer()
             }
             Divider().background(AppTheme.cardMid).padding(.vertical, 10)
-            HStack(spacing: 0) {
-                ForEach(LanguageManager.Language.allCases) { language in
-                    Button {
-                        guard language != lang.current else { return }
-                        HapticManager.shared.tap()
-                        withAnimation(.spring(response: 0.3)) {
-                            LanguageManager.shared.current = language
-                        }
-                    } label: {
-                        VStack(spacing: 5) {
-                            Text(language.flag).font(.system(.title2))
-                            Text(language.nativeName)
-                                .font(.system(size: 11,
-                                              weight: language == lang.current ? .semibold : .regular))
-                                .foregroundStyle(language == lang.current ? AppTheme.onVividFill : AppTheme.textSecondary)
-                                .lineLimit(1).minimumScaleFactor(0.7)
-                        }
-                        .frame(maxWidth: .infinity).padding(.vertical, 10)
-                        .background(language == lang.current ? AppTheme.accentFill : Color.clear,
-                                    in: RoundedRectangle(cornerRadius: AppRadius.sm))
-                    }
-                    .buttonStyle(ScaleButtonStyle())
+            SlidingSegments(options: LanguageManager.Language.allCases,
+                            selection: lang.current,
+                            onSelect: { LanguageManager.shared.current = $0 }) { language, on in
+                VStack(spacing: 5) {
+                    Text(language.flag).font(.system(.title2))
+                    Text(language.nativeName)
+                        .font(.system(size: 11, weight: on ? .semibold : .regular))
+                        .foregroundStyle(on ? AppTheme.onVividFill : AppTheme.textSecondary)
+                        .lineLimit(1).minimumScaleFactor(0.7)
                 }
             }
-            .padding(4)
-            .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: AppRadius.md))
 
         }
         .padding(16)
@@ -1085,43 +1069,28 @@ struct ProfileView: View {
                 Spacer()
             }
             Divider().background(AppTheme.cardMid).padding(.vertical, 10)
-            HStack(spacing: 0) {
-                ForEach(VoiceLanguage.allCases) { option in
-                    let on = voiceLanguage == option
-                    Button {
-                        guard !on else { return }
-                        HapticManager.shared.tap()
-                        withAnimation(.spring(response: 0.3)) { voiceLanguage = option }
-                        VoiceLanguage.saved = option
-                    } label: {
-                        VStack(spacing: 5) {
-                            Group {
-                                switch option {
-                                case .app:        Image(systemName: "link").font(.system(.title3, weight: .semibold))
-                                case .indonesian: Text(LanguageManager.Language.indonesian.flag).font(.system(.title2))
-                                case .english:    Text(LanguageManager.Language.english.flag).font(.system(.title2))
-                                }
-                            }
-                            .frame(height: 28)
-                            .foregroundStyle(on ? AppTheme.onVividFill : AppTheme.textSecondary)
-                            Text(option == .app
-                                 ? String(format: loc("voice.lang_app_short"), lang.current == .indonesian ? "ID" : "EN")
-                                 : option.label)
-                                .font(.system(size: 11, weight: on ? .semibold : .regular))
-                                .foregroundStyle(on ? AppTheme.onVividFill : AppTheme.textSecondary)
-                                .lineLimit(1).minimumScaleFactor(0.7)
+            SlidingSegments(options: VoiceLanguage.allCases,
+                            selection: voiceLanguage,
+                            onSelect: { voiceLanguage = $0; VoiceLanguage.saved = $0 }) { option, on in
+                VStack(spacing: 5) {
+                    Group {
+                        switch option {
+                        case .app:        Image(systemName: "link").font(.system(.title3, weight: .semibold))
+                        case .indonesian: Text(LanguageManager.Language.indonesian.flag).font(.system(.title2))
+                        case .english:    Text(LanguageManager.Language.english.flag).font(.system(.title2))
                         }
-                        .frame(maxWidth: .infinity).padding(.vertical, 10)
-                        .background(on ? AppTheme.accentFill : Color.clear,
-                                    in: RoundedRectangle(cornerRadius: AppRadius.sm))
                     }
-                    .buttonStyle(ScaleButtonStyle())
-                    .accessibilityLabel(option.label)
-                    .accessibilityAddTraits(on ? .isSelected : [])
+                    .frame(height: 28)
+                    .foregroundStyle(on ? AppTheme.onVividFill : AppTheme.textSecondary)
+                    Text(option == .app
+                         ? String(format: loc("voice.lang_app_short"), lang.current == .indonesian ? "ID" : "EN")
+                         : option.label)
+                        .font(.system(size: 11, weight: on ? .semibold : .regular))
+                        .foregroundStyle(on ? AppTheme.onVividFill : AppTheme.textSecondary)
+                        .lineLimit(1).minimumScaleFactor(0.7)
                 }
+                .accessibilityLabel(option.label)
             }
-            .padding(4)
-            .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: AppRadius.md))
         }
         .padding(16)
         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
