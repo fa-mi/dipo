@@ -464,7 +464,11 @@ struct CategorySuggestionHint: View {
                         .background(suggested.color, in: Capsule())
                 }
             }
-            .transition(.move(edge: .top).combined(with: .opacity))
+            // A plain fade, only ever seen when the user taps a different
+            // tile. It used to slide in from the top, and when a keystroke
+            // changed the guess it could flash in and slide away in the same
+            // moment — text moving that nobody asked to move.
+            .transition(.opacity)
         }
     }
 }
