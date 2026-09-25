@@ -1681,7 +1681,9 @@ struct StatisticsView: View {
                                            label: row.category.displayLabel,
                                            amount: row.amount,
                                            color: shareShade(i, of: rows.count),
-                                           labelColor: shadeLabelColor(i, of: rows.count))
+                                           // The share sits on the pale wedge,
+                                           // never on the saturated rim.
+                                           labelColor: AppTheme.textPrimary)
                            },
                            total: total,
                            format: { money($0) },
@@ -1752,12 +1754,6 @@ struct StatisticsView: View {
     private func shareShade(_ rank: Int, of count: Int) -> Color {
         let t = count > 1 ? Double(rank) / Double(count - 1) : 0
         return AppTheme.accent.opacity(1 - 0.6 * t)
-    }
-
-    /// White sits on the deep end of that scale and nothing else does.
-    private func shadeLabelColor(_ rank: Int, of count: Int) -> Color {
-        let t = count > 1 ? Double(rank) / Double(count - 1) : 0
-        return t < 0.45 ? .white : AppTheme.textPrimary
     }
 
     private func categoryRow(_ cat: TxCategory, amount: Double, share: Double, index: Int,
