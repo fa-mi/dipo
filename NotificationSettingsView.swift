@@ -60,7 +60,6 @@ struct NotificationSettingsView: View {
             set: { newValue in
                 enabled[kind.rawValue] = newValue
                 prefs.setEnabled(kind, newValue)
-                HapticManager.shared.tap()
             }
         )
         return HStack(alignment: .top, spacing: 13) {
@@ -80,9 +79,12 @@ struct NotificationSettingsView: View {
                     .fixedSize(horizontal: false, vertical: true).lineSpacing(1.5)
             }
             Spacer(minLength: 8)
-            Toggle("", isOn: isOn)
-                .labelsHidden()
-                .tint(AppTheme.accent)
+            // A bell in the knob, not the category's own icon: that one is
+            // already on the left saying WHICH notification this is, and the
+            // switch's job is to say whether it rings. The track keeps the
+            // accent for every row — "on" should look the same everywhere, and
+            // the category tints are text colours that go dark in light mode.
+            DiPoSwitch(isOn: isOn, onIcon: "bell.fill", offIcon: "bell.slash.fill")
         }
         .padding(.horizontal, 14).padding(.vertical, 13)
     }
