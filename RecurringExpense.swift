@@ -1266,7 +1266,7 @@ struct RecurringFormSheet: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 6)
-            Toggle("", isOn: $vm.formAutoRecord).labelsHidden().tint(AppTheme.accentFill)
+            DiPoSwitch(isOn: $vm.formAutoRecord, onIcon: "bolt.fill", offIcon: "hand.point.up.left.fill")
         }
         .padding(14)
         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))

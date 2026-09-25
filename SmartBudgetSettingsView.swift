@@ -239,9 +239,8 @@ struct SmartBudgetSettingsSheet: View {
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                         Spacer()
-                        Toggle("", isOn: $isEnabled).tint(AppTheme.accentFill).labelsHidden()
+                        DiPoSwitch(isOn: $isEnabled, onIcon: "checkmark", offIcon: "xmark")
                             .onChange(of: isEnabled) { _, on in
-                                HapticManager.shared.tap()
                                 if on {
                                     // Force user to choose a card before proceeding
                                     if selectedCardID == nil {
