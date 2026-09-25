@@ -153,6 +153,9 @@ struct StatisticsView: View {
     @State private var sb = SmartBudgetManager.shared
     @State private var showExportSheet = false
     @State private var showAllCategories = false
+    /// The slice picked in the ring. Held here rather than inside the chart so
+    /// the figure beside it can follow the same choice.
+    @State private var donutSelection: String? = nil
     /// Which day of the Weekly page is open, and which of its rows was tapped.
     @State private var expandedDay: Date? = nil
     /// Category filter on the cycle page. Cleared whenever a different cycle opens.
@@ -1640,6 +1643,35 @@ struct StatisticsView: View {
             .sorted { $0.amount > $1.amount }
     }
 
+    /// What the ring is pointing at: the period's total, or the slice the user
+    /// tapped. Tapping the same slice again returns the total.
+    @ViewBuilder
+    private func donutFigure(rows: [(category: TxCategory, amount: Double)], total: Double) -> some View {
+        let picked = rows.first { $0.category.rawValue == donutSelection }
+        VStack(alignment: .leading, spacing: 3) {
+            Text(picked?.category.displayLabel ?? loc("stats.total"))
+                .font(.system(.footnote))
+                .foregroundStyle(AppTheme.textSecondary)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+            Text(money(picked?.amount ?? total))
+                .font(.system(.title3, weight: .bold))
+                .foregroundStyle(AppTheme.textPrimary)
+                .lineLimit(1).minimumScaleFactor(0.6)
+            if let picked, total > 0 {
+                Text("\(Int(((picked.amount / total) * 100).rounded()))%")
+                    .font(.system(.caption, weight: .semibold))
+                    .foregroundStyle(Color(hex: picked.category.iconBg))
+            } else {
+                Text(String(format: loc("stats.categories_count"), rows.count))
+                    .font(.system(.caption))
+                    .foregroundStyle(AppTheme.textSecondary.opacity(0.8))
+                    .lineLimit(1)
+            }
+        }
+        .animation(.easeOut(duration: 0.18), value: donutSelection)
+    }
+
     private var categoriesCard: some View {
         let rows = categoryBreakdown
         let total = rows.reduce(0) { $0 + $1.amount }
@@ -1676,20 +1708,31 @@ struct StatisticsView: View {
                 // The ring answers "how is this divided", which a ranked list
                 // answers badly; the list below keeps the figures, which a ring
                 // cannot give to the rupiah. Neither replaces the other.
-                SpendDonut(slices: rows.map {
-                                DonutSlice(id: $0.category.rawValue,
-                                           label: $0.category.displayLabel,
-                                           amount: $0.amount,
-                                           color: Color(hex: $0.category.iconBg),
-                                           // The share sits on the pale wedge,
-                                           // never on the saturated rim.
-                                           labelColor: AppTheme.textPrimary)
-                           },
-                           total: total,
-                           format: { money($0) },
-                           centerCaption: loc("stats.total"))
-                    .frame(height: 196)
-                    .padding(.bottom, 4)
+                // The figure sits BESIDE the ring, not inside it. In the hole
+                // it had to shrink to fit and still crowded the wedges, which
+                // reach toward the middle by design; out here it can be read at
+                // a size that suits a total, and the space was empty anyway.
+                HStack(alignment: .center, spacing: 14) {
+                    SpendDonut(slices: rows.map {
+                                   DonutSlice(id: $0.category.rawValue,
+                                              label: $0.category.displayLabel,
+                                              amount: $0.amount,
+                                              color: Color(hex: $0.category.iconBg),
+                                              // The share sits on the pale wedge,
+                                              // never on the saturated rim.
+                                              labelColor: AppTheme.textPrimary)
+                               },
+                               total: total,
+                               selectedID: $donutSelection)
+                        // 160 checked against a mock at the real card width:
+                        // the total reads at full size beside it, which it did
+                        // not at 176.
+                        .frame(width: 160, height: 160)
+
+                    donutFigure(rows: rows, total: total)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .padding(.bottom, 4)
 
                 VStack(spacing: 14) {
                     ForEach(Array(shown.enumerated()), id: \.element.category) { i, row in

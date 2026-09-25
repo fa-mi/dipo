@@ -751,6 +751,10 @@ struct ProfileView: View {
                     : loc("biometric.unavailable")
                 )
                 .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
+                // One line, always. The three states are short enough to fit,
+                // and a status that wraps on one of them resizes the card under
+                // the switch mid-animation.
+                .lineLimit(1).minimumScaleFactor(0.85)
             }
             Spacer()
             if authVM.isBiometricAvailable {

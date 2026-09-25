@@ -119,9 +119,9 @@ final class LanguageManager {
         "custom":  "Custom",
         
         // Biometrics
-        "biometric.auto_unlock":  "Auto-unlocks on launch",
-        "biometric.disabled":  "Disabled — app opens without a lock",
-        "biometric.unavailable":  "Not available on this device",
+        "biometric.auto_unlock":  "Unlocks on launch",
+        "biometric.disabled":  "Opens without a lock",
+        "biometric.unavailable":  "Not available here",
         
         // PIN
         "pin.confirm":  "Confirm your PIN",
@@ -2003,6 +2003,7 @@ final class LanguageManager {
         "checkin.pending":     "Nothing logged today yet",
         "checkin.streak":      "%d days in a row",
         "tx.reference":        "Reference",
+        "stats.categories_count": "%d categories",
         "stats.unchecked_days": "%d days this week have no answer yet, so they are not counted here",
         "notif.info":  "Payday alerts, budget warnings\nand goal milestones appear here.",
 
@@ -2558,9 +2559,9 @@ final class LanguageManager {
         "custom":  "Kustom",
         
         // Biometrics
-        "biometric.auto_unlock":  "Terbuka otomatis saat aplikasi dibuka",
-        "biometric.disabled":  "Nonaktif — aplikasi terbuka tanpa kunci",
-        "biometric.unavailable":  "Tidak tersedia untuk perangkat ini",
+        "biometric.auto_unlock":  "Terbuka otomatis",
+        "biometric.disabled":  "Terbuka tanpa kunci",
+        "biometric.unavailable":  "Tidak tersedia di sini",
         
         // PIN
         "pin.confirm":  "Konfirmasi PIN-mu",
@@ -4431,6 +4432,7 @@ final class LanguageManager {
         "checkin.pending":     "Hari ini belum ada catatan",
         "checkin.streak":      "%d hari berturut-turut",
         "tx.reference":        "Nomor referensi",
+        "stats.categories_count": "%d kategori",
         "stats.unchecked_days": "%d hari minggu ini belum dijawab, jadi tidak ikut dihitung",
         "notif.info":  "Pengingat gajian, peringatan anggaran,\ndan kabar target tabungan muncul di sini.",
 
