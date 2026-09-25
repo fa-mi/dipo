@@ -317,3 +317,187 @@ struct SpendLineChart: View {
         .fixedSize()
     }
 }
+
+// MARK: - Trend line
+//
+// Periods as a curve rather than a row of columns, with one span picked out:
+// the line is grey for its whole length, the chosen span is drawn over it in
+// colour with a dotted ground beneath, and a bubble names the figure and the
+// dates it covers. Columns say "this one is tall"; a line says "this is the
+// shape of the last six months, and here is where we are in it".
+//
+// The chosen span is drawn with the SAME control points as the grey curve, not
+// re-smoothed from its two endpoints — re-smoothing gives a slightly different
+// curve, and the grey line peeks out from under the colour along its whole
+// length.
+
+struct TrendPoint: Identifiable {
+    let id: Int
+    /// Short label under the axis ends, e.g. "Jul".
+    let label: String
+    /// What the bubble says about the span, e.g. "25 Sep – 24 Oct".
+    let rangeLabel: String
+    let value: Double
+}
+
+struct TrendLineChart: View {
+    let points: [TrendPoint]
+    var tint: Color = AppTheme.accent
+    let format: (Double) -> String
+
+    /// The END of the highlighted span. Defaults to the last one, which is the
+    /// period the reader is living in.
+    @State private var selected: Int? = nil
+
+    private let pad: CGFloat = 12
+    private let height: CGFloat = 150
+
+    private var peak: Double { max(points.map(\.value).max() ?? 1, 1) * 1.12 }
+    private var pick: Int { min(max(selected ?? points.count - 1, 1), points.count - 1) }
+
+    var body: some View {
+        VStack(spacing: 6) {
+            GeometryReader { geo in
+                let w = geo.size.width, h = geo.size.height
+                let pts = positions(width: w, height: h)
+                ZStack(alignment: .topLeading) {
+                    ForEach(points.indices, id: \.self) { i in
+                        Rectangle()
+                            .fill(AppTheme.cardMid.opacity(0.7))
+                            .frame(width: 1)
+                            .frame(maxHeight: .infinity)
+                            .position(x: pts[i].x, y: h / 2)
+                    }
+
+                    if pts.count >= 2 {
+                        let span = segment(pts, at: pick)
+                        // The ground under the chosen span, as texture rather
+                        // than a wash: it marks the span without competing with
+                        // the line for the eye.
+                        Canvas { ctx, size in
+                            var ground = span
+                            ground.addLine(to: CGPoint(x: pts[pick].x, y: size.height))
+                            ground.addLine(to: CGPoint(x: pts[pick - 1].x, y: size.height))
+                            ground.closeSubpath()
+                            ctx.clip(to: ground)
+                            var y = 4.0
+                            while y < size.height {
+                                var x = pts[pick - 1].x
+                                while x < pts[pick].x {
+                                    ctx.fill(Path(ellipseIn: CGRect(x: x, y: y, width: 2.2, height: 2.2)),
+                                             with: .color(tint.opacity(0.55)))
+                                    x += 5
+                                }
+                                y += 5
+                            }
+                        }
+
+                        curve(pts)
+                            .stroke(AppTheme.textSecondary.opacity(0.45),
+                                    style: StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round))
+                        span
+                            .stroke(tint, style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
+
+                        marker.position(pts[pick - 1])
+                        marker.position(pts[pick])
+
+                        bubble
+                            .position(x: min(max((pts[pick - 1].x + pts[pick].x) / 2, 64), w - 64),
+                                      y: bubbleY(pts, h: h))
+                    }
+                }
+                .contentShape(Rectangle())
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { v in
+                            let step = w / CGFloat(max(points.count - 1, 1))
+                            let i = min(max(Int((v.location.x / step).rounded()), 1), points.count - 1)
+                            if i != selected { HapticManager.shared.select(); selected = i }
+                        }
+                )
+                .animation(.easeOut(duration: 0.2), value: pick)
+            }
+            .frame(height: height)
+
+            HStack {
+                Text(points.first?.label ?? "")
+                Spacer()
+                Text(points.last?.label ?? "")
+            }
+            .font(.system(size: 10))
+            .foregroundStyle(AppTheme.textSecondary.opacity(0.8))
+        }
+    }
+
+    private var marker: some View {
+        Circle()
+            .fill(AppTheme.cardDark)
+            .frame(width: 11, height: 11)
+            .overlay(Circle().stroke(tint, lineWidth: 2.5))
+    }
+
+    private var bubble: some View {
+        VStack(spacing: 1) {
+            Text(format(points[pick].value))
+                .font(.system(.caption, weight: .bold))
+                .foregroundStyle(AppTheme.textPrimary)
+            Text(points[pick].rangeLabel)
+                .font(.system(size: 9))
+                .foregroundStyle(AppTheme.textSecondary)
+        }
+        .padding(.horizontal, 10).padding(.vertical, 6)
+        .background(AppTheme.bg, in: RoundedRectangle(cornerRadius: AppRadius.sm))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.sm)
+            .stroke(AppTheme.cardMid, lineWidth: 1))
+        .fixedSize()
+    }
+
+    /// Above the span when there is room, below it when there is not.
+    private func bubbleY(_ pts: [CGPoint], h: CGFloat) -> CGFloat {
+        let top = min(pts[pick - 1].y, pts[pick].y)
+        let bottom = max(pts[pick - 1].y, pts[pick].y)
+        return top - 34 > 8 ? top - 34 : min(bottom + 34, h - 8)
+    }
+
+    private func positions(width: CGFloat, height: CGFloat) -> [CGPoint] {
+        guard points.count > 1 else {
+            return [CGPoint(x: width / 2, y: height / 2)]
+        }
+        let step = (width - pad * 2) / CGFloat(points.count - 1)
+        return points.map { p in
+            CGPoint(x: pad + CGFloat(p.id) * step,
+                    y: height - pad - CGFloat(p.value / peak) * (height - pad * 2))
+        }
+    }
+
+    /// Catmull-Rom through every point, expressed as cubic curves.
+    private func control(_ pts: [CGPoint], _ i: Int) -> (CGPoint, CGPoint) {
+        let p0 = i > 0 ? pts[i - 1] : pts[i]
+        let p1 = pts[i]
+        let p2 = pts[i + 1]
+        let p3 = i + 2 < pts.count ? pts[i + 2] : p2
+        return (CGPoint(x: p1.x + (p2.x - p0.x) / 6, y: p1.y + (p2.y - p0.y) / 6),
+                CGPoint(x: p2.x - (p3.x - p1.x) / 6, y: p2.y - (p3.y - p1.y) / 6))
+    }
+
+    private func curve(_ pts: [CGPoint]) -> Path {
+        var path = Path()
+        guard pts.count > 1 else { return path }
+        path.move(to: pts[0])
+        for i in 0..<(pts.count - 1) {
+            let (c1, c2) = control(pts, i)
+            path.addCurve(to: pts[i + 1], control1: c1, control2: c2)
+        }
+        return path
+    }
+
+    private func segment(_ pts: [CGPoint], at end: Int) -> Path {
+        var path = Path()
+        let i = end - 1
+        guard i >= 0, end < pts.count else { return path }
+        let (c1, c2) = control(pts, i)
+        path.move(to: pts[i])
+        path.addCurve(to: pts[end], control1: c1, control2: c2)
+        return path
+    }
+}

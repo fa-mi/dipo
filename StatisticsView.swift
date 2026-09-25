@@ -2128,8 +2128,19 @@ struct StatisticsView: View {
                              change: change, changeCaption: loc("stats.vs_prev_period"),
                              previous: prev)
 
-                    chartCard(values: points.map(\.expense), labels: points.map { String($0.label.prefix(3)) },
-                              tint: AppTheme.accent, highlightLast: true)
+                    // Columns said "this one is tall". A line says what shape
+                    // the last six periods make, with the one you are living in
+                    // picked out of it.
+                    TrendLineChart(points: points.enumerated().map { i, p in
+                                       TrendPoint(id: i,
+                                                  label: String(p.label.prefix(3)),
+                                                  rangeLabel: cycleRangeLabel(p),
+                                                  value: p.expense)
+                                   },
+                                   tint: AppTheme.accent,
+                                   format: { money($0) })
+                        .padding(16)
+                        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.xl))
 
                     HStack(spacing: 10) {
                         factTile(loc("stats.trend_avg"), money(avg), AppTheme.accent)
@@ -2477,16 +2488,28 @@ struct StatisticsView: View {
     }
 
     private func factTile(_ label: String, _ value: String, _ tint: Color) -> some View {
-        VStack(spacing: 4) {
+        VStack(alignment: .leading, spacing: 4) {
             Text(value).font(.system(.subheadline, weight: .bold)).foregroundStyle(tint)
                 .lineLimit(1).minimumScaleFactor(0.5)
-            Text(label).font(.system(size: 10, weight: .medium))
-                .foregroundStyle(AppTheme.textSecondary)
-                .multilineTextAlignment(.center).lineLimit(2).minimumScaleFactor(0.8)
+            // A tick of the figure's own colour beside its name: three tiles in
+            // a row under a chart are a key, and a key needs its colours.
+            HStack(spacing: 5) {
+                Capsule().fill(tint).frame(width: 3, height: 10)
+                Text(label).font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(AppTheme.textSecondary)
+                    .lineLimit(1).minimumScaleFactor(0.75)
+            }
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 14).padding(.horizontal, 6)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 12).padding(.horizontal, 12)
         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+    }
+
+    /// "25 Sep – 24 Oct" for the bubble: a period's name is a month, but the
+    /// span it covers is not, and on a pay cycle those are different things.
+    private func cycleRangeLabel(_ p: CycleTrendPoint) -> String {
+        let f = DateFormatterCache.template("dMMM")
+        return "\(f.string(from: p.start)) – \(f.string(from: p.end))"
     }
 
     /// Every figure the summary is built from, for anyone who wants to check it:
