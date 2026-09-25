@@ -15,48 +15,6 @@ import SwiftUI
 // row of bumps. A shape with real holes has neither problem, needs no colour to
 // match anything, and works over any background.
 
-/// The outline: rounded top, a notch bitten out of each side at the fold, and a
-/// torn bottom edge. Filled with the even-odd rule, so every circle added here
-/// removes what it overlaps instead of adding to it.
-struct TicketShape: Shape {
-    /// Distance from the top of the card to the middle of the fold.
-    var notchY: CGFloat
-    var notchR: CGFloat = 11
-    var corner: CGFloat = 24
-    var scallopR: CGFloat = 7
-
-    // Lets the fold animate into place rather than jumping when the content
-    // above it changes height.
-    var animatableData: CGFloat {
-        get { notchY }
-        set { notchY = newValue }
-    }
-
-    func path(in rect: CGRect) -> Path {
-        var p = Path()
-        p.addRoundedRect(in: rect, cornerSize: CGSize(width: corner, height: corner))
-
-        // The two side notches. Centred ON the edge, so exactly half of each
-        // circle overlaps the card and is removed.
-        if notchY > 0 {
-            p.addEllipse(in: CGRect(x: rect.minX - notchR, y: rect.minY + notchY - notchR,
-                                    width: notchR * 2, height: notchR * 2))
-            p.addEllipse(in: CGRect(x: rect.maxX - notchR, y: rect.minY + notchY - notchR,
-                                    width: notchR * 2, height: notchR * 2))
-        }
-
-        // The torn bottom. They touch, because a gap between two bites is a
-        // bump, which is exactly what the painted version produced.
-        var x = rect.minX + scallopR
-        while x < rect.maxX + scallopR {
-            p.addEllipse(in: CGRect(x: x - scallopR, y: rect.maxY - scallopR,
-                                    width: scallopR * 2, height: scallopR * 2))
-            x += scallopR * 2
-        }
-        return p
-    }
-}
-
 struct TicketCard<Stub: View, Particulars: View>: View {
     var surface: Color = AppTheme.cardDark
     @ViewBuilder var stub: () -> Stub
@@ -89,18 +47,53 @@ struct TicketCard<Stub: View, Particulars: View>: View {
                 .padding(.bottom, 20 + scallop)
         }
         .coordinateSpace(.named(space))
-        .background {
-            TicketShape(notchY: foldY, notchR: notch, corner: corner, scallopR: scallop)
-                .fill(surface, style: FillStyle(eoFill: true))
-                // On the shape, not on the whole card: a shadow cast by the
-                // overlay circles is what made the first version look like
-                // beads glued to the sides.
-                .shadow(color: .black.opacity(0.16), radius: 12, y: 5)
+        .background { paper }
+    }
+
+    /// The paper, with the notches and the torn edge ERASED out of it.
+    ///
+    /// Two earlier attempts got this wrong in the same place. Painting
+    /// backdrop-coloured circles on top of the card made the card's shadow fall
+    /// on them, so they read as beads stuck to the sides. Then an even-odd fill
+    /// went wrong the other way: even-odd fills whatever is covered an ODD
+    /// number of times, and the half of each circle that hangs OUTSIDE the card
+    /// is covered exactly once — so it filled, and the bites came out as bumps.
+    ///
+    /// `destinationOut` has neither failure mode. The circles are not drawn at
+    /// all; they remove what is already there, and removing nothing outside the
+    /// card is exactly what should happen. The shadow is taken after the holes
+    /// are cut, so it follows the notched outline.
+    private var paper: some View {
+        GeometryReader { geo in
+            let w = geo.size.width, h = geo.size.height
+            ZStack(alignment: .topLeading) {
+                UnevenRoundedRectangle(topLeadingRadius: corner, bottomLeadingRadius: 0,
+                                       bottomTrailingRadius: 0, topTrailingRadius: corner)
+                    .fill(surface)
+                    .frame(width: w, height: h)
+
+                Group {
+                    // The fold's two bites, centred ON each edge.
+                    Circle().frame(width: notch * 2, height: notch * 2)
+                        .position(x: 0, y: foldY)
+                    Circle().frame(width: notch * 2, height: notch * 2)
+                        .position(x: w, y: foldY)
+                    // The torn bottom. They tile edge to edge; a gap between two
+                    // bites is a bump, which is what the first version produced.
+                    ForEach(0..<max(Int((w / (scallop * 2)).rounded(.up)), 1), id: \.self) { i in
+                        Circle().frame(width: scallop * 2, height: scallop * 2)
+                            .position(x: CGFloat(i) * scallop * 2 + scallop, y: h)
+                    }
+                }
+                .blendMode(.destinationOut)
+            }
+            .compositingGroup()
+            .shadow(color: .black.opacity(0.16), radius: 12, y: 5)
         }
     }
 
     /// The perforation. Only the dashed line is drawn — the bites at either end
-    /// belong to the shape now.
+    /// are cut out of the paper itself.
     private var fold: some View {
         Rectangle()
             .stroke(style: StrokeStyle(lineWidth: 1, dash: [5, 5]))
