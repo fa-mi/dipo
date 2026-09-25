@@ -31,19 +31,25 @@ struct SpendDonut: View {
     let format: (Double) -> String
     var centerCaption: String
 
-    /// The thickest a slice gets. Every arc grows INWARD from this, so the
-    /// hole stays put and the outer edge is what varies.
-    var ring: CGFloat = 30
     @State private var selectedID: String? = nil
+
+    // Proportions taken off a rendered comparison against the reference rather
+    // than guessed: the arcs sit on one mid-radius, each one is stroked with a
+    // weight that follows its share, and behind each sits a paler, narrower arc
+    // pushed outward and run a few degrees long. That pale tail is what makes
+    // the ring read as stacked paper instead of a painted band, and it was the
+    // piece missing from the first three attempts.
+    private let midR: CGFloat = 0.395      // × side
+    private let maxWeight: CGFloat = 0.155 // × side, the widest band
+    private let minWeight: CGFloat = 0.5   // × maxWeight, the narrowest
+    private let haloOut: CGFloat = 0.045   // × side, how far the pale layer sits out
+    private let haloWeight: CGFloat = 0.72 // × the band's own weight
+    private let gapDeg = 7.0
+    private let tailDeg = 7.0
 
     /// Slices below this are drawn but not labelled — a "2%" printed across a
     /// sliver is unreadable and pushes into its neighbours.
     private let labelFloor = 0.07
-    /// The gap between slices, as a fraction of the circle. Wide enough to read
-    /// as air between separate things rather than as a hairline.
-    private let gap = 0.016
-    /// The thinnest a slice is drawn, as a share of `ring`.
-    private let floorWidth = 0.55
 
     private struct Arc: Identifiable {
         let slice: DonutSlice
@@ -66,16 +72,11 @@ struct SpendDonut: View {
     }
 
     private var selected: Arc? { arcs.first { $0.id == selectedID } }
-
     private var largest: Double { arcs.map(\.fraction).max() ?? 1 }
 
-    /// Thickness follows the share, so the ring says which is biggest twice —
-    /// by how far it travels and by how heavy it is. A flat ring of even width
-    /// leaves the whole job to arc length, which is the hardest thing on a
-    /// circle to compare by eye.
-    private func width(_ arc: Arc) -> CGFloat {
+    private func weight(_ arc: Arc, side: CGFloat) -> CGFloat {
         let t = largest > 0 ? arc.fraction / largest : 1
-        return ring * CGFloat(floorWidth + (1 - floorWidth) * t)
+        return side * maxWeight * (minWeight + (1 - minWeight) * CGFloat(t))
     }
 
     var body: some View {
@@ -84,28 +85,28 @@ struct SpendDonut: View {
             ZStack {
                 ForEach(arcs) { arc in
                     let on = arc.id == selectedID
-                    let w = width(arc) + (on ? 6 : 0)
-                    // Inset so each arc keeps the same INNER edge whatever its
-                    // width: stroking a circle grows both ways, which would eat
-                    // into the hole and leave the middle figure crowded.
-                    Circle()
-                        .inset(by: ring - w / 2)
-                        .trim(from: min(arc.start + gap / 2, arc.end - 0.002),
-                              to: max(arc.end - gap / 2, arc.start + 0.002))
+                    let w = weight(arc, side: side) + (on ? side * 0.02 : 0)
+                    let a0 = arc.start * 360 + gapDeg / 2
+                    let a1 = arc.end * 360 - gapDeg / 2
+                    // The pale layer, held to the slice's own span so it can
+                    // never run under the next one.
+                    ArcSegment(radius: side * midR + side * haloOut,
+                               from: a0, to: min(a1 + tailDeg, arc.end * 360 - 1))
+                        .stroke(arc.slice.color.opacity(0.32),
+                                style: StrokeStyle(lineWidth: w * haloWeight, lineCap: .round))
+                    ArcSegment(radius: side * midR, from: a0, to: max(a1, a0 + 0.5))
                         .stroke(arc.slice.color,
                                 style: StrokeStyle(lineWidth: w, lineCap: .round))
                         .opacity(selectedID == nil || on ? 1 : 0.4)
                 }
-                .rotationEffect(.degrees(-90))
 
                 ForEach(arcs.filter { $0.fraction >= labelFloor }) { arc in
                     let mid = Angle(degrees: ((arc.start + arc.end) / 2) * 360 - 90)
-                    // The middle of THIS arc's band, which moves with its width.
-                    let r = side / 2 - ring + width(arc) / 2
                     Text("\(Int((arc.fraction * 100).rounded()))%")
                         .font(.system(.caption2, weight: .bold))
                         .foregroundStyle(arc.slice.labelColor)
-                        .offset(x: cos(mid.radians) * r, y: sin(mid.radians) * r)
+                        .offset(x: cos(mid.radians) * side * midR,
+                                y: sin(mid.radians) * side * midR)
                 }
 
                 center
@@ -113,12 +114,12 @@ struct SpendDonut: View {
             .frame(width: side, height: side)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .contentShape(Circle())
-            // A tap anywhere on the ring picks the slice under the finger, and
+            // A tap anywhere on the band picks the slice under the finger, and
             // a tap on the same slice puts it back — the centre has to be able
             // to return to the total, or the first tap is a one-way door.
             .gesture(
                 DragGesture(minimumDistance: 0)
-                    .onEnded { v in select(at: v.location, in: CGSize(width: side, height: side)) }
+                    .onEnded { v in select(at: v.location, side: side) }
             )
             .animation(.spring(response: 0.32, dampingFraction: 0.8), value: selectedID)
         }
@@ -141,22 +142,41 @@ struct SpendDonut: View {
                     .foregroundStyle(s.slice.color)
             }
         }
-        .padding(.horizontal, ring + 6)
+        .padding(.horizontal, 30)
     }
 
-    private func select(at point: CGPoint, in size: CGSize) {
-        let dx = point.x - size.width / 2
-        let dy = point.y - size.height / 2
+    private func select(at point: CGPoint, side: CGFloat) {
+        let dx = point.x - side / 2
+        let dy = point.y - side / 2
         let radius = sqrt(dx * dx + dy * dy)
         // Ignore the hole: a tap in the middle is a tap on the figure, not on a
         // slice, and guessing one there would flip the centre at random.
-        guard radius > size.width / 2 - ring - 8, radius < size.width / 2 + 8 else { return }
+        let band = side * maxWeight
+        guard radius > side * midR - band, radius < side * midR + band else { return }
         var deg = atan2(dy, dx) * 180 / .pi + 90
         if deg < 0 { deg += 360 }
         let f = deg / 360
         guard let hit = arcs.first(where: { f >= $0.start && f < $0.end }) else { return }
         HapticManager.shared.select()
         selectedID = (selectedID == hit.id) ? nil : hit.id
+    }
+}
+
+/// One band of the ring. Degrees, clockwise, 0 at twelve o'clock — the way the
+/// chart is read rather than the way trigonometry numbers it.
+private struct ArcSegment: Shape {
+    var radius: CGFloat
+    var from: Double
+    var to: Double
+
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        p.addArc(center: CGPoint(x: rect.midX, y: rect.midY),
+                 radius: radius,
+                 startAngle: .degrees(from - 90),
+                 endAngle: .degrees(to - 90),
+                 clockwise: false)
+        return p
     }
 }
 
