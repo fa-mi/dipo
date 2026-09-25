@@ -66,6 +66,13 @@ struct BackupPayload: Codable {
     /// worth carrying: without them a restore turns every confirmed quiet day
     /// back into a day nobody accounted for.
     var dayCheckIns:  [BackupDayCheckIn]? = nil
+    /// Three that were in the schema but never in the file. A backup that is
+    /// missing a feature is worse than one that fails, because it looks like it
+    /// worked: the portfolio, the money lent out and the card instalments were
+    /// all simply absent on a new phone.
+    var investments:  [BackupHolding]? = nil
+    var receivables:  [BackupReceivable]? = nil
+    var installments: [BackupInstallment]? = nil
 }
 
 // MARK: - DTOs (mirror SwiftData @Model classes 1:1)
@@ -253,6 +260,61 @@ struct BackupCycleIntent: Codable {
     let cycleKey: String
     let note: String
     let isRecurring: Bool
+    let createdAt: Date
+}
+
+/// A holding carries its own lots: they are its history, and half a portfolio
+/// restored is worse than none.
+struct BackupHolding: Codable {
+    let id: String
+    let typeRaw: String
+    let name: String
+    let symbol: String
+    let currency: String
+    let createdAt: Date
+    let lastPrice: Double
+    let prevClose: Double
+    let priceUpdatedAt: Date?
+    let manualPrice: Bool
+    let priceHistory: [Double]
+    let sortOrder: Int
+    let lots: [BackupLot]
+}
+
+struct BackupLot: Codable {
+    let id: String
+    let date: Date
+    let kindRaw: String
+    let units: Double
+    let pricePerUnit: Double
+    let fee: Double
+    let cashAmount: Double
+    let note: String
+    let linkedCardTxID: String
+}
+
+struct BackupReceivable: Codable {
+    let id: String
+    let personName: String
+    let amount: Double
+    let currency: String
+    let lentAt: Date
+    let dueDate: Date?
+    let notes: String
+    let isSettled: Bool
+    let createdAt: Date
+}
+
+struct BackupInstallment: Codable {
+    let id: String
+    let cardID: String
+    let merchant: String
+    let totalAmount: Double
+    let tenorMonths: Int
+    let startDate: Date
+    let flatRatePercent: Double
+    let currency: String
+    let isActive: Bool
     let createdAt: Date
 }
 
@@ -444,6 +506,9 @@ enum BackupService {
         let intents:  [CycleIntent] = (try? context.fetch(FetchDescriptor<CycleIntent>())) ?? []
         let recurrings: [RecurringExpense] = (try? context.fetch(FetchDescriptor<RecurringExpense>())) ?? []
         let checkIns: [DayCheckIn] = (try? context.fetch(FetchDescriptor<DayCheckIn>())) ?? []
+        let holdings: [InvestmentHolding] = (try? context.fetch(FetchDescriptor<InvestmentHolding>())) ?? []
+        let receivables: [Receivable] = (try? context.fetch(FetchDescriptor<Receivable>())) ?? []
+        let installments: [CardInstallment] = (try? context.fetch(FetchDescriptor<CardInstallment>())) ?? []
 
         // Build a card-id → list-of-tx index so we know which card each tx
         // belongs to without traversing relationships at write time.
@@ -567,6 +632,32 @@ enum BackupService {
             },
             dayCheckIns: checkIns.map {
                 BackupDayCheckIn(dayKey: $0.dayKey, answeredAt: $0.answeredAt)
+            },
+            investments: holdings.map { h in
+                BackupHolding(
+                    id: h.id.uuidString, typeRaw: h.typeRaw, name: h.name, symbol: h.symbol,
+                    currency: h.currency, createdAt: h.createdAt, lastPrice: h.lastPrice,
+                    prevClose: h.prevClose, priceUpdatedAt: h.priceUpdatedAt,
+                    manualPrice: h.manualPrice, priceHistory: h.priceHistory,
+                    sortOrder: h.sortOrder,
+                    lots: h.lots.map { l in
+                        BackupLot(id: l.id.uuidString, date: l.date, kindRaw: l.kindRaw,
+                                  units: l.units, pricePerUnit: l.pricePerUnit, fee: l.fee,
+                                  cashAmount: l.cashAmount, note: l.note,
+                                  linkedCardTxID: l.linkedCardTxID)
+                    })
+            },
+            receivables: receivables.map { r in
+                BackupReceivable(id: r.id.uuidString, personName: r.personName, amount: r.amount,
+                                 currency: r.currency, lentAt: r.lentAt, dueDate: r.dueDate,
+                                 notes: r.notes, isSettled: r.isSettled, createdAt: r.createdAt)
+            },
+            installments: installments.map { i in
+                BackupInstallment(id: i.id.uuidString, cardID: i.cardID.uuidString,
+                                  merchant: i.merchant, totalAmount: i.totalAmount,
+                                  tenorMonths: i.tenorMonths, startDate: i.startDate,
+                                  flatRatePercent: i.flatRatePercent, currency: i.currency,
+                                  isActive: i.isActive, createdAt: i.createdAt)
             }
         )
 
@@ -650,6 +741,10 @@ enum BackupService {
             try? context.delete(model: CardBudgetConfig.self)
             try? context.delete(model: CycleIntent.self)
             try? context.delete(model: DayCheckIn.self)
+            try? context.delete(model: InvestmentHolding.self)
+            try? context.delete(model: InvestmentLot.self)
+            try? context.delete(model: Receivable.self)
+            try? context.delete(model: CardInstallment.self)
             try? context.delete(model: RecurringExpense.self)
             try context.save()
 
@@ -793,6 +888,51 @@ enum BackupService {
             context.insert(DayCheckIn(dayKey: c.dayKey, answeredAt: c.answeredAt))
         }
 
+        for h in payload.investments ?? [] {
+            guard let type = InvestmentType(rawValue: h.typeRaw) else { continue }
+            let holding = InvestmentHolding(type: type, name: h.name, symbol: h.symbol,
+                                            currency: h.currency, lastPrice: h.lastPrice,
+                                            prevClose: h.prevClose, manualPrice: h.manualPrice,
+                                            sortOrder: h.sortOrder)
+            // The id is restored so anything pointing at this holding still does.
+            if let id = UUID(uuidString: h.id) { holding.id = id }
+            holding.createdAt = h.createdAt
+            holding.priceUpdatedAt = h.priceUpdatedAt
+            holding.priceHistory = h.priceHistory
+            context.insert(holding)
+            for l in h.lots {
+                guard let kind = InvestmentLotKind(rawValue: l.kindRaw) else { continue }
+                let lot = InvestmentLot(kind: kind, date: l.date, units: l.units,
+                                        pricePerUnit: l.pricePerUnit, fee: l.fee,
+                                        cashAmount: l.cashAmount, note: l.note,
+                                        linkedCardTxID: l.linkedCardTxID)
+                if let id = UUID(uuidString: l.id) { lot.id = id }
+                context.insert(lot)
+                holding.lots.append(lot)
+            }
+        }
+
+        for r in payload.receivables ?? [] {
+            let rec = Receivable(personName: r.personName, amount: r.amount, currency: r.currency,
+                                 lentAt: r.lentAt, dueDate: r.dueDate, notes: r.notes)
+            if let id = UUID(uuidString: r.id) { rec.id = id }
+            rec.isSettled = r.isSettled
+            rec.createdAt = r.createdAt
+            context.insert(rec)
+        }
+
+        for i in payload.installments ?? [] {
+            guard let cardID = UUID(uuidString: i.cardID) else { continue }
+            let inst = CardInstallment(cardID: cardID, merchant: i.merchant,
+                                       totalAmount: i.totalAmount, tenorMonths: i.tenorMonths,
+                                       startDate: i.startDate, flatRatePercent: i.flatRatePercent,
+                                       currency: i.currency)
+            if let id = UUID(uuidString: i.id) { inst.id = id }
+            inst.isActive = i.isActive
+            inst.createdAt = i.createdAt
+            context.insert(inst)
+        }
+
         for cb in payload.cardBudgets {
             let cfg = CardBudgetConfig(
                 cardID: cb.cardID,
@@ -842,6 +982,10 @@ enum BackupService {
                 try? context.delete(model: CardBudgetConfig.self)
             try? context.delete(model: CycleIntent.self)
                 try? context.delete(model: DayCheckIn.self)
+                try? context.delete(model: InvestmentHolding.self)
+                try? context.delete(model: InvestmentLot.self)
+                try? context.delete(model: Receivable.self)
+                try? context.delete(model: CardInstallment.self)
                 try? context.delete(model: RecurringExpense.self)
                 try? context.save()
                 NotificationManager.clearDeliveryDedupState()
@@ -973,6 +1117,51 @@ enum BackupService {
 
         for c in payload.dayCheckIns ?? [] {
             context.insert(DayCheckIn(dayKey: c.dayKey, answeredAt: c.answeredAt))
+        }
+
+        for h in payload.investments ?? [] {
+            guard let type = InvestmentType(rawValue: h.typeRaw) else { continue }
+            let holding = InvestmentHolding(type: type, name: h.name, symbol: h.symbol,
+                                            currency: h.currency, lastPrice: h.lastPrice,
+                                            prevClose: h.prevClose, manualPrice: h.manualPrice,
+                                            sortOrder: h.sortOrder)
+            // The id is restored so anything pointing at this holding still does.
+            if let id = UUID(uuidString: h.id) { holding.id = id }
+            holding.createdAt = h.createdAt
+            holding.priceUpdatedAt = h.priceUpdatedAt
+            holding.priceHistory = h.priceHistory
+            context.insert(holding)
+            for l in h.lots {
+                guard let kind = InvestmentLotKind(rawValue: l.kindRaw) else { continue }
+                let lot = InvestmentLot(kind: kind, date: l.date, units: l.units,
+                                        pricePerUnit: l.pricePerUnit, fee: l.fee,
+                                        cashAmount: l.cashAmount, note: l.note,
+                                        linkedCardTxID: l.linkedCardTxID)
+                if let id = UUID(uuidString: l.id) { lot.id = id }
+                context.insert(lot)
+                holding.lots.append(lot)
+            }
+        }
+
+        for r in payload.receivables ?? [] {
+            let rec = Receivable(personName: r.personName, amount: r.amount, currency: r.currency,
+                                 lentAt: r.lentAt, dueDate: r.dueDate, notes: r.notes)
+            if let id = UUID(uuidString: r.id) { rec.id = id }
+            rec.isSettled = r.isSettled
+            rec.createdAt = r.createdAt
+            context.insert(rec)
+        }
+
+        for i in payload.installments ?? [] {
+            guard let cardID = UUID(uuidString: i.cardID) else { continue }
+            let inst = CardInstallment(cardID: cardID, merchant: i.merchant,
+                                       totalAmount: i.totalAmount, tenorMonths: i.tenorMonths,
+                                       startDate: i.startDate, flatRatePercent: i.flatRatePercent,
+                                       currency: i.currency)
+            if let id = UUID(uuidString: i.id) { inst.id = id }
+            inst.isActive = i.isActive
+            inst.createdAt = i.createdAt
+            context.insert(inst)
         }
 
         for cb in payload.cardBudgets {
