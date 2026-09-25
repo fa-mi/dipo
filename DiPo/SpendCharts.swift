@@ -16,6 +16,10 @@ struct DonutSlice: Identifiable {
     let label: String
     let amount: Double
     let color: Color
+    /// What the share printed inside this slice is drawn in. Passed rather than
+    /// derived: only the caller knows how pale it made the fill, and white on a
+    /// pale slice is unreadable.
+    var labelColor: Color = .white
 }
 
 struct SpendDonut: View {
@@ -100,7 +104,7 @@ struct SpendDonut: View {
                     let r = side / 2 - ring + width(arc) / 2
                     Text("\(Int((arc.fraction * 100).rounded()))%")
                         .font(.system(.caption2, weight: .bold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(arc.slice.labelColor)
                         .offset(x: cos(mid.radians) * r, y: sin(mid.radians) * r)
                 }
 
