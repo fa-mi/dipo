@@ -536,6 +536,11 @@ struct HomeView: View {
                             .offset(y: contentAppeared ? 0 : 20)
                             .animation(AppMotion.appear, value: contentAppeared)
 
+                        // Above the list it is about, and only ever one line
+                        // unless it has a question to ask.
+                        DailyCheckInCard(transactions: selectedCardTransactions)
+                            .padding(.horizontal, 22).padding(.top, 18)
+
                         TransactionSection(
                             transactions: selectedCardTransactions,
                             cards: queriedCards,
@@ -2159,7 +2164,7 @@ struct TransactionSection: View {
                             }
 
                             VStack(spacing: 10) {
-                                ForEach(group.txs) { tx in
+                                ForEach(Array(group.txs.enumerated()), id: \.element.id) { i, tx in
                                     SwipeToDeleteRow(
                                         onTap: { selectedTx = tx },
                                         onDelete: { pendingDelete = tx }
@@ -2173,6 +2178,20 @@ struct TransactionSection: View {
                                     .transition(.asymmetric(
                                         insertion: .opacity.combined(with: .move(edge: .top)),
                                         removal: .scale(scale: 0.92).combined(with: .opacity)))
+                                    // A hairline between rows of the same day,
+                                    // starting where the name does — 44pt of
+                                    // avatar plus the row's 14pt gap — so it
+                                    // separates entries without drawing a table
+                                    // rule across the card. The last row of a day
+                                    // has none: the next day's header is the
+                                    // break there, and a line above it would read
+                                    // as belonging to that header.
+                                    if i < group.txs.count - 1 {
+                                        Rectangle()
+                                            .fill(AppTheme.cardMid.opacity(0.6))
+                                            .frame(height: 1)
+                                            .padding(.leading, 58)
+                                    }
                                 }
                             }
                         }
@@ -2371,8 +2390,12 @@ struct TxRow: View {
 
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
+                    // Two lines at most. A long name used to wrap to three and
+                    // squeeze the badge beside it until the badge wrapped too —
+                    // "Salary" came out as "Salar / y".
                     Text(tx.name)
                         .font(.system(.subheadline, weight: .medium)).foregroundStyle(AppTheme.textPrimary)
+                        .lineLimit(2)
                     // Subtype badge — small inline marker showing this tx is
                     // a refund or transfer. Without this, users can't tell
                     // at a glance which tx is treated specially by the
@@ -2385,10 +2408,12 @@ struct TxRow: View {
                                 .font(.system(.caption2, weight: .semibold)).imageScale(.small)
                             Text(tx.txSubtype.displayLabel)
                                 .font(.system(.caption2, weight: .bold))
+                                .lineLimit(1)
                         }
                         .foregroundStyle(AppTheme.orange)
                         .padding(.horizontal, 5).padding(.vertical, 2)
                         .background(AppTheme.orange.opacity(0.15), in: Capsule())
+                        .fixedSize()
                     }
                     // Auto-posted marker — a recurring charge or salary credit
                     // the engine created. Answers "where did my balance go?"
@@ -2400,10 +2425,14 @@ struct TxRow: View {
                                 .font(.system(.caption2, weight: .semibold)).imageScale(.small)
                             Text(loc(isSalary ? "tx.badge.auto_salary" : "tx.badge.auto_recurring"))
                                 .font(.system(.caption2, weight: .bold))
+                                .lineLimit(1)
                         }
                         .foregroundStyle(isSalary ? AppTheme.accent : AppTheme.blue)
                         .padding(.horizontal, 5).padding(.vertical, 2)
                         .background((isSalary ? AppTheme.accent : AppTheme.blue).opacity(0.13), in: Capsule())
+                        // A label, not a column: it keeps its width and the name
+                        // beside it gives way instead.
+                        .fixedSize()
                     }
                 }
                 HStack(spacing: 6) {

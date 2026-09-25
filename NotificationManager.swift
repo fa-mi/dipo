@@ -492,22 +492,58 @@ final class NotificationManager {
     // ✅ nonisolated: these only call UNUserNotificationCenter, no @Observable state.
     // Without nonisolated, calling from a non-isolated context (e.g. the notification
     // permission callback in RootView) would require await and cause a compile warning.
-    nonisolated static func scheduleDailyReminder() {
-        let center = UNUserNotificationCenter.current()
-        center.removePendingNotificationRequests(withIdentifiers: ["daily_reminder"])
-        let content = UNMutableNotificationContent()
-        content.title = NSLocalizedString("notif.dailycheckin", comment: "")
-        content.body  = NSLocalizedString("notif.dailycheckinbody", comment: "")
-        content.sound = .dipo
-        var comps = DateComponents()
-        comps.hour = 21; comps.minute = 0
-        let trigger = UNCalendarNotificationTrigger(dateMatching: comps, repeats: true)
-        center.add(UNNotificationRequest(identifier: "daily_reminder", content: content, trigger: trigger))
-    }
+    static let checkInHour = 21
+    /// How many days ahead to queue. Covers a week away from the app; anyone
+    /// who opens it sooner re-arms the whole set anyway.
+    private static let checkInHorizon = 7
 
-    nonisolated static func cancelDailyReminder() {
-        UNUserNotificationCenter.current()
-            .removePendingNotificationRequests(withIdentifiers: ["daily_reminder"])
+    /// One evening nudge, and only on a day that has nothing in it.
+    ///
+    /// Three things were wrong with the version this replaces. It was a single
+    /// REPEATING 9 PM trigger, so it fired on days the user had already logged
+    /// ten things — a reminder that is wrong more often than right teaches
+    /// people to swipe it away. Its text came from `NSLocalizedString`, and
+    /// this app has no `.strings` files at all (every other string goes through
+    /// `loc`), so what actually reached the lock screen was the raw key
+    /// "notif.dailycheckin". And it was gated on `daily_reminder_on`, a flag no
+    /// screen has ever written, so the condition could never be true.
+    ///
+    /// A repeating trigger cannot test anything at fire time, so the next few
+    /// days are queued as separate one-offs and today's is dropped as soon as
+    /// the day is accounted for. Re-armed by the check-in card whenever that
+    /// state changes.
+    @MainActor
+    static func refreshCheckInReminders(accountedToday: Bool) {
+        let center = UNUserNotificationCenter.current()
+        // "daily_reminder" is the old unconditional one, still sitting in the
+        // queue on any device that ever scheduled it.
+        center.removePendingNotificationRequests(
+            withIdentifiers: ["daily_reminder"] + (0..<checkInHorizon).map { "checkin_day_\($0)" })
+
+        // Same switch as the other "you have not logged anything" nudges, which
+        // is the family this belongs to.
+        guard NotificationPreferences.shared.isEnabled(.inactivity) else { return }
+
+        let cal = Calendar.current
+        let now = Date()
+        let content = UNMutableNotificationContent()
+        content.title = loc("notif.dailycheckin")
+        content.body  = loc("notif.dailycheckinbody")
+        content.sound = .dipo
+
+        for offset in 0..<checkInHorizon {
+            guard let day = cal.date(byAdding: .day, value: offset, to: now),
+                  let fire = cal.date(bySettingHour: checkInHour, minute: 0, second: 0, of: day)
+            else { continue }
+            // Nothing for today once it is accounted for, and nothing for a
+            // time that has already passed.
+            if offset == 0, accountedToday || fire <= now { continue }
+            let comps = cal.dateComponents([.year, .month, .day, .hour, .minute], from: fire)
+            center.add(UNNotificationRequest(
+                identifier: "checkin_day_\(offset)",
+                content: content,
+                trigger: UNCalendarNotificationTrigger(dateMatching: comps, repeats: false)))
+        }
     }
 
     /// Call once at app start (from RootView.onAppear).

@@ -103,7 +103,9 @@ struct ReceiptPreviewSheet: View {
                                     if let suggested = CategorySuggestionHint.autoPick(
                                         for: newName, transactions: allTransactions,
                                         categories: expenseCategories) {
-                                        withAnimation(.spring(response: 0.3)) { scan.category = suggested }
+                                        // No animation — same reason as Add
+                                        // Transaction: it tracks the typing.
+                                        scan.category = suggested
                                     }
                                 }
                             CategorySuggestionHint(name: scan.merchantName,

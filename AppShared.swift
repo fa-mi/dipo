@@ -464,7 +464,11 @@ struct CategorySuggestionHint: View {
                         .background(suggested.color, in: Capsule())
                 }
             }
-            .transition(.move(edge: .top).combined(with: .opacity))
+            // A plain fade, only ever seen when the user taps a different
+            // tile. It used to slide in from the top, and when a keystroke
+            // changed the guess it could flash in and slide away in the same
+            // moment — text moving that nobody asked to move.
+            .transition(.opacity)
         }
     }
 }
@@ -899,6 +903,7 @@ enum UserSwitchDetector {
             "app_notifications_v2",     // NotificationManager queue
             "profile_photo",            // Profile avatar
             "daily_reminder_on",        // Personal reminder toggle
+            "checkin_snoozed_day",      // "ask me later" — per person, per day
             // Smart Budget settings + ephemeral state
             "sb_enabled", "sb_daily", "sb_lifestyle", "sb_invest", "sb_card_id",
             // Per-user insight state — same-month dismissals and coaching

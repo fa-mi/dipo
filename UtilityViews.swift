@@ -1030,7 +1030,6 @@ struct AddTransactionSheet: View {
     @State private var selectedDebtID: UUID? = nil
     @State private var notes: String = ""
     @State private var showError = false
-    @State private var appeared = false
     @State private var saveInPreferred = false
     @State private var showBudgetAlert = false
     @State private var pendingBudgetAlert: BudgetAlert? = nil
@@ -1480,7 +1479,11 @@ struct AddTransactionSheet: View {
                        let suggested = CategorySuggestionHint.autoPick(
                             for: newName, transactions: allTransactions,
                             categories: availableCategories) {
-                        withAnimation(.spring(response: 0.3)) { selectedCategory = suggested }
+                        // Without animation: this follows the typing keystroke
+                        // by keystroke, and a spring on every guess set tiles,
+                        // labels and the hint line moving under the words the
+                        // user was still writing.
+                        selectedCategory = suggested
                     }
                 }
 
@@ -1633,12 +1636,12 @@ struct AddTransactionSheet: View {
                     }
                     .padding(.top, 6)
                     .containerRelativeFrame(.horizontal)
-                    // One entrance for the whole form. Each section used to
-                    // carry its own `.opacity(appeared)` + `.animation`, which
-                    // is eight animations driven by one boolean.
-                    .opacity(appeared ? 1 : 0)
-                    .offset(y: appeared ? 0 : 16)
-                    .animation(AppMotion.appear, value: appeared)
+                    // No entrance animation. The sheet already carries the form
+                    // up; fading and lifting the content inside it as well made
+                    // every label drift into place a beat after the sheet had
+                    // landed, which read as the screen glitching, not as polish.
+                    // Content arriving is not a change the user caused, and
+                    // AppMotion reserves motion for those.
                     // These two were previously attached to the card picker and
                     // so only ran when the user owned more than one card. The
                     // currency rule is not about how many cards exist.
@@ -1699,7 +1702,6 @@ struct AddTransactionSheet: View {
                 selectedCategory = pre
                 if pre == .debtPayment { txType = .expense }
             }
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.15)) { appeared = true }
         }
         .sheet(isPresented: $showConversionPaywall) {
             PaywallView()

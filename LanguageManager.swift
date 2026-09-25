@@ -1993,6 +1993,16 @@ final class LanguageManager {
         "notif.closedbody":  "Support answered. Tap to view their response.",
         "notif.dailycheckin":  "Daily check-in",
         "notif.dailycheckinbody":  "Did you log all your expenses and income today?",
+        // Daily check-in — the card above the transaction list.
+        "checkin.ask_title":   "Nothing logged today",
+        "checkin.ask_body":    "Was there really nothing to spend, or has it just not been written down yet?",
+        "checkin.none":        "Nothing spent today",
+        "checkin.later":       "I'll log it later",
+        "checkin.logged":      "Today is logged",
+        "checkin.confirmed":   "Today: no spending",
+        "checkin.pending":     "Nothing logged today yet",
+        "checkin.streak":      "%d days in a row",
+        "stats.unchecked_days": "%d days this week have no answer yet, so they are not counted here",
         "notif.info":  "Payday alerts, budget warnings\nand goal milestones appear here.",
 
         // Notification — time labels (used as the "time" tag on AppNotificationItem)
@@ -4410,6 +4420,16 @@ final class LanguageManager {
         "notif.closedbody":  "Admin telah menjawab. Ketuk untuk melihat lebih jelas.",
         "notif.dailycheckin":  "Check-in harian",
         "notif.dailycheckinbody":  "Sudah catat pemasukan dan pengeluaranmu hari ini?",
+        // Check-in harian — kartu di atas daftar transaksi.
+        "checkin.ask_title":   "Hari ini belum ada catatan",
+        "checkin.ask_body":    "Memang tidak ada pengeluaran, atau belum sempat dicatat?",
+        "checkin.none":        "Tidak ada pengeluaran",
+        "checkin.later":       "Nanti saya catat",
+        "checkin.logged":      "Hari ini sudah dicatat",
+        "checkin.confirmed":   "Hari ini tanpa pengeluaran",
+        "checkin.pending":     "Hari ini belum ada catatan",
+        "checkin.streak":      "%d hari berturut-turut",
+        "stats.unchecked_days": "%d hari minggu ini belum dijawab, jadi tidak ikut dihitung",
         "notif.info":  "Pengingat gajian, peringatan anggaran,\ndan kabar target tabungan muncul di sini.",
 
         // Notification — label waktu pada AppNotificationItem
