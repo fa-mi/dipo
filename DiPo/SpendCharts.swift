@@ -28,10 +28,10 @@ struct SpendDonut: View {
     /// Passed in rather than formatted here: the currency rules live with the
     /// screen, and a second implementation of money formatting is a second
     /// answer to the same question.
-    let format: (Double) -> String
-    var centerCaption: String
-
-    @State private var selectedID: String? = nil
+    /// Which slice is picked, owned by the caller: the figure that used to sit
+    /// in the hole now lives beside the ring, and it has to answer to the same
+    /// selection. Two sources of truth for that would be one too many.
+    @Binding var selectedID: String?
 
     // Every proportion below was read off a rendered comparison with the
     // reference, not reasoned about. A slice is TWO things: a thin arc on the
@@ -125,7 +125,6 @@ struct SpendDonut: View {
                         .offset(x: cos(mid.radians) * r, y: sin(mid.radians) * r)
                 }
 
-                center
             }
             .frame(width: side, height: side)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -140,27 +139,6 @@ struct SpendDonut: View {
             .animation(.spring(response: 0.32, dampingFraction: 0.8), value: selectedID)
         }
         .aspectRatio(1, contentMode: .fit)
-    }
-
-    private var center: some View {
-        VStack(spacing: 2) {
-            Text(selected?.slice.label ?? centerCaption)
-                .font(.system(.caption2))
-                .foregroundStyle(AppTheme.textSecondary)
-                .lineLimit(1)
-            Text(format(selected?.slice.amount ?? total))
-                .font(.system(.footnote, weight: .bold))
-                .foregroundStyle(AppTheme.textPrimary)
-                .lineLimit(1).minimumScaleFactor(0.55)
-            if let s = selected {
-                Text("\(Int((s.fraction * 100).rounded()))%")
-                    .font(.system(.caption2, weight: .semibold))
-                    .foregroundStyle(s.slice.color)
-            }
-        }
-        // The hole is small and uneven by design, so the figure inside it has
-        // to stay narrow.
-        .frame(maxWidth: 96)
     }
 
     private func select(at point: CGPoint, side: CGFloat, outer: CGFloat) {
