@@ -926,6 +926,13 @@ struct ProfileView: View {
         .animation(AppMotion.appear, value: appeared)
     }
 
+    /// What the screen is actually showing right now. While the mode is
+    /// "system" the environment carries the system's answer, and while it is
+    /// pinned the environment carries that pin — either way, what the user sees.
+    private var effectiveDark: Bool {
+        appearanceMode == "dark" || (appearanceMode != "light" && colorScheme == .dark)
+    }
+
     @ViewBuilder
     private var appearanceCard: some View {
         VStack(spacing: 0) {
@@ -941,35 +948,45 @@ struct ProfileView: View {
                 Spacer()
             }
             Divider().background(AppTheme.cardMid).padding(.vertical, 10)
-            HStack(spacing: 0) {
-                let modes: [(icon: String, label: String, mode: String)] = [
-                    ("sun.max.fill", loc("appearance.light"), "light"),
-                    ("circle.lefthalf.filled", loc("appearance.system"), "system"),
-                    ("moon.fill", loc("appearance.dark"), "dark")
-                ]
-                ForEach(modes, id: \.mode) { item in
-                    Button {
-                        guard item.mode != appearanceMode else { return }
-                        HapticManager.shared.tap()
-                        withAnimation(.spring(response: 0.3)) { appearanceMode = item.mode }
-                        performAppearanceTransition(to: item.mode)
-                    } label: {
-                        VStack(spacing: 5) {
-                            Image(systemName: item.icon).font(.system(.callout))
-                                .foregroundStyle(appearanceMode == item.mode ? AppTheme.onVividFill : AppTheme.textSecondary)
-                            Text(item.label)
-                                .font(.system(size: 11, weight: appearanceMode == item.mode ? .semibold : .regular))
-                                .foregroundStyle(appearanceMode == item.mode ? AppTheme.onVividFill : AppTheme.textSecondary)
-                                .lineLimit(1).minimumScaleFactor(0.7)
-                        }
-                        .frame(maxWidth: .infinity).padding(.vertical, 10)
-                        .background(appearanceMode == item.mode ? AppTheme.accentFill : Color.clear,
-                                    in: RoundedRectangle(cornerRadius: AppRadius.sm))
-                    }
-                    .buttonStyle(ScaleButtonStyle())
-                }
+
+            // The scene carries the two modes a switch can hold. Which side it
+            // shows is always the truth about the screen, including while the
+            // system is choosing — then it is muted, and a tap means "I'll take
+            // it from here", pinning the opposite of what is on screen, because
+            // a tap is a request for something to change.
+            DayNightToggle(isDark: effectiveDark, isLive: appearanceMode != "system") {
+                HapticManager.shared.tap()
+                let next = effectiveDark ? "light" : "dark"
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) { appearanceMode = next }
+                performAppearanceTransition(to: next)
             }
-            .padding(4)
+            .frame(maxWidth: .infinity)
+            .padding(.top, 2).padding(.bottom, 12)
+
+            // The third mode, as its own switch rather than a third position on
+            // a two-position control.
+            HStack(spacing: 10) {
+                Image(systemName: "circle.lefthalf.filled")
+                    .font(.system(.footnote))
+                    .foregroundStyle(AppTheme.textSecondary)
+                Text(loc("appearance.system"))
+                    .font(.system(.subheadline))
+                    .foregroundStyle(AppTheme.textPrimary)
+                Spacer()
+                Toggle("", isOn: Binding(
+                    get: { appearanceMode == "system" },
+                    set: { on in
+                        HapticManager.shared.tap()
+                        // Turning it off keeps what is on screen rather than
+                        // snapping to a default the user did not ask for.
+                        let next = on ? "system" : (colorScheme == .dark ? "dark" : "light")
+                        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) { appearanceMode = next }
+                        performAppearanceTransition(to: next)
+                    }))
+                    .labelsHidden()
+                    .tint(AppTheme.accent)
+            }
+            .padding(.horizontal, 12).padding(.vertical, 10)
             .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: AppRadius.md))
         }
         .padding(16)
