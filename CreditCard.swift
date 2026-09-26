@@ -368,7 +368,7 @@ struct CreditCardFormSheet: View {
         let g = gradient
         if let card = editCard {
             card.holderName = name.trimmingCharacters(in: .whitespaces)
-            card.cardNumber = cardNumber
+            card.cardNumber = CardNumber.stored(cardNumber)
             card.creditLimit = limit
             // Re-baseline: owed becomes the entered value as of now.
             card.openingOwed = owed
@@ -378,7 +378,7 @@ struct CreditCardFormSheet: View {
         } else {
             let card = BankCard(
                 holderName: name.trimmingCharacters(in: .whitespaces),
-                cardNumber: cardNumber, balance: 0, expireDate: "",
+                cardNumber: CardNumber.stored(cardNumber), balance: 0, expireDate: "",
                 gradientStart: g.start, gradientEnd: g.end,
                 sortOrder: cards.count, currency: currency)
             card.isCreditCard = true

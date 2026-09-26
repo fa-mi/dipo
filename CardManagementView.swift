@@ -1161,9 +1161,12 @@ struct CardFormSheet: View {
             // fallback stored as the concrete gradient below).
             let issuerID = issuerTouched ? (selectedIssuerID ?? "") : (BankIssuer.detect(from: num)?.id ?? "")
             let grad = BankIssuer.resolveGradient(issuerID: selectedIssuerID, cardNumber: num)
+            // Everything above works on the number the user typed — issuer and
+            // gradient both need the BIN. Only what gets WRITTEN is trimmed.
+            let storedNum = CardNumber.stored(num)
             if let card = editCard {
                 card.holderName    = name
-                card.cardNumber    = num
+                card.cardNumber    = storedNum
                 card.expireDate    = expireDate
                 card.issuerID      = issuerID
                 card.gradientStart = grad.start
@@ -1171,7 +1174,7 @@ struct CardFormSheet: View {
             } else {
                 let newCard = BankCard(
                     holderName: name,
-                    cardNumber: num,
+                    cardNumber: storedNum,
                     balance: 0.0,
                     expireDate: expireDate,
                     gradientStart: grad.start,
