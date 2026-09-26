@@ -515,6 +515,9 @@ struct RootView: View {
             appVM.cards = liveCards
             guard !Self.didLaunch else { return }
             Self.didLaunch = true
+            // Cards saved by an older build still hold their middle digits.
+            // Idempotent, so it costs nothing once there is nothing to trim.
+            CardNumber.trimStoredCards(context: context)
             UserSession.shared.checkAppleCredentialState { _ in }
             // Recover email for users who signed in before email capture was
             // fixed — so support/broadcast emails can reach them. Runs before

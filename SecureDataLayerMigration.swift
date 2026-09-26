@@ -117,7 +117,12 @@ struct BankCardMigrationPlan {
     }
     
     /// Step 2: Encrypt existing plain text data
-    /// This should be called ONCE after app update with new schema
+    /// NOT WIRED UP, and deliberately left that way.
+    ///
+    /// It discards every value it encrypts, and no caller exists anywhere in the
+    /// app. Card numbers are protected by not being stored in full at all
+    /// (`DiPo/CardNumber.swift`), which needs no keys and no migration. Kept
+    /// only as the starting point if phone numbers ever need encrypting.
     static func migrateToEncrypted(context: ModelContext) throws {
         let descriptor = FetchDescriptor<BankCard>()
         let cards = try context.fetch(descriptor)
@@ -283,9 +288,20 @@ struct CardDetailView: View {
 // MARK: - Security Best Practices Checklist
 
 /*
- ✅ IMPLEMENTED:
- - [x] Card numbers encrypted at rest using AES-GCM
- - [x] Phone numbers encrypted at rest
+ ⚠️ CORRECTED 2026-09-27. This block used to claim card and phone numbers were
+ "encrypted at rest using AES-GCM". They never were: `migrateToEncrypted` below
+ throws its own output away with `_ =`, and nothing in the app has ever called
+ it. A false security claim is worse than none — someone reads it and stops
+ looking.
+
+ Card numbers are handled a different way now, and a better one: the middle
+ digits are NOT STORED AT ALL (see `DiPo/CardNumber.swift`). The app only ever
+ needed the BIN and the last four, so there is nothing left to encrypt, nothing
+ to decrypt, and nothing for a backup file to leak.
+
+ ✅ ACTUALLY IMPLEMENTED:
+ - [x] Card numbers reduced to BIN + last four, in the store and in backups
+ - [x] Phone numbers stored in full, unencrypted — a wallet needs them whole
  - [x] Encryption keys stored in Keychain with kSecAttrAccessibleWhenUnlockedThisDeviceOnly
  - [x] Auto-hide revealed data after timeout
  - [x] .privacySensitive() modifier to blur in screenshots

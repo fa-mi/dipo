@@ -532,7 +532,10 @@ enum BackupService {
             userID:      currentUserID,
             cards:       cards.map { c in
                 BackupCard(
-                    id: c.id, holderName: c.holderName, cardNumber: c.cardNumber,
+                    id: c.id, holderName: c.holderName,
+                    // Trimmed again on the way out: a backup is the copy that
+                    // leaves the phone, so it is the last place to be sure.
+                    cardNumber: CardNumber.stored(c.cardNumber),
                     balance: c.balance, expireDate: c.expireDate,
                     gradientStart: c.gradientStart, gradientEnd: c.gradientEnd,
                     sortOrder: c.sortOrder, currency: c.currency,
@@ -761,7 +764,7 @@ enum BackupService {
         var cardByID: [UUID: BankCard] = [:]
         for c in payload.cards {
             let card = BankCard(
-                holderName: c.holderName, cardNumber: c.cardNumber,
+                holderName: c.holderName, cardNumber: CardNumber.stored(c.cardNumber),
                 balance: c.balance, expireDate: c.expireDate,
                 gradientStart: c.gradientStart, gradientEnd: c.gradientEnd,
                 sortOrder: c.sortOrder, currency: c.currency,
@@ -1006,7 +1009,7 @@ enum BackupService {
         var cardByID: [UUID: BankCard] = [:]
         for c in payload.cards {
             let card = BankCard(
-                holderName: c.holderName, cardNumber: c.cardNumber,
+                holderName: c.holderName, cardNumber: CardNumber.stored(c.cardNumber),
                 balance: c.balance, expireDate: c.expireDate,
                 gradientStart: c.gradientStart, gradientEnd: c.gradientEnd,
                 sortOrder: c.sortOrder, currency: c.currency,
