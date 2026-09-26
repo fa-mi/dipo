@@ -151,6 +151,10 @@ final class FirebaseSupportService {
         // ticket confirmation to, and the admin panel shows a nameless ticket.
         var data: [String: Any] = [
             "userId":         userId,
+            // Same reason as `registerDeviceToken`: the ticket is keyed by a
+            // social id, so read/update/delete cannot be pinned to its owner
+            // until the uid is on the document.
+            "uid":            Auth.auth().currentUser?.uid ?? "",
             "userPlan":       PremiumManager.shared.plan.label,
             "category":       category,
             "subject":        subject,
@@ -297,6 +301,14 @@ final class FirebaseSupportService {
             // Field name MUST be `fcmToken` — the admin panel reads exactly
             // that key. Renaming it silently breaks admin push targeting.
             "fcmToken":  token,
+            // The document id is the SOCIAL id (Apple/Google subject), which
+            // nothing in a request can be checked against — so today any
+            // signed-in user who learns another account's social id can
+            // overwrite its push token. Writing the Firebase uid is what makes
+            // ownership provable; the rule that enforces it can only be turned
+            // on once enough installs are writing this field, or older builds
+            // lose the ability to register at all.
+            "uid":       Auth.auth().currentUser?.uid ?? "",
             "plan":      PremiumManager.shared.plan.rawValue,   // "free" | "royal"
             "locale":    LanguageManager.shared.current.rawValue,
             "platform":  "ios",

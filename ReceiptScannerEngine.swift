@@ -191,9 +191,7 @@ final class ReceiptScannerEngine {
         }
         let base64 = jpeg.base64EncodedString()
 
-        // Backend endpoint — set this to your Cloudflare Worker / Vercel Function URL.
-        // Returning a structured JSON body keeps client code simple.
-        // ⚠️ Replace YOUR_BACKEND_URL with the real one before shipping.
+        // The Worker that runs the scan. Same deployment as /api/prices.
         let endpointURL = "https://dipo-receipt-scanner.fahmi-aquinas.workers.dev/api/scan-receipt"
 
         struct ScanRequest: Encodable {
