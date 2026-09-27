@@ -640,18 +640,54 @@ struct SalaryCard: View {
     let cycleRole: SalaryCycleRole
     let onMore: () -> Void
 
-    /// This month's payday has passed AND the engine recorded it. A new
-    /// schedule marks the current month as done so it never back-posts, which
-    /// is why "passed" is part of the test: without it every freshly added
-    /// salary would claim to have been paid already.
+    /// Whether this month's salary is actually IN the ledger.
+    ///
+    /// This used to read `lastCredited`, and that field carries two meanings at
+    /// once: the engine stamps it after posting, and a NEW schedule stamps it on
+    /// creation so the engine skips the month the user set it up in ("add this
+    /// month yourself"). The badge read the second as the first, so a schedule
+    /// created after payday announced "Recorded this month" having recorded
+    /// nothing — and never would, because the same stamp told the engine to skip.
+    /// Deleting an auto-posted salary produced the same lie from the other side.
+    ///
+    /// A stamp is a claim; the transaction is the fact. This asks the card.
     private var recordedThisMonth: Bool {
-        let cal = Calendar.current
-        let now = Date()
+        guard schedule.autoRecord, paydayPassed else { return false }
+        return creditedTxThisMonth != nil
+    }
+
+    /// The engine will not post this month, and nothing is there. Said out loud
+    /// rather than left blank, because silence looks identical to "all fine".
+    private var awaitingManualEntry: Bool {
+        schedule.autoRecord && paydayPassed && creditedTxThisMonth == nil
+    }
+
+    private var paydayPassed: Bool {
+        let cal = Calendar.current, now = Date()
+        let pay = SalaryDateEngine.actualPayDate(dayOfMonth: schedule.dayOfMonth,
+                                                 month: cal.component(.month, from: now),
+                                                 year: cal.component(.year, from: now))
+        return cal.startOfDay(for: pay) <= cal.startOfDay(for: now)
+    }
+
+    /// An auto-posted salary on THIS schedule's card, dated this month.
+    ///
+    /// Card plus month is what separates two schedules that are otherwise
+    /// identical — the case that found this bug was two "Main Job" rows for the
+    /// same amount on the same day, one paying into BRI and one into an
+    /// e-wallet. Two schedules paying into the SAME card on the same day would
+    /// still be indistinguishable here; nothing on the transaction points back
+    /// to the schedule that made it.
+    private var creditedTxThisMonth: TxRecord? {
+        guard let card else { return nil }
+        let cal = Calendar.current, now = Date()
         let m = cal.component(.month, from: now), y = cal.component(.year, from: now)
-        let thisMonthPay = SalaryDateEngine.actualPayDate(dayOfMonth: schedule.dayOfMonth, month: m, year: y)
-        return schedule.autoRecord
-            && schedule.lastCreditedMonth == m && schedule.lastCreditedYear == y
-            && cal.startOfDay(for: thisMonthPay) <= cal.startOfDay(for: now)
+        return card.transactions.first { tx in
+            tx.notes == "tx.note.salary_auto"
+                && tx.category == .salary
+                && cal.component(.month, from: tx.date) == m
+                && cal.component(.year, from: tx.date) == y
+        }
     }
 
     var body: some View {
@@ -720,6 +756,18 @@ struct SalaryCard: View {
 
             if active {
                 PayCycleBar(cycle: cycle)
+            }
+
+            if awaitingManualEntry {
+                HStack(spacing: 6) {
+                    Image(systemName: "exclamationmark.circle.fill")
+                        .font(.system(.footnote))
+                        .foregroundStyle(AppTheme.orange)
+                    Text(loc("salary.not_recorded_this_month"))
+                        .font(.system(.caption, weight: .semibold))
+                        .foregroundStyle(AppTheme.textPrimary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
 
             if recordedThisMonth {
