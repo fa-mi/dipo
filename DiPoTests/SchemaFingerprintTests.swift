@@ -42,8 +42,15 @@ final class SchemaFingerprintTests: XCTestCase {
         let fm = FileManager.default
 
         guard fm.fileExists(atPath: fixture.path) else {
-            try current.write(to: fixture, atomically: true, encoding: .utf8)
-            XCTFail("Recorded \(fixture.lastPathComponent) (\(DiPoSchemaCurrent.versionIdentifier)). Commit it; the test passes from the next run.")
+            // Best effort: on a CI runner the file lands on a machine that is
+            // thrown away, so the content is printed too, ready to copy.
+            try? current.write(to: fixture, atomically: true, encoding: .utf8)
+            XCTFail("""
+                No \(fixture.lastPathComponent) yet — recorded it (\(DiPoSchemaCurrent.versionIdentifier)). \
+                Commit it; the test passes from the next run.
+                ----- BEGIN SchemaFingerprint.txt -----
+                \(current)----- END SchemaFingerprint.txt -----
+                """)
             return
         }
 
