@@ -215,40 +215,13 @@ struct DiPoApp: App {
     /// Not private: the background-refresh task needs the same store the UI
     /// uses, and a second container over the same file would fight it.
     static let sharedModelContainer: ModelContainer = {
-        let schema = Schema([
-            BankCard.self, TxRecord.self, SalarySchedule.self,
-            DebtRecord.self, SavingsGoal.self, RecurringExpense.self,
-            // Money lent out. Registered here or @Query would fault at runtime.
-            Receivable.self,
-            // Credit-card instalments: they hold limit that no transaction
-            // represents, so they need their own store.
-            CardInstallment.self,
-            // Per-card Smart Budget allocations (50/30/20 daily/lifestyle/invest).
-            // One row per card the user has configured; cards without a row fall
-            // back to global defaults from SmartBudgetManager.
-            CardBudgetConfig.self,
-            // Deliberate choices the user declared per pay cycle, so the engine
-            // reports them instead of scoring them as mistakes.
-            CycleIntent.self,
-            // Investment portfolio (Royal). Holdings + their buy/sell/income lots
-            // (see Investment.swift). Valued by PortfolioEngine; prices cached on
-            // the holding.
-            InvestmentHolding.self, InvestmentLot.self,
-            // Pre-aggregated daily buckets (see RollupEngine). A derived cache of
-            // the ledger — always rebuildable from TxRecord — that lets screens
-            // read O(days) instead of scanning every transaction on each render.
-            DailyRollup.self,
-            // One row per day the user confirmed as spend-free. Without it a
-            // day with no rows is indistinguishable from a day nobody logged,
-            // and every per-day figure quietly treats the second as the first.
-            DayCheckIn.self,
-            // Read for the user, not yet theirs: everything DiPo parses waits
-            // here until it has been reviewed (see DiPo/PendingInbox.swift).
-            PendingTransaction.self
-        ])
+        // The model list and the migration plan live in DiPo/SchemaVersions.swift.
+        // Read its header before changing any @Model.
+        let schema = Schema(versionedSchema: DiPoSchemaCurrent.self)
         let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
         // Never deletes the store on failure — see DiPo/StoreRecovery.swift.
-        return StoreRecovery.openContainer(schema: schema, config: config)
+        return StoreRecovery.openContainer(schema: schema, config: config,
+                                           migrationPlan: DiPoMigrationPlan.self)
     }()
 
     init() {
