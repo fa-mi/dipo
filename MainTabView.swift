@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 
 // MARK: - Main Tab View
 
@@ -7,6 +8,10 @@ struct MainTabView: View {
     @Bindable var authVM: AuthViewModel
     @Namespace private var tabNS
     @State private var showAddSheet = false
+    /// The review queue is shown once per foreground, not once per render —
+    /// a sheet that reappears every time the user dismisses it is a trap.
+    @State private var showPendingInbox = false
+    @Query private var pendingItems: [PendingTransaction]
     @State private var showNoCardBanner = false
     /// Bound by the widget's Royal paywall deep-link via
     /// `.requestOpenPaywall` notification (see below). Owned here so any
@@ -203,6 +208,23 @@ struct MainTabView: View {
         .onChange(of: scenePhase) { _, phase in
             guard phase == .active, let img = SharedScanInbox.take() else { return }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { routeScan(img) }
+        }
+        // Anything read in the background is waiting here. Shown on arrival,
+        // after a beat so it lands on a drawn screen rather than over a blank
+        // one, and never while another sheet already has the user.
+        .onChange(of: scenePhase) { _, phase in
+            guard phase == .active else { return }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                guard !pendingItems.isEmpty, !showAddSheet, !showSupport, !showPaywall else { return }
+                showPendingInbox = true
+            }
+        }
+        .sheet(isPresented: $showPendingInbox) {
+            PendingInboxSheet()
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+                .presentationBackground(AppTheme.bg)
+                .preferredColorScheme(appColorScheme())
         }
     }
 
