@@ -86,6 +86,19 @@ final class ReceiptScannerEngine {
             throw ReceiptScanError.noTextDetected
         }
 
+        // Step 3a: a screenshot of a bank or wallet NOTIFICATION is not a
+        // receipt, and reading it as one goes badly — the receipt parser hunts
+        // for a total and a name at the top of a slip, and a notification has
+        // neither. It is one line naming an amount, a direction and a
+        // counterparty, which is what BankMessageParser reads.
+        //
+        // This is also the only route by which a push notification can be
+        // captured at all: iOS will not let an app read another app's
+        // notifications, so a screenshot of one is the whole story.
+        if let messageResult = Self.messageScan(rawText: rawText, cardCurrency: cardCurrency) {
+            return messageResult
+        }
+
         // Step 3: parse Vision output.
         let visionResult = ReceiptParser.parse(rawText: rawText, fallbackCurrency: cardCurrency)
 
@@ -124,6 +137,38 @@ final class ReceiptScannerEngine {
         }
 
         return visionResult
+    }
+
+    /// A notification read as one, or nil to let the receipt path handle it.
+    ///
+    /// Length is the gate. A till slip runs to hundreds of characters of line
+    /// items; a notification is one sentence. Anything long enough to be a
+    /// receipt stays with the receipt parser even when a bank name appears on
+    /// it, because payment slips carry those too.
+    static func messageScan(rawText: String, cardCurrency: String) -> ReceiptScanResult? {
+        guard rawText.count <= 240,
+              let parsed = BankMessageParser.parse(rawText, defaultCurrency: cardCurrency),
+              parsed.amount != 0
+        else { return nil }
+
+        return ReceiptScanResult(
+            merchantName: parsed.merchant.isEmpty ? loc("receipt.unknown_merchant") : parsed.merchant,
+            // Receipts carry a positive total and the sign is applied when the
+            // transaction is created, so this follows that rather than
+            // inventing a second convention.
+            amount: abs(parsed.amount),
+            currency: parsed.currency,
+            date: parsed.date,
+            category: SmartBudgetManager.suggestCategory(for: parsed.merchant, txType: "Expense") ?? .other,
+            // Deterministic rather than guessed from pixels: the amount was
+            // read from text the bank wrote. Short of certain because the
+            // merchant still comes from a heuristic.
+            confidence: 0.9,
+            mode: .message,
+            rawText: rawText,
+            notes: "",
+            issuer: parsed.issuerHint?.uppercased() ?? ""
+        )
     }
 
     // MARK: - Vision OCR

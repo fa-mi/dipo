@@ -19,6 +19,7 @@ import UIKit
 enum ScanMode: String {
     case vision    // On-device Apple Vision (free, offline)
     case haikuAI   // Claude Haiku 4.5 fallback (small cost, online)
+    case message   // A bank/wallet notification, read by BankMessageParser
     case manual    // User typed everything from scratch (no scan)
 }
 
