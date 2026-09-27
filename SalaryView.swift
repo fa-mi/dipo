@@ -1400,9 +1400,16 @@ struct SalaryFormSheet: View {
                 cardID: vm.formCardID
             )
             schedule.autoRecord = vm.formAutoRecord
-            // Skip the current month — user should add this month's income manually
-            schedule.lastCreditedMonth = cal.component(.month, from: now)
-            schedule.lastCreditedYear  = cal.component(.year, from: now)
+            // No "skip this month" stamp. It used to be set here so the engine
+            // would not invent income for a month already under way — but the
+            // engine ALREADY refuses that: `pendingMonths` starts at the month
+            // the schedule was created, and each month is checked against
+            // `payDate >= createdAt`. The stamp added nothing to that, and it
+            // broke the case it was never meant to touch: a schedule created
+            // BEFORE its payday was marked as already credited, so when the day
+            // came the engine skipped it and no income was ever posted. A second
+            // salary set up mid-month into a different card is how that surfaced
+            // — it stayed empty for good.
             context.insert(schedule)
         }
         try? context.save()
