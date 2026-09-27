@@ -336,6 +336,13 @@ enum ReceiptParser {
         // Pass 1: known merchants. This catches Indomaret/Alfamart/etc. even if
         // they appear lower than line 1 (sometimes there's a logo region first).
         for line in topLines {
+            // A line that is nothing but a payment rail is never the shop, and
+            // has to be ruled out HERE, not only in Pass 2: rail names contain
+            // merchant keywords. "ShopeePay" contains "shopee" and "GrabPay"
+            // contains "grab", so a wallet slip was filed under the
+            // marketplace or the ride app instead of the warung that was paid.
+            // A real "Shopee" or "Grab" header is not a rail and still matches.
+            if isPaymentBrandOnly(line) || isIssuer(line) { continue }
             let lower = line.lowercased()
             for entry in SmartBudgetManager.merchantMap {
                 for keyword in entry.keywords {
