@@ -135,7 +135,7 @@ final class ReceiptParsingTests: XCTestCase {
     /// headed GoPay / OVO / DANA / ShopeePay / SeaBank / Jago never files the
     /// wallet as the shop.
     func testEWalletAndNeobankRailsAreNeverTheMerchant() {
-        for rail in ["GoPay", "OVO", "DANA", "ShopeePay", "LinkAja",
+        for rail in ["GoPay", "OVO", "DANA", "ShopeePay", "GrabPay", "LinkAja",
                      "SeaBank", "Jago", "Jenius", "QRIS"] {
             let text = """
             \(rail)
@@ -150,6 +150,22 @@ final class ReceiptParsingTests: XCTestCase {
             let r = ReceiptParser.parse(rawText: text, fallbackCurrency: "IDR")
             XCTAssertEqual(r.merchantName, "Warung Sate Pak Kumis",
                            "\(rail) should never win the merchant")
+        }
+    }
+
+    /// The fix for ShopeePay/GrabPay above skips rail-only lines before the
+    /// known-merchant pass. The marketplace and the ride app themselves are
+    /// not rails, so their own receipts must still be filed under them.
+    func testShopeeAndGrabHeadersStillReadAsTheMerchant() {
+        for brand in ["Shopee", "Grab"] {
+            let text = """
+            \(brand)
+            Pesanan Selesai
+            13 Sep 2026, 08:00:00 WIB
+            Total Pembayaran Rp125.000
+            """
+            let r = ReceiptParser.parse(rawText: text, fallbackCurrency: "IDR")
+            XCTAssertEqual(r.merchantName, brand, "a \(brand) receipt is \(brand)'s")
         }
     }
 
