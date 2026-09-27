@@ -158,6 +158,11 @@ private struct MoneyField: View {
                 .stroke(focused ? AppTheme.accent.opacity(0.7) : Color.clear, lineWidth: 1.5))
             if let hint {
                 Text(hint).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary.opacity(0.85))
+                    // Wrap rather than widen: in a two-column row the hint's
+                    // natural width is what decides the column's, and a long one
+                    // squeezes whatever sits beside it.
+                    .fixedSize(horizontal: false, vertical: true)
+                    .lineLimit(2)
             }
         }
     }
@@ -257,10 +262,19 @@ struct AddHoldingSheet: View {
                                            hint: loc("invest.field.current_hint"), bg: AppTheme.bg, text: $currentValue)
                             }
                         } else {
-                            HStack(spacing: 12) {
+                            // Two columns of equal width, aligned at the top.
+                            // Without the explicit width an HStack hands each
+                            // child its IDEAL width, and the long hint under
+                            // "how many" made that column half again as wide as
+                            // the price beside it. Both carry a hint now, so the
+                            // two input boxes sit on the same line as well.
+                            HStack(alignment: .top, spacing: 12) {
                                 MoneyField(label: loc("invest.field.units"), suffix: type.unitLabel,
                                            hint: loc("invest.field.units_hint"), bg: AppTheme.bg, text: $units)
-                                MoneyField(label: loc("invest.field.price"), prefix: curSymbol, bg: AppTheme.bg, text: $buyPrice)
+                                    .frame(maxWidth: .infinity)
+                                MoneyField(label: loc("invest.field.price"), prefix: curSymbol,
+                                           hint: loc("invest.field.price_hint"), bg: AppTheme.bg, text: $buyPrice)
+                                    .frame(maxWidth: .infinity)
                             }
                             MoneyField(label: loc("invest.field.fee"), prefix: curSymbol, bg: AppTheme.bg, text: $fee)
                             // Auto-priced instruments fetch the current price themselves,
