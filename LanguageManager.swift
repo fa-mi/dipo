@@ -2978,7 +2978,7 @@ final class LanguageManager {
         "backup.auto.before_restore": "%@ (sebelum pemulihan)",
         "backup.auto.note":          "DiPo menyimpan salinan di iPhone ini sekali sehari. Salinan ini ikut backup iCloud atau komputer iPhone-mu, tapi tidak keluar dari HP dengan sendirinya — tekan Cadangkan untuk menyimpannya di tempat lain.",
         "store_recovery.title":      "Data tidak bisa dibuka",
-        "store_recovery.body":       "DiPo tidak bisa membuka data di iPhone ini, jadi memulai dari awal. Tidak ada yang dihapus: data lama disimpan terpisah di perangkat ini. Untuk mengembalikan catatanmu, buka Profil → Cadangkan & Pulihkan lalu pulihkan salinan otomatis terbaru atau file cadangan. Hubungi Dukungan kalau butuh bantuan.",
+        "store_recovery.body":       "DiPo tidak bisa membuka data di iPhone ini, jadi memulai dari awal. Tidak ada yang dihapus: data lama disimpan terpisah di perangkat ini. Untuk mengembalikan catatanmu, buka Profil → Cadangkan & Pulihkan lalu pulihkan salinan otomatis terbaru atau file cadangan. Hubungi Layanan Kami kalau butuh bantuan.",
         "store_recovery.ok":         "Oke",
         "backup.export":             "Cadangkan",
         "backup.import":             "Pulihkan",

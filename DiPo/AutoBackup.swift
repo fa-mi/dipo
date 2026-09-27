@@ -1,5 +1,6 @@
 import Foundation
 import SwiftData
+import UIKit
 
 // MARK: - A backup nobody has to remember to make
 //
@@ -14,10 +15,11 @@ import SwiftData
 // one. They do NOT help a phone that is lost without such a backup — Export
 // stays the way to get a copy off the device, and its reminder still runs.
 //
-// What is kept: the 3 newest copies, plus the newest copy from each of the
-// last 4 weeks. The weekly ones matter: if data goes missing quietly
-// (deleted by mistake, a bad import), daily copies alone would all show the
-// loss within 3 days.
+// What is kept: the 3 newest copies, the newest copy from each of the last 4
+// weeks, and always the newest pre-restore snapshot. The weekly ones matter
+// because if data goes missing quietly (deleted by mistake, a bad import),
+// daily copies alone would all show the loss within 3 days — with them, there
+// is a copy from before the loss for about three weeks.
 //
 // Copies are per account: the file name carries the DiPo ID, and listing and
 // pruning only ever touch the signed-in account's own copies. On a shared
@@ -56,10 +58,22 @@ enum AutoBackup {
     }
 
     /// Called when the app goes to the background. Cheap when not due.
+    @MainActor
     static func runIfDue(context: ModelContext, now: Date = .now) {
         guard UserSession.shared.dipoID != nil, StoreRecovery.pendingNotice == nil else { return }
         if let last = UserDefaults.standard.object(forKey: lastRunKey) as? Date,
            now.timeIntervalSince(last) < minInterval { return }
+
+        // Encoding walks the whole ledger, and this runs exactly as iOS is
+        // about to suspend the app — ProfileView's export already notes that
+        // the encode is not always quick on a device with thousands of
+        // transactions. Without an assertion the work can be cut short, or
+        // the app killed for not yielding. The write is `.atomic`, so being
+        // cut off can never leave half a file; it would just mean no copy
+        // today, silently, on the days the ledger is largest.
+        let assertion = UIApplication.shared.beginBackgroundTask(withName: "DiPo.AutoBackup")
+        defer { if assertion != .invalid { UIApplication.shared.endBackgroundTask(assertion) } }
+
         do {
             try write(context: context, reason: .daily, now: now)
             UserDefaults.standard.set(now, forKey: lastRunKey)
@@ -114,6 +128,16 @@ enum AutoBackup {
     /// `entries` must be newest first.
     static func kept(_ entries: [Entry], now: Date) -> Set<URL> {
         var keep = Set(entries.prefix(keepNewest).map(\.url))
+        // The newest pre-restore snapshot always survives. It is the only copy
+        // that undoes a restore of the wrong file, and it is taken on a day the
+        // user is busy restoring — so a few daily copies push it out of the
+        // three newest within days, while the person is still working out that
+        // the file they picked was the wrong one. It is kept for good, not for a
+        // window: one small JSON left over from a restore months ago is a fair
+        // price for the undo always being there.
+        if let undo = entries.first(where: { $0.reason == .beforeRestore }) {
+            keep.insert(undo.url)
+        }
         var weeksSeen = Set<Int>()
         for entry in entries {   // newest first → the first of each week wins
             let week = Int(now.timeIntervalSince(entry.date) / (7 * 24 * 60 * 60))

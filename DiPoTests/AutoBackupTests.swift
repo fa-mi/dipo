@@ -37,6 +37,25 @@ final class AutoBackupTests: XCTestCase {
         XCTAssertEqual(AutoBackup.kept(entries, now: now), Set(entries.map(\.url)))
     }
 
+    /// The snapshot taken before a restore is the only way back from restoring
+    /// the wrong file, and it is taken on a busy day: a few daily copies push
+    /// it out of the three newest within days. It has to outlive them.
+    func testTheNewestPreRestoreSnapshotSurvivesTheDailyCopies() {
+        let undo = AutoBackup.Entry(url: URL(fileURLWithPath: "/tmp/undo.json"),
+                                    date: now.addingTimeInterval(-4 * day), reason: .beforeRestore)
+        let older = AutoBackup.Entry(url: URL(fileURLWithPath: "/tmp/undo-older.json"),
+                                     date: now.addingTimeInterval(-5 * day), reason: .beforeRestore)
+        // Newest first: four daily copies, then the two snapshots.
+        let entries = daily(4) + [undo, older]
+
+        let kept = AutoBackup.kept(entries, now: now)
+
+        XCTAssertTrue(kept.contains(undo.url),
+                      "Out of the three newest and not its week's winner — the rule itself must keep it.")
+        XCTAssertFalse(kept.contains(older.url),
+                       "Only the newest snapshot is spared; the rest age out like any copy.")
+    }
+
     func testAnOldOnlyCopyIsKeptWhileItIsTheNewest() {
         // A user who stopped opening the app: their one copy is two months
         // old. It is still among the three newest, so it stays.

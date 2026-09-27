@@ -1,5 +1,6 @@
 import Foundation
 import SwiftData
+import UIKit
 
 // MARK: - Opening the store without ever deleting it
 //
@@ -16,8 +17,9 @@ import SwiftData
 //     and deleting it does not.
 //
 // Now nothing is deleted:
-//   • unreadable (still locked) → stop this launch and leave the file alone.
-//     A background launch dying costs nothing; the next launch opens it.
+//   • device still locked from a reboot → stop this launch and leave the file
+//     alone. A background launch ending early costs nothing; the next launch
+//     after the user unlocks opens the store normally.
 //   • readable but won't open → move the store and its side files into
 //     StoreQuarantine/<timestamp>/, start empty, and tell the user once
 //     (RootView) — including that the old data is still on the device and
@@ -55,8 +57,25 @@ enum StoreRecovery {
             return try ModelContainer(for: schema, migrationPlan: migrationPlan, configurations: config)
         } catch let openError {
             let store = config.url
-            if FileManager.default.fileExists(atPath: store.path), !isReadable(store) {
-                fatalError("[DiPo] Store exists but can't be read yet (device locked?) — leaving it untouched: \(openError)")
+            // Only ONE thing may stop the launch instead of quarantining: the
+            // device being locked from a reboot, when no file in the container
+            // can be read and no decision taken here would be sound.
+            //
+            // `isProtectedDataAvailable` is the system's own answer to that, and
+            // asking it is what keeps this from becoming a trap: a store that
+            // cannot be read for any OTHER reason is a permanent condition, and
+            // stopping every launch over it would crash the app forever with no
+            // way out but deleting it — which throws away the very data this
+            // exists to protect, and the automatic copies beside it. Anything
+            // that is not a locked device goes to quarantine, where the bytes
+            // are kept and the app opens.
+            if FileManager.default.fileExists(atPath: store.path),
+               !UIApplication.shared.isProtectedDataAvailable {
+                // `exit(0)` rather than `fatalError`: this is a deliberate,
+                // correct stop, and it should not be filed as a crash in
+                // Crashlytics or counted against crash-free users.
+                print("[DiPo] Device still locked — leaving the store untouched, stopping this launch: \(openError)")
+                exit(0)
             }
             if migrationPlan != nil, FileManager.default.fileExists(atPath: store.path),
                let copy = snapshot(store: store) {
@@ -113,12 +132,6 @@ enum StoreRecovery {
 
     // MARK: Private
 
-    private static func isReadable(_ url: URL) -> Bool {
-        guard let handle = try? FileHandle(forReadingFrom: url) else { return false }
-        try? handle.close()
-        return true
-    }
-
     /// Copies (does not move) the store and its side files next to the
     /// quarantines, before anything is allowed to migrate it. Returns the
     /// folder name, or nil if the copy failed — in which case nothing may
@@ -155,8 +168,10 @@ enum StoreRecovery {
         let folder = root.appendingPathComponent(stamp, isDirectory: true)
         do {
             try fm.createDirectory(at: folder, withIntermediateDirectories: true)
-            // default.store, default.store-wal, default.store-shm, and the
-            // external-storage folder SwiftData keeps beside them.
+            // default.store and its side files: -wal, -shm. SwiftData's
+            // external-storage folder is called `.default_SUPPORT` and does
+            // NOT match this prefix — deliberately, since no model in DiPo
+            // uses `.externalStorage`, so nothing of the user's is in it.
             let name = store.lastPathComponent
             for file in try fm.contentsOfDirectory(atPath: dir.path) where file.hasPrefix(name) {
                 try fm.moveItem(at: dir.appendingPathComponent(file),

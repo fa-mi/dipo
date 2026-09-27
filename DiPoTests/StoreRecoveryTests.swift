@@ -4,6 +4,12 @@ import SwiftData
 
 /// A store that won't open used to be deleted. These pin that it is moved
 /// aside instead — every byte of it — and that the user is told.
+///
+/// The other branch, a device still locked from a reboot, has no test here: it
+/// turns on `UIApplication.isProtectedDataAvailable`, which cannot be faked,
+/// and it ends in `exit(0)`, which would take the test runner with it. What
+/// these tests do cover is the part that matters for that branch being safe —
+/// an UNLOCKED device never stops the launch, it quarantines and opens.
 @MainActor
 final class StoreRecoveryTests: XCTestCase {
 
