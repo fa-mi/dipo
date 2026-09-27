@@ -68,6 +68,18 @@ struct DiPoAppShortcuts: AppShortcutsProvider {
             shortTitle: "Log from Screenshot",
             systemImageName: "text.viewfinder"
         )
+        // The one that runs without the user present: bound to a Shortcuts
+        // automation on a bank SMS or email, it files the transaction in the
+        // review queue while the phone stays where it is.
+        AppShortcut(
+            intent: LogFromMessageIntent(),
+            phrases: [
+                "Log from a message in \(.applicationName)",
+                "Catat dari pesan di \(.applicationName)",
+            ],
+            shortTitle: "Log from Message",
+            systemImageName: "text.bubble"
+        )
     }
 }
 
