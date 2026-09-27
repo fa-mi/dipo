@@ -73,6 +73,10 @@ struct BackupPayload: Codable {
     var investments:  [BackupHolding]? = nil
     var receivables:  [BackupReceivable]? = nil
     var installments: [BackupInstallment]? = nil
+    /// The review queue. Optional like the rest, and worth carrying: these are
+    /// transactions the user has not decided on yet, and a restore that drops
+    /// them silently throws away decisions still to be made.
+    var pending:      [BackupPending]? = nil
 }
 
 // MARK: - DTOs (mirror SwiftData @Model classes 1:1)
@@ -318,6 +322,19 @@ struct BackupInstallment: Codable {
     let createdAt: Date
 }
 
+struct BackupPending: Codable {
+    let id: String
+    let capturedAt: Date
+    let sourceRaw: String
+    let rawText: String
+    let name: String
+    let amount: Double
+    let currency: String
+    let date: Date
+    let categoryRaw: String
+    let cardID: String?
+}
+
 struct BackupDayCheckIn: Codable {
     let dayKey: String
     let answeredAt: Date
@@ -509,6 +526,7 @@ enum BackupService {
         let holdings: [InvestmentHolding] = (try? context.fetch(FetchDescriptor<InvestmentHolding>())) ?? []
         let receivables: [Receivable] = (try? context.fetch(FetchDescriptor<Receivable>())) ?? []
         let installments: [CardInstallment] = (try? context.fetch(FetchDescriptor<CardInstallment>())) ?? []
+        let pending: [PendingTransaction] = (try? context.fetch(FetchDescriptor<PendingTransaction>())) ?? []
 
         // Build a card-id → list-of-tx index so we know which card each tx
         // belongs to without traversing relationships at write time.
@@ -661,6 +679,12 @@ enum BackupService {
                                   tenorMonths: i.tenorMonths, startDate: i.startDate,
                                   flatRatePercent: i.flatRatePercent, currency: i.currency,
                                   isActive: i.isActive, createdAt: i.createdAt)
+            },
+            pending: pending.map { p in
+                BackupPending(id: p.id.uuidString, capturedAt: p.capturedAt, sourceRaw: p.sourceRaw,
+                              rawText: p.rawText, name: p.name, amount: p.amount,
+                              currency: p.currency, date: p.date, categoryRaw: p.categoryRaw,
+                              cardID: p.cardID?.uuidString)
             }
         )
 
@@ -748,6 +772,7 @@ enum BackupService {
             try? context.delete(model: InvestmentLot.self)
             try? context.delete(model: Receivable.self)
             try? context.delete(model: CardInstallment.self)
+            try? context.delete(model: PendingTransaction.self)
             try? context.delete(model: RecurringExpense.self)
             try context.save()
 
@@ -924,6 +949,18 @@ enum BackupService {
             context.insert(rec)
         }
 
+        for p in payload.pending ?? [] {
+            let item = PendingTransaction(
+                name: p.name, amount: p.amount, currency: p.currency, date: p.date,
+                category: TxCategory(rawValue: p.categoryRaw) ?? .other,
+                cardID: p.cardID.flatMap(UUID.init(uuidString:)),
+                source: PendingSource(rawValue: p.sourceRaw) ?? .manual,
+                rawText: p.rawText)
+            if let id = UUID(uuidString: p.id) { item.id = id }
+            item.capturedAt = p.capturedAt
+            context.insert(item)
+        }
+
         for i in payload.installments ?? [] {
             guard let cardID = UUID(uuidString: i.cardID) else { continue }
             let inst = CardInstallment(cardID: cardID, merchant: i.merchant,
@@ -989,6 +1026,7 @@ enum BackupService {
                 try? context.delete(model: InvestmentLot.self)
                 try? context.delete(model: Receivable.self)
                 try? context.delete(model: CardInstallment.self)
+                try? context.delete(model: PendingTransaction.self)
                 try? context.delete(model: RecurringExpense.self)
                 try? context.save()
                 NotificationManager.clearDeliveryDedupState()
@@ -1153,6 +1191,18 @@ enum BackupService {
             rec.isSettled = r.isSettled
             rec.createdAt = r.createdAt
             context.insert(rec)
+        }
+
+        for p in payload.pending ?? [] {
+            let item = PendingTransaction(
+                name: p.name, amount: p.amount, currency: p.currency, date: p.date,
+                category: TxCategory(rawValue: p.categoryRaw) ?? .other,
+                cardID: p.cardID.flatMap(UUID.init(uuidString:)),
+                source: PendingSource(rawValue: p.sourceRaw) ?? .manual,
+                rawText: p.rawText)
+            if let id = UUID(uuidString: p.id) { item.id = id }
+            item.capturedAt = p.capturedAt
+            context.insert(item)
         }
 
         for i in payload.installments ?? [] {

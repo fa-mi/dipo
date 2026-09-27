@@ -241,7 +241,10 @@ struct DiPoApp: App {
             // One row per day the user confirmed as spend-free. Without it a
             // day with no rows is indistinguishable from a day nobody logged,
             // and every per-day figure quietly treats the second as the first.
-            DayCheckIn.self
+            DayCheckIn.self,
+            // Read for the user, not yet theirs: everything DiPo parses waits
+            // here until it has been reviewed (see DiPo/PendingInbox.swift).
+            PendingTransaction.self
         ])
         let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
         do {
