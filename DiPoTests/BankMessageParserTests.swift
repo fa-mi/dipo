@@ -96,3 +96,48 @@ final class BankMessageParserTests: XCTestCase {
         XCTAssertEqual(Calendar.current.component(.year, from: parsed.date), 2025)
     }
 }
+
+/// Where a screenshot goes: a notification is read as a message, a till slip is
+/// left to the receipt parser. Getting this boundary wrong is how a receipt
+/// starts being read one line at a time.
+@MainActor
+final class ScreenshotRoutingTests: XCTestCase {
+
+    func testANotificationScreenshotTakesTheMessagePath() throws {
+        let result = try XCTUnwrap(ReceiptScannerEngine.messageScan(
+            rawText: "BCA: 27/09 DB Rp50.000,00 QRIS WARKOP PAK BUDI",
+            cardCurrency: "IDR"))
+        XCTAssertEqual(result.mode, .message)
+        XCTAssertEqual(result.amount, 50_000, "Positive, as every scan result is.")
+        XCTAssertEqual(result.issuer, "BCA")
+        XCTAssertTrue(result.merchantName.contains("WARKOP"))
+    }
+
+    /// Long enough to be a slip means it is treated as one, bank name or not —
+    /// payment receipts carry those too.
+    func testALongReceiptIsLeftToTheReceiptParser() {
+        let slip = """
+        INDOMARET CABANG SUDIRMAN
+        Jl. Jend. Sudirman No. 12, Jakarta
+        NPWP 01.234.567.8-901.000
+        ---------------------------------
+        Indomie Goreng           3.500
+        Aqua 600ml               4.000
+        Pulpen Standard         12.000
+        ---------------------------------
+        SUBTOTAL                19.500
+        PPN                      2.145
+        TOTAL               Rp 21.645
+        TUNAI               Rp 25.000
+        KEMBALI             Rp  3.355
+        Kasir: 02   No. Transaksi 889921
+        """
+        XCTAssertNil(ReceiptScannerEngine.messageScan(rawText: slip, cardCurrency: "IDR"),
+                     "A till slip must not be read as a one-line notification.")
+    }
+
+    func testTextWithNoAmountTakesNeitherPath() {
+        XCTAssertNil(ReceiptScannerEngine.messageScan(
+            rawText: "BCA: Kode OTP Anda 449120. RAHASIA.", cardCurrency: "IDR"))
+    }
+}
