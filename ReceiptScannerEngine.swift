@@ -231,7 +231,9 @@ final class ReceiptScannerEngine {
     ///   - Forward to Anthropic with the prompt below
     ///   - Return Anthropic's response unchanged
     private func scanWithHaiku(image: UIImage, cardCurrency: String) async throws -> ReceiptScanResult {
-        guard let jpeg = image.jpegData(compressionQuality: ReceiptScanConfig.haikuJpegCompression) else {
+        // Only what the model will actually look at goes over the network.
+        guard let upload = downscale(image, maxDim: ReceiptScanConfig.haikuMaxImageDimension),
+              let jpeg = upload.jpegData(compressionQuality: ReceiptScanConfig.haikuJpegCompression) else {
             throw ReceiptScanError.imageQualityTooLow
         }
         let base64 = jpeg.base64EncodedString()
