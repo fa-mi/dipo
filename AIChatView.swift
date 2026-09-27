@@ -59,9 +59,10 @@ final class AIChatViewModel {
 
     // ── Worker payload / response shapes ──────────────────────────────────
 
+    // No `userPlan` in either request: the Worker asks RevenueCat for the
+    // plan itself, and wants the Firebase ID token WorkerAuth attaches.
     private struct ChatRequest: Encodable {
         let userId: String
-        let userPlan: String
         let message: String
         let currencyHint: String
         /// Compact snapshot of the user's in-app finances (income, expenses,
@@ -91,7 +92,6 @@ final class AIChatViewModel {
     }
     private struct CreditsRequest: Encodable {
         let userId: String
-        let userPlan: String
     }
     private struct CreditsResponse: Decodable {
         let balance: Int
@@ -101,11 +101,10 @@ final class AIChatViewModel {
 
     func loadCredits() async {
         guard let userId = UserSession.shared.userID else { return }
-        let body = try? JSONEncoder().encode(
-            CreditsRequest(userId: userId, userPlan: PremiumManager.shared.plan.rawValue))
+        let body = try? JSONEncoder().encode(CreditsRequest(userId: userId))
         guard let body else { return }
         let endpoint = Endpoint(path: creditsURL, method: .post,
-                                headers: ["X-DiPo-Client": "iOS"], body: body)
+                                headers: await WorkerAuth.headers(), body: body)
         if let resp: CreditsResponse = try? await NetworkService.shared.fetch(endpoint) {
             creditsLeft = resp.balance
         }
@@ -170,7 +169,6 @@ final class AIChatViewModel {
 
         let payload = ChatRequest(
             userId: userId,
-            userPlan: PremiumManager.shared.plan.rawValue,
             message: text,
             currencyHint: CurrencyManager.shared.preferredCurrency,
             context: context,
@@ -182,7 +180,7 @@ final class AIChatViewModel {
             return
         }
         let endpoint = Endpoint(path: chatURL, method: .post,
-                                headers: ["X-DiPo-Client": "iOS"], body: body)
+                                headers: await WorkerAuth.headers(), body: body)
         do {
             let resp: ChatResponse = try await NetworkService.shared.fetch(endpoint)
             if let left = resp.creditsLeft { creditsLeft = left }
