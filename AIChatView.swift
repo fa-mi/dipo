@@ -164,6 +164,13 @@ final class AIChatViewModel {
             return
         }
 
+        // The local parser couldn't take it, so it needs the model — and there
+        // is no signal to reach it. Hand the text back instead of failing it.
+        guard NetworkService.shared.isOnline else {
+            keepForLater(text)
+            return
+        }
+
         isLoading = true
         defer { isLoading = false }
 
@@ -198,8 +205,12 @@ final class AIChatViewModel {
             messages.append(AIChatMessage(role: .assistant,
                 text: resp.reply, transactions: parsed))
         } catch let netError as NetworkError {
-            // 402 = out of monthly AI credits.
-            if case .httpError(let code) = netError, code == 402 {
+            if netError.isLostSignal {
+                // Patchy coverage: the path looked up, the request never made
+                // it. Same treatment as being offline from the start.
+                keepForLater(text)
+            } else if case .httpError(let code) = netError, code == 402 {
+                // 402 = out of monthly AI credits.
                 creditsLeft = 0
                 messages.append(AIChatMessage(role: .assistant,
                     text: loc("ai.error.out_of_credits"), isError: true))
@@ -217,6 +228,31 @@ final class AIChatViewModel {
             messages.append(AIChatMessage(role: .assistant,
                 text: loc("ai.error.generic"), isError: true))
         }
+    }
+
+    /// No signal, or too little to finish the request.
+    ///
+    /// The message used to be lost: the input box is cleared before sending,
+    /// so a failure left a generic error and nothing to resend — the user had
+    /// to type it again, on the patchy coverage where that happens most. Now
+    /// the text goes back into the box, and DiPo says why and what still works
+    /// without internet.
+    ///
+    /// It is NOT sent automatically when the signal returns: each model reply
+    /// spends one of the user's AI credits, and they should choose to spend it
+    /// — by which time what they meant to ask may have changed.
+    private func keepForLater(_ text: String) {
+        // The user bubble for this text was just added; the text is going
+        // back to the box, so the bubble would be a duplicate on resend.
+        if let last = messages.last, last.role == .user, last.text == text {
+            messages.removeLast()
+        }
+        // Don't clobber anything typed while the request was in flight.
+        if input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            input = text
+        }
+        messages.append(AIChatMessage(role: .assistant,
+            text: loc("ai.offline.kept"), isError: true))
     }
 
     /// User-facing error text. Release builds always show the friendly,

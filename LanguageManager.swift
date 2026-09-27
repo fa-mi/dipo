@@ -453,12 +453,9 @@ final class LanguageManager {
         "debt.title":         "Smart Debt Tracker",
 
         // Network
-        "network.no_connection":   "No Internet Connection",
-        "network.check":           "Check connection",
-        "network.checking":        "Checking connection…",
         "network.back_online":     "Back online — syncing…",
-        "network.message":         "Please check your connection.\nSome features require internet to work.",
-        "network.data_safe":       "Your existing data is safe and you can see it when online.",
+        "network.offline_banner":  "Offline — you can keep recording",
+        "ai.offline.kept":         "You're offline, so this can't reach DiPo's AI yet. Your message is back in the box — send it again when there's signal. Simple entries like “beli kopi 25rb” still work without internet.",
 
         // Notifications
         "notif.card_expired":      "Card has expired",
@@ -2919,12 +2916,9 @@ final class LanguageManager {
         "debt.title":         "Pelacak Utang",
 
         // Network
-        "network.no_connection":   "Tidak Ada Koneksi Internet",
-        "network.check":           "Periksa koneksi",
-        "network.checking":        "Memeriksa koneksi…",
         "network.back_online":     "Kembali online — menyinkronkan…",
-        "network.message":         "Cek koneksi internetmu.\nBeberapa fitur butuh internet.",
-        "network.data_safe":       "Datamu aman dan bisa dilihat saat online.",
+        "network.offline_banner":  "Offline — pencatatan tetap jalan",
+        "ai.offline.kept":         "Kamu sedang offline, jadi pesan ini belum bisa sampai ke AI DiPo. Pesanmu sudah dikembalikan ke kolom ketik — kirim lagi saat ada sinyal. Catatan sederhana seperti “beli kopi 25rb” tetap bisa dicatat tanpa internet.",
 
         // Notifications
         "notif.card_expired":      "Kartu sudah kadaluarsa",

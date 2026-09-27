@@ -400,7 +400,7 @@ struct RootView: View {
             .id(LanguageManager.shared.renderID)
         }
         .animation(.spring(response: 0.5, dampingFraction: 0.82), value: authVM.authState)
-        .overlay { NoInternetOverlay() }      // full-screen offline view
+        .overlay { NoInternetOverlay() }      // small "offline" pill; the app stays usable
         .overlay(alignment: .top) { ReconnectedToast() }  // brief "Back online" toast
         // Admin-controlled maintenance gate — blocks the ENTIRE app (above
         // auth, main UI, everything) with an opaque full-screen page when the
