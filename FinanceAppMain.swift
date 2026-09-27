@@ -247,17 +247,8 @@ struct DiPoApp: App {
             PendingTransaction.self
         ])
         let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
-        do {
-            return try ModelContainer(for: schema, configurations: config)
-        } catch {
-            print("[DiPo] Store error, wiping: \(error)")
-            try? FileManager.default.removeItem(at: config.url)
-            guard let fresh = try? ModelContainer(for: schema, configurations: config) else {
-                print("[DiPo] FATAL: Could not recreate SwiftData store after wipe. Schema: \(schema)")
-                fatalError("SwiftData store unrecoverable — check schema consistency.")
-            }
-            return fresh
-        }
+        // Never deletes the store on failure — see DiPo/StoreRecovery.swift.
+        return StoreRecovery.openContainer(schema: schema, config: config)
     }()
 
     init() {

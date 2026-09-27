@@ -510,6 +510,9 @@ final class LanguageManager {
         "cards.edit":                "Edit Card",
         // Backup / restore
         "backup.section_title":      "Backup & Restore",
+        "store_recovery.title":      "Your data couldn't be opened",
+        "store_recovery.body":       "DiPo couldn't open the data on this iPhone, so it started fresh. Nothing was deleted: the old data is kept aside on this device. If you have a backup file, restore it from Profile → Backup & Restore. Contact Support if you need help.",
+        "store_recovery.ok":         "OK",
         "backup.export":             "Export",
         "backup.import":             "Import",
         "backup.subtitle":           "Save a copy of your data to switch devices or recover after a wipe. The file stays on your device or wherever you choose to save it.",
@@ -2966,6 +2969,9 @@ final class LanguageManager {
         "cards.edit":                "Edit Kartu",
         // Backup / restore
         "backup.section_title":      "Cadangkan & Pulihkan",
+        "store_recovery.title":      "Data tidak bisa dibuka",
+        "store_recovery.body":       "DiPo tidak bisa membuka data di iPhone ini, jadi memulai dari awal. Tidak ada yang dihapus: data lama disimpan terpisah di perangkat ini. Kalau kamu punya file cadangan, pulihkan lewat Profil → Cadangkan & Pulihkan. Hubungi Dukungan kalau butuh bantuan.",
+        "store_recovery.ok":         "Oke",
         "backup.export":             "Cadangkan",
         "backup.import":             "Pulihkan",
         "backup.subtitle":           "Simpan salinan data untuk pindah perangkat atau memulihkan setelah hilang. File tetap di perangkatmu atau di tempat penyimpanan yang kamu pilih.",
