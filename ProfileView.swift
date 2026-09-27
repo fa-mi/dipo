@@ -1,3 +1,7 @@
+import SwiftUI
+import SwiftData
+import PhotosUI
+import UniformTypeIdentifiers   // for `.json` UTType in fileImporter
 
 // MARK: - Profile View
 
