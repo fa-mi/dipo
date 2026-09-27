@@ -504,6 +504,26 @@ enum BackupService {
     /// sheet. Caller is responsible for presenting the URL via
     /// UIActivityViewController.
     static func exportBackup(context: ModelContext) throws -> URL {
+        let data = try encodedBackup(context: context)
+
+        // Filename pattern: DiPo_Backup_<userID-or-anon>_<timestamp>.json
+        // Including a coarse timestamp helps users keep multiple backups.
+        let stamp = Int(Date().timeIntervalSince1970)
+        let userTag = (UserSession.shared.userID ?? "anon").prefix(8)
+        let filename = "DiPo_Backup_\(userTag)_\(stamp).json"
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(filename)
+
+        do {
+            try data.write(to: url, options: .atomic)
+        } catch {
+            throw BackupError.writeFailed(error.localizedDescription)
+        }
+        return url
+    }
+
+    /// The backup as JSON bytes, exactly what `exportBackup` writes. Split
+    /// out so AutoBackup can put the same file somewhere else.
+    static func encodedBackup(context: ModelContext) throws -> Data {
         // Require login — backups are tagged with the owner's userID so
         // they can't be cross-restored on another account. No userID =
         // can't tag = refuse export.
@@ -692,26 +712,11 @@ enum BackupService {
         encoder.dateEncodingStrategy = .iso8601
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
 
-        let data: Data
         do {
-            data = try encoder.encode(payload)
+            return try encoder.encode(payload)
         } catch {
             throw BackupError.writeFailed(error.localizedDescription)
         }
-
-        // Filename pattern: DiPo_Backup_<userID-or-anon>_<timestamp>.json
-        // Including a coarse timestamp helps users keep multiple backups.
-        let stamp = Int(Date().timeIntervalSince1970)
-        let userTag = (UserSession.shared.userID ?? "anon").prefix(8)
-        let filename = "DiPo_Backup_\(userTag)_\(stamp).json"
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent(filename)
-
-        do {
-            try data.write(to: url, options: .atomic)
-        } catch {
-            throw BackupError.writeFailed(error.localizedDescription)
-        }
-        return url
     }
 
     // MARK: - Import

@@ -505,6 +505,8 @@ struct RootView: View {
             // or a category changed, a transaction moved to another day).
             if newPhase == .background {
                 WidgetDataSync.refresh(context: context)
+                // At most once a day; see DiPo/AutoBackup.swift.
+                AutoBackup.runIfDue(context: context)
             }
             if newPhase == .active {
                 appVM.cards = liveCards

@@ -189,6 +189,9 @@ struct ProfileView: View {
     /// from a leading "✅" the restore path forgot to add, so "Backup restored."
     /// rendered in red as if it had failed.
     @State private var backupToast: BackupBanner? = nil
+    /// Newest first. Read once here and refreshed after a restore; a copy
+    /// written while this screen is open shows up next time it's opened.
+    @State private var autoBackups: [AutoBackup.Entry] = AutoBackup.entries()
     /// A backup/restore result plus its tone. Explicit, so the banner's colour
     /// is set at the call site that knows the outcome, not guessed from text.
     private struct BackupBanner { let isError: Bool; let message: String }
@@ -1276,6 +1279,40 @@ struct ProfileView: View {
                 .disabled(isDisabled)
             }
 
+            // DiPo's own daily copies (DiPo/AutoBackup.swift). Restoring one
+            // goes through the same preview → confirm steps as a picked file.
+            if UserSession.shared.isLoggedIn, let latest = autoBackups.first {
+                HStack(spacing: 8) {
+                    Image(systemName: "clock.arrow.circlepath")
+                        .font(.system(.caption))
+                        .foregroundStyle(AppTheme.textSecondary)
+                    Text(String(format: loc("backup.auto.last"), Self.autoBackupDate(latest.date)))
+                        .font(.system(.caption, weight: .medium))
+                        .foregroundStyle(AppTheme.textSecondary)
+                    Spacer()
+                    Menu {
+                        ForEach(autoBackups) { entry in
+                            Button {
+                                previewAutoBackup(entry)
+                            } label: {
+                                Text(entry.reason == .beforeRestore
+                                     ? String(format: loc("backup.auto.before_restore"), Self.autoBackupDate(entry.date))
+                                     : Self.autoBackupDate(entry.date))
+                            }
+                        }
+                    } label: {
+                        Text(loc("backup.auto.restore"))
+                            .font(.system(.caption, weight: .semibold))
+                            .foregroundStyle(AppTheme.blue)
+                    }
+                    .disabled(backupBusyLabel != nil)
+                }
+                Text(loc("backup.auto.note"))
+                    .font(.system(.caption2))
+                    .foregroundStyle(AppTheme.textSecondary.opacity(0.8))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
             if !UserSession.shared.isLoggedIn {
                 // Tell the user why the buttons are dimmed instead of
                 // letting them silently wonder. Subtle inline hint —
@@ -1494,6 +1531,26 @@ struct ProfileView: View {
         }
     }
 
+    /// Same first step as a picked file: parse, then show the preview sheet.
+    private func previewAutoBackup(_ entry: AutoBackup.Entry) {
+        backupToast = nil
+        pendingImportURL = entry.url
+        do {
+            importPreview = try BackupService.previewBackup(from: entry.url)
+        } catch {
+            backupToast = BackupBanner(isError: true, message: error.localizedDescription)
+            pendingImportURL = nil
+        }
+    }
+
+    private static func autoBackupDate(_ date: Date) -> String {
+        let f = DateFormatter()
+        f.locale = LanguageManager.shared.currentLocale
+        f.dateStyle = .medium
+        f.timeStyle = .short
+        return f.string(from: date)
+    }
+
     /// Wraps `BackupService.exportBackup` with a loading overlay. The
     /// overlay is mostly precaution — export is typically <100ms — but on
     /// devices with thousands of transactions the JSON encode + disk write
@@ -1536,7 +1593,12 @@ struct ProfileView: View {
         backupToast = nil
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
             do {
+                // Import replaces everything. Keep what is here first, so
+                // restoring the wrong file can itself be undone. Fails
+                // harmlessly (noData) on an empty device.
+                try? AutoBackup.write(context: context, reason: .beforeRestore)
                 try BackupService.importBackup(from: url, context: context)
+                autoBackups = AutoBackup.entries()
                 backupBusyLabel = nil
                 backupToast = BackupBanner(isError: false, message: loc("backup.import_success"))
                 HapticManager.shared.success()
