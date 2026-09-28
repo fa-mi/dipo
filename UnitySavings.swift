@@ -544,6 +544,17 @@ final class UnitySavingsService {
             // 2. Invitee must be Royal (all participants are Royal).
             step = "read-user-plan"
             let userSnap = try await db.collection("users").document(toUid).getDocument()
+
+            // The entry must be the invitee's own. A DiPo ID derives from the
+            // account's social id, so an entry pointing someone else's ID at
+            // an account (squatted before the rules checked this) would send
+            // the invite — and its goal — to the wrong person.
+            let toSocialID = (idx["socialUserID"] as? String) ?? (userSnap.data()?["socialUserID"] as? String)
+            guard UserSession.dipoID(dipoID, belongsTo: toSocialID) else {
+                print("[Unity][invite] ✗ step=\(step): dipoIndex/\(dipoID) does not derive from the account it points at")
+                return .notFound
+            }
+
             let plan = userSnap.data()?["plan"] as? String ?? "free"
             print("[Unity][invite] ✓ plan check: users/\(toUid).plan='\(plan)'")
             if plan != "royal" {
@@ -613,7 +624,7 @@ final class UnitySavingsService {
                 "fromUid":    fromUid,
                 "fromName":   fromName,
                 "toUid":      toUid,
-                "toSocialId": idx["socialUserID"] as? String ?? "",
+                "toSocialId": toSocialID ?? "",
                 "status":     "pending",
                 "createdAt":  FieldValue.serverTimestamp(),
             ])

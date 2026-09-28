@@ -115,6 +115,16 @@ final class UserSession {
         return String(digest.prefix(8).map { alphabet[Int($0) % alphabet.count] })
     }
 
+    /// Whether a `dipoIndex` entry is genuine: the DiPo ID is the one derived
+    /// from the social id it points at. An entry that fails this names someone
+    /// else's ID — written before the Firestore rules recomputed the
+    /// derivation — so it must not be followed. firestore.rules and the Worker
+    /// apply the same check.
+    static func dipoID(_ dipoID: String, belongsTo socialID: String?) -> Bool {
+        guard let socialID, !socialID.isEmpty else { return false }
+        return Self.dipoID(from: socialID) == dipoID.uppercased()
+    }
+
     // MARK: - Keychain Keys
 
     private let kUserID   = "social_user_id"
