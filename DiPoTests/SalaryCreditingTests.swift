@@ -47,6 +47,27 @@ final class SalaryCreditingTests: XCTestCase {
         return schedule
     }
 
+    /// A payday that has already landed this month, and how many days ago to
+    /// create the schedule so it predates that payday by one day.
+    ///
+    /// Yesterday is not always the day the money lands: the engine pays early
+    /// when the day falls on a weekend or holiday (SalaryDateEngine.actualPayDate),
+    /// so a Sunday payday lands on the Friday before. Building the case from
+    /// "yesterday, created two days ago" put the real payday BEFORE creation on
+    /// every Monday, and the engine rightly refused to back-date it.
+    private func paydayBehindToday() throws -> (day: Int, createdDaysAgo: Int) {
+        let today = cal.startOfDay(for: Date())
+        let day = cal.component(.day, from: today) - 1
+        let payDate = cal.startOfDay(for: SalaryDateEngine.actualPayDate(
+            dayOfMonth: day,
+            month: cal.component(.month, from: today),
+            year: cal.component(.year, from: today)))
+        // Early in a month that opens with holidays, the pay date walks forward.
+        try XCTSkipIf(payDate > today, "This month's payday for day \(day) hasn't landed yet.")
+        let landedDaysAgo = cal.dateComponents([.day], from: payDate, to: today).day ?? 0
+        return (day, landedDaysAgo + 1)
+    }
+
     private var salaryCount: Int {
         ((try? context.fetch(FetchDescriptor<TxRecord>())) ?? [])
             .filter { $0.notes == "tx.note.salary_auto" }.count
@@ -62,7 +83,8 @@ final class SalaryCreditingTests: XCTestCase {
         // created before it.
         try XCTSkipIf(today < 3, "Needs a day that can have a payday behind it.")
         let card = makeCard()
-        _ = makeSchedule(card: card, day: today - 1, createdDaysAgo: 2)
+        let payday = try paydayBehindToday()
+        _ = makeSchedule(card: card, day: payday.day, createdDaysAgo: payday.createdDaysAgo)
 
         SalaryCreditEngine.processIfNeeded(context: context)
 
@@ -92,8 +114,9 @@ final class SalaryCreditingTests: XCTestCase {
         try XCTSkipIf(today < 3, "Needs a day that can have a payday behind it.")
         let bank = makeCard()
         let wallet = makeCard()
-        _ = makeSchedule(card: bank, day: today - 1, createdDaysAgo: 2)
-        _ = makeSchedule(card: wallet, day: today - 1, createdDaysAgo: 2)
+        let payday = try paydayBehindToday()
+        _ = makeSchedule(card: bank, day: payday.day, createdDaysAgo: payday.createdDaysAgo)
+        _ = makeSchedule(card: wallet, day: payday.day, createdDaysAgo: payday.createdDaysAgo)
 
         SalaryCreditEngine.processIfNeeded(context: context)
 
@@ -106,7 +129,8 @@ final class SalaryCreditingTests: XCTestCase {
         let today = cal.component(.day, from: Date())
         try XCTSkipIf(today < 3, "Needs a day that can have a payday behind it.")
         let card = makeCard()
-        _ = makeSchedule(card: card, day: today - 1, createdDaysAgo: 2)
+        let payday = try paydayBehindToday()
+        _ = makeSchedule(card: card, day: payday.day, createdDaysAgo: payday.createdDaysAgo)
 
         SalaryCreditEngine.processIfNeeded(context: context)
         SalaryCreditEngine.processIfNeeded(context: context)
@@ -119,7 +143,8 @@ final class SalaryCreditingTests: XCTestCase {
         let today = cal.component(.day, from: Date())
         try XCTSkipIf(today < 3, "Needs a day that can have a payday behind it.")
         let card = makeCard()
-        let schedule = makeSchedule(card: card, day: today - 1, createdDaysAgo: 2)
+        let payday = try paydayBehindToday()
+        let schedule = makeSchedule(card: card, day: payday.day, createdDaysAgo: payday.createdDaysAgo)
         schedule.autoRecord = false
 
         SalaryCreditEngine.processIfNeeded(context: context)
