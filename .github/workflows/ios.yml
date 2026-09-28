@@ -1,0 +1,73 @@
+# Builds the app and runs DiPoTests on every PR and on main.
+#
+# CLAUDE.md's "never boot the iOS Simulator" is about working sessions on
+# Fahmi's Mac; a throwaway CI runner booting one is the point of this job.
+#
+# The repo is public, so macOS minutes are free. Signing is off: nothing here
+# is installed on a device.
+name: iOS
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    runs-on: macos-26
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      # The app targets iOS 26.2, so the newest Xcode 26 on the image.
+      - name: Select Xcode
+        run: |
+          XCODE=$(ls -d /Applications/Xcode_26*.app | sort -V | tail -1)
+          sudo xcode-select -s "$XCODE"
+          xcodebuild -version
+
+      - name: Cache Swift packages
+        uses: actions/cache@v4
+        with:
+          path: .spm
+          key: spm-${{ runner.os }}-${{ hashFiles('DiPo.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
+
+      - name: Pick a simulator
+        id: sim
+        run: echo "udid=$(xcrun simctl list devices available -j | python3 ci/pick-simulator.py)" >> "$GITHUB_OUTPUT"
+
+      - name: Build and test
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -project DiPo.xcodeproj -scheme DiPo \
+            -destination "id=${{ steps.sim.outputs.udid }}" \
+            -clonedSourcePackagesDirPath .spm \
+            -resultBundlePath DiPo.xcresult \
+            -skipPackagePluginValidation -skipMacroValidation \
+            CODE_SIGNING_ALLOWED=NO \
+            2>&1 | tee xcodebuild.log \
+            | { grep -E '^(Test Suite|Test Case .*(passed|failed))|error:|\*\* (BUILD|TEST)' || true; }
+          # pipefail makes the step fail with xcodebuild's status; the grep
+          # group always succeeds, so it can't mask or cause a failure.
+
+      # The grep above keeps the step log readable; the failures in full.
+      - name: Summarise failures
+        if: failure()
+        run: |
+          grep -E 'error:|failed|BEGIN SchemaFingerprint|END SchemaFingerprint' xcodebuild.log | head -200 || true
+          sed -n '/BEGIN SchemaFingerprint.txt/,/END SchemaFingerprint.txt/p' xcodebuild.log | head -400 || true
+
+      - name: Upload results
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xcode-results
+          path: |
+            DiPo.xcresult
+            xcodebuild.log
+          retention-days: 7

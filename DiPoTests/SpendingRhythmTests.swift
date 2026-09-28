@@ -101,7 +101,11 @@ final class SpendingRhythmTests: XCTestCase {
     }
 
     func testTooFewSamplesSkipOutlierTest() {
-        var history = spread(200, 25_000, .food, over: 60)
+        // Cadence is measured over the WHOLE history's span, so the span sets
+        // which band four rows land in. Over 60 days they averaged one per
+        // ~15 days — episodic, and the test never reached the guard it names.
+        // Over 24 days (span 23) it is one per ~5.75: judged, not episodic.
+        var history = spread(200, 25_000, .food, over: 24)
         // Four "Other" rows: a cadence in the judged band but no distribution
         // worth testing against.
         for i in 0..<4 { history.append(tx(50_000, .other, daysAgo: 20 - i * 5)) }
