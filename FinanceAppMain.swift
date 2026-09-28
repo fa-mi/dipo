@@ -112,9 +112,10 @@ class AppDelegate: NSObject, UIApplicationDelegate,
     func messaging(_ messaging: Messaging, didReceiveRegistrationToken fcmToken: String?) {
         guard let token = fcmToken else { return }
         print("[DiPo] FCM token: \(token)")
+        // FCM calls this on EVERY launch, not only when the token changes.
+        let changed = UserDefaults.standard.string(forKey: "dipo_fcm_token") != token
         UserDefaults.standard.set(token, forKey: "dipo_fcm_token")
-        // Update token on any open tickets so admin can reach this device
-        Task { await FirebaseSupportService.shared.updateFCMToken(token) }
+        Task { await FirebaseSupportService.shared.updateFCMToken(token, changed: changed) }
     }
 
     // Show notification banner even when app is in foreground.

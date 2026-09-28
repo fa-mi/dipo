@@ -238,9 +238,21 @@ final class FirebaseSupportService {
 
     // MARK: - Update FCM token on all open tickets when token refreshes
 
-    func updateFCMToken(_ token: String) async {
+    /// `changed` is false on the usual launch, when FCM hands back the same
+    /// token as before. Copying it onto every ticket then meant downloading
+    /// all of them — old tickets with their inline screenshots — and writing
+    /// each one, on every app open, to change nothing. The admin panel reads
+    /// device_tokens first now, so the tickets only need the new token when
+    /// there is one.
+    func updateFCMToken(_ token: String, changed: Bool) async {
         let userId = UserSession.shared.userID ?? "anonymous"
         guard userId != "anonymous" else { return }
+        // The per-user registry is one small write, and also carries the
+        // plan, language and email the admin panel targets by.
+        guard changed else {
+            await registerDeviceToken(token)
+            return
+        }
         do {
             let snap = try await db.collection("support_tickets")
                 .whereField("userId", isEqualTo: userId)
