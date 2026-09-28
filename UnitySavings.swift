@@ -501,6 +501,9 @@ final class UnitySavingsService {
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        for (field, value) in await WorkerAuth.headers() {
+            req.setValue(value, forHTTPHeaderField: field)
+        }
         req.httpBody = try? JSONSerialization.data(withJSONObject: ["inviteId": inviteId])
         // Short timeout: this is a best-effort push. It must never make the
         // "Send invite" button spin — the default 60s timeout previously kept

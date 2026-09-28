@@ -225,6 +225,8 @@ struct DiPoApp: App {
     }()
 
     init() {
+        // Must precede configure(): Firebase reads the provider factory then.
+        AppCheckSetup.install()
         FirebaseApp.configure()
 
         if let path = Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist"),

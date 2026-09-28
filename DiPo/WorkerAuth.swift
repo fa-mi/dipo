@@ -21,6 +21,12 @@ enum WorkerAuth {
            let token = try? await user.getIDToken() {
             headers["Authorization"] = "Bearer \(token)"
         }
+        // Proof the request comes from the real app (see AppCheckSetup).
+        // Nil until FirebaseAppCheck is linked; the Worker only logs its
+        // absence while REQUIRE_APP_CHECK is off.
+        if let appCheck = await AppCheckSetup.token() {
+            headers["X-Firebase-AppCheck"] = appCheck
+        }
         return headers
     }
 }

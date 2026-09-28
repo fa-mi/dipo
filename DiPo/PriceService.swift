@@ -89,6 +89,9 @@ enum PriceService {
         var req = URLRequest(url: url, timeoutInterval: 12)
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        for (field, value) in await WorkerAuth.headers() {
+            req.setValue(value, forHTTPHeaderField: field)
+        }
         req.httpBody = try? JSONSerialization.data(withJSONObject: ["items": items])
 
         do {
