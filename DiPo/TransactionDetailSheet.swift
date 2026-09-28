@@ -491,7 +491,7 @@ struct TransactionDetailSheet: View {
                 .padding(.horizontal, 22)
 
             Button { saveEdits() } label: {
-                let canSave = (Double(editAmount) ?? 0) > 0
+                let canSave = NumberInput.amount(editAmount) > 0
                 HStack(spacing: 10) {
                     Image(systemName: "checkmark.circle.fill").font(.system(.body))
                     Text(loc("common.save")).font(.system(.callout, weight: .bold))
@@ -502,7 +502,7 @@ struct TransactionDetailSheet: View {
                             in: RoundedRectangle(cornerRadius: AppRadius.lg))
             }
             .buttonStyle(ScaleButtonStyle())
-            .disabled((Double(editAmount) ?? 0) <= 0)
+            .disabled(NumberInput.amount(editAmount) <= 0)
             .padding(.horizontal, 22)
             .padding(.top, 4)
 
@@ -514,7 +514,7 @@ struct TransactionDetailSheet: View {
         editName     = tx.name
         // "20000", not "20000.0" — the hero field shows this at 34pt.
         let a = abs(tx.amount)
-        editAmount   = a.rounded() == a ? String(Int64(a)) : String(a)
+        editAmount   = NumberInput.text(a)
         editCurrency = tx.currency
         editType     = tx.amount >= 0 ? .income : .expense
         editCategory = tx.category
@@ -523,7 +523,8 @@ struct TransactionDetailSheet: View {
     }
 
     private func saveEdits() {
-        guard let amt = Double(editAmount), amt > 0 else { return }
+        let amt = NumberInput.amount(editAmount)
+        guard amt > 0 else { return }
         tx.name      = editName.trimmingCharacters(in: .whitespaces)
         tx.amount    = editType == .expense ? -abs(amt) : abs(amt)
         tx.currency  = editCurrency

@@ -15,7 +15,7 @@ final class InvestmentInputTests: XCTestCase {
         XCTAssertEqual(InvestmentInput.number("2.251.774"), 2_251_774)
         XCTAssertEqual(InvestmentInput.number("0,1308"), 0.1308, accuracy: 1e-12)
         XCTAssertEqual(InvestmentInput.number("1.234.567,89"), 1_234_567.89, accuracy: 1e-6)
-        XCTAssertEqual(InvestmentInput.number("Rp 308.426"), 0, "letters are not a number")
+        XCTAssertEqual(InvestmentInput.number("Rp 308.426"), 308_426, "a currency marker copied along is ignored")
         XCTAssertEqual(InvestmentInput.number(" 308 426 "), 308_426)
     }
 

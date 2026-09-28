@@ -195,7 +195,7 @@ final class SalaryViewModel {
     func loadForEdit(_ s: SalarySchedule, cards: [BankCard]) {
         formLabel  = s.label
         // "10000000", not "10000000.0" — the amount field shows it at 34pt.
-        formAmount = s.amount.rounded() == s.amount ? String(Int64(s.amount)) : String(s.amount)
+        formAmount = NumberInput.text(s.amount)
         formDay    = s.dayOfMonth
         formCardID = s.cardID
         formAutoRecord = s.autoRecord
@@ -213,7 +213,7 @@ final class SalaryViewModel {
         guard !formLabel.trimmingCharacters(in: .whitespaces).isEmpty else {
             formError = loc("salary.error.label"); return false
         }
-        guard let amt = Double(formAmount), amt > 0 else {
+        guard NumberInput.amount(formAmount) > 0 else {
             formError = loc("salary.error.amount"); return false
         }
         guard formCardID != nil else {
@@ -1381,7 +1381,7 @@ struct SalaryFormSheet: View {
 
     private func save() {
         guard vm.validate() else { HapticManager.shared.error(); return }
-        let amount = Double(vm.formAmount) ?? 0
+        let amount = NumberInput.amount(vm.formAmount)
         if let existing = vm.editingSchedule {
             existing.label      = vm.formLabel.trimmingCharacters(in: .whitespaces)
             existing.amount     = amount

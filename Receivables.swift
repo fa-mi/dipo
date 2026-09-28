@@ -124,7 +124,7 @@ final class ReceivableViewModel {
 
     func loadForEdit(_ r: Receivable) {
         formName = r.personName
-        formAmount = String(r.amount)
+        formAmount = NumberInput.text(r.amount)
         formCurrency = r.currency
         formNotes = r.notes
         formHasDueDate = r.dueDate != nil
@@ -139,7 +139,7 @@ final class ReceivableViewModel {
         guard !formName.trimmingCharacters(in: .whitespaces).isEmpty else {
             formError = loc("receivable.error_name"); return false
         }
-        guard let a = Double(formAmount), a > 0 else {
+        guard NumberInput.amount(formAmount) > 0 else {
             formError = loc("receivable.error_amount"); return false
         }
         formError = nil
@@ -492,7 +492,7 @@ struct ReceivableFormSheet: View {
     }
 
     private func save() {
-        let amount = Double(vm.formAmount) ?? 0
+        let amount = NumberInput.amount(vm.formAmount)
         let name = vm.formName.trimmingCharacters(in: .whitespaces)
 
         if let r = vm.editing {
@@ -570,7 +570,7 @@ struct RepaymentSheet: View {
                             .padding(.horizontal, 22)
 
                         Button {
-                            amountText = String(remaining)
+                            amountText = NumberInput.text(remaining)
                         } label: {
                             Text(loc("receivable.pay_full")).font(.system(.caption, weight: .semibold))
                                 .foregroundStyle(AppTheme.accent)
@@ -605,12 +605,13 @@ struct RepaymentSheet: View {
     }
 
     private var canSave: Bool {
-        guard let a = Double(amountText), a > 0, cardID != nil else { return false }
+        guard NumberInput.amount(amountText) > 0, cardID != nil else { return false }
         return true
     }
 
     private func record() {
-        guard let amount = Double(amountText), amount > 0,
+        let amount = NumberInput.amount(amountText)
+        guard amount > 0,
               let id = cardID, let card = cards.first(where: { $0.id == id }) else { return }
 
         // Money returning is not new income — same `.transfer` reasoning as the

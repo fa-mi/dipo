@@ -355,34 +355,11 @@ struct ReceiptPreviewSheet: View {
 
     private func formatAmountForEditing(_ amount: Double, currency: String) -> String {
         let noDecimals = ["IDR", "JPY", "KRW", "VND"]
-        if noDecimals.contains(currency.uppercased()) {
-            return String(Int(amount))
-        }
-        return String(format: "%.2f", amount)
+        return NumberInput.text(noDecimals.contains(currency.uppercased()) ? amount.rounded() : amount)
     }
 
-    private func parseAmount(_ text: String) -> Double {
-        let cleaned = text.replacingOccurrences(of: " ", with: "")
-        let lastDot = cleaned.lastIndex(of: ".")
-        let lastComma = cleaned.lastIndex(of: ",")
-        var normalized = cleaned
-        if let dot = lastDot, let comma = lastComma {
-            if comma > dot {
-                normalized = cleaned.replacingOccurrences(of: ".", with: "")
-                normalized = normalized.replacingOccurrences(of: ",", with: ".")
-            } else {
-                normalized = cleaned.replacingOccurrences(of: ",", with: "")
-            }
-        } else if cleaned.contains(",") && !cleaned.contains(".") {
-            let parts = cleaned.split(separator: ",")
-            if parts.count == 2, parts[1].count == 3 {
-                normalized = cleaned.replacingOccurrences(of: ",", with: "")
-            } else {
-                normalized = cleaned.replacingOccurrences(of: ",", with: ".")
-            }
-        }
-        return Double(normalized) ?? 0
-    }
+    /// "25.000" is twenty-five thousand here as on every other amount field.
+    private func parseAmount(_ text: String) -> Double { NumberInput.amount(text) }
 
     // MARK: - Save
 

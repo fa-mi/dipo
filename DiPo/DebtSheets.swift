@@ -161,11 +161,7 @@ struct DebtFormSheet: View {
                         .opacity(appeared ? 1 : 0).animation(AppMotion.appear, value: appeared)
 
                         // Payoff preview
-                        if let bal = Double(vm.formBalance.replacingOccurrences(of: ",", with: ".")),
-                           let minPay = Double(vm.formMinPayment.replacingOccurrences(of: ",", with: ".")),
-                           let rate = Double(vm.formInterestRate.replacingOccurrences(of: ",", with: ".")), bal > 0, minPay > 0 {
-                            let previewDebt = DebtRecord(name: "Preview", totalAmount: bal, currentBalance: bal,
-                                                          minimumPayment: minPay, annualInterestRate: rate, dueDayOfMonth: 1)
+                        if let previewDebt = payoffPreviewDebt {
                             VStack(alignment: .leading, spacing: 8) {
                                 Text(loc("debt.payoff_preview")).font(.system(.footnote)).foregroundStyle(AppTheme.textSecondary)
                                 HStack(spacing: 20) {
@@ -206,7 +202,7 @@ struct DebtFormSheet: View {
                         // WishlistView.
                         let canSave: Bool = {
                             let nameOK = !vm.formName.trimmingCharacters(in: .whitespaces).isEmpty
-                            let balOK  = (Double(vm.formBalance.replacingOccurrences(of: ",", with: ".")) ?? 0) > 0
+                            let balOK  = NumberInput.amount(vm.formBalance) > 0
                             return nameOK && balOK
                         }()
                         Button { save() } label: {
@@ -239,14 +235,24 @@ struct DebtFormSheet: View {
         .onAppear { withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.1)) { appeared = true } }
     }
 
+    /// A throwaway record for the payoff preview, once balance, minimum
+    /// payment and rate are all filled in.
+    private var payoffPreviewDebt: DebtRecord? {
+        let bal = NumberInput.amount(vm.formBalance)
+        let minPay = NumberInput.amount(vm.formMinPayment)
+        guard bal > 0, minPay > 0, NumberInput.isNumber(vm.formInterestRate) else { return nil }
+        return DebtRecord(name: "Preview", totalAmount: bal, currentBalance: bal,
+                          minimumPayment: minPay, annualInterestRate: NumberInput.decimal(vm.formInterestRate),
+                          dueDayOfMonth: 1)
+    }
+
     private func save() {
         guard vm.validate() else { HapticManager.shared.error(); return }
-        // Normalize comma → dot for locale-safe parsing
-        let normalize: (String) -> String = { $0.replacingOccurrences(of: ",", with: ".") }
-        let bal   = Double(normalize(vm.formBalance)) ?? 0
-        let min   = Double(normalize(vm.formMinPayment)) ?? 0
-        let rate  = Double(normalize(vm.formInterestRate)) ?? 0
-        let total = Double(normalize(vm.formTotal)).flatMap { $0 > 0 ? $0 : nil } ?? bal
+        let bal   = NumberInput.amount(vm.formBalance)
+        let min   = NumberInput.amount(vm.formMinPayment)
+        let rate  = NumberInput.decimal(vm.formInterestRate)
+        let typedTotal = NumberInput.amount(vm.formTotal)
+        let total = typedTotal > 0 ? typedTotal : bal
 
         if let existing = vm.editingDebt {
             existing.name = vm.formName.trimmingCharacters(in: .whitespaces)
@@ -287,7 +293,7 @@ struct DebtPaymentSheet: View {
     @State private var note         = ""
     @State private var errorMsg: String? = nil
 
-    private var amount: Double { Double(amountText) ?? 0 }
+    private var amount: Double { NumberInput.amount(amountText) }
 
     private var selectedCard: BankCard? {
         guard !cards.isEmpty else { return nil }
@@ -380,7 +386,7 @@ struct DebtPaymentSheet: View {
                             amount: debt.minimumPayment,
                             currency: debt.currency,
                             color: AppTheme.orange
-                        ) { amountText = String(debt.minimumPayment) }
+                        ) { amountText = NumberInput.text(debt.minimumPayment) }
 
                         // Full balance
                         QuickPayButton(
@@ -388,7 +394,7 @@ struct DebtPaymentSheet: View {
                             amount: debt.currentBalance,
                             currency: debt.currency,
                             color: AppTheme.accent
-                        ) { amountText = String(debt.currentBalance) }
+                        ) { amountText = NumberInput.text(debt.currentBalance) }
 
                         // Double minimum
                         if debt.minimumPayment * 2 < debt.currentBalance {
@@ -397,7 +403,7 @@ struct DebtPaymentSheet: View {
                                 amount: debt.minimumPayment * 2,
                                 currency: debt.currency,
                                 color: AppTheme.blue
-                            ) { amountText = String(debt.minimumPayment * 2) }
+                            ) { amountText = NumberInput.text(debt.minimumPayment * 2) }
                         }
                     }
                     .padding(.horizontal, 22)

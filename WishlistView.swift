@@ -176,8 +176,7 @@ extension SavingsGoal {
 enum SavingsNumber {
     static func edit(_ v: Double, currency: String) -> String {
         guard v != 0 else { return "" }
-        if v.rounded() == v { return String(Int64(v)) }
-        return String(v)
+        return NumberInput.text(v)
     }
 }
 
@@ -719,7 +718,7 @@ struct DepositSheet: View {
     @State private var sourceIndex = 0
     @Query(sort: \BankCard.sortOrder) private var cards: [BankCard]
 
-    var amount: Double { Double(amountText) ?? 0 }
+    var amount: Double { NumberInput.amount(amountText) }
     /// Cash accounts only — a goal can't be funded from a credit line.
     private var fundingCards: [BankCard] { cards.filter { !$0.isCreditCard } }
     private var selectedCard: BankCard? {
@@ -1108,15 +1107,15 @@ struct GoalFormSheet: View {
     private var isEditing: Bool { editGoal != nil }
 
     private var monthsPreview: Int? {
-        guard let target = Double(targetAmount),
-              let saved  = Double(savedAmount.isEmpty ? "0" : savedAmount),
-              let mo     = Double(monthly),
-              mo > 0, target > saved else { return nil }
+        let target = NumberInput.amount(targetAmount)
+        let saved  = NumberInput.amount(savedAmount)
+        let mo     = NumberInput.amount(monthly)
+        guard mo > 0, target > saved else { return nil }
         return Int(ceil((target - saved) / mo))
     }
 
     private var canSave: Bool {
-        !name.trimmingCharacters(in: .whitespaces).isEmpty && (Double(targetAmount) ?? 0) > 0
+        !name.trimmingCharacters(in: .whitespaces).isEmpty && NumberInput.amount(targetAmount) > 0
     }
 
     var body: some View {
@@ -1306,9 +1305,10 @@ struct GoalFormSheet: View {
 
     private func save() {
         guard !name.trimmingCharacters(in: .whitespaces).isEmpty else { errorMsg = loc("savings.error.name"); return }
-        guard let target = Double(targetAmount), target > 0 else { errorMsg = loc("savings.error.amount"); return }
-        let saved   = Double(savedAmount) ?? 0
-        let monthly = Double(monthly) ?? 0
+        let target = NumberInput.amount(targetAmount)
+        guard target > 0 else { errorMsg = loc("savings.error.amount"); return }
+        let saved   = NumberInput.amount(savedAmount)
+        let monthly = NumberInput.amount(monthly)
 
         if let g = editGoal {
             g.name = name.trimmingCharacters(in: .whitespaces); g.emoji = emoji
@@ -1627,7 +1627,7 @@ struct RecordPastDepositSheet: View {
     @State private var sourceIndex = 0
     @State private var date = Date()
 
-    private var amount: Double { Double(amountText.replacingOccurrences(of: ",", with: ".")) ?? 0 }
+    private var amount: Double { NumberInput.amount(amountText) }
     private var fundingCards: [BankCard] { cards.filter { !$0.isCreditCard } }
     private var selectedCard: BankCard? {
         fundingCards.indices.contains(sourceIndex) ? fundingCards[sourceIndex] : fundingCards.first

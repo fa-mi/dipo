@@ -338,7 +338,8 @@ struct PendingRowEditor: View {
     }
 
     private func save() {
-        let magnitude = abs(Double(amountText.replacingOccurrences(of: ",", with: ".")) ?? abs(item.amount))
+        let typed = NumberInput.amount(amountText)
+        let magnitude = NumberInput.isNumber(amountText) ? typed : abs(item.amount)
         item.amount = isExpense ? -magnitude : magnitude
         try? context.save()
         HapticManager.shared.success()

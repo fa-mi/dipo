@@ -825,25 +825,10 @@ enum AmountInputHelper {
     /// or `nil` if the input doesn't yet form a parseable positive number.
     /// Caller decides whether to render the label.
     static func preview(_ raw: String, currency: String) -> String? {
-        // Accept both ID-style ("5000,00") and US-style ("5000.00") decimals.
-        // Strip thousand-noise the user may have typed but keep the LAST
-        // separator as the decimal hint.
-        let cleaned = raw.replacingOccurrences(of: " ", with: "")
-        let lastDot = cleaned.lastIndex(of: ".")
-        let lastComma = cleaned.lastIndex(of: ",")
-        var normalized = cleaned
-        if let dot = lastDot, let comma = lastComma {
-            // Whichever appears LAST is the decimal — drop the other as noise.
-            if comma > dot {
-                normalized = cleaned.replacingOccurrences(of: ".", with: "")
-                normalized = normalized.replacingOccurrences(of: ",", with: ".")
-            } else {
-                normalized = cleaned.replacingOccurrences(of: ",", with: "")
-            }
-        } else if cleaned.contains(",") {
-            normalized = cleaned.replacingOccurrences(of: ",", with: ".")
-        }
-        guard let value = Double(normalized), value > 0 else { return nil }
+        // The same reading the field's save uses, so what is echoed here is
+        // exactly what gets stored ("25.000" → Rp 25.000, not Rp 25).
+        let value = NumberInput.amount(raw)
+        guard value > 0 else { return nil }
         return CurrencyManager.shared.formatted(value, currency: currency)
     }
 }

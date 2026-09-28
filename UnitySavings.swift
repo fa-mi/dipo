@@ -1184,7 +1184,7 @@ struct AddContributionSheet: View {
     @State private var saving = false
     @State private var sourceCardID: UUID? = nil
 
-    private var amount: Double { Double(amountText.replacingOccurrences(of: ",", with: ".")) ?? 0 }
+    private var amount: Double { NumberInput.amount(amountText) }
     /// Contributing to a shared goal moves the user's OWN money out of their
     /// OWN account — it must leave the same transaction trail as any other
     /// outflow, otherwise the spending record (and every analysis built on it)
@@ -1395,7 +1395,7 @@ struct SharedGoalFormSheet: View {
     @State private var saving = false
 
     private let emojiChoices = ["🎯", "✈️", "🏠", "🎁", "💍", "🚗", "🕋", "🎓", "💻", "🏖️", "👶", "🎂"]
-    private var amount: Double { Double(amountText.replacingOccurrences(of: ",", with: ".")) ?? 0 }
+    private var amount: Double { NumberInput.amount(amountText) }
     private var canSave: Bool { !title.trimmingCharacters(in: .whitespaces).isEmpty && amount > 0 && !saving }
 
     var body: some View {

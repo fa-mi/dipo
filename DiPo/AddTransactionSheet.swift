@@ -207,7 +207,7 @@ struct AddTransactionSheet: View {
         var icon: String { self == .expense ? "arrow.up.circle.fill" : "arrow.down.circle.fill" }
     }
 
-    var amount: Double { Double(amountText) ?? 0 }
+    var amount: Double { NumberInput.amount(amountText) }
     var isValid: Bool  { !name.trimmingCharacters(in: .whitespaces).isEmpty && amount > 0 }
 
     @ViewBuilder
