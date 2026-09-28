@@ -3,6 +3,7 @@ import SwiftUI      // `withAnimation` — phase changes drive the progress scre
 import SwiftData
 import FirebaseAuth
 import FirebaseFirestore
+import CryptoKit
 
 // MARK: - Web Sync (Statistics Dashboard)
 //
@@ -99,6 +100,33 @@ final class WebSyncService {
     }
     private static let lastSyncKey = "web_sync_last_synced_at"
 
+    /// The code the dashboard asks for, from the last sync on this device.
+    ///
+    /// A DiPo ID is shared on purpose (Tabungan Bersama invites find people by
+    /// it), so it can't be all that unlocks a day of someone's balances and
+    /// transactions. Every sync makes a fresh code, the snapshot stores only
+    /// its hash, and the Worker serves the snapshot only to a page that sends
+    /// the code; five wrong ones lock it until the next sync.
+    private(set) var accessCode: String? {
+        get { UserDefaults.standard.string(forKey: Self.accessCodeKey) }
+        set { UserDefaults.standard.set(newValue, forKey: Self.accessCodeKey) }
+    }
+    private static let accessCodeKey = "web_sync_access_code"
+
+    /// Six characters from the DiPo ID alphabet (no 0/O/1/I, easy to read out
+    /// and type): ~1.07 billion codes.
+    static func makeAccessCode() -> String {
+        let alphabet = Array("ABCDEFGHJKLMNPQRSTUVWXYZ23456789")
+        var rng = SystemRandomNumberGenerator()
+        return String((0..<6).map { _ in alphabet[Int(rng.next(upperBound: UInt32(alphabet.count)))] })
+    }
+
+    /// Hex SHA-256 of "uid:CODE" — what the Worker recomputes (dashboard.js
+    /// in dipo-backend, accessCodeHash).
+    nonisolated static func accessCodeHash(uid: String, code: String) -> String {
+        SHA256.hash(data: Data("\(uid):\(code)".utf8)).map { String(format: "%02x", $0) }.joined()
+    }
+
     /// How long a snapshot stays readable before the dashboard shows its
     /// "expired, sync again" screen.
     ///
@@ -156,10 +184,15 @@ final class WebSyncService {
         // `setData` with NO merge — a sync REPLACES the previous snapshot. Merge
         // would leave last week's transactions sitting under this week's, and
         // the dashboard would quietly draw a blend of two moments.
+        // A fresh code each sync; a replaced snapshot also clears any lock.
+        let code = Self.makeAccessCode()
         let doc: [String: Any] = [
-            "payload":   payload,
-            "syncedAt":  ISO8601DateFormatter().string(from: now),
-            "expiresAt": ISO8601DateFormatter().string(from: expires),
+            "payload":        payload,
+            "syncedAt":       ISO8601DateFormatter().string(from: now),
+            "expiresAt":      ISO8601DateFormatter().string(from: expires),
+            "accessCodeHash": Self.accessCodeHash(uid: uid, code: code),
+            "codeAttempts":   0,
+            "codeLocked":     false,
         ]
 
         do {
@@ -183,6 +216,7 @@ final class WebSyncService {
             }
 
             lastSyncedAt = now
+            accessCode = code
             state = .success(now)
             HapticManager.shared.success()
             ActionFeedbackCenter.shared.webSynced(at: now)
@@ -559,6 +593,7 @@ final class WebSyncService {
         do {
             try await Firestore.firestore().collection("webSync").document(uid).delete()
             lastSyncedAt = nil
+            accessCode = nil
             state = .idle
             HapticManager.shared.warning()
             ActionFeedbackCenter.shared.removed(loc("websync.revoked"))
