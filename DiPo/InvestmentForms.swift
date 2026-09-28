@@ -189,22 +189,110 @@ private struct PlainField: View {
     }
 }
 
-/// Parse a user-typed number tolerantly (accepts "1.000.000" and "1,5").
-private func parseNumber(_ s: String) -> Double {
-    let cleaned = s.replacingOccurrences(of: " ", with: "")
-    // If both separators present, assume "." thousands + "," decimal (id-ID).
-    if cleaned.contains(",") && cleaned.contains(".") {
-        return Double(cleaned.replacingOccurrences(of: ".", with: "")
-                             .replacingOccurrences(of: ",", with: ".")) ?? 0
+/// Parse a user-typed number — see InvestmentInput.number for the rules.
+private func parseNumber(_ s: String) -> Double { InvestmentInput.number(s) }
+
+// MARK: - Price mode, derived figures, gold check
+//
+// Unit-based instruments ask for a price, and the person may know it either
+// per unit (a broker's "avg cost") or only as a total (a gold app's balance).
+// Both are accepted; the lot always stores the per-unit price.
+
+/// A row of capsule choices, the same look as the lot-kind picker.
+private struct ChoiceChips<Option: Hashable>: View {
+    let options: [Option]
+    let title: (Option) -> String
+    @Binding var selection: Option
+    /// Fill of an unselected chip — the ground it sits on decides it.
+    var idle: Color = AppTheme.bg
+    var body: some View {
+        HStack(spacing: 8) {
+            ForEach(options, id: \.self) { o in
+                Button {
+                    HapticManager.shared.tap()
+                    withAnimation(.spring(response: 0.3)) { selection = o }
+                } label: {
+                    Text(title(o))
+                        .font(.system(.caption, weight: .semibold))
+                        .foregroundStyle(selection == o ? AppTheme.onVividFill : AppTheme.textSecondary)
+                        .padding(.horizontal, 14).padding(.vertical, 8)
+                        .background((selection == o ? AppTheme.accent : idle), in: Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+            Spacer(minLength: 0)
+        }
     }
-    if cleaned.contains(",") {
-        return Double(cleaned.replacingOccurrences(of: ",", with: ".")) ?? 0
+}
+
+private struct PriceModeChips: View {
+    let unitLabel: String
+    @Binding var mode: InvestmentInput.PriceMode
+    var idle: Color = AppTheme.bg
+    var body: some View {
+        ChoiceChips(options: InvestmentInput.PriceMode.allCases, title: {
+            $0 == .perUnit ? String(format: loc("invest.price_mode.per_unit"), unitLabel)
+                           : loc("invest.price_mode.total")
+        }, selection: $mode, idle: idle)
     }
-    // Only dots: could be thousands ("1.000.000") or a decimal ("1.5"). Treat a
-    // single dot with ≤2 trailing digits as decimal, otherwise thousands.
-    let parts = cleaned.split(separator: ".")
-    if parts.count == 2 && parts[1].count <= 2 { return Double(cleaned) ?? 0 }
-    return Double(cleaned.replacingOccurrences(of: ".", with: "")) ?? 0
+}
+
+/// The other half of what was typed: the per-unit price behind a total, or
+/// the total behind a per-unit price — so the figure the app will use is on
+/// screen before it is saved.
+private struct DerivedLine: View {
+    let text: String
+    var body: some View {
+        Text(text).font(.system(.caption, weight: .medium))
+            .foregroundStyle(AppTheme.textSecondary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// Shown when a per-gram gold price is off by an order of magnitude — most
+/// often a total typed where a per-gram price belongs. It warns, never blocks.
+private struct GoldPriceWarning: View {
+    let perGram: Double
+    let currency: String
+    /// The one-tap fix, when there is one: switch the field to "Total", or put
+    /// in the per-gram price the total works out to.
+    var fixTitle: String? = nil
+    var fix: (() -> Void)? = nil
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill").font(.system(.caption))
+            VStack(alignment: .leading, spacing: 8) {
+                Text(String(format: loc("invest.gold_price_warning"), investMoney(perGram, currency)))
+                    .font(.system(.caption, weight: .medium))
+                    .fixedSize(horizontal: false, vertical: true)
+                if let fixTitle, let fix {
+                    Button {
+                        HapticManager.shared.tap()
+                        withAnimation(.spring(response: 0.3)) { fix() }
+                    } label: {
+                        Text(fixTitle).font(.system(.caption, weight: .bold))
+                            .padding(.horizontal, 12).padding(.vertical, 6)
+                            .background(AppTheme.amber.opacity(0.18), in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .foregroundStyle(AppTheme.amber)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 12).padding(.vertical, 10)
+        .background(AppTheme.amber.opacity(0.12), in: RoundedRectangle(cornerRadius: AppRadius.md))
+    }
+}
+
+/// The per-unit price behind a price field. A total paid includes the fee and
+/// a total received is net of it, so the fee is taken out (or added back)
+/// before spreading; the lot's cost then comes back to exactly the total.
+private func lotUnitPrice(_ entered: Double, units: Double, fee: Double,
+                          mode: InvestmentInput.PriceMode, isSell: Bool) -> Double {
+    guard mode == .total else { return entered }
+    let gross = isSell ? entered + fee : max(entered - fee, 0)
+    return InvestmentInput.perUnitPrice(gross, units: units, mode: .total)
 }
 
 // MARK: - Add holding (creates the holding + its first purchase)
@@ -226,14 +314,28 @@ struct AddHoldingSheet: View {
     @State private var amount = ""       // amount-based
     @State private var currentValue = "" // amount-based
     @State private var date = Date()
+    /// Gold apps show a rupiah total, brokers a per-share price; gold starts
+    /// on the total because that is the number its apps put in front of you.
+    @State private var priceMode: InvestmentInput.PriceMode = .total
+    @State private var market: StockMarket = .idx
 
-    private var cur: String { CurrencyManager.shared.preferredCurrency }
-    private var curSymbol: String { cur == "IDR" ? "Rp" : cur }
+    /// A stock is kept in its market's currency (a US share in dollars, as the
+    /// broker shows it); everything else in the preferred currency.
+    private var cur: String { type == .stock ? market.currency : CurrencyManager.shared.preferredCurrency }
+    private var curSymbol: String { CurrencyManager.symbol(for: cur) }
+
+    private var unitsValue: Double { parseNumber(units) }
+    private var buyUnitPrice: Double {
+        lotUnitPrice(parseNumber(buyPrice), units: unitsValue, fee: parseNumber(fee), mode: priceMode, isSell: false)
+    }
+    private var currentUnitPrice: Double {
+        InvestmentInput.perUnitPrice(parseNumber(current), units: unitsValue, mode: priceMode)
+    }
 
     private var canSave: Bool {
         guard !name.trimmingCharacters(in: .whitespaces).isEmpty else { return false }
         if type.isAmountBased { return parseNumber(amount) > 0 }
-        return parseNumber(units) > 0 && parseNumber(buyPrice) > 0
+        return unitsValue > 0 && buyUnitPrice > 0
     }
 
     var body: some View {
@@ -246,8 +348,24 @@ struct AddHoldingSheet: View {
                     groupCard {
                         PlainField(label: loc("invest.field.name"), placeholder: loc("invest.field.name_ph"),
                                    bg: AppTheme.bg, text: $name)
+                        if type == .stock {
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text(loc("invest.market")).font(.system(.caption, weight: .medium))
+                                    .foregroundStyle(AppTheme.textSecondary)
+                                ChoiceChips(options: StockMarket.allCases,
+                                            title: { loc("invest.market.\($0.rawValue)") },
+                                            selection: $market)
+                                if market == .us {
+                                    Text(loc("invest.market.us_hint")).font(.system(.caption2))
+                                        .foregroundStyle(AppTheme.textSecondary.opacity(0.85))
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                            }
+                        }
                         if type.supportsAutoPrice {
-                            PlainField(label: loc("invest.field.symbol"), placeholder: loc("invest.field.symbol_ph"),
+                            PlainField(label: loc("invest.field.symbol"),
+                                       placeholder: loc(type == .stock && market == .us
+                                                        ? "invest.field.symbol_ph_us" : "invest.field.symbol_ph"),
                                        bg: AppTheme.bg, text: $symbol)
                         }
                     }
@@ -262,6 +380,7 @@ struct AddHoldingSheet: View {
                                            hint: loc("invest.field.current_hint"), bg: AppTheme.bg, text: $currentValue)
                             }
                         } else {
+                            PriceModeChips(unitLabel: type.unitLabel, mode: $priceMode)
                             // Two columns of equal width, aligned at the top.
                             // Without the explicit width an HStack hands each
                             // child its IDEAL width, and the long hint under
@@ -272,19 +391,39 @@ struct AddHoldingSheet: View {
                                 MoneyField(label: loc("invest.field.units"), suffix: type.unitLabel,
                                            hint: loc("invest.field.units_hint"), bg: AppTheme.bg, text: $units)
                                     .frame(maxWidth: .infinity)
-                                MoneyField(label: loc("invest.field.price"), prefix: curSymbol,
-                                           hint: loc("invest.field.price_hint"), bg: AppTheme.bg, text: $buyPrice)
+                                MoneyField(label: buyLabel, prefix: curSymbol,
+                                           hint: loc(priceMode == .total ? "invest.field.total_paid_hint"
+                                                                         : "invest.field.price_hint"),
+                                           bg: AppTheme.bg, text: $buyPrice)
                                     .frame(maxWidth: .infinity)
                             }
                             MoneyField(label: loc("invest.field.fee"), prefix: curSymbol, bg: AppTheme.bg, text: $fee)
+                            if let line = derivedLine(entered: parseNumber(buyPrice), unitPrice: buyUnitPrice) {
+                                DerivedLine(text: line)
+                            }
+                            if type == .gold, InvestmentInput.goldPriceLooksWrong(perGram: buyUnitPrice, currency: cur) {
+                                GoldPriceWarning(perGram: buyUnitPrice, currency: cur,
+                                                 fixTitle: priceMode == .perUnit ? loc("invest.gold_as_total") : nil,
+                                                 fix: { priceMode = .total })
+                            }
                             // Auto-priced instruments fetch the current price themselves,
                             // so there's nothing to type — say so instead of asking.
                             if type.supportsAutoPrice {
                                 autoNote
                             } else {
-                                MoneyField(label: loc("invest.field.current"),
+                                MoneyField(label: currentLabel,
                                            placeholder: buyPrice.isEmpty ? "0" : buyPrice, prefix: curSymbol,
-                                           hint: loc("invest.field.current_hint"), bg: AppTheme.bg, text: $current)
+                                           hint: currentHint, bg: AppTheme.bg, text: $current)
+                                if parseNumber(current) > 0,
+                                   let line = derivedLine(entered: parseNumber(current), unitPrice: currentUnitPrice) {
+                                    DerivedLine(text: line)
+                                }
+                                if type == .gold, !current.isEmpty,
+                                   InvestmentInput.goldPriceLooksWrong(perGram: currentUnitPrice, currency: cur) {
+                                    GoldPriceWarning(perGram: currentUnitPrice, currency: cur,
+                                                     fixTitle: priceMode == .perUnit ? loc("invest.gold_as_total") : nil,
+                                                     fix: { priceMode = .total })
+                                }
                             }
                         }
                     }
@@ -302,6 +441,7 @@ struct AddHoldingSheet: View {
             .background(AppTheme.bg)
             .navigationTitle(loc("invest.add_holding"))
             .navigationBarTitleDisplayMode(.inline)
+            .onChange(of: type) { _, t in priceMode = t == .gold ? .total : .perUnit }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(loc("common.cancel")) { dismiss() }.foregroundStyle(AppTheme.textSecondary)
@@ -361,6 +501,31 @@ struct AddHoldingSheet: View {
         Text(t).font(.system(.subheadline, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
     }
 
+    private var buyLabel: String {
+        priceMode == .total ? loc("invest.field.total_paid")
+            : String(format: loc("invest.field.price_per"), type.unitLabel)
+    }
+
+    private var currentLabel: String {
+        priceMode == .total ? loc("invest.field.current_total")
+            : String(format: loc("invest.field.current_per"), type.unitLabel)
+    }
+
+    private var currentHint: String {
+        if priceMode == .total { return loc("invest.field.current_total_hint") }
+        return loc(type == .gold ? "invest.gold_sell_hint" : "invest.field.current_hint")
+    }
+
+    /// "≈ Rp2.251.774 per gr" under a total, "Total ≈ Rp294.532" under a
+    /// per-unit price; nothing until both the quantity and the price are in.
+    private func derivedLine(entered: Double, unitPrice: Double) -> String? {
+        guard unitsValue > 0, entered > 0, unitPrice > 0 else { return nil }
+        if priceMode == .total {
+            return String(format: loc("invest.derived_per_unit"), investMoney(unitPrice, cur), type.unitLabel)
+        }
+        return String(format: loc("invest.derived_total"), investMoney(unitsValue * unitPrice, cur))
+    }
+
     private var autoNote: some View {
         HStack(spacing: 7) {
             Image(systemName: "bolt.fill").font(.system(.caption2, weight: .bold))
@@ -394,9 +559,10 @@ struct AddHoldingSheet: View {
             price = 1
             lastPrice = type.priceIsFixed ? 1 : (amt > 0 ? parseNumber(currentValue) / amt : 1)
         } else {
-            holdingUnits = parseNumber(units)
-            price = parseNumber(buyPrice)
-            let c = parseNumber(current)
+            holdingUnits = unitsValue
+            price = buyUnitPrice
+            // Left empty, the current price defaults to the buy price.
+            let c = parseNumber(current) > 0 ? currentUnitPrice : 0
             lastPrice = c > 0 ? c : price
         }
         let h = InvestmentHolding(type: type,
@@ -439,9 +605,14 @@ struct AddLotSheet: View {
     @State private var amount = ""   // amount-based buy/sell, or cash for income/fee
     @State private var date = Date()
     @State private var note = ""
+    @State private var priceMode: InvestmentInput.PriceMode = .perUnit
 
     private var cur: String { holding.currency }
-    private var curSymbol: String { cur == "IDR" ? "Rp" : cur }
+    private var curSymbol: String { CurrencyManager.symbol(for: cur) }
+    private var unitPrice: Double {
+        lotUnitPrice(parseNumber(price), units: parseNumber(units), fee: parseNumber(fee),
+                     mode: priceMode, isSell: kind == .sell)
+    }
     private var availableKinds: [InvestmentLotKind] {
         var ks: [InvestmentLotKind] = [.buy]
         if holding.stats().unitsHeld > 0 { ks.append(.sell) }
@@ -457,14 +628,28 @@ struct AddLotSheet: View {
     private var canSave: Bool {
         if kind.isCash { return parseNumber(amount) > 0 }
         if holding.type.isAmountBased { return parseNumber(amount) > 0 }
-        return parseNumber(units) > 0 && parseNumber(price) > 0
+        return parseNumber(units) > 0 && unitPrice > 0
     }
 
     /// A sale is not a purchase: the field has to say which price it is asking
     /// for, or the number typed into "Harga beli" on the Jual tab is the wrong
-    /// one entirely.
+    /// one entirely. It also says whether it wants one unit's price or the total.
     private var priceLabel: String {
-        loc(kind == .sell ? "invest.field.price_sell" : "invest.field.price")
+        switch (priceMode, kind == .sell) {
+        case (.total, false): return loc("invest.field.total_paid")
+        case (.total, true):  return loc("invest.field.total_received")
+        case (_, false):      return String(format: loc("invest.field.price_per"), holding.type.unitLabel)
+        case (_, true):       return String(format: loc("invest.field.price_sell_per"), holding.type.unitLabel)
+        }
+    }
+
+    private var derivedLine: String? {
+        let u = parseNumber(units), entered = parseNumber(price)
+        guard u > 0, entered > 0, unitPrice > 0 else { return nil }
+        if priceMode == .total {
+            return String(format: loc("invest.derived_per_unit"), investMoney(unitPrice, cur), holding.type.unitLabel)
+        }
+        return String(format: loc("invest.derived_total"), investMoney(u * unitPrice, cur))
     }
 
     var body: some View {
@@ -477,11 +662,21 @@ struct AddLotSheet: View {
                     } else if holding.type.isAmountBased {
                         MoneyField(label: loc("invest.field.amount"), prefix: curSymbol, text: $amount)
                     } else {
-                        HStack(spacing: 12) {
+                        PriceModeChips(unitLabel: holding.type.unitLabel, mode: $priceMode, idle: AppTheme.cardDark)
+                        HStack(alignment: .top, spacing: 12) {
                             MoneyField(label: loc("invest.field.units"), suffix: holding.type.unitLabel, text: $units)
+                                .frame(maxWidth: .infinity)
                             MoneyField(label: priceLabel, prefix: curSymbol, text: $price)
+                                .frame(maxWidth: .infinity)
                         }
                         MoneyField(label: loc("invest.field.fee"), prefix: curSymbol, text: $fee)
+                        if let derivedLine { DerivedLine(text: derivedLine) }
+                        if holding.type == .gold,
+                           InvestmentInput.goldPriceLooksWrong(perGram: unitPrice, currency: cur) {
+                            GoldPriceWarning(perGram: unitPrice, currency: cur,
+                                             fixTitle: priceMode == .perUnit ? loc("invest.gold_as_total") : nil,
+                                             fix: { priceMode = .total })
+                        }
                     }
                     if kind == .buy && !cards.isEmpty {
                         CardFundPicker(cards: cards, selectedID: $fundCardID)
@@ -507,7 +702,10 @@ struct AddLotSheet: View {
                         .disabled(!canSave)
                 }
             }
-            .onAppear { kind = initialKind }
+            .onAppear {
+                kind = initialKind
+                priceMode = holding.type == .gold ? .total : .perUnit
+            }
         }
     }
 
@@ -538,13 +736,13 @@ struct AddLotSheet: View {
                                 pricePerUnit: 1, note: note)
         } else {
             lot = InvestmentLot(kind: kind, date: date, units: parseNumber(units),
-                                pricePerUnit: parseNumber(price), fee: parseNumber(fee), note: note)
+                                pricePerUnit: unitPrice, fee: parseNumber(fee), note: note)
         }
         // A buy can be funded from a card (transfer out).
         if kind == .buy, let id = fundCardID, let card = cards.first(where: { $0.id.uuidString == id }) {
             let cost = holding.type.isAmountBased
                 ? parseNumber(amount)
-                : parseNumber(units) * parseNumber(price) + parseNumber(fee)
+                : parseNumber(units) * unitPrice + parseNumber(fee)
             lot.linkedCardTxID = InvestmentCash.recordOutflow(holding: holding, cost: cost, card: card, date: date)
         }
         holding.lots.append(lot)
@@ -573,7 +771,7 @@ struct EditLotSheet: View {
     @State private var loaded = false
 
     private var cur: String { holding.currency }
-    private var curSymbol: String { cur == "IDR" ? "Rp" : cur }
+    private var curSymbol: String { CurrencyManager.symbol(for: cur) }
     private var kind: InvestmentLotKind { lot.kind }
 
     private var canSave: Bool {
@@ -586,7 +784,8 @@ struct EditLotSheet: View {
     /// for, or the number typed into "Harga beli" on the Jual tab is the wrong
     /// one entirely.
     private var priceLabel: String {
-        loc(kind == .sell ? "invest.field.price_sell" : "invest.field.price")
+        String(format: loc(kind == .sell ? "invest.field.price_sell_per" : "invest.field.price_per"),
+               holding.type.unitLabel)
     }
 
     var body: some View {
@@ -599,11 +798,24 @@ struct EditLotSheet: View {
                     } else if holding.type.isAmountBased {
                         MoneyField(label: loc("invest.field.amount"), prefix: curSymbol, text: $amount)
                     } else {
-                        HStack(spacing: 12) {
+                        HStack(alignment: .top, spacing: 12) {
                             MoneyField(label: loc("invest.field.units"), suffix: holding.type.unitLabel, text: $units)
+                                .frame(maxWidth: .infinity)
                             MoneyField(label: priceLabel, prefix: curSymbol, text: $price)
+                                .frame(maxWidth: .infinity)
                         }
                         MoneyField(label: loc("invest.field.fee"), prefix: curSymbol, text: $fee)
+                        if parseNumber(units) > 0, parseNumber(price) > 0 {
+                            DerivedLine(text: String(format: loc("invest.derived_total"),
+                                                     investMoney(parseNumber(units) * parseNumber(price), cur)))
+                        }
+                        if holding.type == .gold,
+                           InvestmentInput.goldPriceLooksWrong(perGram: parseNumber(price), currency: cur) {
+                            GoldPriceWarning(perGram: parseNumber(price), currency: cur,
+                                             fixTitle: totalFix.map { String(format: loc("invest.gold_use_per_gram"),
+                                                                            investMoney($0, cur)) },
+                                             fix: { if let v = totalFix { price = num(v) } })
+                        }
                     }
                     if kind == .buy && !cards.isEmpty {
                         CardFundPicker(cards: cards, selectedID: $fundCardID)
@@ -666,12 +878,19 @@ struct EditLotSheet: View {
         }
     }
 
-    /// Whole numbers plain; fractional units use a comma decimal so `parseNumber`
-    /// (id-ID) round-trips them (e.g. 0.005 → "0,005", not misread as thousands).
-    private func num(_ v: Double) -> String {
-        if v == v.rounded() { return String(Int(v)) }
-        return String(v).replacingOccurrences(of: ".", with: ",")
+    /// If the price field holds a total, the per-gram price it works out to —
+    /// offered only when that one is plausible. A total paid includes the fee.
+    private var totalFix: Double? {
+        let u = parseNumber(units)
+        guard u > 0 else { return nil }
+        let v = lotUnitPrice(parseNumber(price), units: u, fee: parseNumber(fee),
+                             mode: .total, isSell: kind == .sell).rounded()
+        guard v > 0, !InvestmentInput.goldPriceLooksWrong(perGram: v, currency: cur) else { return nil }
+        return v
     }
+
+    /// Written so `parseNumber` reads it back unchanged (0.005 → "0,005").
+    private func num(_ v: Double) -> String { InvestmentInput.text(v) }
 
     private func save() {
         if kind.isCash {
@@ -713,18 +932,42 @@ struct UpdatePriceSheet: View {
     @Environment(\.modelContext) private var context
     @Bindable var holding: InvestmentHolding
     @State private var priceText = ""
+    /// Unit-based holdings take either one unit's price or what the whole
+    /// balance is worth now (the figure a gold app shows first).
+    @State private var priceMode: InvestmentInput.PriceMode = .perUnit
 
     private var cur: String { holding.currency }
     private var amountBased: Bool { holding.type.isAmountBased }
+    private var unitsHeld: Double { holding.stats().unitsHeld }
+    /// Totals only make sense with something held to spread them over.
+    private var offersTotal: Bool { !amountBased && unitsHeld > 0 }
+
+    private var newUnitPrice: Double {
+        let entered = parseNumber(priceText)
+        if amountBased { return unitsHeld > 0 ? entered / unitsHeld : 1 }
+        return InvestmentInput.perUnitPrice(entered, units: unitsHeld, mode: priceMode)
+    }
 
     var body: some View {
         NavigationStack {
-            VStack(alignment: .leading, spacing: 16) {
-                Text(amountBased ? loc("invest.total_value") : loc("invest.current_price"))
-                    .font(.system(.caption, weight: .medium)).foregroundStyle(AppTheme.textSecondary)
-                MoneyField(label: holding.name, prefix: holding.currency == "IDR" ? "Rp" : holding.currency, text: $priceText)
-                Text(String(format: loc("invest.per_unit"), holding.type.unitLabel))
-                    .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
+            VStack(alignment: .leading, spacing: 14) {
+                if offersTotal {
+                    PriceModeChips(unitLabel: holding.type.unitLabel, mode: $priceMode, idle: AppTheme.cardDark)
+                }
+                MoneyField(label: fieldLabel, prefix: CurrencyManager.symbol(for: cur),
+                           hint: holding.type == .gold && priceMode == .perUnit ? loc("invest.gold_sell_hint") : nil,
+                           text: $priceText)
+                if offersTotal, parseNumber(priceText) > 0 {
+                    DerivedLine(text: priceMode == .total
+                        ? String(format: loc("invest.derived_per_unit"), investMoney(newUnitPrice, cur), holding.type.unitLabel)
+                        : String(format: loc("invest.derived_total"), investMoney(newUnitPrice * unitsHeld, cur)))
+                }
+                if holding.type == .gold,
+                   InvestmentInput.goldPriceLooksWrong(perGram: newUnitPrice, currency: cur) {
+                    GoldPriceWarning(perGram: newUnitPrice, currency: cur,
+                                     fixTitle: offersTotal && priceMode == .perUnit ? loc("invest.gold_as_total") : nil,
+                                     fix: { priceMode = .total })
+                }
                 Spacer()
             }
             .padding(22)
@@ -738,25 +981,31 @@ struct UpdatePriceSheet: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button(loc("invest.save")) { save() }
                         .font(.system(.body, weight: .bold)).foregroundStyle(AppTheme.accent)
-                        .disabled(parseNumber(priceText) <= 0)
+                        .disabled(newUnitPrice <= 0)
                 }
             }
             .onAppear {
                 let shown = amountBased ? holding.stats().marketValue : holding.lastPrice
-                if shown > 0 { priceText = String(Int(shown)) }
+                // Keeps the cents of a dollar price (366,51, not 366).
+                if shown > 0 { priceText = InvestmentInput.text(amountBased ? shown.rounded() : shown) }
+            }
+            .onChange(of: priceMode) { _, mode in
+                // Switch what is in the field along with its meaning.
+                guard holding.lastPrice > 0 else { return }
+                let v = mode == .total ? holding.lastPrice * unitsHeld : holding.lastPrice
+                priceText = InvestmentInput.text(cur == "IDR" ? v.rounded() : (v * 100).rounded() / 100)
             }
         }
     }
 
+    private var fieldLabel: String {
+        if amountBased { return loc("invest.total_value") }
+        return priceMode == .total ? loc("invest.field.current_total")
+            : String(format: loc("invest.field.current_per"), holding.type.unitLabel)
+    }
+
     private func save() {
-        let entered = parseNumber(priceText)
-        let newPrice: Double
-        if amountBased {
-            let units = holding.stats().unitsHeld
-            newPrice = units > 0 ? entered / units : 1
-        } else {
-            newPrice = entered
-        }
+        let newPrice = newUnitPrice
         // Keep the last price as the previous close so "today" shows the move
         // since the user last updated it.
         holding.prevClose = holding.lastPrice > 0 ? holding.lastPrice : newPrice

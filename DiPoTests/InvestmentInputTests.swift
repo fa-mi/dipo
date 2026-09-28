@@ -1,0 +1,119 @@
+import XCTest
+@testable import DiPo
+
+/// What the investment forms make of typed numbers. Every case here is a
+/// number someone really copies from a finance app: BRImo's gold balance,
+/// Gotrade's fractional shares, rupiah prices with dot grouping.
+final class InvestmentInputTests: XCTestCase {
+
+    // MARK: Reading numbers
+
+    func testIndonesianGroupingAndDecimals() {
+        XCTAssertEqual(InvestmentInput.number("1.000.000"), 1_000_000)
+        XCTAssertEqual(InvestmentInput.number("200.000"), 200_000)
+        XCTAssertEqual(InvestmentInput.number("16.160"), 16_160)
+        XCTAssertEqual(InvestmentInput.number("2.251.774"), 2_251_774)
+        XCTAssertEqual(InvestmentInput.number("0,1308"), 0.1308, accuracy: 1e-12)
+        XCTAssertEqual(InvestmentInput.number("1.234.567,89"), 1_234_567.89, accuracy: 1e-6)
+        XCTAssertEqual(InvestmentInput.number("Rp 308.426"), 0, "letters are not a number")
+        XCTAssertEqual(InvestmentInput.number(" 308 426 "), 308_426)
+    }
+
+    /// The bug: a single dot followed by more than two digits was always read
+    /// as grouping, so 0.134582962 shares became 134,582,962.
+    func testDotDecimalsFromForeignApps() {
+        XCTAssertEqual(InvestmentInput.number("0.134582962"), 0.134582962, accuracy: 1e-12)
+        XCTAssertEqual(InvestmentInput.number("0.1308"), 0.1308, accuracy: 1e-12)
+        XCTAssertEqual(InvestmentInput.number("0.080"), 0.08, accuracy: 1e-12)
+        XCTAssertEqual(InvestmentInput.number("366.51"), 366.51, accuracy: 1e-9)
+        XCTAssertEqual(InvestmentInput.number("381.8"), 381.8, accuracy: 1e-9)
+        XCTAssertEqual(InvestmentInput.number("1.5"), 1.5, accuracy: 1e-12)
+        XCTAssertEqual(InvestmentInput.number("2.2517"), 2.2517, accuracy: 1e-12)
+    }
+
+    func testEnglishGrouping() {
+        XCTAssertEqual(InvestmentInput.number("1,234.56"), 1_234.56, accuracy: 1e-9)
+        XCTAssertEqual(InvestmentInput.number("1,000,000"), 1_000_000)
+    }
+
+    func testRejectsJunk() {
+        XCTAssertEqual(InvestmentInput.number(""), 0)
+        XCTAssertEqual(InvestmentInput.number("abc"), 0)
+        XCTAssertEqual(InvestmentInput.number("-5"), 0)
+    }
+
+    func testTextRoundTrips() {
+        for v in [0.1308, 0.134582962, 0.00001, 366.51, 2_251_774, 16_160, 0.005, 1] {
+            let t = InvestmentInput.text(v)
+            XCTAssertFalse(t.contains("e"), "no scientific notation: \(t)")
+            XCTAssertEqual(InvestmentInput.number(t), v, accuracy: 1e-9, t)
+        }
+        XCTAssertEqual(InvestmentInput.text(0.1308), "0,1308")
+        XCTAssertEqual(InvestmentInput.text(2_251_774), "2251774")
+    }
+
+    // MARK: Totals and per-unit prices
+
+    /// The BRImo screen: 0,1308 g, balance Rp308.426, yield +Rp13.894.
+    func testBRImoGoldBalanceAsTotals() {
+        let grams = 0.1308
+        let buy = InvestmentInput.perUnitPrice(294_532, units: grams, mode: .total)
+        let now = InvestmentInput.perUnitPrice(308_426, units: grams, mode: .total)
+        XCTAssertEqual(grams * buy, 294_532, accuracy: 0.01)
+        XCTAssertEqual(now, 2_358_000, accuracy: 5)   // = Rp23.580 per 0,01 g × 100
+        XCTAssertFalse(InvestmentInput.goldPriceLooksWrong(perGram: buy, currency: "IDR"))
+        XCTAssertFalse(InvestmentInput.goldPriceLooksWrong(perGram: now, currency: "IDR"))
+
+        let lots = [LotFact(date: .now, kind: "buy", units: grams, pricePerUnit: buy)]
+        let s = PortfolioEngine.stats(lots: lots, lastPrice: now)
+        XCTAssertEqual(s.marketValue, 308_426, accuracy: 1)
+        XCTAssertEqual(s.unrealizedPL, 13_894, accuracy: 1)
+        XCTAssertEqual(s.unrealizedPct, 0.0472, accuracy: 0.0001)
+    }
+
+    func testPerUnitModeKeepsThePriceAndTotalNeedsUnits() {
+        XCTAssertEqual(InvestmentInput.perUnitPrice(381.88, units: 0.0339, mode: .perUnit), 381.88)
+        XCTAssertEqual(InvestmentInput.perUnitPrice(12.43, units: 0, mode: .total), 0)
+    }
+
+    // MARK: Gold sanity
+
+    func testTotalsTypedAsPerGramAreCaught() {
+        // What was actually entered: the totals, as prices per gram.
+        XCTAssertTrue(InvestmentInput.goldPriceLooksWrong(perGram: 294_532, currency: "IDR"))
+        XCTAssertTrue(InvestmentInput.goldPriceLooksWrong(perGram: 308_426, currency: "IDR"))
+        // A price per 0,01 gram.
+        XCTAssertTrue(InvestmentInput.goldPriceLooksWrong(perGram: 23_580, currency: "IDR"))
+        // Real per-gram prices, old and new.
+        XCTAssertFalse(InvestmentInput.goldPriceLooksWrong(perGram: 1_000_000, currency: "IDR"))
+        XCTAssertFalse(InvestmentInput.goldPriceLooksWrong(perGram: 2_358_000, currency: "IDR"))
+        // Nothing typed yet, or not rupiah: no opinion.
+        XCTAssertFalse(InvestmentInput.goldPriceLooksWrong(perGram: 0, currency: "IDR"))
+        XCTAssertFalse(InvestmentInput.goldPriceLooksWrong(perGram: 140, currency: "USD"))
+    }
+
+    // MARK: Stock markets
+
+    func testYahooTickerFollowsTheHoldingCurrency() {
+        XCTAssertEqual(StockMarket.yahooTicker(symbol: "bbca", currency: "IDR"), "BBCA.JK")
+        XCTAssertEqual(StockMarket.yahooTicker(symbol: " AAPL ", currency: "USD"), "AAPL")
+        XCTAssertEqual(StockMarket.yahooTicker(symbol: "brk-b", currency: "USD"), "BRK-B")
+        XCTAssertEqual(StockMarket.yahooTicker(symbol: "BBCA.JK", currency: "USD"), "BBCA.JK")
+        XCTAssertEqual(StockMarket.of(currency: "idr"), .idx)
+        XCTAssertEqual(StockMarket.of(currency: "USD"), .us)
+        XCTAssertEqual(StockMarket.us.currency, "USD")
+    }
+
+    /// A US position is valued in dollars and only converted for the totals.
+    func testUSPositionConvertsIntoRupiahTotals() {
+        let visa = PortfolioEngine.stats(
+            lots: [LotFact(date: .now, kind: "buy", units: 0.033937184, pricePerUnit: 381.88)],
+            lastPrice: 366.51)
+        XCTAssertEqual(visa.marketValue, 12.44, accuracy: 0.01)
+        let totals = PortfolioEngine.portfolio(
+            [(type: "stock", currency: "USD", stats: visa)],
+            targetCurrency: "IDR",
+            convert: { amount, from, to in from == "USD" && to == "IDR" ? amount * 16_000 : amount })
+        XCTAssertEqual(totals.marketValue, visa.marketValue * 16_000, accuracy: 0.01)
+    }
+}
