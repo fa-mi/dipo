@@ -159,6 +159,15 @@ struct ReceiptScanConfig {
     /// to keep Vision fast and Haiku token cost predictable.
     static let maxImageDimension: CGFloat = 2048
 
+    /// Longer side of the copy UPLOADED to Haiku, separate from the one OCR'd
+    /// on the phone. Claude Haiku 4.5 downsamples anything past 1568 px on the
+    /// long edge before it looks, so the 2048 px copy sent ~40% more pixels
+    /// than the model ever used — paid for in the user's mobile data, on the
+    /// exact receipts (the hard ones) that need the upload. Vision keeps 2048:
+    /// it runs on the device and costs nothing to send. If the Worker moves to
+    /// a high-resolution model (2576 px), raise this with it.
+    static let haikuMaxImageDimension: CGFloat = 1568
+
     /// JPEG compression for the version sent to Haiku. 0.7 is a good tradeoff
     /// between file size (token cost) and OCR-friendliness for thermal receipts.
     static let haikuJpegCompression: CGFloat = 0.7
