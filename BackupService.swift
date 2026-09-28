@@ -373,13 +373,16 @@ enum BackupError: LocalizedError {
     /// Backup's `userID` doesn't match the currently logged-in user.
     case userMismatch
 
+    /// What the person reads. The technical detail each case carries stays on
+    /// the error for debugging — "The data couldn't be read because it isn't
+    /// in the correct format." helps no one choosing a file.
     var errorDescription: String? {
         switch self {
-        case .readFailed(let msg):    return "Failed to read backup: \(msg)"
-        case .decodeFailed(let msg):  return "Backup file is invalid: \(msg)"
-        case .unknownVersion(let v):  return "This backup (v\(v)) is from a newer app version."
-        case .writeFailed(let msg):   return "Failed to write backup: \(msg)"
-        case .noData:                 return "Nothing to back up yet."
+        case .readFailed:             return loc("backup.error.read")
+        case .decodeFailed:           return loc("backup.error.decode")
+        case .unknownVersion:         return loc("backup.error.newer_version")
+        case .writeFailed:            return loc("backup.error.write")
+        case .noData:                 return loc("backup.error.no_data")
         case .notLoggedIn:            return loc("backup.error.notLoggedIn")
         case .notDiPoBackup:          return loc("backup.error.notDiPoBackup")
         case .userMismatch:           return loc("backup.error.userMismatch")

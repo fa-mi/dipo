@@ -409,7 +409,8 @@ struct ReceiptPreviewSheet: View {
             onSaved()
             dismiss()
         } catch {
-            saveError = error.localizedDescription
+            print("[DiPo] receipt save failed: \(error)")
+            saveError = loc("receipt.error.save")
             HapticManager.shared.error()
         }
     }

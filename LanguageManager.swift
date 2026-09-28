@@ -501,6 +501,7 @@ final class LanguageManager {
         "error.invalid_response":    "We received an unexpected response. Try again.",
         "error.ssl_pinning_failed":  "Couldn't verify the secure connection. Update the app.",
         "error.unknown":             "Something went wrong. Try again.",
+        "error.busy":                "DiPo is busy right now. Try again in a minute.",
         // Currency rate freshness indicator. Shown under amount fields.
         "currency.fetching":         "Fetching latest rate…",
         "currency.live":             "Live",
@@ -531,6 +532,12 @@ final class LanguageManager {
         "backup.error.notLoggedIn":   "Please sign in before backing up or restoring.",
         "backup.error.notDiPoBackup": "This file isn't a DiPo backup.",
         "backup.error.userMismatch":  "This backup belongs to a different account.",
+        "backup.error.read":          "Couldn't open this backup file. Try choosing it again.",
+        "backup.error.decode":        "This backup file is damaged or incomplete.",
+        "backup.error.newer_version": "This backup is from a newer version of DiPo. Update the app, then restore it.",
+        "backup.error.write":         "Couldn't save the backup. Check that your phone has free space.",
+        "backup.error.no_data":       "Nothing to back up yet.",
+        "receipt.error.save":         "Couldn't save the transaction. Try again.",
 
         // Home Screen widget labels — pre-resolved by the main app and
         // mirrored into App Group UserDefaults so the widget extension
@@ -2991,6 +2998,7 @@ final class LanguageManager {
         "error.invalid_response":    "Respons tidak terduga. Coba lagi.",
         "error.ssl_pinning_failed":  "Tidak bisa verifikasi koneksi aman. Perbarui aplikasi.",
         "error.unknown":             "Terjadi kesalahan. Coba lagi.",
+        "error.busy":                "DiPo sedang sibuk. Coba lagi sebentar lagi.",
         // Currency rate freshness
         "currency.fetching":         "Mengambil kurs terbaru…",
         "currency.live":             "Live",
@@ -3021,6 +3029,12 @@ final class LanguageManager {
         "backup.error.notLoggedIn":   "Silakan masuk dulu sebelum mencadangkan atau memulihkan.",
         "backup.error.notDiPoBackup": "File ini bukan cadangan DiPo.",
         "backup.error.userMismatch":  "Cadangan ini milik akun lain.",
+        "backup.error.read":          "File cadangan tidak bisa dibuka. Coba pilih lagi.",
+        "backup.error.decode":        "File cadangan ini rusak atau tidak lengkap.",
+        "backup.error.newer_version": "Cadangan ini dari versi DiPo yang lebih baru. Perbarui aplikasi, lalu pulihkan.",
+        "backup.error.write":         "Cadangan gagal disimpan. Pastikan memori HP masih cukup.",
+        "backup.error.no_data":       "Belum ada data untuk dicadangkan.",
+        "receipt.error.save":         "Transaksi gagal disimpan. Coba lagi.",
 
         // Widget Home Screen — di-resolve di main app, dikirim via App Group
         // UserDefaults supaya widget extension bisa render dalam bahasa

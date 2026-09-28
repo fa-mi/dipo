@@ -131,7 +131,9 @@ enum ReceiptScanError: Error, LocalizedError {
         case .premiumRequired:       return loc("receipt.error.premium")
         case .outOfCredits:          return loc("receipt.error.out_of_credits")
         case .notAReceipt:           return loc("receipt.error.not_receipt")
-        case .unknown(let msg):      return msg
+        // The message is the underlying error's own text, often English and
+        // technical; it is kept for logs, not shown.
+        case .unknown:               return loc("error.unknown")
         }
     }
 

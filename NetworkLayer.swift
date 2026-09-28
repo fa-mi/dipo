@@ -37,13 +37,14 @@ enum NetworkError: Error, LocalizedError {
         case .invalidResponse:
             return loc("error.invalid_response")
         case .httpError(let code):
-            return "HTTP Error \(code)"
+            // Rate limit or a server-side failure: nothing the person did.
+            return loc(code == 429 || code >= 500 ? "error.busy" : "error.unknown")
         case .sslPinningFailed:
             return loc("error.ssl_pinning_failed")
-        case .decodingError(let error):
-            return "Decoding error: \(error.localizedDescription)"
-        case .encodingError(let error):
-            return "Encoding error: \(error.localizedDescription)"
+        case .decodingError:
+            return loc("error.invalid_response")
+        case .encodingError:
+            return loc("error.unknown")
         case .serverError(let message):
             return message
         case .unknown:
