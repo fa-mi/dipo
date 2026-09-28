@@ -14,10 +14,13 @@ struct SupportTicket: Identifiable, Codable {
     let category: String
     let subject: String
     let message: String
-    // ✅ Replaced mediaURLs (Firebase Storage) with mediaBase64 (Firestore inline).
-    // Images are compressed + resized to stay well under Firestore's 1MB doc limit.
-    // No Storage bucket or billing upgrade required — works on Spark (free) plan.
+    // Screenshots. Tickets filed before the media subcollection carry them
+    // inline here; newer ones leave this empty and store them under
+    // support_tickets/{id}/media, loaded only when the ticket is opened
+    // (fetchMedia) — see submitTicket for why.
     let mediaBase64: [String]
+    /// How many screenshots the ticket has, wherever they are stored.
+    let mediaCount: Int
     var status: String           // "open" | "answered" | "closed"
     var hasUnreadReply: Bool
     let createdAt: Date
@@ -37,9 +40,13 @@ struct SupportReply: Identifiable, Codable {
 // Firestore schema:
 //   support_tickets/{ticketId}
 //     userId, userName, userEmail, userPlan, category, subject, message,
-//     mediaBase64: [String],   ← base64-encoded JPEG strings (max 3 × ~100KB each)
+//     mediaCount: Int,         ← screenshots, stored in media/ below
+//     mediaBase64: [String],   ← older tickets only: the screenshots inline
 //     status: "open"|"answered"|"closed",
 //     hasUnreadReply: Bool, createdAt, updatedAt
+//
+//   support_tickets/{ticketId}/media/{index}
+//     data: String (base64 JPEG), index: Int
 //
 //   support_tickets/{ticketId}/replies/{replyId}
 //     message: String, isAdmin: Bool, createdAt, isReadByUser: Bool
@@ -159,7 +166,7 @@ final class FirebaseSupportService {
             "category":       category,
             "subject":        subject,
             "message":        message,
-            "mediaBase64":    mediaBase64,
+            "mediaCount":     mediaBase64.count,
             "status":         "open",
             "hasUnreadReply": false,
             "createdAt":      FieldValue.serverTimestamp(),
@@ -172,7 +179,22 @@ final class FirebaseSupportService {
             data["fcmToken"] = tok
         }
 
-        try await db.collection("support_tickets").document(ticketId).setData(data)
+        // The screenshots go in their own documents, not inline. Inline, every
+        // screenshot rode along whenever the ticket list loaded — up to ~0.7 MB
+        // a ticket, on every visit to Support and every push-token refresh —
+        // for a list that only shows whether a ticket has any. Now they are
+        // downloaded once, when that ticket is opened. The ticket goes first:
+        // the rules for media/ check the parent ticket's owner.
+        let ticketRef = db.collection("support_tickets").document(ticketId)
+        try await ticketRef.setData(data)
+        for (index, encoded) in mediaBase64.enumerated() {
+            do {
+                try await ticketRef.collection("media").document(String(index))
+                    .setData(["data": encoded, "index": index])
+            } catch {
+                print("[DiPo] ticket media \(index) upload failed: \(error.localizedDescription)")
+            }
+        }
 
         // Fire-and-forget: ask the worker to email (1) the admin inbox a "new
         // ticket" notification (always) and (2) the user a fixed-text
@@ -529,6 +551,25 @@ final class FirebaseSupportService {
         await fetchTickets()
     }
 
+    /// A ticket's screenshots, in the order they were attached. Old tickets
+    /// carry them inline and need no fetch. They never change once written,
+    /// so the local cache is tried first and the network only when it misses.
+    func fetchMedia(for ticket: SupportTicket) async -> [String] {
+        if !ticket.mediaBase64.isEmpty || ticket.mediaCount == 0 { return ticket.mediaBase64 }
+        let ref = db.collection("support_tickets").document(ticket.id).collection("media")
+        let decode: (QuerySnapshot) -> [String] = { snap in
+            snap.documents
+                .sorted { ($0.data()["index"] as? Int ?? 0) < ($1.data()["index"] as? Int ?? 0) }
+                .compactMap { $0.data()["data"] as? String }
+        }
+        if let cached = try? await ref.getDocuments(source: .cache),
+           cached.documents.count >= ticket.mediaCount {
+            return decode(cached)
+        }
+        guard let snap = try? await ref.getDocuments() else { return [] }
+        return decode(snap)
+    }
+
     func fetchReplies(ticketId: String) async throws -> [SupportReply] {
         let snap = try await db.collection("support_tickets")
             .document(ticketId)
@@ -821,6 +862,7 @@ final class FirebaseSupportService {
             subject:        d["subject"]         as? String ?? "",
             message:        d["message"]         as? String ?? "",
             mediaBase64:    d["mediaBase64"]     as? [String] ?? [],
+            mediaCount:     d["mediaCount"] as? Int ?? (d["mediaBase64"] as? [String])?.count ?? 0,
             status:         d["status"]          as? String ?? "open",
             hasUnreadReply: d["hasUnreadReply"]  as? Bool ?? false,
             createdAt:      (d["createdAt"] as? Timestamp)?.dateValue() ?? Date(),

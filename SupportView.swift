@@ -274,7 +274,7 @@ struct ContactAdminSheet: View {
                         Text(DateFormatterCache.styles(date: .medium, time: .none)
                                 .string(from: ticket.updatedAt))
                             .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
-                        if !ticket.mediaBase64.isEmpty {
+                        if ticket.mediaCount > 0 {
                             Image(systemName: "photo.fill")
                                 .font(.system(.caption2)).imageScale(.small).foregroundStyle(AppTheme.textSecondary)
                         }
@@ -636,6 +636,8 @@ struct TicketThreadView: View {
 
     @Environment(\.dismiss) private var dismiss
     @State private var replies:          [SupportReply]    = []
+    /// Screenshots, loaded when the thread opens (see fetchMedia).
+    @State private var media:            [String]          = []
     @State private var isLoading         = true
     @State private var fullscreenBase64: IdentifiableString?
     @State private var liveStatus: String = ""
@@ -658,6 +660,8 @@ struct TicketThreadView: View {
             .toolbarBackground(AppTheme.bg, for: .navigationBar)
             .doneToolbar { dismiss() }
         }
+        // Separate from the task below so screenshots don't hold up the replies.
+        .task { media = await FirebaseSupportService.shared.fetchMedia(for: ticket) }
         .task {
             liveStatus = ticket.status
             do { replies = try await FirebaseSupportService.shared.fetchReplies(ticketId: ticket.id) } catch {}
@@ -688,7 +692,7 @@ struct TicketThreadView: View {
                 VStack(spacing: 16) {
                     ticketMetaHeader
                     userBubble(text: ticket.message, date: ticket.createdAt,
-                               mediaBase64: ticket.mediaBase64,
+                               mediaBase64: media,
                                category: SupportCategory(rawValue: ticket.category) ?? .other)
                     ForEach(replies) { reply in
                         if reply.isAdmin { adminBubble(reply) } else { userReplyBubble(reply) }

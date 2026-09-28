@@ -104,14 +104,15 @@ final class AccountDeletionService {
     }
 
     /// Support tickets are the user's own words + email — account deletion means
-    /// they go too. Each ticket carries a `replies` subcollection that Firestore
-    /// will not cascade, so it's cleared first.
+    /// they go too. Each ticket carries `replies` and `media` subcollections that
+    /// Firestore will not cascade, so they're cleared first.
     private func deleteSupportTickets(socialID: String) async {
         do {
             let tickets = try await db.collection("support_tickets")
                 .whereField("userId", isEqualTo: socialID).getDocuments()
             for t in tickets.documents {
                 await deleteAll(in: t.reference.collection("replies"), label: "replies")
+                await deleteAll(in: t.reference.collection("media"), label: "media")
                 try? await t.reference.delete()
             }
             if !tickets.documents.isEmpty {
