@@ -547,11 +547,11 @@ final class DebtViewModel {
 
     func validate() -> Bool {
         guard !formName.trimmingCharacters(in: .whitespaces).isEmpty else {
-            formError = "Enter a name"; return false
+            formError = loc("debt.error.name"); return false
         }
-        guard NumberInput.isNumber(formBalance) else { formError = "Enter current balance"; return false }
-        guard NumberInput.isNumber(formMinPayment) else { formError = "Enter minimum payment"; return false }
-        guard NumberInput.isNumber(formInterestRate) else { formError = "Enter interest rate"; return false }
+        guard NumberInput.isNumber(formBalance) else { formError = loc("debt.error.balance"); return false }
+        guard NumberInput.isNumber(formMinPayment) else { formError = loc("debt.error.min_payment"); return false }
+        guard NumberInput.isNumber(formInterestRate) else { formError = loc("debt.error.rate"); return false }
         formError = nil; return true
     }
 }

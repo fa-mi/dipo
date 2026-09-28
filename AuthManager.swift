@@ -279,7 +279,7 @@ final class AuthViewModel {
 
     func submitName() {
         guard userName.trimmingCharacters(in: .whitespaces).count >= 2 else {
-            errorMessage = "Enter at least 2 characters"
+            errorMessage = loc("setup.error.name_short")
             HapticManager.shared.error()
             return
         }

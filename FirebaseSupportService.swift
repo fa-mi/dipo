@@ -523,11 +523,24 @@ final class FirebaseSupportService {
             await MainActor.run { tickets = decoded }
         } catch {
             await MainActor.run {
-                fetchError = error.localizedDescription
+                fetchError = Self.fetchErrorMessage(error)
                 print("[DiPo Support] fetchTickets failed for userId=\(userId): \(error)")
             }
         }
         await MainActor.run { isLoading = false }
+    }
+
+    /// What the Support screen says when tickets can't be fetched. Never the
+    /// raw error: Firestore's text is English and technical ("Failed to get
+    /// document because the client is offline."), and on a patchy rural signal
+    /// being offline is by far the likeliest cause, so that case gets its own
+    /// reassuring line.
+    static func fetchErrorMessage(_ error: Error) -> String {
+        let ns = error as NSError
+        // Firestore: 14 = unavailable (offline), 4 = deadline exceeded.
+        let offline = ns.domain == NSURLErrorDomain
+            || (ns.domain == "FIRFirestoreErrorDomain" && [4, 14].contains(ns.code))
+        return loc(offline ? "support.load_error_offline" : "error.unknown")
     }
 
     // MARK: - Fetch Replies for a ticket

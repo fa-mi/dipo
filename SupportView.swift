@@ -158,12 +158,9 @@ struct ContactAdminSheet: View {
                             .font(.system(.body, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
                         Text(err)
                             .font(.system(.caption, weight: .medium))
-                            .foregroundStyle(AppTheme.red.opacity(0.8))
+                            .foregroundStyle(AppTheme.textSecondary)
                             .multilineTextAlignment(.center)
                             .padding(.horizontal, 32)
-                        Text(loc("support.firestore_error"))
-                            .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
-                            .multilineTextAlignment(.center).padding(.horizontal, 32)
                     }
                     Button {
                         HapticManager.shared.tap()
