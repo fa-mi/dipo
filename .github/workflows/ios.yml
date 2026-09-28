@@ -71,3 +71,44 @@ jobs:
             DiPo.xcresult
             xcodebuild.log
           retention-days: 7
+
+  # Could DiPo run on older iPhones? The app targets iOS 26.2, which needs an
+  # iPhone 11 or newer, fully updated. iOS 17 also runs on the XS and XR,
+  # common second-hand phones, and covers phones that are behind on updates.
+  # This builds the app with the minimum overridden on the command line (the
+  # project file is not changed), so the compiler lists every API that needs a
+  # newer iOS. Informational: it never fails the PR.
+  min-ios-probe:
+    runs-on: macos-26
+    timeout-minutes: 45
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        min_ios: ["17.0", "18.0"]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select Xcode
+        run: sudo xcode-select -s "$(ls -d /Applications/Xcode_26*.app | sort -V | tail -1)"
+      - name: Cache Swift packages
+        uses: actions/cache@v4
+        with:
+          path: .spm
+          key: spm-${{ runner.os }}-${{ hashFiles('DiPo.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
+      - name: Build with IPHONEOS_DEPLOYMENT_TARGET=${{ matrix.min_ios }}
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project DiPo.xcodeproj -scheme DiPo \
+            -destination 'generic/platform=iOS Simulator' \
+            -clonedSourcePackagesDirPath .spm \
+            -skipPackagePluginValidation -skipMacroValidation \
+            CODE_SIGNING_ALLOWED=NO \
+            IPHONEOS_DEPLOYMENT_TARGET=${{ matrix.min_ios }} \
+            2>&1 | tee build.log | { grep -E 'error:|\*\* BUILD' || true; }
+      - name: APIs that need a newer iOS
+        if: always()
+        run: |
+          grep -E "error: .*(is only available in iOS|available in iOS [0-9]+|@available)" build.log \
+            | sed -E 's#^/Users/runner/work/dipo/dipo/##' | sort -u | head -150 || true
+          echo "Total errors: $(grep -c 'error:' build.log || true)"
