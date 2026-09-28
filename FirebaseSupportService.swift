@@ -174,13 +174,13 @@ final class FirebaseSupportService {
 
         try await db.collection("support_tickets").document(ticketId).setData(data)
 
-        // Fire-and-forget: ask the worker to email (1) the user a confirmation
-        // (if their ticket has an email) and (2) the admin inbox a "new ticket"
-        // notification (always). The worker reads the recipient from the ticket
-        // doc we just wrote (never from the request) and stamps an idempotency
-        // flag, so this needs no auth and can't be abused to email arbitrary
-        // addresses. Called unconditionally so the admin is alerted even when
-        // the user has no email.
+        // Fire-and-forget: ask the worker to email (1) the admin inbox a "new
+        // ticket" notification (always) and (2) the user a fixed-text
+        // confirmation. The confirmation goes to the email Apple/Google
+        // verified for this account, read from the ID token sent with the
+        // request, never to the ticket's userEmail (which can be typed in, so
+        // it could be anyone's). Without a token there is no confirmation. The
+        // worker stamps an idempotency flag so a replay sends nothing more.
         Task.detached { await Self.sendTicketCreatedEmail(ticketId: ticketId) }
 
         return ticketId
@@ -196,6 +196,11 @@ final class FirebaseSupportService {
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        // The ID token proves which account filed the ticket and carries its
+        // verified email, the only address the confirmation may go to.
+        for (field, value) in await WorkerAuth.headers() {
+            req.setValue(value, forHTTPHeaderField: field)
+        }
         let payload: [String: Any] = [
             "kind": "ticket_created",
             "ticketId": ticketId,
