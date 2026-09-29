@@ -22,6 +22,7 @@ extension StatisticsView {
                 }
                 .padding(.horizontal, 22)
                 .padding(.top, 20)
+                .containerRelativeFrame(.horizontal)
             }
         }
     }

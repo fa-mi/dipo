@@ -100,6 +100,7 @@ extension StatisticsView {
                     Spacer(minLength: 100)
                 }
                 .padding(.horizontal, 22).padding(.top, 8)
+                .containerRelativeFrame(.horizontal)
             }
         }
         .navigationTitle(loc("stats.weekly"))
@@ -257,6 +258,7 @@ extension StatisticsView {
                     Spacer(minLength: 100)
                 }
                 .padding(.horizontal, 22).padding(.top, 8)
+                .containerRelativeFrame(.horizontal)
             }
         }
         .navigationTitle(loc("stats.trends"))
@@ -369,6 +371,7 @@ extension StatisticsView {
                     Spacer(minLength: 100)
                 }
                 .padding(.horizontal, 22).padding(.top, 8)
+                .containerRelativeFrame(.horizontal)
             }
         }
         .navigationTitle(label)
@@ -665,6 +668,10 @@ extension StatisticsView {
                 }
                 .padding(.horizontal, 22)
                 .padding(.top, 8)
+                // Clamp the column to the viewport, as ProfileView does: one
+                // child wider than the screen (a long translated line, a big
+                // Dynamic Type size) made the whole page slide sideways.
+                .containerRelativeFrame(.horizontal)
             }
         }
         .navigationTitle(loc("stats.detail_title"))
