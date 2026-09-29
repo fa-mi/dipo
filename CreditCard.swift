@@ -311,6 +311,7 @@ struct CreditCardFormSheet: View {
                         Spacer(minLength: 30)
                     }
                     .padding(.top, 6)
+                    .containerRelativeFrame(.horizontal)
                 }
             }
             .navigationTitle(isEditing ? loc("cc.edit_title") : loc("cc.new_title"))
@@ -476,6 +477,7 @@ struct CreditCardPaymentSheet: View {
                         .padding(.horizontal, 22)
                         Spacer(minLength: 20)
                     }
+                    .containerRelativeFrame(.horizontal)
                 }
             }
             .navigationTitle(loc("cc.pay_bill"))

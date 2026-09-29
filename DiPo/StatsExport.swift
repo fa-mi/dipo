@@ -76,6 +76,7 @@ struct StatsExportSheet: View {
                     }
                     .padding(.top, 8)
                     .padding(.bottom, 110)
+                    .containerRelativeFrame(.horizontal)
                 }
 
                 Button {

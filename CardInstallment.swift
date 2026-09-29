@@ -414,6 +414,7 @@ struct InstallmentFormSheet: View {
                         Spacer(minLength: 30)
                     }
                     .padding(.top, 14)
+                    .containerRelativeFrame(.horizontal)
                 }
             }
             .navigationTitle(editing == nil ? loc("inst.add") : loc("inst.edit"))
@@ -534,6 +535,7 @@ struct InstallmentSimulatorSheet: View {
                         Spacer(minLength: 30)
                     }
                     .padding(.top, 14)
+                    .containerRelativeFrame(.horizontal)
                 }
             }
             .navigationTitle(installment.merchant)

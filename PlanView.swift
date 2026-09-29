@@ -54,6 +54,7 @@ struct PlanView: View {
                     }
                     .padding(.horizontal, 22)
                     .padding(.top, 20)
+                    .containerRelativeFrame(.horizontal)
                 }
             }
             // Hidden, but still the back button's label on every screen below.

@@ -51,6 +51,7 @@ struct WebSyncView: View {
                     }
                     .padding(.horizontal, 20)
                     .padding(.top, 8)
+                    .containerRelativeFrame(.horizontal)
                 }
             }
             .navigationTitle(loc("websync.title"))

@@ -50,6 +50,7 @@ struct CycleIntentView: View {
                         Spacer(minLength: 24)
                     }
                     .padding(.horizontal, 20).padding(.top, 8)
+                    .containerRelativeFrame(.horizontal)
                 }
             }
             .navigationTitle(loc("intent.title"))

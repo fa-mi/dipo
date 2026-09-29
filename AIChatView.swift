@@ -549,6 +549,7 @@ struct AIChatView: View {
                     }
                 }
                 .padding(.vertical, 16)
+                .containerRelativeFrame(.horizontal)
             }
             .onChange(of: vm.messages.count) { _, _ in
                 withAnimation { proxy.scrollTo(vm.messages.last?.id, anchor: .bottom) }

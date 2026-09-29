@@ -103,6 +103,7 @@ struct BackTapGuideView: View {
                     .padding(.horizontal, 22)
                     .padding(.top, 8)
                     .padding(.bottom, 40)
+                    .containerRelativeFrame(.horizontal)
                 }
             }
             .navigationTitle(loc("profile.backtap"))

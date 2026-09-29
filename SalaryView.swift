@@ -436,6 +436,7 @@ struct SalaryView: View {
                     }
                     .opacity(appeared ? 1 : 0)
                     .offset(y: appeared ? 0 : 16)
+                    .containerRelativeFrame(.horizontal)
                 }
             }
             .featureBar(pushed: pushed)
@@ -1201,6 +1202,7 @@ struct SalaryFormSheet: View {
                     .opacity(appeared ? 1 : 0)
                     .offset(y: appeared ? 0 : 16)
                     .animation(AppMotion.appear, value: appeared)
+                    .containerRelativeFrame(.horizontal)
                 }
             }
             .navigationTitle(isEditing ? loc("salary.edit") : loc("salary.new"))
@@ -1562,6 +1564,7 @@ struct SalaryDetailView: View {
                 .padding(.top, 12)
                 .opacity(appeared ? 1 : 0)
                 .offset(y: appeared ? 0 : 16)
+                .containerRelativeFrame(.horizontal)
             }
         }
         .navigationTitle(schedule.label)

@@ -138,6 +138,7 @@ struct ContactAdminSheet: View {
                 Spacer(minLength: 60)
             }
             .padding(.top, 14)
+            .containerRelativeFrame(.horizontal)
         }
     }
 
@@ -398,6 +399,7 @@ struct NewTicketForm: View {
                 Spacer(minLength: 40)
             }
             .padding(.top, 8)
+            .containerRelativeFrame(.horizontal)
         }
     }
 
@@ -698,6 +700,7 @@ struct TicketThreadView: View {
                     Spacer(minLength: 20)
                 }
                 .padding(.top, 16)
+                .containerRelativeFrame(.horizontal)
             }
 
             // ✅ Reply composer — always visible unless ticket is closed

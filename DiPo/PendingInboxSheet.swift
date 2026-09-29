@@ -60,6 +60,7 @@ struct PendingInboxSheet: View {
 
                             Spacer(minLength: 90)
                         }
+                        .containerRelativeFrame(.horizontal)
                     }
                 }
             }
@@ -274,6 +275,7 @@ struct PendingRowEditor: View {
                         Spacer(minLength: 30)
                     }
                     .padding(.horizontal, 22).padding(.top, 10)
+                    .containerRelativeFrame(.horizontal)
                 }
             }
             .navigationTitle(loc("pending.edit_title"))

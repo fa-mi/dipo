@@ -239,6 +239,7 @@ struct PlannerView: View {
                         Spacer(minLength: 30)
                     }
                     .padding(.top, 14)
+                    .containerRelativeFrame(.horizontal)
                 }
             }
             .sheet(item: $active) { tool in
@@ -313,6 +314,7 @@ struct CalculatorSheet: View {
                         Spacer(minLength: 30)
                     }
                     .padding(.top, 14)
+                    .containerRelativeFrame(.horizontal)
                 }
             }
             .navigationTitle(loc(tool.titleKey))

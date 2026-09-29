@@ -507,6 +507,7 @@ struct CycleTrendBreakdown: View {
                         Spacer(minLength: 30)
                     }
                     .padding(.top, 12)
+                    .containerRelativeFrame(.horizontal)
                 }
             }
             .navigationTitle(loc("stats.trend_detail_title"))
