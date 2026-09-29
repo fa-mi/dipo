@@ -276,11 +276,11 @@ struct ProfileView: View {
                 do {
                     importPreview = try BackupService.previewBackup(from: url)
                 } catch {
-                    backupToast = BackupBanner(isError: true, message: error.localizedDescription)
+                    backupToast = BackupBanner(isError: true, message: UserFacingError.message(error))
                     pendingImportURL = nil
                 }
             case .failure(let err):
-                backupToast = BackupBanner(isError: true, message: err.localizedDescription)
+                backupToast = BackupBanner(isError: true, message: UserFacingError.message(err))
             }
         }
         // Preview sheet — shows what's in the picked file BEFORE wiping.
@@ -1403,7 +1403,7 @@ struct ProfileView: View {
         do {
             importPreview = try BackupService.previewBackup(from: entry.url)
         } catch {
-            backupToast = BackupBanner(isError: true, message: error.localizedDescription)
+            backupToast = BackupBanner(isError: true, message: UserFacingError.message(error))
             pendingImportURL = nil
         }
     }
@@ -1444,7 +1444,7 @@ struct ProfileView: View {
                 lastExportDate = now
             } catch {
                 backupBusyLabel = nil
-                backupToast = BackupBanner(isError: true, message: error.localizedDescription)
+                backupToast = BackupBanner(isError: true, message: UserFacingError.message(error))
                 HapticManager.shared.error()
             }
         }
@@ -1469,7 +1469,7 @@ struct ProfileView: View {
                 HapticManager.shared.success()
             } catch {
                 backupBusyLabel = nil
-                backupToast = BackupBanner(isError: true, message: error.localizedDescription)
+                backupToast = BackupBanner(isError: true, message: UserFacingError.message(error))
                 HapticManager.shared.error()
             }
             pendingImportURL = nil

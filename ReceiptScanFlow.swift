@@ -219,7 +219,7 @@ struct ReceiptScanFlow: View {
             } catch {
                 await MainActor.run {
                     HapticManager.shared.error()
-                    phase = .error(image, .unknown(error.localizedDescription))
+                    phase = .error(image, ReceiptScanError.unknown(error.localizedDescription))
                 }
             }
         }

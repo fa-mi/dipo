@@ -408,7 +408,8 @@ final class PremiumManager {
                 }
             } catch {
                 isLoading = false
-                purchaseError = String(format: loc("premium.restore_failed"), error.localizedDescription)
+                print("[Premium] restore error: \(error.localizedDescription)")
+                purchaseError = String(format: loc("premium.restore_failed"), UserFacingError.message(error))
             }
         }
     }

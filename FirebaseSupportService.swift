@@ -536,11 +536,9 @@ final class FirebaseSupportService {
     /// being offline is by far the likeliest cause, so that case gets its own
     /// reassuring line.
     static func fetchErrorMessage(_ error: Error) -> String {
-        let ns = error as NSError
-        // Firestore: 14 = unavailable (offline), 4 = deadline exceeded.
-        let offline = ns.domain == NSURLErrorDomain
-            || (ns.domain == "FIRFirestoreErrorDomain" && [4, 14].contains(ns.code))
-        return loc(offline ? "support.load_error_offline" : "error.unknown")
+        UserFacingError.connectivity(error) != nil
+            ? loc("support.load_error_offline")
+            : UserFacingError.message(error)
     }
 
     // MARK: - Fetch Replies for a ticket
