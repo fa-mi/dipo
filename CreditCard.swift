@@ -110,6 +110,7 @@ struct CreditCardLiabilityRow: View {
                         .foregroundStyle(AppTheme.textSecondary).frame(width: 28, height: 28)
                         .background(AppTheme.cardMid, in: Circle())
                 }
+                .accessibilityLabel(loc("a11y.more_actions"))
             }
 
             // Owed / limit

@@ -137,6 +137,7 @@ struct HoldingDetailView: View {
                     .foregroundStyle(AppTheme.textSecondary).frame(width: 40, height: 40)
                     .background(AppTheme.cardDark, in: Circle())
             }
+            .accessibilityLabel(loc("a11y.more_actions"))
         }
     }
 
