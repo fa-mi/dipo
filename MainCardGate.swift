@@ -41,6 +41,7 @@ struct MainCardGate: View {
                 .padding(.horizontal, 22)
                 .padding(.top, 40)
                 .padding(.bottom, 130)
+                .containerRelativeFrame(.horizontal)
             }
 
             VStack {

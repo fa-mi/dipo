@@ -45,6 +45,7 @@ struct CardDeleteSheet: View {
                     .padding(.horizontal, 22)
                     .padding(.top, 8)
                     .padding(.bottom, 130)
+                    .containerRelativeFrame(.horizontal)
                 }
 
                 VStack {

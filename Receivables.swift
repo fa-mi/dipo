@@ -225,6 +225,7 @@ struct ReceivablesView: View {
                         Spacer(minLength: 40)
                     }
                     .padding(.top, 12)
+                    .containerRelativeFrame(.horizontal)
                 }
             }
             .onAppear { withAnimation(.spring(response: 0.5)) { appeared = true } }
@@ -482,6 +483,7 @@ struct ReceivableFormSheet: View {
                         Spacer(minLength: 30)
                     }
                     .padding(.top, 14)
+                    .containerRelativeFrame(.horizontal)
                 }
             }
             .navigationTitle(loc(isEditing ? "receivable.edit_title" : "receivable.add"))
@@ -594,6 +596,7 @@ struct RepaymentSheet: View {
                         .padding(.horizontal, 22)
                         Spacer(minLength: 20)
                     }
+                    .containerRelativeFrame(.horizontal)
                 }
             }
             .navigationTitle(receivable.personName)

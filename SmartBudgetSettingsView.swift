@@ -308,6 +308,7 @@ struct SmartBudgetSettingsSheet: View {
                             }
                             Spacer(minLength: 40)
                         }.padding(.top, 12)
+                        .containerRelativeFrame(.horizontal)
                     }
                 }
             }
@@ -1330,6 +1331,7 @@ struct BudgetGroupDetailView: View {
                     }
                     Spacer(minLength: 40)
                 }.padding(.top, 16)
+                .containerRelativeFrame(.horizontal)
             }
         }
         .navigationTitle(group.label).navigationBarTitleDisplayMode(.large)

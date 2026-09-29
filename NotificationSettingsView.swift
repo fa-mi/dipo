@@ -34,6 +34,7 @@ struct NotificationSettingsView: View {
                     }
                     .padding(.horizontal, 20)
                     .padding(.top, 6)
+                    .containerRelativeFrame(.horizontal)
                 }
             }
             .navigationTitle(loc("notifpref.title"))

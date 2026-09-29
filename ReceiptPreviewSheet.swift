@@ -138,6 +138,7 @@ struct ReceiptPreviewSheet: View {
                         Spacer(minLength: 90)
                     }
                     .padding(.top, 8)
+                    .containerRelativeFrame(.horizontal)
                 }
             }
             .safeAreaInset(edge: .bottom) { saveBar }

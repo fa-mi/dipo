@@ -62,6 +62,7 @@ struct TidyCategoriesView: View {
                             Spacer(minLength: 100)
                         }
                         .padding(.top, 8)
+                        .containerRelativeFrame(.horizontal)
                     }
                 }
                 if !suggestions.isEmpty {

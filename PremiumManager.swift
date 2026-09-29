@@ -965,6 +965,7 @@ struct PaywallView: View {
 
                     Spacer(minLength: 40)
                 }
+                .containerRelativeFrame(.horizontal)
             }
 
             HStack {

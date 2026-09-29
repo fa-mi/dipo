@@ -320,6 +320,7 @@ struct SmartRecommendationView: View {
                     .padding(.bottom, 30)
                     .opacity(appeared ? 1 : 0)
                     .offset(y: appeared ? 0 : 12)
+                    .containerRelativeFrame(.horizontal)
                 }
             } else {
                 ProgressView().tint(AppTheme.accent)
@@ -946,6 +947,7 @@ struct ScoreDetailSheet: View {
                 Spacer(minLength: 20)
             }
             .padding(.horizontal, 20)
+            .containerRelativeFrame(.horizontal)
         }
         .background(AppTheme.bg)
     }

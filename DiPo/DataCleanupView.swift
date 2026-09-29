@@ -118,6 +118,7 @@ struct DataCleanupView: View {
                         Spacer(minLength: 60)
                     }
                     .padding(.horizontal, 22)
+                    .containerRelativeFrame(.horizontal)
                 }
             }
             .featureBar(pushed: pushed)

@@ -664,6 +664,7 @@ struct FinancialBriefingView: View {
                             Spacer(minLength: 30)
                         }
                         .opacity(appeared ? 1 : 0)
+                        .containerRelativeFrame(.horizontal)
                     }
                 } else {
                     ProgressView().tint(AppTheme.purple)

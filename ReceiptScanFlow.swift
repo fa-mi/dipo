@@ -377,6 +377,7 @@ private struct LandingView: View {
                     .padding(.horizontal, 22)
                     .padding(.bottom, 24)
                 }
+                .containerRelativeFrame(.horizontal)
             }
         }
     }

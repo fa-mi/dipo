@@ -508,6 +508,7 @@ struct RecurringExpensesView: View {
                     .padding(.horizontal, 22)
                     .opacity(appeared ? 1 : 0)
                     .offset(y: appeared ? 0 : 16)
+                    .containerRelativeFrame(.horizontal)
                 }
             }
             .featureBar(pushed: pushed)
@@ -1124,6 +1125,7 @@ struct RecurringFormSheet: View {
                     .opacity(appeared ? 1 : 0)
                     .offset(y: appeared ? 0 : 16)
                     .animation(AppMotion.appear, value: appeared)
+                    .containerRelativeFrame(.horizontal)
                 }
             }
             .navigationTitle(isEditing ? loc("recurring.edit_title") : loc("recurring.new_title"))
@@ -1347,6 +1349,7 @@ struct AllRecurringExpensesView: View {
                               onMore: { HapticManager.shared.tap(); actionsFor = $0 })
                     .padding(.horizontal, 22)
                     .padding(.vertical, 16)
+                    .containerRelativeFrame(.horizontal)
             }
         }
         .recurringActions(for: $actionsFor, vm: vm, cards: cards)
@@ -1400,6 +1403,7 @@ struct OrphanedAutoChargesView: View {
                             Spacer(minLength: 100)
                         }
                         .padding(.top, 8)
+                        .containerRelativeFrame(.horizontal)
                     }
                     VStack { Spacer(); deleteButton }
                 }
@@ -1593,6 +1597,7 @@ struct PhantomAutoChargesView: View {
                             Spacer(minLength: 130)
                         }
                         .padding(.top, 8)
+                        .containerRelativeFrame(.horizontal)
                     }
                     VStack { Spacer(); footer }
                 }

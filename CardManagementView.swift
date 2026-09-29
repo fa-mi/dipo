@@ -361,6 +361,7 @@ struct CardListView: View {
 
                     Spacer(minLength: 110)
                 }
+                .containerRelativeFrame(.horizontal)
             }
 
             // Empty state
@@ -1053,6 +1054,7 @@ struct CardFormSheet: View {
 
                         Spacer(minLength: 40)
                     }
+                    .containerRelativeFrame(.horizontal)
                 }
             }
             .navigationTitle(isEditing ? loc("cards.edit") : loc("cards.new_card"))
@@ -1388,6 +1390,7 @@ struct CardTransferSheet: View {
                         Spacer(minLength: 30)
                     }
                     .padding(.top, 8)
+                    .containerRelativeFrame(.horizontal)
                 }
             }
             .navigationTitle(loc("transfer.title"))
@@ -1469,6 +1472,7 @@ struct CardTransferSheet: View {
                         }
                     }
                     .padding(.horizontal, 22).padding(.top, 12)
+                    .containerRelativeFrame(.horizontal)
                 }
             }
             .navigationTitle(loc(picking == .source ? "transfer.from" : "transfer.to"))

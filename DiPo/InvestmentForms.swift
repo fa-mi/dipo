@@ -437,6 +437,7 @@ struct AddHoldingSheet: View {
                     Spacer(minLength: 20)
                 }
                 .padding(22)
+                .containerRelativeFrame(.horizontal)
             }
             .background(AppTheme.bg)
             .navigationTitle(loc("invest.add_holding"))
@@ -687,6 +688,7 @@ struct AddLotSheet: View {
                     Spacer(minLength: 20)
                 }
                 .padding(22)
+                .containerRelativeFrame(.horizontal)
             }
             .background(AppTheme.bg)
             .navigationTitle(holding.name)
@@ -826,6 +828,7 @@ struct EditLotSheet: View {
                     Spacer(minLength: 20)
                 }
                 .padding(22)
+                .containerRelativeFrame(.horizontal)
             }
             .background(AppTheme.bg)
             .navigationTitle(loc("invest.edit_lot"))
