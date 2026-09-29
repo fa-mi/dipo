@@ -62,6 +62,10 @@ final class AccountDeletionService {
         //    DiPo ID could never be reissued.
         if let dipoID { try? await db.collection("dipoIndex").document(dipoID).delete() }
         try? await db.collection("users").document(uid).delete()
+        // The web-dashboard snapshot: balances and six months of transactions.
+        // Keyed by uid, so it has to go before the auth account does — after
+        // that nothing can prove it is theirs to delete.
+        try? await db.collection("webSync").document(uid).delete()
 
         // 4. The auth account itself.
         do {

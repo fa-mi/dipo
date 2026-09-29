@@ -190,6 +190,11 @@ final class WebSyncService {
             "payload":        payload,
             "syncedAt":       ISO8601DateFormatter().string(from: now),
             "expiresAt":      ISO8601DateFormatter().string(from: expires),
+            // The same moment as a Timestamp, for Firestore's TTL policy on
+            // webSync (see dipo-backend readme): an expired snapshot is never
+            // served, so nothing should keep six months of transactions
+            // around after it. `expiresAt` stays a string for the Worker.
+            "expireAt":       Timestamp(date: expires),
             "accessCodeHash": Self.accessCodeHash(uid: uid, code: code),
             "codeAttempts":   0,
             "codeLocked":     false,
