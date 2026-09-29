@@ -467,6 +467,8 @@ final class LanguageManager {
         "notif.card_expires_soon": "Card expires soon",
         "notif.salary_incoming":   "Salary incoming in 3 days!",
         "notif.payday_tomorrow":   "Payday is tomorrow!",
+        "notif.salary_incoming_body": "%@ • %@ — arrives %@",
+        "notif.payday_tomorrow_body": "%@ • %@ lands on %@",
         
         // Auth
         "auth.title":            "DiPo",
@@ -2114,6 +2116,10 @@ final class LanguageManager {
         // Debt
         "notif.debt_due_title":         "Debt payment due soon",
         "notif.debt_due_body":          "%@: %@ due on the %dth.",
+        "notif.debt_due_in_days_title": "📅 Payment due in %d days",
+        "notif.debt_due_tomorrow_title": "⚠️ Payment due tomorrow",
+        "notif.debt_due_today_title":   "🚨 Payment due today",
+        "notif.debt_due_today_body":    "%@: pay %@ today to avoid a late fee.",
         // Savings goal reached
         "notif.goal_reached_title":     "Goal reached! %@",
         "notif.goal_reached_body":      "You've saved enough for %@. Time to make it happen!",
@@ -2968,6 +2974,8 @@ final class LanguageManager {
         "notif.card_expires_soon": "Kartu segera kadaluarsa",
         "notif.salary_incoming":   "Gaji masuk dalam 3 hari!",
         "notif.payday_tomorrow":   "Gajian besok!",
+        "notif.salary_incoming_body": "%@ • %@ — masuk %@",
+        "notif.payday_tomorrow_body": "%@ • %@ masuk hari %@",
         // Auth
         "auth.title":            "DiPo",
         "auth.tagline":          "Digital Pocket ID",
@@ -4604,6 +4612,10 @@ final class LanguageManager {
         // Hutang
         "notif.debt_due_title":         "Pembayaran hutang segera jatuh tempo",
         "notif.debt_due_body":          "%@: %@ jatuh tempo tanggal %d.",
+        "notif.debt_due_in_days_title": "📅 Jatuh tempo %d hari lagi",
+        "notif.debt_due_tomorrow_title": "⚠️ Jatuh tempo besok",
+        "notif.debt_due_today_title":   "🚨 Jatuh tempo hari ini",
+        "notif.debt_due_today_body":    "%@: bayar %@ hari ini supaya tidak kena denda.",
         // Savings goal tercapai
         "notif.goal_reached_title":     "Tujuan tercapai! %@",
         "notif.goal_reached_body":      "Tabunganmu cukup untuk %@. Saatnya wujudkan!",

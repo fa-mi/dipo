@@ -557,72 +557,99 @@ final class DebtViewModel {
 }
 
 // MARK: - Debt Notification Scheduler
-// Schedules iOS local push notifications for upcoming debt due dates
+//
+// The device-side timeline for debt due dates: pushes scheduled ahead of
+// time (3 days, 1 day, the morning of), so they fire whether or not DiPo is
+// opened in between. The Notifications inbox entry, with its advice, comes
+// from NotificationManager.scheduleDebtReminders, which calls this too and
+// no longer pushes on its own, so a due date is announced once.
+//
+// It used to push in English whatever the app language, ignore the "Debt due
+// dates" switch and the Royal gate, keep reminding for debts already paid off,
+// and never cancel a deleted debt's reminders (it removed "debt_<id>", while
+// the requests were "debt_<id>_3d", "_1d" and "_due").
 
 import UserNotifications
 
 struct DebtNotificationScheduler {
 
-    static func scheduleAll(debts: [DebtRecord]) {
-        let center = UNUserNotificationCenter.current()
-        // Remove old debt notifications
-        center.removePendingNotificationRequests(withIdentifiers:
-            debts.map { "debt_\($0.id.uuidString)" })
+    /// One scheduled push, built on the main actor and handed to the
+    /// notification center as plain values.
+    struct Planned: Sendable {
+        let id: String
+        let title: String
+        let body: String
+        let debtId: String
+        let fire: DateComponents
+    }
 
-        for debt in debts where debt.isActive {
-            scheduleReminder(for: debt, daysBefore: 3)
-            scheduleReminder(for: debt, daysBefore: 1)
-            scheduleOnDueDay(for: debt)
+    static let idPrefix = "debt_"
+
+    static func scheduleAll(debts: [DebtRecord]) {
+        let enabled = NotificationPreferences.shared.isEnabled(.debt)
+            && PremiumManager.shared.canAccess(.smartDebt)
+        let planned = enabled ? plan(debts: debts, now: .now, cal: .current) : []
+        Task {
+            let center = UNUserNotificationCenter.current()
+            // Everything DiPo scheduled for debts before, including debts that
+            // have since been deleted or paid off.
+            let stale = await center.pendingNotificationRequests()
+                .map(\.identifier).filter { $0.hasPrefix(idPrefix) }
+            center.removePendingNotificationRequests(withIdentifiers: stale)
+            for p in planned {
+                let content = UNMutableNotificationContent()
+                content.title = p.title
+                content.body = p.body
+                content.sound = .dipo
+                content.userInfo = ["debtId": p.debtId]
+                let trigger = UNCalendarNotificationTrigger(dateMatching: p.fire, repeats: false)
+                try? await center.add(UNNotificationRequest(identifier: p.id, content: content, trigger: trigger))
+            }
         }
     }
 
-    private static func scheduleReminder(for debt: DebtRecord, daysBefore: Int) {
-        let cal = Calendar.current
-        let now = Date()
-        // Calculate next due date
-        var components = cal.dateComponents([.year, .month], from: now)
-        components.day = debt.dueDayOfMonth
-        guard var dueDate = cal.date(from: components) else { return }
-        if dueDate <= now { dueDate = cal.date(byAdding: .month, value: 1, to: dueDate) ?? dueDate }
-
-        guard let reminderDate = cal.date(byAdding: .day, value: -daysBefore, to: dueDate),
-              reminderDate > now else { return }
-
-        let content = UNMutableNotificationContent()
-        content.title = daysBefore == 1 ? "⚠️ Payment due tomorrow!" : "📅 Payment due in \(daysBefore) days"
-        content.body = "\(debt.name): \(CurrencyManager.shared.formatted(debt.minimumPayment, currency: debt.currency)) due on the \(debt.dueDayOfMonth)th"
-        content.sound = .dipo
-        content.userInfo = ["debtId": debt.id.uuidString]
-
-        var triggerComponents = cal.dateComponents([.year, .month, .day], from: reminderDate)
-        triggerComponents.hour = 9
-        triggerComponents.minute = 0
-        let trigger = UNCalendarNotificationTrigger(dateMatching: triggerComponents, repeats: false)
-        let id = "debt_\(debt.id.uuidString)_\(daysBefore)d"
-        center.add(UNNotificationRequest(identifier: id, content: content, trigger: trigger))
+    /// The pushes still ahead for every debt that is still owed.
+    static func plan(debts: [DebtRecord], now: Date, cal: Calendar) -> [Planned] {
+        var out: [Planned] = []
+        for debt in debts where debt.isActive && !debt.manuallyClosed && debt.currentBalance > 0 {
+            let due = nextDueDate(day: debt.dueDayOfMonth, onOrAfter: now, cal: cal)
+            let dayOfMonth = cal.component(.day, from: due)
+            let amount = CurrencyManager.shared.formatted(debt.effectiveMinimumPayment, currency: debt.currency)
+            let id = debt.id.uuidString
+            let steps: [(suffix: String, daysBefore: Int, hour: Int, title: String, body: String)] = [
+                ("3d", 3, 9, String(format: loc("notif.debt_due_in_days_title"), 3),
+                 String(format: loc("notif.debt_due_body"), debt.name, amount, dayOfMonth)),
+                ("1d", 1, 9, loc("notif.debt_due_tomorrow_title"),
+                 String(format: loc("notif.debt_due_body"), debt.name, amount, dayOfMonth)),
+                ("due", 0, 8, loc("notif.debt_due_today_title"),
+                 String(format: loc("notif.debt_due_today_body"), debt.name, amount)),
+            ]
+            for step in steps {
+                let day = cal.date(byAdding: .day, value: -step.daysBefore, to: due) ?? due
+                var fire = cal.dateComponents([.year, .month, .day], from: day)
+                fire.hour = step.hour
+                fire.minute = 0
+                guard let when = cal.date(from: fire), when > now else { continue }
+                out.append(Planned(id: "\(idPrefix)\(id)_\(step.suffix)", title: step.title,
+                                   body: step.body, debtId: id, fire: fire))
+            }
+        }
+        return out
     }
 
-    private static func scheduleOnDueDay(for debt: DebtRecord) {
-        let cal = Calendar.current
-        let now = Date()
-        var components = cal.dateComponents([.year, .month], from: now)
-        components.day = debt.dueDayOfMonth
-        guard var dueDate = cal.date(from: components) else { return }
-        if dueDate <= now { dueDate = cal.date(byAdding: .month, value: 1, to: dueDate) ?? dueDate }
-
-        let content = UNMutableNotificationContent()
-        content.title = "🚨 Payment due TODAY"
-        content.body = "\(debt.name): Pay \(CurrencyManager.shared.formatted(debt.minimumPayment, currency: debt.currency)) now to avoid late fees!"
-        content.sound = .defaultCritical
-        content.userInfo = ["debtId": debt.id.uuidString]
-
-        var triggerComponents = cal.dateComponents([.year, .month, .day], from: dueDate)
-        triggerComponents.hour = 8
-        triggerComponents.minute = 0
-        let trigger = UNCalendarNotificationTrigger(dateMatching: triggerComponents, repeats: false)
-        let id = "debt_\(debt.id.uuidString)_due"
-        center.add(UNNotificationRequest(identifier: id, content: content, trigger: trigger))
+    /// The next time `day` comes round, today included. A due day past the
+    /// end of a month (31 in April, 29–31 in February) falls on that month's
+    /// last day instead of spilling into the next month.
+    static func nextDueDate(day: Int, onOrAfter now: Date, cal: Calendar) -> Date {
+        let today = cal.startOfDay(for: now)
+        func due(inMonthOf date: Date) -> Date {
+            let start = cal.date(from: cal.dateComponents([.year, .month], from: date)) ?? date
+            let length = cal.range(of: .day, in: .month, for: start)?.count ?? 28
+            return cal.date(byAdding: .day, value: min(max(day, 1), length) - 1, to: start) ?? start
+        }
+        let thisMonth = due(inMonthOf: today)
+        if thisMonth >= today { return thisMonth }
+        let nextMonth = cal.date(byAdding: .month, value: 1, to: today) ?? today
+        return due(inMonthOf: nextMonth)
     }
-
-    private static var center: UNUserNotificationCenter { .current() }
 }
