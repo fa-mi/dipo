@@ -88,7 +88,21 @@ final class AuthViewModel {
 
     var isBiometricAvailable: Bool {
         var error: NSError?
-        return LAContext().canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error)
+        let ok = LAContext().canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error)
+        return Self.biometricGateApplies(canEvaluate: ok, error: error.flatMap { LAError.Code(rawValue: $0.code) })
+    }
+
+    /// Whether the lock screen should stand, given what LocalAuthentication
+    /// says about biometrics.
+    ///
+    /// A LOCKOUT still counts. After five failed Face ID attempts iOS reports
+    /// biometrics as unavailable (`biometryLockout`), and this used to read
+    /// that as "the phone has no Face ID" and open the app — so anyone holding
+    /// the phone could get in by failing five times. On a phone a household
+    /// shares, that is the whole threat. The gate stays, and unlocking falls
+    /// back to the phone's passcode (see `triggerBiometric`).
+    nonisolated static func biometricGateApplies(canEvaluate: Bool, error: LAError.Code?) -> Bool {
+        canEvaluate || error == .biometryLockout
     }
 
     /// User-controlled toggle — false means always use PIN even if Face/Touch ID is available
@@ -184,8 +198,11 @@ final class AuthViewModel {
         guard !isLoading else { return }
         let ctx = LAContext()
         var error: NSError?
-        guard ctx.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error) else {
-            // Device doesn't support biometrics — skip gate
+        // Face ID first, the phone's passcode as the fallback — which is also
+        // the only way back in once Face ID is locked out after failed tries.
+        // This is unavailable only when the phone has no passcode at all, and
+        // then it has no Face ID either (iOS requires one for the other).
+        guard ctx.canEvaluatePolicy(.deviceOwnerAuthentication, error: &error) else {
             withAnimation(.spring(response: 0.5, dampingFraction: 0.82)) {
                 authState = .authenticated
             }
@@ -193,7 +210,7 @@ final class AuthViewModel {
         }
         isLoading = true
         ctx.evaluatePolicy(
-            .deviceOwnerAuthenticationWithBiometrics,
+            .deviceOwnerAuthentication,
             localizedReason: loc("auth.biometric_reason")
         ) { success, err in
             DispatchQueue.main.async {
@@ -262,7 +279,7 @@ final class AuthViewModel {
 
     func submitName() {
         guard userName.trimmingCharacters(in: .whitespaces).count >= 2 else {
-            errorMessage = "Enter at least 2 characters"
+            errorMessage = loc("setup.error.name_short")
             HapticManager.shared.error()
             return
         }

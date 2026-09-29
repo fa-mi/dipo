@@ -352,10 +352,11 @@ struct InstallmentFormSheet: View {
     private let tenors = [3, 6, 9, 12, 18, 24, 36]
 
     private var preview: CardInstallment? {
-        guard let a = Double(amount), a > 0 else { return nil }
+        let a = NumberInput.amount(amount)
+        guard a > 0 else { return nil }
         return CardInstallment(cardID: card.id, merchant: merchant, totalAmount: a,
                                tenorMonths: tenor, startDate: start,
-                               flatRatePercent: Double(rate) ?? 0,
+                               flatRatePercent: NumberInput.decimal(rate),
                                currency: card.resolvedCurrency)
     }
 
@@ -419,9 +420,9 @@ struct InstallmentFormSheet: View {
             .onAppear {
                 guard let inst = editing else { return }
                 merchant = inst.merchant
-                amount   = String(inst.totalAmount)
+                amount   = NumberInput.text(inst.totalAmount)
                 tenor    = inst.tenorMonths
-                rate     = String(inst.flatRatePercent)
+                rate     = NumberInput.text(inst.flatRatePercent)
                 start    = inst.startDate
             }
             .navigationBarTitleDisplayMode(.inline)
@@ -468,7 +469,8 @@ struct InstallmentFormSheet: View {
     }
 
     private func save() {
-        guard let a = Double(amount), a > 0 else { return }
+        let a = NumberInput.amount(amount)
+        guard a > 0 else { return }
         let name = merchant.trimmingCharacters(in: .whitespaces)
         let label = name.isEmpty ? loc("inst.untitled") : name
 
@@ -480,12 +482,12 @@ struct InstallmentFormSheet: View {
             inst.totalAmount = a
             inst.tenorMonths = max(tenor, 1)
             inst.startDate = start
-            inst.flatRatePercent = Double(rate) ?? 0
+            inst.flatRatePercent = NumberInput.decimal(rate)
         } else {
             let inst = CardInstallment(cardID: card.id,
                                        merchant: label,
                                        totalAmount: a, tenorMonths: tenor, startDate: start,
-                                       flatRatePercent: Double(rate) ?? 0,
+                                       flatRatePercent: NumberInput.decimal(rate),
                                        currency: card.resolvedCurrency)
             context.insert(inst)
         }
@@ -617,7 +619,7 @@ struct InstallmentSimulatorSheet: View {
     }
 
     private var overpayCard: some View {
-        let paying = Double(payingText) ?? 0
+        let paying = NumberInput.amount(payingText)
         let extra = InstallmentAdvice.Extra(statement: statement, paying: paying,
                                             revolvingBalance: revolving)
         return VStack(alignment: .leading, spacing: 10) {

@@ -6,6 +6,15 @@ import Security
 // MARK: - Network Errors
 
 enum NetworkError: Error, LocalizedError {
+    /// The request failed for want of signal — none at all, or too weak to
+    /// finish — rather than because anything answered with an error.
+    var isLostSignal: Bool {
+        switch self {
+        case .noConnection, .timeout: return true
+        default: return false
+        }
+    }
+
     case invalidURL
     case noConnection
     case timeout
@@ -28,13 +37,14 @@ enum NetworkError: Error, LocalizedError {
         case .invalidResponse:
             return loc("error.invalid_response")
         case .httpError(let code):
-            return "HTTP Error \(code)"
+            // Rate limit or a server-side failure: nothing the person did.
+            return loc(code == 429 || code >= 500 ? "error.busy" : "error.unknown")
         case .sslPinningFailed:
             return loc("error.ssl_pinning_failed")
-        case .decodingError(let error):
-            return "Decoding error: \(error.localizedDescription)"
-        case .encodingError(let error):
-            return "Encoding error: \(error.localizedDescription)"
+        case .decodingError:
+            return loc("error.invalid_response")
+        case .encodingError:
+            return loc("error.unknown")
         case .serverError(let message):
             return message
         case .unknown:
@@ -280,7 +290,17 @@ final class NetworkService: NetworkServiceProtocol {
                     throw NetworkError.timeout
                 }
                 
-                if (error as NSError).code == NSURLErrorNotConnectedToInternet {
+                // Every way of "no route to the server" is no connection, not an
+                // unknown failure. On patchy mobile coverage the likeliest are a
+                // connection dropped mid-request, and cellular data switched off
+                // for the app (or cut by the carrier when the quota runs out).
+                let noRoute: Set<Int> = [
+                    NSURLErrorNotConnectedToInternet, NSURLErrorNetworkConnectionLost,
+                    NSURLErrorDataNotAllowed, NSURLErrorInternationalRoamingOff,
+                    NSURLErrorCannotFindHost, NSURLErrorCannotConnectToHost,
+                    NSURLErrorDNSLookupFailed,
+                ]
+                if noRoute.contains((error as NSError).code) {
                     throw NetworkError.noConnection
                 }
                 

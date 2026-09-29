@@ -53,6 +53,7 @@ struct HoldingDetailView: View {
                     VStack(spacing: 18) {
                         header.padding(.top, 20)
                         heroCard
+                        if goldFiguresLookWrong { goldCheckBanner }
                         if holding.priceHistory.count >= 2 { priceChartCard }
                         detailRows
                         actionRow
@@ -79,7 +80,7 @@ struct HoldingDetailView: View {
                         .presentationBackground(AppTheme.bg).preferredColorScheme(appColorScheme())
                 case .price:
                     UpdatePriceSheet(holding: holding)
-                        .presentationDetents([.height(320)]).presentationDragIndicator(.visible)
+                        .presentationDetents([.medium]).presentationDragIndicator(.visible)
                         .presentationBackground(AppTheme.bg).preferredColorScheme(appColorScheme())
                 }
             }
@@ -180,6 +181,26 @@ struct HoldingDetailView: View {
         }
     }
 
+    /// Gold recorded with totals where per-gram prices belong — the mistake the
+    /// forms now catch, but holdings saved before that still carry it.
+    private var goldFiguresLookWrong: Bool {
+        guard holding.type == .gold else { return false }
+        return InvestmentInput.goldPriceLooksWrong(perGram: s.avgCost, currency: cur)
+            || InvestmentInput.goldPriceLooksWrong(perGram: holding.lastPrice, currency: cur)
+    }
+
+    private var goldCheckBanner: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill").font(.system(.caption))
+            Text(loc("invest.gold_check")).font(.system(.caption, weight: .medium))
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .foregroundStyle(AppTheme.amber)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .background(AppTheme.amber.opacity(0.12), in: RoundedRectangle(cornerRadius: AppRadius.lg))
+    }
+
     private func plChip(_ text: String, _ tint: Color, trend: Int) -> some View {
         HStack(spacing: 4) {
             if let arrow = investArrow(trend) {
@@ -210,7 +231,8 @@ struct HoldingDetailView: View {
             if !holding.type.priceIsFixed { rowDivider; detailRow(loc("invest.current_price"), priceNow) }
             rowDivider
             detailRow(loc("invest.volume"), "\(investUnits(s.unitsHeld)) \(holding.type.unitLabel)")
-            if holding.type == .stock {
+            // A lot is 100 shares on the IDX; US shares trade singly (and in fractions).
+            if holding.type == .stock && StockMarket.of(currency: cur) == .idx {
                 rowDivider
                 detailRow(loc("invest.lot"), "\(investUnits((s.unitsHeld / 100).rounded(.down))) Lot")
             }

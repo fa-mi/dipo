@@ -373,13 +373,16 @@ enum BackupError: LocalizedError {
     /// Backup's `userID` doesn't match the currently logged-in user.
     case userMismatch
 
+    /// What the person reads. The technical detail each case carries stays on
+    /// the error for debugging — "The data couldn't be read because it isn't
+    /// in the correct format." helps no one choosing a file.
     var errorDescription: String? {
         switch self {
-        case .readFailed(let msg):    return "Failed to read backup: \(msg)"
-        case .decodeFailed(let msg):  return "Backup file is invalid: \(msg)"
-        case .unknownVersion(let v):  return "This backup (v\(v)) is from a newer app version."
-        case .writeFailed(let msg):   return "Failed to write backup: \(msg)"
-        case .noData:                 return "Nothing to back up yet."
+        case .readFailed:             return loc("backup.error.read")
+        case .decodeFailed:           return loc("backup.error.decode")
+        case .unknownVersion:         return loc("backup.error.newer_version")
+        case .writeFailed:            return loc("backup.error.write")
+        case .noData:                 return loc("backup.error.no_data")
         case .notLoggedIn:            return loc("backup.error.notLoggedIn")
         case .notDiPoBackup:          return loc("backup.error.notDiPoBackup")
         case .userMismatch:           return loc("backup.error.userMismatch")
@@ -504,6 +507,26 @@ enum BackupService {
     /// sheet. Caller is responsible for presenting the URL via
     /// UIActivityViewController.
     static func exportBackup(context: ModelContext) throws -> URL {
+        let data = try encodedBackup(context: context)
+
+        // Filename pattern: DiPo_Backup_<userID-or-anon>_<timestamp>.json
+        // Including a coarse timestamp helps users keep multiple backups.
+        let stamp = Int(Date().timeIntervalSince1970)
+        let userTag = (UserSession.shared.userID ?? "anon").prefix(8)
+        let filename = "DiPo_Backup_\(userTag)_\(stamp).json"
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(filename)
+
+        do {
+            try data.write(to: url, options: .atomic)
+        } catch {
+            throw BackupError.writeFailed(error.localizedDescription)
+        }
+        return url
+    }
+
+    /// The backup as JSON bytes, exactly what `exportBackup` writes. Split
+    /// out so AutoBackup can put the same file somewhere else.
+    static func encodedBackup(context: ModelContext) throws -> Data {
         // Require login — backups are tagged with the owner's userID so
         // they can't be cross-restored on another account. No userID =
         // can't tag = refuse export.
@@ -692,26 +715,11 @@ enum BackupService {
         encoder.dateEncodingStrategy = .iso8601
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
 
-        let data: Data
         do {
-            data = try encoder.encode(payload)
+            return try encoder.encode(payload)
         } catch {
             throw BackupError.writeFailed(error.localizedDescription)
         }
-
-        // Filename pattern: DiPo_Backup_<userID-or-anon>_<timestamp>.json
-        // Including a coarse timestamp helps users keep multiple backups.
-        let stamp = Int(Date().timeIntervalSince1970)
-        let userTag = (UserSession.shared.userID ?? "anon").prefix(8)
-        let filename = "DiPo_Backup_\(userTag)_\(stamp).json"
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent(filename)
-
-        do {
-            try data.write(to: url, options: .atomic)
-        } catch {
-            throw BackupError.writeFailed(error.localizedDescription)
-        }
-        return url
     }
 
     // MARK: - Import

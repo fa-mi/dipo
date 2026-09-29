@@ -7,7 +7,7 @@ import SwiftData
 // and direct — it reads two free, no-key endpoints the app can call itself:
 //
 //   • Crypto  → CoinGecko simple/price (real-time, IDR or USD).
-//   • Stocks  → Yahoo Finance chart (IDX tickers, delayed ~15 min).
+//   • Stocks  → Yahoo Finance chart (IDX and US tickers, delayed ~15 min).
 //
 // Everything else (gold, reksadana, bonds, deposits) is user-maintained, so it
 // is skipped here. A failed fetch changes nothing — the manual price stands —
@@ -89,6 +89,9 @@ enum PriceService {
         var req = URLRequest(url: url, timeoutInterval: 12)
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        for (field, value) in await WorkerAuth.headers() {
+            req.setValue(value, forHTTPHeaderField: field)
+        }
         req.httpBody = try? JSONSerialization.data(withJSONObject: ["items": items])
 
         do {
@@ -117,7 +120,7 @@ enum PriceService {
     private static func quote(for h: InvestmentHolding) async -> Quote? {
         switch h.type {
         case .crypto: return await crypto(id: h.symbol, currency: h.currency)
-        case .stock:  return await stock(symbol: h.symbol)
+        case .stock:  return await stock(symbol: h.symbol, currency: h.currency)
         default:      return nil
         }
     }
@@ -144,12 +147,11 @@ enum PriceService {
         return Quote(price: price, prevClose: prev)
     }
 
-    // MARK: Yahoo Finance (IDX)
+    // MARK: Yahoo Finance (IDX, US)
 
-    private static func stock(symbol raw: String) async -> Quote? {
-        let s = raw.trimmingCharacters(in: .whitespaces).uppercased()
-        // IDX tickers need the ".JK" suffix; leave any explicit market alone.
-        let ticker = s.contains(".") ? s : "\(s).JK"
+    private static func stock(symbol raw: String, currency: String) async -> Quote? {
+        // The holding's currency picks the market: IDR → "BBCA.JK", USD → "AAPL".
+        let ticker = StockMarket.yahooTicker(symbol: raw, currency: currency)
         guard let url = URL(string:
             "https://query1.finance.yahoo.com/v8/finance/chart/\(ticker)?interval=1d&range=1d"),
               let obj = await getJSON(url) as? [String: Any],
@@ -158,6 +160,11 @@ enum PriceService {
               let meta = results.first?["meta"] as? [String: Any],
               let price = (meta["regularMarketPrice"] as? NSNumber)?.doubleValue, price > 0
         else { return nil }
+        // A quote in another currency than the holding's would be stored as if
+        // it were — a $366 share read as Rp366. Refuse it; the price stands.
+        if let quoted = meta["currency"] as? String, quoted.uppercased() != currency.uppercased() {
+            return nil
+        }
         let prev = (meta["previousClose"] as? NSNumber)?.doubleValue
                 ?? (meta["chartPreviousClose"] as? NSNumber)?.doubleValue ?? 0
         return Quote(price: price, prevClose: prev)

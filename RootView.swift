@@ -355,6 +355,10 @@ struct RootView: View {
     /// Observe the support service so the maintenance gate flips live when the
     /// admin toggles it.
     @State private var support = FirebaseSupportService.shared
+    /// Set when this launch had to set an unopenable store aside and start
+    /// empty (DiPo/StoreRecovery.swift). Shown once the user is past the lock,
+    /// so they learn it before they start re-entering data.
+    @State private var storeNotice = StoreRecovery.pendingNotice
 
     var body: some View {
         ZStack {
@@ -389,6 +393,9 @@ struct RootView: View {
                                 .transition(.asymmetric(
                                     insertion: .opacity,
                                     removal: .scale(scale: 1.05).combined(with: .opacity)))
+                        } else if scenePhase != .active && authVM.isBiometricActive {
+                            // Keeps finances out of the app-switcher snapshot.
+                            PrivacyCover()
                         }
                     }
             }
@@ -396,7 +403,7 @@ struct RootView: View {
             .id(LanguageManager.shared.renderID)
         }
         .animation(.spring(response: 0.5, dampingFraction: 0.82), value: authVM.authState)
-        .overlay { NoInternetOverlay() }      // full-screen offline view
+        .overlay { NoInternetOverlay() }      // small "offline" pill; the app stays usable
         .overlay(alignment: .top) { ReconnectedToast() }  // brief "Back online" toast
         // Admin-controlled maintenance gate — blocks the ENTIRE app (above
         // auth, main UI, everything) with an opaque full-screen page when the
@@ -407,6 +414,19 @@ struct RootView: View {
                 MaintenanceView(title: support.maintenanceTitle, message: support.maintenanceMessage)
                     .transition(.opacity)
             }
+        }
+        .alert(loc("store_recovery.title"), isPresented: Binding(
+            get: { storeNotice != nil && authVM.authState == .authenticated },
+            set: { shown in
+                if !shown {
+                    StoreRecovery.acknowledge()
+                    storeNotice = nil
+                }
+            }
+        )) {
+            Button(loc("store_recovery.ok"), role: .cancel) {}
+        } message: {
+            Text(loc("store_recovery.body"))
         }
 
         // KEY: whenever SwiftData adds/removes/edits any BankCard,
@@ -488,6 +508,8 @@ struct RootView: View {
             // or a category changed, a transaction moved to another day).
             if newPhase == .background {
                 WidgetDataSync.refresh(context: context)
+                // At most once a day; see DiPo/AutoBackup.swift.
+                AutoBackup.runIfDue(context: context)
             }
             if newPhase == .active {
                 appVM.cards = liveCards
@@ -515,6 +537,7 @@ struct RootView: View {
             appVM.cards = liveCards
             guard !Self.didLaunch else { return }
             Self.didLaunch = true
+            StoreRecovery.reportIfNeeded()
             // Cards saved by an older build still hold their middle digits.
             // Idempotent, so it costs nothing once there is nothing to trim.
             CardNumber.trimStoredCards(context: context)

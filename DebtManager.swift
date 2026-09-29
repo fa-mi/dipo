@@ -537,9 +537,9 @@ final class DebtViewModel {
 
     func loadForEdit(_ d: DebtRecord) {
         formName = d.name; formType = d.debtType
-        formTotal = String(d.totalAmount); formBalance = String(d.currentBalance)
-        formMinPayment = String(d.minimumPayment)
-        formInterestRate = String(d.annualInterestRate)
+        formTotal = NumberInput.text(d.totalAmount); formBalance = NumberInput.text(d.currentBalance)
+        formMinPayment = NumberInput.text(d.minimumPayment)
+        formInterestRate = NumberInput.text(d.annualInterestRate)
         formDueDay = d.dueDayOfMonth; formCurrency = d.currency; formNotes = d.notes
         editingDebt = d
         showAddSheet = true
@@ -547,12 +547,11 @@ final class DebtViewModel {
 
     func validate() -> Bool {
         guard !formName.trimmingCharacters(in: .whitespaces).isEmpty else {
-            formError = "Enter a name"; return false
+            formError = loc("debt.error.name"); return false
         }
-        let norm: (String) -> String = { $0.replacingOccurrences(of: ",", with: ".") }
-        guard Double(norm(formBalance)) != nil else { formError = "Enter current balance"; return false }
-        guard Double(norm(formMinPayment)) != nil else { formError = "Enter minimum payment"; return false }
-        guard Double(norm(formInterestRate)) != nil else { formError = "Enter interest rate"; return false }
+        guard NumberInput.isNumber(formBalance) else { formError = loc("debt.error.balance"); return false }
+        guard NumberInput.isNumber(formMinPayment) else { formError = loc("debt.error.min_payment"); return false }
+        guard NumberInput.isNumber(formInterestRate) else { formError = loc("debt.error.rate"); return false }
         formError = nil; return true
     }
 }

@@ -286,7 +286,7 @@ final class RecurringExpenseViewModel {
 
     func loadForEdit(_ e: RecurringExpense, cards: [BankCard]) {
         formLabel = e.label
-        formAmount = String(e.amount)
+        formAmount = NumberInput.text(e.amount)
         formDay = e.dayOfMonth
         formCategory = e.category
         formCardID = e.cardID
@@ -305,7 +305,7 @@ final class RecurringExpenseViewModel {
         guard !formLabel.trimmingCharacters(in: .whitespaces).isEmpty else {
             formError = loc("recurring.error_label"); return false
         }
-        guard let amt = Double(formAmount), amt > 0 else {
+        guard NumberInput.amount(formAmount) > 0 else {
             formError = loc("recurring.error_amount"); return false
         }
         guard formCardID != nil else {
@@ -1044,7 +1044,8 @@ struct RecurringFormSheet: View {
 
     /// The consequence of saving this, computed live as the form is filled.
     private var impact: CommitmentImpact? {
-        guard let amount = Double(vm.formAmount), amount > 0 else { return nil }
+        let amount = NumberInput.amount(vm.formAmount)
+        guard amount > 0 else { return nil }
         let pref = CurrencyManager.shared.preferredCurrency
         let converted = CurrencyManager.shared.convert(amount, from: vm.formCurrency, to: pref)
         return CommitmentImpact.build(proposedAmount: converted,
@@ -1064,7 +1065,8 @@ struct RecurringFormSheet: View {
               let card = cards.first(where: { $0.id == cardID }) else { return nil }
         let target = card.resolvedCurrency
         guard !vm.formCurrency.isEmpty, vm.formCurrency != target else { return nil }
-        guard let amount = Double(vm.formAmount), amount > 0 else { return nil }
+        let amount = NumberInput.amount(vm.formAmount)
+        guard amount > 0 else { return nil }
         let cm = CurrencyManager.shared
         let converted = cm.convert(amount, from: vm.formCurrency, to: target)
         let unitRate  = cm.convert(1, from: vm.formCurrency, to: target)
@@ -1291,7 +1293,7 @@ struct RecurringFormSheet: View {
     }
 
     private func save() {
-        let amount = Double(vm.formAmount) ?? 0
+        let amount = NumberInput.amount(vm.formAmount)
         let newLabel = vm.formLabel.trimmingCharacters(in: .whitespaces)
         if let e = vm.editing {
             // A rename carries the bill's recorded payments with it. They are

@@ -10,7 +10,6 @@ final class NetworkMonitor {
 
     private(set) var isConnected:     Bool = true
     private(set) var justReconnected: Bool = false
-    private(set) var isChecking:      Bool = false   // spinner while retrying
 
     private let monitor = NWPathMonitor()
     private let queue   = DispatchQueue(label: "dipo.network.monitor", qos: .utility)
@@ -22,7 +21,6 @@ final class NetworkMonitor {
             let connected = path.status == .satisfied
             DispatchQueue.main.async {
                 self.isConnected = connected
-                self.isChecking  = false
                 if connected && self.wasOffline {
                     self.justReconnected = true
                     IndonesianHolidayService.shared.prefetch()
@@ -35,136 +33,51 @@ final class NetworkMonitor {
         }
         monitor.start(queue: queue)
     }
-
-    /// Called by the Retry button — briefly shows spinner then re-checks path.
-    func retry() {
-        isChecking = true
-        // Re-evaluate current path after short delay to give NWPathMonitor time
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in
-            guard let self else { return }
-            let connected = self.monitor.currentPath.status == .satisfied
-            self.isConnected = connected
-            self.isChecking  = false
-            if connected {
-                self.justReconnected = true
-                IndonesianHolidayService.shared.prefetch()
-                DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
-                    self.justReconnected = false
-                }
-            }
-        }
-    }
 }
 
-// MARK: - No Internet Full-Screen View
-// Shown as an overlay over the whole app when there is no connection.
-// Slides away automatically when connection is restored.
-
+// MARK: - Offline banner
+//
+// Everything DiPo records lives on the phone, so losing signal takes away
+// only the few things that talk to a server: the AI chat's model replies,
+// the receipt fallback to Haiku, sign-in, purchases, web sync. This used to
+// be a full-screen, opaque page with no way past it: the whole app was
+// locked until the signal came back. For someone on patchy rural coverage
+// that means locked exactly when they are standing at the warung wanting to
+// log what they just paid.
+//
+// Now it is a small pill at the top that says so and lets every touch
+// through. The features that need the network already handle being offline
+// on their own: the receipt scan keeps its on-device reading, and the chat
+// keeps what was typed (see AIChatViewModel.keepForLater).
 struct NoInternetOverlay: View {
-    @State private var monitor  = NetworkMonitor.shared
-    @State private var appeared = false
+    @State private var monitor = NetworkMonitor.shared
 
     var body: some View {
-        ZStack {
+        VStack {
             if !monitor.isConnected {
-                offlineScreen
-                    .transition(.asymmetric(
-                        insertion:  .move(edge: .bottom).combined(with: .opacity),
-                        removal:    .move(edge: .bottom).combined(with: .opacity)
-                    ))
+                HStack(spacing: 8) {
+                    Image(systemName: "wifi.slash")
+                        .font(.system(.footnote, weight: .semibold))
+                        .foregroundStyle(AppTheme.orange)
+                    Text(loc("network.offline_banner"))
+                        .font(.system(.footnote, weight: .semibold))
+                        .foregroundStyle(AppTheme.textPrimary)
+                }
+                .padding(.horizontal, 16).padding(.vertical, 9)
+                .background(
+                    Capsule().fill(AppTheme.cardMid)
+                        .shadow(color: .black.opacity(0.2), radius: 8, y: 4)
+                )
+                .padding(.top, 54)
+                .transition(.move(edge: .top).combined(with: .opacity))
+                .accessibilityElement(children: .combine)
             }
+            Spacer()
         }
         .animation(.spring(response: 0.45, dampingFraction: 0.8), value: monitor.isConnected)
+        .ignoresSafeArea(edges: .top)
+        .allowsHitTesting(false)
         .zIndex(998)
-    }
-
-    private var offlineScreen: some View {
-        ZStack {
-            AppTheme.bg.ignoresSafeArea()
-
-            VStack(spacing: 0) {
-                Spacer()
-
-                // Mascot — full color, no circle
-                Image("DiPoMascot")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 160, height: 160)
-                    .opacity(appeared ? 1 : 0)
-                    .scaleEffect(appeared ? 1 : 0.85)
-                    .animation(AppMotion.appear, value: appeared)
-
-                Spacer().frame(height: 28)
-
-                // Title
-                Text(loc("network.no_connection"))
-                    .font(.system(.title2, weight: .bold))
-                    .foregroundStyle(AppTheme.textPrimary)
-                    .opacity(appeared ? 1 : 0)
-                    .animation(AppMotion.appear, value: appeared)
-
-                Spacer().frame(height: 10)
-
-                // Subtitle
-                Text(loc("network.message"))
-                    .font(.system(.subheadline))
-                    .foregroundStyle(AppTheme.textSecondary)
-                    .multilineTextAlignment(.center)
-                    .lineSpacing(3)
-                    .padding(.horizontal, 40)
-                    .opacity(appeared ? 1 : 0)
-                    .animation(AppMotion.appear, value: appeared)
-
-                Spacer().frame(height: 40)
-
-                // Retry button
-                retryButton
-                    .padding(.horizontal, 32)
-                    .opacity(appeared ? 1 : 0)
-                    .animation(AppMotion.appear, value: appeared)
-
-                Spacer()
-
-                // Footer hint
-                Text(loc("network.data_safe"))
-                    .font(.system(.caption))
-                    .foregroundStyle(AppTheme.textSecondary.opacity(0.5))
-                    .padding(.bottom, 40)
-                    .opacity(appeared ? 1 : 0)
-                    .animation(AppMotion.appear, value: appeared)
-            }
-        }
-        .onAppear  { withAnimation { appeared = true } }
-        .onDisappear { appeared = false }
-    }
-
-    private var retryButton: some View {
-        Button { monitor.retry() } label: {
-            HStack(spacing: 10) {
-                if monitor.isChecking {
-                    ProgressView().tint(.white).scaleEffect(0.85)
-                    Text(loc("network.checking"))
-                        .font(.system(.callout, weight: .semibold))
-                } else {
-                    Image(systemName: "arrow.clockwise")
-                        .font(.system(.subheadline, weight: .semibold))
-                    Text(loc("network.check"))
-                        .font(.system(.callout, weight: .semibold))
-                }
-            }
-            .foregroundStyle(monitor.isChecking ? AppTheme.textSecondary : AppTheme.onVividFill)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 16)
-            .background(
-                monitor.isChecking
-                    ? AppTheme.textSecondary.opacity(0.25)
-                    : AppTheme.red,
-                in: RoundedRectangle(cornerRadius: AppRadius.lg)
-            )
-        }
-        .buttonStyle(ScaleButtonStyle())
-        .disabled(monitor.isChecking)
-        .animation(.easeInOut(duration: 0.2), value: monitor.isChecking)
     }
 }
 

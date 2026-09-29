@@ -1318,7 +1318,7 @@ struct CardTransferSheet: View {
     private var destCard:   BankCard? { cards.indices.contains(destIndex)   ? cards[destIndex]   : nil }
 
     /// Amount is entered in the SOURCE card's currency.
-    private var amount: Double { Double(amountText.replacingOccurrences(of: ",", with: ".")) ?? 0 }
+    private var amount: Double { NumberInput.amount(amountText) }
     private var sourceBalance: Double { sourceCard?.computedBalance() ?? 0 }
     private var convertedToDest: Double {
         guard let s = sourceCard, let d = destCard else { return 0 }

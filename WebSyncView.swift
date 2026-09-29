@@ -14,7 +14,9 @@ import SwiftData
 // `webSync/{uid}` unconditionally and the Worker reads whatever snapshot is
 // there, so a snapshot may predate the browser session entirely — syncing first
 // actually renders faster, since the page finds data on its first poll instead
-// of waiting for one.
+// of waiting for one. Either way the page also needs the access code shown
+// here after the sync (see WebSyncService.accessCode): the DiPo ID alone is
+// not enough, because it is shared with friends for invites.
 //
 // What the order DOES cost is time: the 24-hour window starts at sync, not at
 // first view. Sync tonight, open the laptop tomorrow afternoon, and it has
@@ -26,6 +28,7 @@ struct WebSyncView: View {
     @State private var service = WebSyncService.shared
     @State private var session = UserSession.shared
     @State private var idCopied = false
+    @State private var codeCopied = false
     @State private var showRevokeConfirm = false
     @State private var appeared = false
 
@@ -41,6 +44,7 @@ struct WebSyncView: View {
                         idCard
                         steps
                         statusCard
+                        if let code = liveAccessCode { codeCard(code) }
                         syncButton
                         if service.lastSyncedAt != nil { revokeLink }
                         Spacer(minLength: 28)
@@ -136,6 +140,59 @@ struct WebSyncView: View {
                 .font(.system(.caption, weight: .semibold))
                 .foregroundStyle(AppTheme.accent)
             Text(loc("websync.id_hint"))
+                .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary.opacity(0.85))
+                .fixedSize(horizontal: false, vertical: true).lineSpacing(1.5)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.accent.opacity(0.22), lineWidth: 1))
+    }
+
+    // MARK: Access code
+
+    /// The code for the snapshot that is still readable, if any.
+    private var liveAccessCode: String? {
+        guard let code = service.accessCode, let at = service.lastSyncedAt,
+              Date() < at.addingTimeInterval(WebSyncService.snapshotLifetime) else { return nil }
+        return code
+    }
+
+    private func codeCard(_ code: String) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label(loc("websync.code_label"), systemImage: "lock.fill")
+                .font(.system(.caption, weight: .semibold))
+                .foregroundStyle(AppTheme.textSecondary)
+            HStack(spacing: 12) {
+                Text(code)
+                    .font(.system(.title, design: .monospaced, weight: .bold))
+                    .tracking(4)
+                    .foregroundStyle(AppTheme.textPrimary)
+                    .lineLimit(1).minimumScaleFactor(0.7)
+                    .accessibilityLabel(code.map(String.init).joined(separator: " "))
+                Spacer(minLength: 8)
+                Button {
+                    HapticManager.shared.tap()
+                    UIPasteboard.general.string = code
+                    withAnimation(.spring(response: 0.3)) { codeCopied = true }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) {
+                        withAnimation(.easeOut) { codeCopied = false }
+                    }
+                } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: codeCopied ? "checkmark" : "doc.on.doc")
+                            .font(.system(.caption2, weight: .bold))
+                        Text(codeCopied ? loc("common.copied") : loc("common.copy"))
+                            .font(.system(.caption, weight: .semibold))
+                    }
+                    .foregroundStyle(codeCopied ? AppTheme.bg : AppTheme.accent)
+                    .padding(.horizontal, 13).padding(.vertical, 8)
+                    .background(codeCopied ? AnyShapeStyle(AppTheme.accent)
+                                           : AnyShapeStyle(AppTheme.accent.opacity(0.14)), in: Capsule())
+                }
+                .buttonStyle(ScaleButtonStyle())
+            }
+            Text(loc("websync.code_hint"))
                 .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary.opacity(0.85))
                 .fixedSize(horizontal: false, vertical: true).lineSpacing(1.5)
         }

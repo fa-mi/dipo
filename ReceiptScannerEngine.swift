@@ -244,9 +244,9 @@ final class ReceiptScannerEngine {
         struct ScanRequest: Encodable {
             let imageBase64: String
             let cardCurrency: String
-            let userPlan: String
             // Required by the worker's per-user credit ledger — identifies
-            // whose credit balance to check & decrement.
+            // whose credit balance to check & decrement. The plan is not
+            // sent: the Worker asks RevenueCat (see WorkerAuth).
             let userId: String
         }
         struct ScanResponse: Decodable {
@@ -265,7 +265,6 @@ final class ReceiptScannerEngine {
         let payload = ScanRequest(
             imageBase64: base64,
             cardCurrency: cardCurrency,
-            userPlan: PremiumManager.shared.plan.rawValue,
             userId: UserSession.shared.userID ?? ""
         )
 
@@ -279,7 +278,7 @@ final class ReceiptScannerEngine {
         let endpoint = Endpoint(
             path: endpointURL,
             method: .post,
-            headers: ["X-DiPo-Client": "iOS"],
+            headers: await WorkerAuth.headers(),
             body: bodyData
         )
 

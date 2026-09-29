@@ -261,7 +261,7 @@ struct CreditCardFormSheet: View {
         BankIssuer.resolveGradient(issuerID: nil, cardNumber: cardNumber.isEmpty ? "5" : cardNumber)
     }
     private var isValid: Bool {
-        !name.trimmingCharacters(in: .whitespaces).isEmpty && (Double(limitText) ?? 0) > 0
+        !name.trimmingCharacters(in: .whitespaces).isEmpty && NumberInput.amount(limitText) > 0
     }
 
     var body: some View {
@@ -363,8 +363,8 @@ struct CreditCardFormSheet: View {
     }
 
     private func save() {
-        let limit = Double(limitText) ?? 0
-        let owed = Double(owedText) ?? 0
+        let limit = NumberInput.amount(limitText)
+        let owed = NumberInput.amount(owedText)
         let g = gradient
         if let card = editCard {
             card.holderName = name.trimmingCharacters(in: .whitespaces)
@@ -420,7 +420,7 @@ struct CreditCardPaymentSheet: View {
     private var cashCards: [BankCard] { cards.filter { !$0.isCreditCard } }
 
     private var canSave: Bool {
-        guard let a = Double(amountText), a > 0, fromCardID != nil else { return false }
+        guard NumberInput.amount(amountText) > 0, fromCardID != nil else { return false }
         return true
     }
 
@@ -487,7 +487,8 @@ struct CreditCardPaymentSheet: View {
     }
 
     private func record() {
-        guard let amount = Double(amountText), amount > 0,
+        let amount = NumberInput.amount(amountText)
+        guard amount > 0,
               let id = fromCardID, let source = cards.first(where: { $0.id == id }) else { return }
         let ccName = creditCard.holderName.isEmpty ? loc("cc.title") : creditCard.holderName
 
