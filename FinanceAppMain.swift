@@ -229,6 +229,13 @@ struct DiPoApp: App {
         // Must precede configure(): Firebase reads the provider factory then.
         AppCheckSetup.install()
         FirebaseApp.configure()
+        // Apply the last known analytics switch (off unless the backend said
+        // on) straight away. Until something touches ScreenAnalytics, Firebase
+        // runs Analytics at its own default, which is on — and on 12.11 its
+        // experiment worker crashed the app with a nil-key flag. The real
+        // off-by-default is FIREBASE_ANALYTICS_COLLECTION_ENABLED = NO in
+        // Info.plist; this narrows the window if that key is ever missing.
+        _ = ScreenAnalytics.shared
 
         if let path = Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist"),
            let plist = NSDictionary(contentsOfFile: path),
