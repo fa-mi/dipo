@@ -1,0 +1,269 @@
+# Archives DiPo on a macOS runner and uploads it to App Store Connect, where
+# it appears under TestFlight and can be picked for an App Store submission.
+# Started by hand (Actions → Release to App Store Connect → Run workflow),
+# only from main.
+#
+# What it needs, as repository secrets (Settings → Secrets → Actions):
+#   ASC_KEY_ID, ASC_ISSUER_ID  App Store Connect API key (Users and Access →
+#   ASC_KEY_P8                 Integrations → Team Keys), App Manager or Admin.
+#                              ASC_KEY_P8 is the .p8 file's text (or base64).
+#   DIST_CERT_P12              Optional. An Apple Distribution certificate
+#   DIST_CERT_PASSWORD         exported as .p12, base64. Without it Xcode uses
+#                              a cloud-managed distribution certificate, which
+#                              the API key must be allowed to use (Admin, or
+#                              App Manager with access to Certificates).
+# Provisioning profiles for the app, widget and share extension are created
+# or refreshed by Xcode through the same key (-allowProvisioningUpdates).
+#
+# What it deliberately does NOT do: submit for review. Picking the build,
+# release notes, App Privacy and "Submit for Review" stay in App Store Connect.
+name: Release to App Store Connect
+
+on:
+  workflow_dispatch:
+    inputs:
+      marketing_version:
+        description: "Version on the App Store, e.g. 3.1 (applied to the app, widget and share extension)"
+        required: true
+      build_number:
+        description: "Build number. Empty = one above the highest ever uploaded"
+        required: false
+        default: ""
+      upload:
+        description: "Upload to App Store Connect (off = only build the .ipa, kept as an artifact)"
+        type: boolean
+        default: true
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    if: github.ref == 'refs/heads/main'
+    runs-on: macos-26
+    timeout-minutes: 60
+    env:
+      BUNDLE_ID: com.fahmiaquinas.DiPo
+      TEAM_ID: 3C6KN7P2NC
+    steps:
+      - uses: actions/checkout@v4
+
+      # The runner context isn't available in job-level env, so the paths
+      # under RUNNER_TEMP are set here.
+      - name: Paths
+        run: |
+          {
+            echo "ARCHIVE=$RUNNER_TEMP/DiPo.xcarchive"
+            echo "EXPORT_DIR=$RUNNER_TEMP/export"
+            echo "SPM_DIR=$RUNNER_TEMP/spm"
+          } >> "$GITHUB_ENV"
+
+      - name: Select Xcode
+        run: |
+          XCODE=$(ls -d /Applications/Xcode_26*.app | sort -V | tail -1)
+          sudo xcode-select -s "$XCODE"
+          xcodebuild -version
+
+      - name: Cache Swift packages
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/spm
+          key: release-spm-${{ hashFiles('DiPo.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
+
+      - name: Check inputs and secrets
+        env:
+          VERSION: ${{ inputs.marketing_version }}
+          BUILD: ${{ inputs.build_number }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+        run: |
+          missing=""
+          [ -n "$ASC_KEY_ID" ]    || missing="$missing ASC_KEY_ID"
+          [ -n "$ASC_ISSUER_ID" ] || missing="$missing ASC_ISSUER_ID"
+          [ -n "$ASC_KEY_P8" ]    || missing="$missing ASC_KEY_P8"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing repository secrets:$missing"; exit 1
+          fi
+          if ! printf '%s' "$VERSION" | grep -Eq '^[0-9]+(\.[0-9]+){1,2}$'; then
+            echo "::error::marketing_version must look like 3.1 or 3.1.2, got '$VERSION'"; exit 1
+          fi
+          if [ -n "$BUILD" ] && ! printf '%s' "$BUILD" | grep -Eq '^[0-9]+$'; then
+            echo "::error::build_number must be a whole number, got '$BUILD'"; exit 1
+          fi
+
+      - name: App Store Connect API key
+        env:
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+        run: |
+          dir="$RUNNER_TEMP/asc"; mkdir -p "$dir"; chmod 700 "$dir"
+          key="$dir/AuthKey.p8"
+          # Accept the .p8 as pasted text or as base64 of the file.
+          if printf '%s' "$ASC_KEY_P8" | grep -q "BEGIN PRIVATE KEY"; then
+            printf '%s\n' "$ASC_KEY_P8" > "$key"
+          else
+            printf '%s' "$ASC_KEY_P8" | base64 --decode > "$key"
+          fi
+          chmod 600 "$key"
+          grep -q "BEGIN PRIVATE KEY" "$key" || { echo "::error::ASC_KEY_P8 is not a .p8 private key"; exit 1; }
+          echo "ASC_KEY_PATH=$key" >> "$GITHUB_ENV"
+
+      - name: Distribution certificate (optional)
+        env:
+          DIST_CERT_P12: ${{ secrets.DIST_CERT_P12 }}
+          DIST_CERT_PASSWORD: ${{ secrets.DIST_CERT_PASSWORD }}
+        run: |
+          if [ -z "$DIST_CERT_P12" ]; then
+            echo "No DIST_CERT_P12: Xcode will use a cloud-managed distribution certificate."
+            exit 0
+          fi
+          kc="$RUNNER_TEMP/release.keychain-db"
+          kc_pass=$(uuidgen)
+          security create-keychain -p "$kc_pass" "$kc"
+          security set-keychain-settings -lut 3600 "$kc"
+          security unlock-keychain -p "$kc_pass" "$kc"
+          printf '%s' "$DIST_CERT_P12" | base64 --decode > "$RUNNER_TEMP/dist.p12"
+          security import "$RUNNER_TEMP/dist.p12" -k "$kc" -P "$DIST_CERT_PASSWORD" \
+            -T /usr/bin/codesign -T /usr/bin/security
+          rm -f "$RUNNER_TEMP/dist.p12"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$kc_pass" "$kc" > /dev/null
+          security list-keychains -d user -s "$kc" $(security list-keychains -d user | tr -d '"')
+          echo "RELEASE_KEYCHAIN=$kc" >> "$GITHUB_ENV"
+
+      - name: Build number
+        env:
+          BUILD: ${{ inputs.build_number }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          if [ -n "$BUILD" ]; then
+            next="$BUILD"
+          else
+            floor=$(grep -oE 'CURRENT_PROJECT_VERSION = [0-9]+' DiPo.xcodeproj/project.pbxproj \
+                      | grep -oE '[0-9]+' | sort -n | tail -1)
+            next=$(FLOOR="${floor:-0}" node ci/asc-next-build.mjs)
+          fi
+          echo "Build number: $next"
+          echo "BUILD_NUMBER=$next" >> "$GITHUB_ENV"
+
+      # The release build must match what App Review sees on a device. These
+      # edits exist only on the runner; DiPo/Info.plist in the repo is Fahmi's.
+      - name: Info.plist for release
+        run: |
+          plist=DiPo/Info.plist
+          # Analytics stays off until app_config/analytics turns it on
+          # (ScreenAnalytics). Firebase's own default is on, and 12.11's
+          # experiment worker crashed a device while it was.
+          /usr/libexec/PlistBuddy -c "Delete :FIREBASE_ANALYTICS_COLLECTION_ENABLED" "$plist" 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Add :FIREBASE_ANALYTICS_COLLECTION_ENABLED bool false" "$plist"
+          # A feature that touches the microphone, speech or calendars without
+          # its purpose string crashes, and the upload is flagged.
+          for key in NSMicrophoneUsageDescription NSSpeechRecognitionUsageDescription \
+                     NSCalendarsUsageDescription NSCalendarsFullAccessUsageDescription; do
+            /usr/libexec/PlistBuddy -c "Print :$key" "$plist" > /dev/null \
+              || { echo "::error::$key is missing from $plist"; exit 1; }
+          done
+          test -f DiPo/PrivacyInfo.xcprivacy || { echo "::error::DiPo/PrivacyInfo.xcprivacy is missing"; exit 1; }
+
+      - name: Archive
+        env:
+          VERSION: ${{ inputs.marketing_version }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          set -o pipefail
+          # Version and build on the command line apply to every target, so the
+          # app and both extensions always carry the same pair (a mismatch is
+          # an upload error).
+          xcodebuild archive \
+            -project DiPo.xcodeproj -scheme DiPo -configuration Release \
+            -destination "generic/platform=iOS" \
+            -archivePath "$ARCHIVE" \
+            -clonedSourcePackagesDirPath "$SPM_DIR" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$ASC_KEY_PATH" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            DEVELOPMENT_TEAM="$TEAM_ID" \
+            MARKETING_VERSION="$VERSION" \
+            CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
+            | tee "$RUNNER_TEMP/archive.log" | grep -E "error:|warning: .*(sign|provision)|ARCHIVE (SUCCEEDED|FAILED)" || true
+          test -d "$ARCHIVE" || { echo "::error::Archive failed; see the archive-log artifact"; exit 1; }
+
+      - name: Export${{ inputs.upload && ' and upload' || '' }}
+        env:
+          UPLOAD: ${{ inputs.upload }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          set -o pipefail
+          destination=export; [ "$UPLOAD" = "true" ] && destination=upload
+          opts="$RUNNER_TEMP/ExportOptions.plist"
+          cat > "$opts" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>destination</key><string>$destination</string>
+            <key>teamID</key><string>$TEAM_ID</string>
+            <key>signingStyle</key><string>automatic</string>
+            <key>uploadSymbols</key><true/>
+            <key>manageAppVersionAndBuildNumber</key><false/>
+          </dict>
+          </plist>
+          PLIST
+          xcodebuild -exportArchive \
+            -archivePath "$ARCHIVE" \
+            -exportOptionsPlist "$opts" \
+            -exportPath "$EXPORT_DIR" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$ASC_KEY_PATH" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            | tee "$RUNNER_TEMP/export.log" | grep -E "error:|Upload|EXPORT (SUCCEEDED|FAILED)" || true
+          grep -q "EXPORT SUCCEEDED" "$RUNNER_TEMP/export.log" || { echo "::error::Export failed; see the export-log artifact"; exit 1; }
+
+      - name: Summary
+        if: success()
+        env:
+          VERSION: ${{ inputs.marketing_version }}
+          UPLOAD: ${{ inputs.upload }}
+        run: |
+          {
+            echo "### DiPo $VERSION ($BUILD_NUMBER)"
+            if [ "$UPLOAD" = "true" ]; then
+              echo "Uploaded to App Store Connect. It appears under TestFlight once Apple has processed it (usually 10–30 minutes)."
+              echo "Next, in App Store Connect: choose this build for version $VERSION, check App Privacy and release notes, then Submit for Review."
+            else
+              echo "Built only; the .ipa is attached to this run as an artifact."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Keep the .ipa
+        if: success() && !inputs.upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: DiPo-${{ inputs.marketing_version }}-ipa
+          path: ${{ runner.temp }}/export/*.ipa
+          retention-days: 7
+
+      - name: Keep the logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-logs
+          path: |
+            ${{ runner.temp }}/archive.log
+            ${{ runner.temp }}/export.log
+          retention-days: 7
+
+      - name: Clean up
+        if: always()
+        run: |
+          rm -rf "$RUNNER_TEMP/asc"
+          if [ -n "$RELEASE_KEYCHAIN" ]; then security delete-keychain "$RELEASE_KEYCHAIN" || true; fi
