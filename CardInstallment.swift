@@ -306,6 +306,7 @@ struct InstallmentSection: View {
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel(loc("a11y.more_actions"))
                 }
                 GeometryReader { geo in
                     ZStack(alignment: .leading) {

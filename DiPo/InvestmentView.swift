@@ -204,6 +204,7 @@ struct InvestmentView: View {
                 }
                 .buttonStyle(ScaleButtonStyle())
                 .disabled(refreshing)
+                .accessibilityLabel(loc("a11y.refresh_prices"))
             }
             if !holdings.isEmpty {
                 Button {
@@ -216,6 +217,7 @@ struct InvestmentView: View {
                         .background(AppTheme.accent, in: Circle())
                 }
                 .buttonStyle(ScaleButtonStyle())
+                .accessibilityLabel(loc("invest.add"))
             }
         }
     }
