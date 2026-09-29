@@ -351,7 +351,10 @@ final class NotificationManager {
             title: loc("notif.debt_due_title"),
             body:  String(format: loc("notif.debt_due_body"), name, amount, dueDay),
             time:  loc("notif.time.upcoming"), isUrgent: true,
-            advice: advice, route: NotificationRoute.debt.rawValue))
+            advice: advice, route: NotificationRoute.debt.rawValue),
+            // DebtNotificationScheduler already has this due date on the
+            // device; mirroring it here as well pushed it twice.
+            pushToDevice: false)
     }
 
     func postSavingsGoalReached(name: String, emoji: String, advice: String? = nil) {
@@ -705,8 +708,10 @@ final class NotificationManager {
             if let fireDate = cal.date(byAdding: .day, value: -3, to: payDate) {
                 scheduleLocalPush(
                     id:      "salary_reminder_3d",
-                    title:   "💸 Salary incoming in 3 days!",
-                    body:    "\(label) • \(amount) — arrives \(payDate.formatted(date: .abbreviated, time: .omitted))",
+                    title:   "💸 " + loc("notif.salary_incoming"),
+                    body:    String(format: loc("notif.salary_incoming_body"), label, amount,
+                                    payDate.formatted(Date.FormatStyle(date: .abbreviated, time: .omitted)
+                                        .locale(LanguageManager.shared.currentLocale))),
                     at:      fireDate
                 )
             }
@@ -717,8 +722,10 @@ final class NotificationManager {
             if let fireDate = cal.date(byAdding: .day, value: -1, to: payDate) {
                 scheduleLocalPush(
                     id:      "salary_reminder_1d",
-                    title:   "🎉 Payday is tomorrow!",
-                    body:    "\(label) • \(amount) drops on \(payDate.formatted(.dateTime.weekday(.wide)))",
+                    title:   "🎉 " + loc("notif.payday_tomorrow"),
+                    body:    String(format: loc("notif.payday_tomorrow_body"), label, amount,
+                                    payDate.formatted(Date.FormatStyle().weekday(.wide)
+                                        .locale(LanguageManager.shared.currentLocale))),
                     at:      fireDate
                 )
             }
@@ -1383,9 +1390,14 @@ enum NotificationScheduler {
     /// Debt tracking is Royal-only, so this follows the same entitlement.
     private static func scheduleDebtReminders(context: ModelContext, preferred: String,
                                               cal: Calendar, now: Date) {
+        let debts: [DebtRecord] = (try? context.fetch(FetchDescriptor<DebtRecord>())) ?? []
+        // The pushes themselves are scheduled ahead of time, from here as well
+        // as from the Debt screen, so they exist even for someone who never
+        // opens it. It checks the switch and the plan itself, and clears
+        // everything when either is off.
+        DebtNotificationScheduler.scheduleAll(debts: debts)
         guard NotificationPreferences.shared.isEnabled(.debt) else { return }
         guard PremiumManager.shared.canAccess(.smartDebt) else { return }
-        let debts: [DebtRecord] = (try? context.fetch(FetchDescriptor<DebtRecord>())) ?? []
         let cm = CurrencyManager.shared
 
         for debt in debts where debt.isActive && debt.currentBalance > 0 && !debt.manuallyClosed {
