@@ -639,7 +639,7 @@ final class CurrencyManager {
 
             } catch {
                 // Tetap pakai rate terakhir yang ada
-                lastError = error.localizedDescription
+                lastError = UserFacingError.message(error)
                 print("[DiPo] Currency: ❌ fetch gagal — \(error.localizedDescription)")
             }
         }

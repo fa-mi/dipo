@@ -620,7 +620,7 @@ struct NewTicketForm: View {
             }
         } catch {
             await MainActor.run {
-                errorMsg = String(format: loc("support.send_failed"), error.localizedDescription)
+                errorMsg = String(format: loc("support.send_failed"), UserFacingError.message(error))
                 HapticManager.shared.error()
             }
         }
@@ -782,7 +782,7 @@ struct TicketThreadView: View {
             await MainActor.run { replyText = "" }
         } catch {
             await MainActor.run {
-                sendError = String(format: loc("support.send_failed"), error.localizedDescription)
+                sendError = String(format: loc("support.send_failed"), UserFacingError.message(error))
                 HapticManager.shared.error()
             }
         }

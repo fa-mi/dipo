@@ -75,7 +75,7 @@ final class AccountDeletionService {
                 return .requiresRecentLogin
             }
             print("[DiPo][account-delete] ✗ auth delete failed: \(e.localizedDescription)")
-            return .failed(e.localizedDescription)
+            return .failed(UserFacingError.message(e))
         }
 
         // 5. Everything on device. `onLogout` BEFORE `signOut` (its own doc
