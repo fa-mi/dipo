@@ -169,6 +169,16 @@ jobs:
           done
           test -f DiPo/PrivacyInfo.xcprivacy || { echo "::error::DiPo/PrivacyInfo.xcprivacy is missing"; exit 1; }
 
+      # The shared scheme is Fahmi's file and ships with the app's
+      # "Archive" box unticked, which xcodebuild refuses ("Scheme DiPo is not
+      # currently configured for the archive action"). Tick it on the runner.
+      - name: Scheme for archiving
+        run: |
+          scheme=DiPo.xcodeproj/xcshareddata/xcschemes/DiPo.xcscheme
+          sed -i '' 's/buildForArchiving = "NO"/buildForArchiving = "YES"/g' "$scheme"
+          grep -q 'buildForArchiving = "YES"' "$scheme" \
+            || { echo "::error::$scheme has no target built for archiving"; exit 1; }
+
       - name: Archive
         env:
           VERSION: ${{ inputs.marketing_version }}
