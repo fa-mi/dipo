@@ -229,10 +229,14 @@ private struct PriceModeChips: View {
     let unitLabel: String
     @Binding var mode: InvestmentInput.PriceMode
     var idle: Color = AppTheme.bg
+    var options: [InvestmentInput.PriceMode] = InvestmentInput.PriceMode.standard
     var body: some View {
-        ChoiceChips(options: InvestmentInput.PriceMode.allCases, title: {
-            $0 == .perUnit ? String(format: loc("invest.price_mode.per_unit"), unitLabel)
-                           : loc("invest.price_mode.total")
+        ChoiceChips(options: options, title: {
+            switch $0 {
+            case .perUnit:      return String(format: loc("invest.price_mode.per_unit"), unitLabel)
+            case .perHundredth: return loc("invest.price_mode.per_hundredth")
+            case .total:        return loc("invest.price_mode.total")
+            }
         }, selection: $mode, idle: idle)
     }
 }
@@ -290,7 +294,7 @@ private struct GoldPriceWarning: View {
 /// before spreading; the lot's cost then comes back to exactly the total.
 private func lotUnitPrice(_ entered: Double, units: Double, fee: Double,
                           mode: InvestmentInput.PriceMode, isSell: Bool) -> Double {
-    guard mode == .total else { return entered }
+    guard mode == .total else { return InvestmentInput.perUnitPrice(entered, units: units, mode: mode) }
     let gross = isSell ? entered + fee : max(entered - fee, 0)
     return InvestmentInput.perUnitPrice(gross, units: units, mode: .total)
 }
@@ -935,9 +939,10 @@ struct UpdatePriceSheet: View {
     @Environment(\.modelContext) private var context
     @Bindable var holding: InvestmentHolding
     @State private var priceText = ""
-    /// Unit-based holdings take either one unit's price or what the whole
-    /// balance is worth now (the figure a gold app shows first).
-    @State private var priceMode: InvestmentInput.PriceMode = .perUnit
+    /// Unit-based holdings take one unit's price, what the whole balance is
+    /// worth now (the figure a gold app shows first) or, for gold, the price
+    /// per 0,01 gram exactly as BRImo/Tring and Pegadaian quote it.
+    @State private var priceMode: InvestmentInput.PriceMode
 
     private var cur: String { holding.currency }
     private var amountBased: Bool { holding.type.isAmountBased }
@@ -945,25 +950,51 @@ struct UpdatePriceSheet: View {
     /// Totals only make sense with something held to spread them over.
     private var offersTotal: Bool { !amountBased && unitsHeld > 0 }
 
+    init(holding: InvestmentHolding) {
+        _holding = Bindable(holding)
+        _priceMode = State(initialValue: holding.type == .gold ? .perHundredth : .perUnit)
+    }
+
+    private var isGold: Bool { holding.type == .gold }
+    private var modeOptions: [InvestmentInput.PriceMode] {
+        isGold ? InvestmentInput.PriceMode.gold : InvestmentInput.PriceMode.standard
+    }
+
     private var newUnitPrice: Double {
         let entered = parseNumber(priceText)
         if amountBased { return unitsHeld > 0 ? entered / unitsHeld : 1 }
         return InvestmentInput.perUnitPrice(entered, units: unitsHeld, mode: priceMode)
     }
 
+    private var fieldHint: String? {
+        guard isGold else { return nil }
+        switch priceMode {
+        case .perHundredth: return loc("invest.gold_hundredth_hint")
+        case .perUnit:      return loc("invest.gold_sell_hint")
+        case .total:        return loc("invest.field.current_total_hint")
+        }
+    }
+
     var body: some View {
         NavigationStack {
             VStack(alignment: .leading, spacing: 14) {
-                if offersTotal {
-                    PriceModeChips(unitLabel: holding.type.unitLabel, mode: $priceMode, idle: AppTheme.cardDark)
+                if offersTotal || isGold {
+                    PriceModeChips(unitLabel: holding.type.unitLabel, mode: $priceMode, idle: AppTheme.cardDark,
+                                   options: offersTotal ? modeOptions : modeOptions.filter { $0 != .total })
                 }
                 MoneyField(label: fieldLabel, prefix: CurrencyManager.symbol(for: cur),
-                           hint: holding.type == .gold && priceMode == .perUnit ? loc("invest.gold_sell_hint") : nil,
-                           text: $priceText)
-                if offersTotal, parseNumber(priceText) > 0 {
-                    DerivedLine(text: priceMode == .total
-                        ? String(format: loc("invest.derived_per_unit"), investMoney(newUnitPrice, cur), holding.type.unitLabel)
-                        : String(format: loc("invest.derived_total"), investMoney(newUnitPrice * unitsHeld, cur)))
+                           hint: fieldHint, text: $priceText)
+                if !amountBased, parseNumber(priceText) > 0 {
+                    // Both halves of what was typed: the price per gram it
+                    // means, and what the whole balance is worth at it.
+                    if priceMode != .perUnit {
+                        DerivedLine(text: String(format: loc("invest.derived_per_unit"),
+                                                 investMoney(newUnitPrice, cur), holding.type.unitLabel))
+                    }
+                    if priceMode != .total, unitsHeld > 0 {
+                        DerivedLine(text: String(format: loc("invest.derived_total"),
+                                                 investMoney(newUnitPrice * unitsHeld, cur)))
+                    }
                 }
                 if holding.type == .gold,
                    InvestmentInput.goldPriceLooksWrong(perGram: newUnitPrice, currency: cur) {
@@ -988,23 +1019,37 @@ struct UpdatePriceSheet: View {
                 }
             }
             .onAppear {
-                let shown = amountBased ? holding.stats().marketValue : holding.lastPrice
-                // Keeps the cents of a dollar price (366,51, not 366).
-                if shown > 0 { priceText = InvestmentInput.text(amountBased ? shown.rounded() : shown) }
+                if amountBased {
+                    let shown = holding.stats().marketValue
+                    if shown > 0 { priceText = InvestmentInput.text(shown.rounded()) }
+                } else {
+                    showLastPrice(in: priceMode)
+                }
             }
             .onChange(of: priceMode) { _, mode in
                 // Switch what is in the field along with its meaning.
-                guard holding.lastPrice > 0 else { return }
-                let v = mode == .total ? holding.lastPrice * unitsHeld : holding.lastPrice
-                priceText = InvestmentInput.text(cur == "IDR" ? v.rounded() : (v * 100).rounded() / 100)
+                showLastPrice(in: mode)
             }
         }
     }
 
+    /// The last price, written the way `mode` reads it. Keeps the cents of
+    /// a dollar price (366,51, not 366).
+    private func showLastPrice(in mode: InvestmentInput.PriceMode) {
+        guard holding.lastPrice > 0 else { return }
+        let v = InvestmentInput.entered(forUnitPrice: holding.lastPrice, units: unitsHeld, mode: mode)
+        priceText = InvestmentInput.text(cur == "IDR" ? v.rounded() : (v * 100).rounded() / 100)
+    }
+
     private var fieldLabel: String {
         if amountBased { return loc("invest.total_value") }
-        return priceMode == .total ? loc("invest.field.current_total")
-            : String(format: loc("invest.field.current_per"), holding.type.unitLabel)
+        switch priceMode {
+        case .total:        return loc("invest.field.current_total")
+        case .perHundredth: return loc("invest.field.current_per_hundredth")
+        case .perUnit:
+            return isGold ? loc("invest.field.gold_sell_per_gram")
+                          : String(format: loc("invest.field.current_per"), holding.type.unitLabel)
+        }
     }
 
     private func save() {
