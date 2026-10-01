@@ -157,6 +157,13 @@ struct HoldingDetailView: View {
                 Text(investMoney(s.marketValue, cur)).font(.system(.largeTitle, weight: .bold))
                     .foregroundStyle(AppTheme.textPrimary)
                     .contentTransition(.numericText()).minimumScaleFactor(0.6).lineLimit(1)
+                // A gold balance is read with its weight beside it, the way
+                // BRImo and Pegadaian show it: "Rp308.426 (0,1308 gram)".
+                if holding.type == .gold, s.unitsHeld > 0 {
+                    Text("(\(investUnits(s.unitsHeld)) \(loc("invest.unit.gram_long")))")
+                        .font(.system(.subheadline, weight: .medium))
+                        .foregroundStyle(AppTheme.textSecondary)
+                }
             }
             HStack(spacing: 8) {
                 // Labelled, because two bare chips side by side don't say which
@@ -190,11 +197,45 @@ struct HoldingDetailView: View {
             || InvestmentInput.goldPriceLooksWrong(perGram: holding.lastPrice, currency: cur)
     }
 
+    /// The per-gram price the current price works out to if it was really
+    /// the balance's total — what the one-tap repair would set.
+    private var repairedLastPrice: Double? {
+        InvestmentInput.repairedGoldPrice(holding.lastPrice, grams: s.unitsHeld, currency: cur)
+    }
+
+    /// Whether the repair has anything to change: a purchase or the current
+    /// price that only makes sense as a total.
+    private var goldRepairable: Bool {
+        guard holding.type == .gold else { return false }
+        if repairedLastPrice != nil { return true }
+        return holding.lots.contains {
+            ($0.kind == .buy || $0.kind == .sell)
+                && InvestmentInput.repairedGoldPrice($0.pricePerUnit, grams: $0.units, currency: cur) != nil
+        }
+    }
+
     private var goldCheckBanner: some View {
         HStack(alignment: .top, spacing: 8) {
             Image(systemName: "exclamationmark.triangle.fill").font(.system(.caption))
-            Text(loc("invest.gold_check")).font(.system(.caption, weight: .medium))
-                .fixedSize(horizontal: false, vertical: true)
+            VStack(alignment: .leading, spacing: 8) {
+                Text(loc(goldRepairable ? "invest.gold_check_fixable" : "invest.gold_check"))
+                    .font(.system(.caption, weight: .medium))
+                    .fixedSize(horizontal: false, vertical: true)
+                if goldRepairable {
+                    Button {
+                        HapticManager.shared.success()
+                        withAnimation(.spring(response: 0.35)) { repairGoldTotals() }
+                    } label: {
+                        Text(repairedLastPrice.map {
+                                 String(format: loc("invest.gold_fix_to"), investMoney($0, cur))
+                             } ?? loc("invest.gold_fix"))
+                            .font(.system(.caption, weight: .bold))
+                            .padding(.horizontal, 12).padding(.vertical, 6)
+                            .background(AppTheme.amber.opacity(0.18), in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
         }
         .foregroundStyle(AppTheme.amber)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -225,11 +266,33 @@ struct HoldingDetailView: View {
     }
 
     private var detailRows: some View {
+        let isGold = holding.type == .gold
+        // Gold prices carry their unit, as a gold app prints them.
+        let perGram = isGold ? " /" + holding.type.unitLabel : ""
         let priceNow = holding.type.priceIsFixed ? investMoney(1, cur)
-            : (holding.lastPrice > 0 ? investMoney(holding.lastPrice, cur) : "—")
+            : (holding.lastPrice > 0 ? investMoney(holding.lastPrice, cur) + perGram : "—")
         return VStack(spacing: 0) {
-            detailRow(loc("invest.avg_cost"), s.avgCost > 0 ? investMoney(s.avgCost, cur) : "—")
-            if !holding.type.priceIsFixed { rowDivider; detailRow(loc("invest.current_price"), priceNow) }
+            detailRow(loc("invest.avg_cost"), s.avgCost > 0 ? investMoney(s.avgCost, cur) + perGram : "—")
+            if !holding.type.priceIsFixed {
+                rowDivider
+                detailRow(loc(isGold ? "invest.gold_sell_price" : "invest.current_price"), priceNow)
+            }
+            // BRImo/Tring and Pegadaian quote per 0,01 gram; the same figure
+            // here is the one to compare against.
+            if isGold, holding.lastPrice > 0 {
+                rowDivider
+                detailRow(loc("invest.gold_per_hundredth"), investMoney(holding.lastPrice / 100, cur))
+            }
+            // Which way the price itself moved since the update before —
+            // what a gold app's price chart is read for.
+            if !holding.type.priceIsFixed, holding.prevClose > 0, holding.lastPrice > 0,
+               investTrend(holding.lastPrice - holding.prevClose) != 0 {
+                let move = holding.lastPrice - holding.prevClose
+                rowDivider
+                detailRow(loc("invest.price_move"),
+                          investSigned(move, cur) + perGram + " (" + investPct(move / holding.prevClose) + ")",
+                          tint: investPLColor(move))
+            }
             rowDivider
             detailRow(loc("invest.volume"), "\(investUnits(s.unitsHeld)) \(holding.type.unitLabel)")
             // A lot is 100 shares on the IDX; US shares trade singly (and in fractions).
@@ -274,6 +337,26 @@ struct HoldingDetailView: View {
                 actionButton(loc("invest.update_price_short"), "arrow.triangle.2.circlepath", AppTheme.textSecondary) { sheet = .price }
             }
         }
+    }
+
+    /// Turn totals recorded as per-gram prices back into prices per gram:
+    /// each purchase over its own grams, the current price (and the one before
+    /// it, and the chart) over the grams held. Anything that division doesn't
+    /// make plausible is left as it was — see `repairedGoldPrice`.
+    private func repairGoldTotals() {
+        for lot in holding.lots where lot.kind == .buy || lot.kind == .sell {
+            if let p = InvestmentInput.repairedGoldPrice(lot.pricePerUnit, grams: lot.units, currency: cur) {
+                lot.pricePerUnit = p
+            }
+        }
+        let grams = holding.stats().unitsHeld
+        func fixed(_ v: Double) -> Double {
+            InvestmentInput.repairedGoldPrice(v, grams: grams, currency: cur) ?? v
+        }
+        holding.lastPrice = fixed(holding.lastPrice)
+        holding.prevClose = fixed(holding.prevClose)
+        holding.priceHistory = holding.priceHistory.map(fixed)
+        try? context.save()
     }
 
     private func deleteLot(_ lot: InvestmentLot) {

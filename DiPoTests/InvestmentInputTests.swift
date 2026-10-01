@@ -76,6 +76,41 @@ final class InvestmentInputTests: XCTestCase {
         XCTAssertEqual(InvestmentInput.perUnitPrice(12.43, units: 0, mode: .total), 0)
     }
 
+    /// BRImo quotes "Rp23.580 /0,01 gram"; typed as it is, that is a gram's price.
+    func testPerHundredthGramIsTheGoldAppQuote() {
+        XCTAssertEqual(InvestmentInput.perUnitPrice(23_580, units: 0.1308, mode: .perHundredth), 2_358_000)
+        XCTAssertEqual(InvestmentInput.entered(forUnitPrice: 2_358_000, units: 0.1308, mode: .perHundredth), 23_580)
+        XCTAssertEqual(InvestmentInput.entered(forUnitPrice: 2_358_000, units: 0.1308, mode: .total),
+                       308_426.4, accuracy: 0.01)
+        XCTAssertEqual(InvestmentInput.PriceMode.standard, [.perUnit, .total])
+    }
+
+    /// Holdings saved before the forms caught it: the totals from the BRImo
+    /// screen, recorded as prices per gram, come back as BRImo's own figures.
+    func testRepairTurnsRecordedTotalsBackIntoGramPrices() throws {
+        let grams = 0.1308
+        let buy = try XCTUnwrap(InvestmentInput.repairedGoldPrice(294_532, grams: grams, currency: "IDR"))
+        let now = try XCTUnwrap(InvestmentInput.repairedGoldPrice(308_426, grams: grams, currency: "IDR"))
+        let s = PortfolioEngine.stats(lots: [LotFact(date: .now, kind: "buy", units: grams, pricePerUnit: buy)],
+                                      lastPrice: now)
+        XCTAssertEqual(s.marketValue, 308_426, accuracy: 1)
+        XCTAssertEqual(s.unrealizedPL, 13_894, accuracy: 1)
+        XCTAssertEqual(s.unrealizedPct, 0.0472, accuracy: 0.0001)
+        // The second holding in the report: 0,0808 g "at Rp200.000".
+        XCTAssertEqual(try XCTUnwrap(InvestmentInput.repairedGoldPrice(200_000, grams: 0.0808, currency: "IDR")),
+                       2_475_247.5, accuracy: 1)
+    }
+
+    func testRepairLeavesWhatItCannotExplain() {
+        // Already a gram price.
+        XCTAssertNil(InvestmentInput.repairedGoldPrice(2_358_000, grams: 0.1308, currency: "IDR"))
+        // Wrong, but dividing doesn't make it right either.
+        XCTAssertNil(InvestmentInput.repairedGoldPrice(23_580, grams: 0.1308, currency: "IDR"))
+        // Not rupiah, or nothing held.
+        XCTAssertNil(InvestmentInput.repairedGoldPrice(140, grams: 1, currency: "USD"))
+        XCTAssertNil(InvestmentInput.repairedGoldPrice(308_426, grams: 0, currency: "IDR"))
+    }
+
     // MARK: Gold sanity
 
     func testTotalsTypedAsPerGramAreCaught() {

@@ -21,18 +21,33 @@ nonisolated enum InvestmentInput {
     /// A number written back into a field so `number` reads it back unchanged.
     static func text(_ v: Double) -> String { NumberInput.text(v) }
 
-    /// Whether a price field holds the price of ONE unit or the total paid for
-    /// (or worth of) the whole quantity.
+    /// Whether a price field holds the price of ONE unit, of a hundredth of
+    /// one (gold apps quote "Rp23.580 /0,01 gram"), or the total paid for (or
+    /// worth of) the whole quantity.
     enum PriceMode: String, CaseIterable {
-        case perUnit, total
+        case perUnit, perHundredth, total
+
+        /// What most forms offer; the hundredth only makes sense for gold.
+        static let standard: [PriceMode] = [.perUnit, .total]
+        static let gold: [PriceMode] = [.perHundredth, .perUnit, .total]
     }
 
     /// The per-unit price a field means. A total is spread over the units; with
     /// no units yet there is nothing to spread it over.
     static func perUnitPrice(_ entered: Double, units: Double, mode: PriceMode) -> Double {
         switch mode {
-        case .perUnit: return entered
-        case .total:   return units > 0 ? entered / units : 0
+        case .perUnit:      return entered
+        case .perHundredth: return entered * 100
+        case .total:        return units > 0 ? entered / units : 0
+        }
+    }
+
+    /// What goes back into a field in `mode` for a per-unit price.
+    static func entered(forUnitPrice p: Double, units: Double, mode: PriceMode) -> Double {
+        switch mode {
+        case .perUnit:      return p
+        case .perHundredth: return p / 100
+        case .total:        return p * units
         }
     }
 
@@ -48,6 +63,18 @@ nonisolated enum InvestmentInput {
     static func goldPriceLooksWrong(perGram: Double, currency: String) -> Bool {
         guard perGram > 0, currency.uppercased() == "IDR" else { return false }
         return !plausibleGoldIDRPerGram.contains(perGram)
+    }
+
+    /// The per-gram price a figure becomes when it was really a TOTAL for
+    /// `grams` — the mistake every gold holding saved before the forms caught
+    /// it carries (BRImo's "Rp308.426 (0,1308 gram)" typed as a price per
+    /// gram). Nil when the figure is already plausible, or when dividing it
+    /// doesn't make it plausible either: then it is some other mistake, and
+    /// guessing would only replace one wrong number with another.
+    static func repairedGoldPrice(_ figure: Double, grams: Double, currency: String) -> Double? {
+        guard grams > 0, goldPriceLooksWrong(perGram: figure, currency: currency) else { return nil }
+        let perGram = figure / grams
+        return goldPriceLooksWrong(perGram: perGram, currency: currency) ? nil : perGram
     }
 }
 
