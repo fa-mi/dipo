@@ -1784,6 +1784,7 @@ final class LanguageManager {
         // Investment menu (Royal)
         "premium.feature.investments":       "Investments",
         "premium.feature.investments_desc":  "Track gold, stocks, mutual funds, bonds and crypto — with live prices and profit/loss.",
+        "invest.header_sub":  "Gold, stocks, funds & crypto",
         "invest.type.gold":        "Gold",
         "invest.type.stock":       "Stocks",
         "invest.type.mutual_fund": "Mutual Funds",
@@ -4291,6 +4292,7 @@ final class LanguageManager {
         // Menu Investasi (Royal)
         "premium.feature.investments":       "Investasi",
         "premium.feature.investments_desc":  "Pantau emas, saham, reksadana, obligasi & kripto — harga terkini dan untung/rugi.",
+        "invest.header_sub":  "Emas, saham, reksadana & kripto",
         "invest.type.gold":        "Emas",
         "invest.type.stock":       "Saham",
         "invest.type.mutual_fund": "Reksadana",

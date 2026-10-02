@@ -182,10 +182,12 @@ struct InvestmentView: View {
                 Text(loc("premium.feature.investments"))
                     .font(.system(.title, weight: .bold))
                     .foregroundStyle(AppTheme.textPrimary)
-                Text(loc("premium.feature.investments_desc"))
+                // A short line of its own: the paywall's feature description
+                // ran to two lines and was cut off beside the buttons.
+                Text(loc("invest.header_sub"))
                     .font(.system(.footnote))
                     .foregroundStyle(AppTheme.textSecondary)
-                    .lineLimit(2)
+                    .lineLimit(1).minimumScaleFactor(0.85)
             }
             Spacer(minLength: 12)
             if hasAutoPriced {
