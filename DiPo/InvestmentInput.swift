@@ -65,6 +65,24 @@ nonisolated enum InvestmentInput {
         return !plausibleGoldIDRPerGram.contains(perGram)
     }
 
+    /// The price `price` most likely meant, when it sits a whole power of ten
+    /// away from `reference` — a decimal point lost or added while typing:
+    /// "22306" for $223.06, "33369" for $333.69, "1.917" for 191,7. Nil when
+    /// it is within 8× either way (real prices do move that far, a slip
+    /// doesn't stop there), or when shifting the decimal still doesn't land
+    /// within 3× of the reference — then it is some other mistake, and a
+    /// suggestion would only be a guess.
+    static func priceSlip(_ price: Double, reference: Double) -> Double? {
+        guard price > 0, reference > 0, price.isFinite, reference.isFinite else { return nil }
+        let ratio = price / reference
+        guard ratio >= 8 || ratio <= 1.0 / 8 else { return nil }
+        let shift = log10(ratio).rounded()
+        guard shift != 0 else { return nil }
+        let meant = price / pow(10, shift)
+        let off = meant / reference
+        return (off < 3 && off > 1.0 / 3) ? meant : nil
+    }
+
     /// The per-gram price a figure becomes when it was really a TOTAL for
     /// `grams` — the mistake every gold holding saved before the forms caught
     /// it carries (BRImo's "Rp308.426 (0,1308 gram)" typed as a price per
