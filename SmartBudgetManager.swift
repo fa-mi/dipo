@@ -77,6 +77,13 @@ final class SmartBudgetManager {
         fixedCategories.contains(cat)
     }
 
+    /// How far living costs plus investing ran past income this period, or nil
+    /// when they fit. Investing more than the plan is fine while it fits.
+    static func investingShortfall(invested: Double, consumed: Double, income: Double) -> Double? {
+        let gap = consumed + invested - income
+        return income > 0 && gap > 0 ? gap : nil
+    }
+
     // MARK: - Computed Budget Limits
 
     func monthlyLimit(for group: BudgetGroup, income: Double) -> Double {
@@ -583,31 +590,28 @@ final class SmartBudgetManager {
                     )
                 }
 
-                // Investment spending: warn if over the investDebt ratio limit
+                // Investing beyond the plan is not overspending — it is the habit
+                // this pot exists to build, so it used to be wrong to flag it red.
+                // Speak up only when investing left less than nothing for living:
+                // Daily + Lifestyle + investing ran past the income.
                 if investSpent > limit {
-                    if limit <= 0 {
+                    let consumed = self.spent(in: .daily, transactions: allTransactions,
+                                              targetCurrency: target, periodStart: periodStart)
+                        + self.spent(in: .lifestyle, transactions: allTransactions,
+                                     targetCurrency: target, periodStart: periodStart)
+                    if let gap = Self.investingShortfall(invested: investSpent, consumed: consumed, income: income) {
                         return SmartInsight(
                             icon: "chart.line.uptrend.xyaxis",
-                            color: AppTheme.red,
+                            color: AppTheme.orange,
                             title: loc("insight.invest_over_title"),
-                            body: String(format: loc("insight.group_unbudgeted_body"), BudgetGroup.investDebt.label.lowercased()),
+                            body: String(format: loc("insight.invest_over_body"),
+                                         CurrencyManager.shared.formatted(gap.rounded(), currency: target)),
                             action: SmartInsightAction(
                                 label: loc("insight.action.adjust_budget"),
                                 kind: .openBudgetSettings
                             )
                         )
                     }
-                    let pct = Int((investSpent / limit - 1) * 100)
-                    return SmartInsight(
-                        icon: "chart.line.uptrend.xyaxis",
-                        color: AppTheme.red,
-                        title: loc("insight.invest_over_title"),
-                        body: String(format: loc("insight.invest_over_body"), pct),
-                        action: SmartInsightAction(
-                            label: loc("insight.action.adjust_budget"),
-                            kind: .openBudgetSettings
-                        )
-                    )
                 }
             } else {
                 let spent = self.spent(in: grp, transactions: allTransactions, targetCurrency: target,
