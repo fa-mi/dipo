@@ -18,6 +18,7 @@ struct SmartRecommendationView: View {
     @Query private var recurringExpenses: [RecurringExpense]
     @Query private var cardBudgetConfigs: [CardBudgetConfig]
     @Query private var cycleIntents: [CycleIntent]
+    @Query private var holdings: [InvestmentHolding]
     @Environment(\.modelContext) private var context
 
     /// Called after the user taps "Apply" so the parent can refresh its state.
@@ -286,7 +287,18 @@ struct SmartRecommendationView: View {
             creditCardMinPayment: creditCardOwed * 0.10,
             salaryDayOfMonth: salaries.first(where: { $0.isActive })?.dayOfMonth,
             recurrings: recurringExpenses,
-            intents: activeIntents)
+            intents: activeIntents,
+            portfolioValue: portfolioValue)
+    }
+
+    /// What the user's investments are worth now, so the investing advice
+    /// knows they already invest.
+    private var portfolioValue: Double {
+        guard !holdings.isEmpty else { return 0 }
+        let cm = CurrencyManager.shared
+        let entries = holdings.map { (type: $0.typeRaw, currency: $0.currency, stats: $0.stats()) }
+        return PortfolioEngine.portfolio(entries, targetCurrency: currency,
+                                         convert: { cm.convert($0, from: $1, to: $2) }).marketValue
     }
 
     var body: some View {

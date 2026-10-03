@@ -25,8 +25,12 @@ extension InvestmentType {
 // MARK: - Card top-up
 //
 // Investments are tracked standalone, but a purchase can optionally be funded
-// from a card — the money really left that account. It's recorded as a TRANSFER
-// (not a spend): it moved into an asset, so it must not count against the budget.
+// from a card — the money really left that account. It's recorded in the
+// Investment category, the way a savings-goal deposit is: that puts it in Smart
+// Budget's "Invest & Debt" pot, which is what that pot is for. It used to be a
+// transfer filed under Other, so investing never showed against the pot and a
+// steady investor read as putting nothing aside. Daily and Lifestyle never see
+// it, and the recommendation engine treats it as money set aside, not consumed.
 // The lot keeps the transaction's id so deleting the lot reverses the outflow.
 
 enum InvestmentCash {
@@ -34,10 +38,40 @@ enum InvestmentCash {
     static func recordOutflow(holding: InvestmentHolding, cost: Double, card: BankCard, date: Date) -> String {
         let amt = CurrencyManager.shared.convert(cost, from: holding.currency, to: card.resolvedCurrency)
         let tx = TxRecord(name: holding.name, date: date, amount: -abs(amt),
-                          type: "tx.type.purchase", icon: holding.type.icon, iconBgHex: "#1DB87A",
-                          category: .other, currency: card.resolvedCurrency, subtype: .transfer)
+                          type: "tx.type.purchase", icon: holding.type.icon,
+                          iconBgHex: TxCategory.investment.iconBg,
+                          category: .investment, currency: card.resolvedCurrency,
+                          notes: "tx.note.invest_buy")
         card.transactions.append(tx)
         return tx.id.uuidString
+    }
+
+    /// Purchases recorded before this changed are transfers under Other. Moves
+    /// the ones DiPo itself made (linked from a lot) into Investment, once each:
+    /// a transaction the user has since recategorised is left alone.
+    @MainActor
+    static func reclassifyLegacyOutflows(_ holdings: [InvestmentHolding], context: ModelContext) {
+        let ids = Set(holdings.flatMap(\.lots).compactMap { UUID(uuidString: $0.linkedCardTxID) })
+        guard !ids.isEmpty else { return }
+        let d = FetchDescriptor<TxRecord>(predicate: #Predicate { $0.subtype == "transfer" })
+        guard let txs = try? context.fetch(d) else { return }
+        var changed = false
+        for tx in txs where ids.contains(tx.id) && isLegacyOutflow(tx) {
+            tx.category = .investment
+            tx.txSubtype = .normal
+            tx.notes = "tx.note.invest_buy"
+            changed = true
+        }
+        guard changed else { return }
+        try? context.save()
+        // The rollup cache only notices a change in transaction COUNT, and
+        // this keeps the count: rebuild so Smart Budget sees the move now.
+        RollupStore.shared.rebuild(context: context)
+    }
+
+    /// The shape the old `recordOutflow` wrote: a transfer out, filed as Other.
+    static func isLegacyOutflow(_ tx: TxRecord) -> Bool {
+        tx.txSubtype == .transfer && tx.category == .other && tx.amount < 0
     }
 
     @MainActor

@@ -1122,6 +1122,10 @@ final class LanguageManager {
         "reco.item.cut_sub":       "We found %@ in low-priority spending",
         "reco.item.invest_title":  "Start investing %@/month",
         "reco.item.invest_sub":    "Put spare money to work for the long term",
+        "reco.item.invest_keep_title": "Invest %@ every month",
+        "reco.item.invest_keep_sub": "You already hold %@ in investments — a fixed amount each payday keeps it growing",
+        "reco.item.invest_more_title": "Invest %@ more a month",
+        "reco.item.invest_more_sub": "You put about %@ a month into investments and goals — the plan is %@",
         "reco.item.ontrack_title": "You're doing great",
         "reco.item.ontrack_sub":   "Your spending, saving, and investing look healthy",
         "reco.badge.recommended":  "Recommended",
@@ -2326,6 +2330,7 @@ final class LanguageManager {
         "tx.note.salary_auto":             "Added automatically on payday",
         "tx.note.recurring_auto":          "Recorded automatically",
         "tx.note.goal_deposit":            "Added to a savings goal",
+        "tx.note.invest_buy":              "Bought for your investments",
         "tx.note.goal_backfill":           "Earlier savings, logged later",
 
         // Recurring monthly expenses
@@ -3649,6 +3654,10 @@ final class LanguageManager {
         "reco.item.cut_sub":       "Kami menemukan %@ di pengeluaran prioritas rendah",
         "reco.item.invest_title":  "Mulai investasi %@/bulan",
         "reco.item.invest_sub":    "Manfaatkan uang lebih untuk jangka panjang",
+        "reco.item.invest_keep_title": "Investasi %@ tiap bulan",
+        "reco.item.invest_keep_sub": "Kamu sudah punya investasi %@ — setoran rutin tiap gajian membuatnya terus tumbuh",
+        "reco.item.invest_more_title": "Tambah investasi %@/bulan",
+        "reco.item.invest_more_sub": "Kamu menyisihkan sekitar %@/bulan ke investasi dan target — rencananya %@",
         "reco.item.ontrack_title": "Kamu sudah bagus",
         "reco.item.ontrack_sub":   "Belanja, tabungan, dan investasimu terlihat sehat",
         "reco.badge.recommended":  "Disarankan",
@@ -4854,6 +4863,7 @@ final class LanguageManager {
         "tx.note.salary_auto":             "Dicatat otomatis saat gajian",
         "tx.note.recurring_auto":          "Tercatat otomatis",
         "tx.note.goal_deposit":            "Ditabung ke target tabungan",
+        "tx.note.invest_buy":              "Dibelikan investasi",
         "tx.note.goal_backfill":           "Tabungan sebelumnya, dicatat belakangan",
 
         // Recurring monthly expenses
