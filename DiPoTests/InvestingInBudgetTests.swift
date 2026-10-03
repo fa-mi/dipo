@@ -41,9 +41,21 @@ final class InvestingInBudgetTests: XCTestCase {
         XCTAssertNil(InvestPitch.make(suggested: 0, investedMonthly: 0, portfolioValue: 0))
     }
 
+    func testInvestingAbovePlanIsOnlyFlaggedWhenItOutrunsIncome() {
+        // Rp 4 jt income, Rp 2,5 jt living, Rp 1 jt invested: above a 20% plan, but it fits.
+        XCTAssertNil(SmartBudgetManager.investingShortfall(invested: 1_000_000, consumed: 2_500_000,
+                                                           income: 4_000_000))
+        // A Rp 2 jt gold purchase in the same month leaves Rp 500 rb uncovered.
+        XCTAssertEqual(SmartBudgetManager.investingShortfall(invested: 2_000_000, consumed: 2_500_000,
+                                                             income: 4_000_000) ?? 0,
+                       500_000, accuracy: 0.01)
+        XCTAssertNil(SmartBudgetManager.investingShortfall(invested: 1, consumed: 0, income: 0))
+    }
+
     func testNewStringsInBothLanguages() {
         for key in ["tx.note.invest_buy", "reco.item.invest_keep_title", "reco.item.invest_keep_sub",
-                    "reco.item.invest_more_title", "reco.item.invest_more_sub"] {
+                    "reco.item.invest_more_title", "reco.item.invest_more_sub",
+                    "insight.invest_over_title", "insight.invest_over_body"] {
             XCTAssertNotEqual(loc(key), key, key)
         }
     }
