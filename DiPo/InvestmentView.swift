@@ -166,6 +166,7 @@ struct InvestmentView: View {
             .task {
                 guard !didAutoRefresh else { return }
                 didAutoRefresh = true
+                InvestmentCash.reclassifyLegacyOutflows(holdings, context: context)
                 await doRefresh()
             }
             .sheet(isPresented: $showAdd) {

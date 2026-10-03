@@ -194,7 +194,8 @@ enum SmartRecommendationEngine {
                         creditCardMinPayment: Double = 0,
                         salaryDayOfMonth: Int? = nil,
                         recurrings: [RecurringExpense] = [],
-                        intents: CycleIntentSet = .empty) -> SmartRecommendation {
+                        intents: CycleIntentSet = .empty,
+                        portfolioValue: Double = 0) -> SmartRecommendation {
 
         let sb = SmartBudgetManager.shared
         let cm = CurrencyManager.shared
@@ -236,7 +237,13 @@ enum SmartRecommendationEngine {
                           w.cycles, f.string(from: w.start), f.string(from: lastDay))
         }()
 
-        let totalExpense = expenseTx.reduce(0.0) { $0 + toPref(abs($1.amount), $1.currency) }
+        // Money put into investments or savings goals left the account but was
+        // not consumed: it is the set-aside itself. Counting it as spending made
+        // a month with a gold purchase read as "you spent more than you earned".
+        let consumedTx = expenseTx.filter { $0.category != .investment }
+        let investedAvg = expenseTx.filter { $0.category == .investment }
+            .reduce(0.0) { $0 + toPref(abs($1.amount), $1.currency) } / monthsDivisor
+        let totalExpense = consumedTx.reduce(0.0) { $0 + toPref(abs($1.amount), $1.currency) }
         let avgMonthlyExpense = totalExpense / monthsDivisor
 
         func avgGroup(_ cats: [TxCategory]) -> Double {
@@ -719,11 +726,29 @@ enum SmartRecommendationEngine {
         // Only pitch investing when there is genuinely spare money AND no
         // interest-bearing debt to clear first. (0%-interest debt doesn't block
         // investing — mathematically it's fine to invest ahead of free debt.)
-        if suggestedInvestment > 0, hasSurplus, !hasCostlyDebt, !intents.excusesInvesting {
+        // What is already being invested shapes the card: "start investing"
+        // to someone holding a portfolio, or putting money in every month,
+        // read as DiPo not knowing them.
+        if suggestedInvestment > 0, hasSurplus, !hasCostlyDebt, !intents.excusesInvesting,
+           let pitch = InvestPitch.make(suggested: suggestedInvestment, investedMonthly: investedAvg,
+                                        portfolioValue: portfolioValue) {
+            let money = { cm.formatted(roundNice($0), currency: currency) }
+            let title: String, subtitle: String
+            switch pitch {
+            case .start:
+                title = String(format: loc("reco.item.invest_title"), money(suggestedInvestment))
+                subtitle = loc("reco.item.invest_sub")
+            case .keepGoing:
+                title = String(format: loc("reco.item.invest_keep_title"), money(suggestedInvestment))
+                subtitle = String(format: loc("reco.item.invest_keep_sub"), money(portfolioValue))
+            case .topUp(let gap):
+                title = String(format: loc("reco.item.invest_more_title"), money(gap))
+                subtitle = String(format: loc("reco.item.invest_more_sub"),
+                                  money(investedAvg), money(suggestedInvestment))
+            }
             items.append(RecoItem(
                 icon: "chart.line.uptrend.xyaxis", tint: AppTheme.purple,
-                title: String(format: loc("reco.item.invest_title"), cm.formatted(suggestedInvestment, currency: currency)),
-                subtitle: loc("reco.item.invest_sub"),
+                title: title, subtitle: subtitle,
                 badge: loc("reco.badge.high_impact"),
                 badgeTint: AppTheme.purple))
         }
@@ -843,7 +868,7 @@ enum SmartRecommendationEngine {
 
         // ── Spending mix ── average monthly spend per category, biggest first.
         var byCat: [TxCategory: Double] = [:]
-        for tx in expenseTx { byCat[tx.category, default: 0] += toPref(abs(tx.amount), tx.currency) }
+        for tx in consumedTx { byCat[tx.category, default: 0] += toPref(abs(tx.amount), tx.currency) }
         let spendingBreakdown: [RecoSlice] = byCat.sorted { $0.value > $1.value }.prefix(5).map { cat, val in
             RecoSlice(label: cat.displayLabel,
                       pct: totalExpense > 0 ? Int((val / totalExpense) * 100) : 0,
@@ -917,5 +942,23 @@ enum SmartRecommendationEngine {
         default:              step = 500_000
         }
         return (value / step).rounded() * step
+    }
+}
+
+/// Which investing card fits someone, given what they already do. nil means
+/// they already invest about as much as the plan suggests: nothing to pitch.
+enum InvestPitch: Equatable {
+    case start            // nothing invested yet
+    case keepGoing        // holds a portfolio, but no money went in lately
+    case topUp(Double)    // invests already; this much more a month reaches the plan
+
+    static func make(suggested: Double, investedMonthly: Double, portfolioValue: Double) -> InvestPitch? {
+        guard suggested > 0 else { return nil }
+        if investedMonthly <= 0 {
+            return portfolioValue > 0 ? .keepGoing : .start
+        }
+        let gap = suggested - investedMonthly
+        // Within a fifth of the plan is on plan: a "top up Rp 40rb" card is noise.
+        return gap > suggested * 0.2 ? .topUp(gap) : nil
     }
 }
