@@ -147,6 +147,7 @@ struct HoldingDetailView: View {
         switch holding.type.cadence {
         case .live:  return loc("invest.cadence.live")
         case .daily: return loc("invest.cadence.daily")
+        case .monthly: return loc("invest.cadence.monthly")
         case .fixed: return loc("invest.cadence.fixed")
         }
     }

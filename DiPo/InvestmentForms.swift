@@ -11,7 +11,15 @@ import SwiftData
 
 extension InvestmentType {
     /// True when the user thinks in a rupiah amount, not a quantity × price.
-    var isAmountBased: Bool { self == .deposit || self == .bond }
+    var isAmountBased: Bool { self == .deposit || self == .bond || self == .pension }
+
+    /// The value-per-rupiah an amount-based holding opens at: what it is worth
+    /// now over what went in. Left empty, it is worth what went in — not
+    /// nothing, which is how a bond saved without "Value now" showed Rp 0.
+    func openingRatio(amount: Double, valueNow: Double) -> Double {
+        guard !priceIsFixed, amount > 0, valueNow > 0 else { return 1 }
+        return valueNow / amount
+    }
 }
 
 // MARK: - Card top-up
@@ -420,10 +428,17 @@ struct AddHoldingSheet: View {
                     groupCard {
                         sectionHeader(loc("invest.first_buy"))
                         if type.isAmountBased {
-                            MoneyField(label: loc("invest.field.amount"), prefix: curSymbol, bg: AppTheme.bg, text: $amount)
+                            // An amount-based holding has no unit price: what goes in
+                            // is the rupiah put in, and what it is worth now.
+                            MoneyField(label: loc(type == .pension ? "invest.field.contributed" : "invest.field.amount"),
+                                       prefix: curSymbol,
+                                       hint: type == .pension ? loc("invest.field.contributed_hint") : nil,
+                                       bg: AppTheme.bg, text: $amount)
                             if !type.priceIsFixed {
-                                MoneyField(label: loc("invest.field.current"), prefix: curSymbol,
-                                           hint: loc("invest.field.current_hint"), bg: AppTheme.bg, text: $currentValue)
+                                MoneyField(label: loc("invest.field.current_total"), prefix: curSymbol,
+                                           hint: loc(type == .pension ? "invest.field.pension_value_hint"
+                                                                      : "invest.field.current_total_hint"),
+                                           bg: AppTheme.bg, text: $currentValue)
                             }
                         } else {
                             PriceModeChips(unitLabel: type.unitLabel, mode: $priceMode)
@@ -513,7 +528,7 @@ struct AddHoldingSheet: View {
     private var typePicker: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(loc("invest.field.type")).font(.system(.caption, weight: .medium)).foregroundStyle(AppTheme.textSecondary)
-            // A 3-column grid shows all six at once — no cut-off horizontal scroll.
+            // A 3-column grid shows every type at once — no cut-off horizontal scroll.
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 10) {
                 ForEach(InvestmentType.allCases, id: \.self) { t in
                     Button {
@@ -611,7 +626,7 @@ struct AddHoldingSheet: View {
             let amt = parseNumber(amount)
             holdingUnits = amt
             price = 1
-            lastPrice = type.priceIsFixed ? 1 : (amt > 0 ? parseNumber(currentValue) / amt : 1)
+            lastPrice = type.openingRatio(amount: amt, valueNow: parseNumber(currentValue))
         } else {
             holdingUnits = unitsValue
             price = buyUnitPrice
@@ -677,7 +692,7 @@ struct AddLotSheet: View {
         switch holding.type {
         case .stock, .mutualFund, .crypto: ks.append(.dividend)
         case .bond, .deposit: ks.append(.coupon)
-        case .gold: break
+        case .gold, .pension: break
         }
         ks.append(.fee)
         return ks

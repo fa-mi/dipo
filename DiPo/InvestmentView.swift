@@ -239,6 +239,12 @@ struct PortfolioOverviewCard: View {
     private var totalReturnPct: Double {
         totals.costBasis > 0 ? totalReturn / totals.costBasis : 0
     }
+    /// Value held where it can't be drawn yet (pension funds).
+    private var lockedValue: Double {
+        totals.valueByType.reduce(0) { sum, kv in
+            InvestmentType(rawValue: kv.key)?.isLocked == true ? sum + kv.value : sum
+        }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -267,6 +273,15 @@ struct PortfolioOverviewCard: View {
                 }
                 if totals.income > 0.5 {
                     mini(loc("invest.income"), investMoney(totals.income, currency), AppTheme.accent)
+                }
+            }
+
+            // A pension balance can't be drawn until retirement, so the total
+            // alone overstates what is to hand. Say which part is which.
+            if lockedValue > 0.5, lockedValue < totals.marketValue - 0.5 {
+                HStack(spacing: 14) {
+                    mini(loc("invest.liquid"), investMoney(totals.marketValue - lockedValue, currency), AppTheme.textPrimary)
+                    mini(loc("invest.locked_pension"), investMoney(lockedValue, currency), InvestmentType.pension.color)
                 }
             }
 
@@ -357,13 +372,21 @@ private struct FlowLegend: View {
                 HStack(spacing: 5) {
                     Circle().fill(s.type.color).frame(width: 8, height: 8)
                     Text(s.type.displayName).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
-                    Text("\(Int((total > 0 ? s.value / total : 0) * 100))%")
+                    Text(allocationShareLabel(s.value, of: total))
                         .font(.system(.caption2, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
                 }
             }
             Spacer(minLength: 0)
         }
     }
+}
+
+/// A slice's share as a whole percent. A sliver that rounds to nothing reads
+/// "<1%" — "Gold 0%" beside a gold bar that is plainly there looked broken.
+func allocationShareLabel(_ value: Double, of total: Double) -> String {
+    guard total > 0, value > 0 else { return "0%" }
+    let pct = value / total * 100
+    return pct < 1 ? "<1%" : "\(Int(pct.rounded()))%"
 }
 
 // MARK: - Holding row

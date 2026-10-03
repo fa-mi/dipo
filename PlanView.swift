@@ -136,7 +136,10 @@ struct PlanView: View {
         let entries = holdings.map { (type: $0.typeRaw, currency: $0.currency, stats: $0.stats()) }
         let total = PortfolioEngine.portfolio(entries, targetCurrency: pref,
                                               convert: { cm.convert($0, from: $1, to: $2) }).marketValue
-        return String(format: loc("invest.status.summary"), holdings.count, cm.formatted(total, currency: pref))
+        let money = cm.formatted(total, currency: pref)
+        return holdings.count == 1
+            ? String(format: loc("invest.status.summary_one"), money)
+            : String(format: loc("invest.status.summary"), holdings.count, money)
     }
 
     // MARK: Building blocks
