@@ -195,7 +195,8 @@ enum SmartRecommendationEngine {
                         salaryDayOfMonth: Int? = nil,
                         recurrings: [RecurringExpense] = [],
                         intents: CycleIntentSet = .empty,
-                        portfolioValue: Double = 0) -> SmartRecommendation {
+                        portfolioValue: Double = 0,
+                        assetMonthlyWear: Double = 0) -> SmartRecommendation {
 
         let sb = SmartBudgetManager.shared
         let cm = CurrencyManager.shared
@@ -751,6 +752,19 @@ enum SmartRecommendationEngine {
                 title: title, subtitle: subtitle,
                 badge: loc("reco.badge.high_impact"),
                 badgeTint: AppTheme.purple))
+        }
+        // Things that wear out cost money every month whether or not it shows.
+        // Setting the wear aside means the next motorbike isn't another loan.
+        // Skipped once a replacement goal exists (the caller passes 0 then).
+        if assetMonthlyWear >= 1_000, !isDeficit, !hasCostlyDebt {
+            let monthly = AssetAdvice.roundedMonthly(assetMonthlyWear)
+            items.append(RecoItem(
+                icon: "arrow.triangle.2.circlepath", tint: AppTheme.orange,
+                title: String(format: loc("reco.item.replace_title"), cm.formatted(monthly, currency: currency)),
+                subtitle: String(format: loc("reco.item.replace_sub"),
+                                 cm.formatted(roundNice(assetMonthlyWear * 12), currency: currency)),
+                badge: loc("reco.badge.payday"),
+                badgeTint: AppTheme.orange))
         }
         // Always give at least one card so the screen never looks empty.
         if items.isEmpty {

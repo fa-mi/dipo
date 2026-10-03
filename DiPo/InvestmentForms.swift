@@ -169,7 +169,7 @@ struct CardFundPicker: View {
 
 /// A labelled numeric input styled like the rest of the app's forms, with an
 /// optional currency prefix ("Rp") or unit suffix ("gr") sitting inside the box.
-private struct MoneyField: View {
+struct MoneyField: View {
     let label: String
     var placeholder: String = "0"
     var prefix: String? = nil
@@ -210,7 +210,7 @@ private struct MoneyField: View {
     }
 }
 
-private struct PlainField: View {
+struct PlainField: View {
     let label: String
     var placeholder: String = ""
     var bg: Color = AppTheme.cardDark

@@ -23,6 +23,7 @@ struct HomeView: View {
     /// 12-month instalment were not debt at all until each charge posted.
     @Query private var installments: [CardInstallment]
     @Query private var investmentHoldings: [InvestmentHolding]
+    @Query private var physicalAssets: [PhysicalAsset]
     /// Declared Monthly Expenses — surfaced on Home when a charge is imminent,
     /// so the balance drop never comes as a surprise.
     @Query private var recurringExpenses: [RecurringExpense]
@@ -157,9 +158,15 @@ struct HomeView: View {
         }
     }
 
-    /// Net worth = cash + savings goals + receivables + investments − liabilities.
+    /// Estimated value of the house, land, vehicles and electronics (Royal).
+    private var physicalAssetValue: Double {
+        AssetSummary.of(physicalAssets, currency: CurrencyManager.shared.preferredCurrency).totalValue
+    }
+
+    /// Net worth = cash + savings goals + receivables + investments + physical
+    /// assets − liabilities.
     private var netWorth: Double {
-        totalBalance + goalSavings + receivableAssets + investmentValue - totalLiabilities
+        totalBalance + goalSavings + receivableAssets + investmentValue + physicalAssetValue - totalLiabilities
     }
 
     // Transactions for the currently selected card only
@@ -519,6 +526,11 @@ struct HomeView: View {
                                     Text(String(format: loc("invest.networth_line"), fmt(investmentValue)))
                                         .font(.system(.caption2, weight: .medium))
                                         .foregroundStyle(AppTheme.accent)
+                                }
+                                if physicalAssetValue > 0.5 {
+                                    Text(String(format: loc("asset.networth_line"), fmt(physicalAssetValue)))
+                                        .font(.system(.caption2, weight: .medium))
+                                        .foregroundStyle(AppTheme.teal)
                                 }
                             }
                             .padding(.horizontal, 16).padding(.vertical, 11)
