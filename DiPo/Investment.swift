@@ -14,6 +14,10 @@ import SwiftData
 
 enum InvestmentType: String, CaseIterable, Codable {
     case gold, stock, mutualFund, bond, deposit, crypto
+    /// A retirement fund (DPLK — BRIFINE, Manulife, AIA…): a rupiah balance
+    /// that grows with its fund's return, locked until retirement. Kept apart
+    /// in the totals so locked money never reads as money to hand.
+    case pension
 
     var displayName: String {
         switch self {
@@ -23,6 +27,7 @@ enum InvestmentType: String, CaseIterable, Codable {
         case .bond:       return loc("invest.type.bond")
         case .deposit:    return loc("invest.type.deposit")
         case .crypto:     return loc("invest.type.crypto")
+        case .pension:    return loc("invest.type.pension")
         }
     }
 
@@ -35,6 +40,7 @@ enum InvestmentType: String, CaseIterable, Codable {
         case .bond:       return loc("invest.unit.nominal")
         case .deposit:    return loc("invest.unit.nominal")
         case .crypto:     return loc("invest.unit.coin")
+        case .pension:    return loc("invest.unit.nominal")
         }
     }
 
@@ -46,6 +52,7 @@ enum InvestmentType: String, CaseIterable, Codable {
         case .bond:       return "building.columns.fill"
         case .deposit:    return "banknote.fill"
         case .crypto:     return "bitcoinsign.circle.fill"
+        case .pension:    return "beach.umbrella.fill"
         }
     }
 
@@ -57,6 +64,7 @@ enum InvestmentType: String, CaseIterable, Codable {
         case .bond:       return AppTheme.teal
         case .deposit:    return AppTheme.accent
         case .crypto:     return AppTheme.amber
+        case .pension:    return AppTheme.indigo
         }
     }
 
@@ -67,20 +75,24 @@ enum InvestmentType: String, CaseIterable, Codable {
     var supportsAutoPrice: Bool {
         switch self {
         case .stock, .crypto: return true
-        case .gold, .mutualFund, .bond, .deposit: return false
+        case .gold, .mutualFund, .bond, .deposit, .pension: return false
         }
     }
 
     /// How often the price actually changes — sets honest expectations in the UI
     /// ("live" vs "daily" vs "fixed"), rather than implying everything ticks.
-    enum Cadence { case live, daily, fixed }
+    enum Cadence { case live, daily, monthly, fixed }
     var cadence: Cadence {
         switch self {
         case .crypto, .stock: return .live      // crypto real-time; stock delayed but intraday
         case .gold, .mutualFund, .bond: return .daily
+        case .pension: return .monthly           // the fund reports its balance monthly
         case .deposit: return .fixed
         }
     }
+
+    /// Money that can't be drawn until retirement.
+    var isLocked: Bool { self == .pension }
 
     /// Deposits and non-tradable bonds don't have a fluctuating price; their
     /// "price" is fixed at 1.0 (value = amount put in, plus recorded interest).
