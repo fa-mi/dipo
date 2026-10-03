@@ -92,7 +92,7 @@ struct InvestmentView: View {
 
     private var pref: String { CurrencyManager.shared.preferredCurrency }
     private var hasAutoPriced: Bool {
-        holdings.contains { $0.type.supportsAutoPrice && !$0.manualPrice && !$0.symbol.isEmpty }
+        holdings.contains(where: \.isAutoPriced)
     }
 
     private func doRefresh(announce: Bool = false) async {
@@ -417,6 +417,10 @@ struct HoldingRow: View {
     /// the lookup symbol, matching how portfolio apps label a row.
     private var subtitle: String {
         var parts = [holding.type.displayName]
+        if holding.followsGoldFeed {
+            parts.append(holding.manualPrice ? loc("invest.manual") : loc("invest.gold_feed_name"))
+            return parts.joined(separator: " · ")
+        }
         if holding.type.supportsAutoPrice {
             parts.append(holding.manualPrice ? loc("invest.manual") : loc("invest.auto"))
         }

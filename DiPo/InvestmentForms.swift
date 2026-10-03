@@ -577,6 +577,10 @@ struct AddHoldingSheet: View {
                                   lastPrice: lastPrice, prevClose: lastPrice,
                                   sortOrder: nextOrder)
         h.priceUpdatedAt = .now
+        // Rupiah gold follows Pegadaian's daily price from the start (what
+        // BRImo/Tring and Pegadaian show); it can be switched off on the
+        // holding. The price typed here stands until the first refresh.
+        if type == .gold { h.setGoldFeed(true) }
         h.pushPrice(price); h.pushPrice(lastPrice)   // seed the sparkline: buy → now
         context.insert(h)
         let lot = InvestmentLot(kind: .buy, date: date, units: holdingUnits,

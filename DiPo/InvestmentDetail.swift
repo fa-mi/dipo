@@ -56,6 +56,7 @@ struct HoldingDetailView: View {
                         if goldFiguresLookWrong { goldCheckBanner }
                         if holding.priceHistory.count >= 2 { priceChartCard }
                         detailRows
+                        if holding.type == .gold, cur.uppercased() == "IDR" { goldFeedCard }
                         actionRow
                         lotsSection
                         Spacer(minLength: 100)
@@ -337,6 +338,35 @@ struct HoldingDetailView: View {
                 actionButton(loc("invest.update_price_short"), "arrow.triangle.2.circlepath", AppTheme.textSecondary) { sheet = .price }
             }
         }
+    }
+
+    /// Gold can follow Pegadaian's daily buyback price — the one BRImo (Tring)
+    /// values the balance at — instead of being updated by hand.
+    private var goldFeedCard: some View {
+        let on = holding.isAutoPriced
+        return VStack(alignment: .leading, spacing: 6) {
+            Toggle(isOn: Binding(
+                get: { holding.isAutoPriced },
+                set: { newValue in
+                    HapticManager.shared.tap()
+                    holding.setGoldFeed(newValue)
+                    try? context.save()
+                    guard newValue else { return }
+                    Task { await PriceService.refresh([holding], context: context) }
+                })) {
+                Text(loc("invest.gold_feed_title"))
+                    .font(.system(.subheadline, weight: .semibold))
+                    .foregroundStyle(AppTheme.textPrimary)
+            }
+            .tint(AppTheme.accent)
+            Text(on ? loc("invest.gold_feed_on") : loc("invest.gold_feed_off"))
+                .font(.system(.caption))
+                .foregroundStyle(AppTheme.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
     }
 
     /// Turn totals recorded as per-gram prices back into prices per gram:

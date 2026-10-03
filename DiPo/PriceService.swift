@@ -9,8 +9,11 @@ import SwiftData
 //   • Crypto  → CoinGecko simple/price (real-time, IDR or USD).
 //   • Stocks  → Yahoo Finance chart (IDX and US tickers, delayed ~15 min).
 //
-// Everything else (gold, reksadana, bonds, deposits) is user-maintained, so it
-// is skipped here. A failed fetch changes nothing — the manual price stands —
+//   • Gold    → Pegadaian's Tabungan Emas price, via the Worker only (it reads
+//               Pegadaian's page; there is no API to call from the phone).
+//
+// Everything else (reksadana, bonds, deposits) is user-maintained, so it is
+// skipped here. A failed fetch changes nothing — the manual price stands —
 // so the feature works offline and never shows a wrong number because a feed
 // blinked. A Cloudflare Worker cache can front these later without touching the
 // call sites; only `quote(for:)` would change.
@@ -38,10 +41,7 @@ enum PriceService {
     @discardableResult
     static func refresh(_ holdings: [InvestmentHolding], context: ModelContext) async -> Outcome {
         var out = Outcome()
-        let targets = holdings.filter {
-            $0.type.supportsAutoPrice && !$0.manualPrice
-                && !$0.symbol.trimmingCharacters(in: .whitespaces).isEmpty
-        }
+        let targets = holdings.filter(\.isAutoPriced)
         guard !targets.isEmpty else { return out }
 
         var quotes = await workerQuotes(for: targets)
@@ -72,8 +72,16 @@ enum PriceService {
         "https://dipo-receipt-scanner.fahmi-aquinas.workers.dev/api/prices"
 
     /// Must match the key the Worker builds, or every quote looks like a miss.
+    private static func feedKind(_ h: InvestmentHolding) -> String {
+        switch h.type {
+        case .crypto: return "crypto"
+        case .gold:   return "gold"
+        default:      return "stock"
+        }
+    }
+
     private static func cacheKey(for h: InvestmentHolding) -> String {
-        let kind = h.type == .crypto ? "crypto" : "stock"
+        let kind = feedKind(h)
         return "\(kind):\(h.symbol.trimmingCharacters(in: .whitespaces).lowercased()):\(h.currency.lowercased())"
     }
 
@@ -82,7 +90,7 @@ enum PriceService {
     private static func workerQuotes(for holdings: [InvestmentHolding]) async -> [String: Quote] {
         guard let url = URL(string: pricesURL) else { return [:] }
         let items: [[String: String]] = holdings.map {
-            ["type": $0.type == .crypto ? "crypto" : "stock",
+            ["type": feedKind($0),
              "symbol": $0.symbol.trimmingCharacters(in: .whitespaces),
              "currency": $0.currency]
         }
