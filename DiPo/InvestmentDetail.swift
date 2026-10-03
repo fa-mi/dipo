@@ -54,6 +54,7 @@ struct HoldingDetailView: View {
                         header.padding(.top, 20)
                         heroCard
                         if goldFiguresLookWrong { goldCheckBanner }
+                        if let meant = slippedAvgCost { priceSlipBanner(meant) }
                         if holding.priceHistory.count >= 2 { priceChartCard }
                         detailRows
                         if holding.type == .gold, cur.uppercased() == "IDR" { goldFeedCard }
@@ -367,6 +368,64 @@ struct HoldingDetailView: View {
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+    }
+
+    /// Purchases recorded with a decimal in the wrong place — "22306" for
+    /// $223.06 — make the cost, and so the return, wrong by the same factor.
+    /// Only judged against a price that came from a feed: a hand-typed
+    /// current price could carry the same slip.
+    private func slippedLotPrice(_ lot: InvestmentLot) -> Double? {
+        guard lot.kind == .buy || lot.kind == .sell else { return nil }
+        return InvestmentInput.priceSlip(lot.pricePerUnit, reference: holding.lastPrice)
+    }
+
+    /// The average buy price the purchases would give once repaired, or nil
+    /// when nothing needs it.
+    private var slippedAvgCost: Double? {
+        guard holding.type != .gold, !holding.type.isAmountBased,
+              holding.isAutoPriced, holding.lastPrice > 0,
+              holding.lots.contains(where: { slippedLotPrice($0) != nil }) else { return nil }
+        let facts = holding.lots.map { lot -> LotFact in
+            var f = lot.fact
+            if let p = slippedLotPrice(lot) { f = LotFact(date: f.date, kind: f.kind, units: f.units,
+                                                            pricePerUnit: p, fee: f.fee, cashAmount: f.cashAmount) }
+            return f
+        }
+        let fixed = PortfolioEngine.stats(lots: facts, lastPrice: holding.lastPrice)
+        return fixed.avgCost > 0 ? fixed.avgCost : nil
+    }
+
+    private func priceSlipBanner(_ meant: Double) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill").font(.system(.caption))
+            VStack(alignment: .leading, spacing: 8) {
+                Text(String(format: loc("invest.slip_banner"),
+                            investMoney(s.avgCost, cur), investMoney(holding.lastPrice, cur)))
+                    .font(.system(.caption, weight: .medium))
+                    .fixedSize(horizontal: false, vertical: true)
+                Button {
+                    HapticManager.shared.success()
+                    withAnimation(.spring(response: 0.35)) { repairSlippedPrices() }
+                } label: {
+                    Text(String(format: loc("invest.slip_banner_fix"), investMoney(meant, cur)))
+                        .font(.system(.caption, weight: .bold))
+                        .padding(.horizontal, 12).padding(.vertical, 6)
+                        .background(AppTheme.amber.opacity(0.18), in: Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .foregroundStyle(AppTheme.amber)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .background(AppTheme.amber.opacity(0.12), in: RoundedRectangle(cornerRadius: AppRadius.lg))
+    }
+
+    private func repairSlippedPrices() {
+        for lot in holding.lots {
+            if let p = slippedLotPrice(lot) { lot.pricePerUnit = p }
+        }
+        try? context.save()
     }
 
     /// Turn totals recorded as per-gram prices back into prices per gram:

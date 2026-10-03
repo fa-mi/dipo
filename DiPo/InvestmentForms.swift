@@ -289,6 +289,48 @@ private struct GoldPriceWarning: View {
     }
 }
 
+/// A price a whole power of ten away from the one it should be near — a lost
+/// decimal point ("22306" for $223.06). Like the gold check, it warns and
+/// offers the likely price; it never blocks.
+private struct PriceSlipWarning: View {
+    let price: Double
+    let suggestion: Double
+    /// What the price was compared with, already worded: "the market price
+    /// ($333.69)", "your average buy ($223.06)".
+    let against: String
+    let currency: String
+    let fix: () -> Void
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill").font(.system(.caption))
+            VStack(alignment: .leading, spacing: 8) {
+                Text(String(format: loc("invest.price_slip"), investMoney(price, currency), against))
+                    .font(.system(.caption, weight: .medium))
+                    .fixedSize(horizontal: false, vertical: true)
+                Button {
+                    HapticManager.shared.tap()
+                    withAnimation(.spring(response: 0.3)) { fix() }
+                } label: {
+                    Text(String(format: loc("invest.price_slip_fix"), investMoney(suggestion, currency)))
+                        .font(.system(.caption, weight: .bold))
+                        .padding(.horizontal, 12).padding(.vertical, 6)
+                        .background(AppTheme.amber.opacity(0.18), in: Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .foregroundStyle(AppTheme.amber)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 12).padding(.vertical, 10)
+        .background(AppTheme.amber.opacity(0.12), in: RoundedRectangle(cornerRadius: AppRadius.md))
+    }
+}
+
+/// "the market price ($333.69)" / "your average buy ($223.06)".
+private func slipAgainst(_ key: String, _ v: Double, _ cur: String) -> String {
+    String(format: loc(key), investMoney(v, cur))
+}
+
 /// The per-unit price behind a price field. A total paid includes the fee and
 /// a total received is net of it, so the fee is taken out (or added back)
 /// before spreading; the lot's cost then comes back to exactly the total.
@@ -427,6 +469,13 @@ struct AddHoldingSheet: View {
                                     GoldPriceWarning(perGram: currentUnitPrice, currency: cur,
                                                      fixTitle: priceMode == .perUnit ? loc("invest.gold_as_total") : nil,
                                                      fix: { priceMode = .total })
+                                }
+                                if type != .gold, priceMode == .perUnit, !current.isEmpty,
+                                   let meant = InvestmentInput.priceSlip(currentUnitPrice, reference: buyUnitPrice) {
+                                    PriceSlipWarning(price: currentUnitPrice, suggestion: meant,
+                                                     against: slipAgainst("invest.slip_vs_buy", buyUnitPrice, cur),
+                                                     currency: cur,
+                                                     fix: { current = InvestmentInput.text(meant) })
                                 }
                             }
                         }
@@ -686,6 +735,13 @@ struct AddLotSheet: View {
                                              fixTitle: priceMode == .perUnit ? loc("invest.gold_as_total") : nil,
                                              fix: { priceMode = .total })
                         }
+                        if holding.type != .gold, priceMode == .perUnit, !price.isEmpty,
+                           let meant = InvestmentInput.priceSlip(unitPrice, reference: holding.lastPrice) {
+                            PriceSlipWarning(price: unitPrice, suggestion: meant,
+                                             against: slipAgainst("invest.slip_vs_market", holding.lastPrice, cur),
+                                             currency: cur,
+                                             fix: { price = InvestmentInput.text(meant) })
+                        }
                     }
                     if kind == .buy && !cards.isEmpty {
                         CardFundPicker(cards: cards, selectedID: $fundCardID)
@@ -825,6 +881,13 @@ struct EditLotSheet: View {
                                              fixTitle: totalFix.map { String(format: loc("invest.gold_use_per_gram"),
                                                                             investMoney($0, cur)) },
                                              fix: { if let v = totalFix { price = num(v) } })
+                        }
+                        if holding.type != .gold,
+                           let meant = InvestmentInput.priceSlip(parseNumber(price), reference: holding.lastPrice) {
+                            PriceSlipWarning(price: parseNumber(price), suggestion: meant,
+                                             against: slipAgainst("invest.slip_vs_market", holding.lastPrice, cur),
+                                             currency: cur,
+                                             fix: { price = num(meant) })
                         }
                     }
                     if kind == .buy && !cards.isEmpty {
@@ -999,6 +1062,13 @@ struct UpdatePriceSheet: View {
                         DerivedLine(text: String(format: loc("invest.derived_total"),
                                                  investMoney(newUnitPrice * unitsHeld, cur)))
                     }
+                }
+                if !isGold, !amountBased, priceMode == .perUnit, !priceText.isEmpty,
+                   let meant = InvestmentInput.priceSlip(newUnitPrice, reference: holding.stats().avgCost) {
+                    PriceSlipWarning(price: newUnitPrice, suggestion: meant,
+                                     against: slipAgainst("invest.slip_vs_avg", holding.stats().avgCost, cur),
+                                     currency: cur,
+                                     fix: { priceText = InvestmentInput.text(meant) })
                 }
                 if holding.type == .gold,
                    InvestmentInput.goldPriceLooksWrong(perGram: newUnitPrice, currency: cur) {

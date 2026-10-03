@@ -111,6 +111,28 @@ final class InvestmentInputTests: XCTestCase {
         XCTAssertNil(InvestmentInput.repairedGoldPrice(308_426, grams: 0, currency: "IDR"))
     }
 
+    // MARK: Decimal slips
+
+    /// The Apple holding in the report: bought at $223.06, recorded at 22306.
+    func testLostDecimalIsCaughtAndSuggested() throws {
+        XCTAssertEqual(try XCTUnwrap(InvestmentInput.priceSlip(22_306, reference: 333.69)), 223.06, accuracy: 1e-9)
+        XCTAssertEqual(try XCTUnwrap(InvestmentInput.priceSlip(22_306, reference: 223.06)), 223.06, accuracy: 1e-9)
+        // The other way: a rupiah price typed with a stray decimal.
+        XCTAssertEqual(try XCTUnwrap(InvestmentInput.priceSlip(43.6267, reference: 3_080)), 4_362.67, accuracy: 1e-6)
+    }
+
+    func testRealPriceMovesAreLeftAlone() {
+        // Google at $191.73 bought, $340.35 now; BBRI at Rp4.362,67 bought, Rp3.080 now.
+        XCTAssertNil(InvestmentInput.priceSlip(191.73, reference: 340.35))
+        XCTAssertNil(InvestmentInput.priceSlip(4_362.67, reference: 3_080))
+        // A genuine five-bagger is still under the 8× line.
+        XCTAssertNil(InvestmentInput.priceSlip(500, reference: 100))
+        // Far off, but shifting the decimal doesn't explain it either.
+        XCTAssertNil(InvestmentInput.priceSlip(300_000, reference: 100))
+        // Nothing to compare with.
+        XCTAssertNil(InvestmentInput.priceSlip(22_306, reference: 0))
+    }
+
     // MARK: Gold sanity
 
     func testTotalsTypedAsPerGramAreCaught() {
