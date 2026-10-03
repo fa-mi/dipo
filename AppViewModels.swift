@@ -192,6 +192,8 @@ enum HomeRoute: Hashable { case profile }
 enum WalletRoute: Hashable { case obligations }
 enum PlanRoute: Hashable {
     case budget, salary, bills, goals, investments
+    /// The financial ladder: the order to build money habits in.
+    case ladder
     // A specific holding's detail. Carried as a PlanRoute (not a bare view push)
     // so it appends to the tab's typed `[PlanRoute]` path — a value-less
     // NavigationLink here crashes with AnyNavigationPath.comparisonTypeMismatch.

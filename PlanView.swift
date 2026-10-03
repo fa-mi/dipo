@@ -15,6 +15,8 @@ struct PlanView: View {
     @Query private var bills: [RecurringExpense]
     @Query private var goals: [SavingsGoal]
     @Query private var holdings: [InvestmentHolding]
+    @Query private var cards: [BankCard]
+    @Query private var debts: [DebtRecord]
     @State private var pm = PremiumManager.shared
     @State private var budget = SmartBudgetManager.shared
     @State private var showPaywall = false
@@ -27,6 +29,15 @@ struct PlanView: View {
                 ScrollView(showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 22) {
                         header
+                        // Free for everyone: knowing what to do next with money
+                        // is the point of DiPo, not a premium extra.
+                        Button {
+                            HapticManager.shared.tap()
+                            vm.planPath.append(PlanRoute.ladder)
+                        } label: {
+                            FinancialLadderCard(result: ladder, currency: CurrencyManager.shared.preferredCurrency)
+                        }
+                        .buttonStyle(.plain)
                         section(loc("plan.section_month")) {
                             row(.budget, icon: "chart.pie.fill", tint: AppTheme.accent,
                                 title: loc("profile.budget"), status: budgetStatus,
@@ -68,6 +79,7 @@ struct PlanView: View {
                 case .goals:  WishlistView().pushedFeature()
                 case .investments: InvestmentView().pushedFeature()
                 case .holding(let h): HoldingDetailView(holding: h).pushedFeature()
+                case .ladder: FinancialLadderView().pushedFeature()
                 }
             }
             .sheet(isPresented: $showPaywall) {
@@ -83,6 +95,12 @@ struct PlanView: View {
                     .presentationBackground(AppTheme.bg).preferredColorScheme(appColorScheme())
             }
         }
+    }
+
+    private var ladder: LadderResult {
+        FinancialLadder.evaluate(.gather(cards: cards, debts: debts, holdings: holdings, goals: goals,
+                                         salaries: schedules,
+                                         currency: CurrencyManager.shared.preferredCurrency))
     }
 
     // MARK: Header
