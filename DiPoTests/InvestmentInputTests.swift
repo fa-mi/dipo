@@ -152,3 +152,36 @@ final class InvestmentInputTests: XCTestCase {
         XCTAssertEqual(totals.marketValue, visa.marketValue * 16_000, accuracy: 0.01)
     }
 }
+
+/// Gold can follow Pegadaian's price; nothing else about gold is auto-priced.
+final class GoldFeedTests: XCTestCase {
+
+    @MainActor
+    func testRupiahGoldFollowsPegadaianWhenSwitchedOn() {
+        let gold = InvestmentHolding(type: .gold, name: "Tring", currency: "IDR")
+        XCTAssertTrue(gold.manualPrice, "gold starts by hand")
+        XCTAssertFalse(gold.isAutoPriced)
+
+        gold.setGoldFeed(true)
+        XCTAssertEqual(gold.symbol, GoldFeed.symbol)
+        XCTAssertFalse(gold.manualPrice)
+        XCTAssertTrue(gold.isAutoPriced)
+        XCTAssertTrue(gold.followsGoldFeed)
+
+        gold.setGoldFeed(false)
+        XCTAssertFalse(gold.isAutoPriced)
+        XCTAssertEqual(gold.symbol, "")
+    }
+
+    @MainActor
+    func testOnlyRupiahGoldCanFollowTheFeed() {
+        let usd = InvestmentHolding(type: .gold, name: "XAU", currency: "USD")
+        usd.setGoldFeed(true)
+        XCTAssertFalse(usd.isAutoPriced)
+        let fund = InvestmentHolding(type: .mutualFund, name: "RDPU", symbol: GoldFeed.symbol, currency: "IDR")
+        fund.manualPrice = false
+        XCTAssertFalse(fund.isAutoPriced)
+        let stock = InvestmentHolding(type: .stock, name: "BBRI", symbol: "BBRI", currency: "IDR")
+        XCTAssertTrue(stock.isAutoPriced, "stocks are unchanged")
+    }
+}

@@ -205,3 +205,36 @@ final class InvestmentLot {
                 pricePerUnit: pricePerUnit, fee: fee, cashAmount: cashAmount)
     }
 }
+
+// MARK: - Gold price feed
+
+/// Pegadaian's daily Tabungan Emas price — what BRImo (Tring by Pegadaian)
+/// and the Pegadaian app value a gold balance at. Served by the Worker
+/// (dipo-backend src/prices.js) under this one symbol.
+enum GoldFeed {
+    static let symbol = "pegadaian"
+}
+
+extension InvestmentHolding {
+    /// Whether this holding's price comes from a feed rather than by hand:
+    /// a stock or a coin with a symbol, or rupiah gold following Pegadaian.
+    var isAutoPriced: Bool {
+        let sym = symbol.trimmingCharacters(in: .whitespaces)
+        guard !manualPrice, !sym.isEmpty else { return false }
+        if type.supportsAutoPrice { return true }
+        return followsGoldFeed
+    }
+
+    /// Gold set to follow Pegadaian's price (on or paused).
+    var followsGoldFeed: Bool {
+        type == .gold && currency.uppercased() == "IDR"
+            && symbol.trimmingCharacters(in: .whitespaces).lowercased() == GoldFeed.symbol
+    }
+
+    /// Point a rupiah gold holding at Pegadaian's price, or back to by hand.
+    func setGoldFeed(_ on: Bool) {
+        guard type == .gold, currency.uppercased() == "IDR" else { return }
+        symbol = on ? GoldFeed.symbol : ""
+        manualPrice = !on
+    }
+}
