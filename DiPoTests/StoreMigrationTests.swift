@@ -24,23 +24,53 @@ final class StoreMigrationTests: XCTestCase {
     }
 
     /// Writes a store the way builds before versioning did: a bare Schema of
-    /// the same models, no migration plan.
+    /// the V1 models, no migration plan. V1's models are the frozen copies, so
+    /// this is exactly the shape on phones running 3.3 and earlier.
     private func writeUnversionedStore(at url: URL) throws -> (cardID: UUID, txID: UUID) {
         let schema = Schema(DiPoSchemaV1.models)
         let container = try ModelContainer(for: schema, configurations: ModelConfiguration(schema: schema, url: url))
         let context = ModelContext(container)
-        let card = BankCard(holderName: "Lama", cardNumber: "423456••••••7890",
-                            balance: 1_250_000, expireDate: "12/30",
-                            gradientStart: "#000000", gradientEnd: "#111111",
-                            sortOrder: 0, currency: "IDR")
+        let card = DiPoSchemaV1.BankCard()
+        card.holderName = "Lama"
+        card.cardNumber = "423456••••••7890"
+        card.balance = 1_250_000
+        card.currency = "IDR"
         context.insert(card)
-        let tx = TxRecord(name: "Pupuk", date: .now, amount: 85_000, type: "Expense",
-                          icon: "leaf.fill", iconBgHex: "#000000", category: .other,
-                          currency: "IDR")
+        let tx = DiPoSchemaV1.TxRecord()
+        tx.name = "Pupuk"
+        tx.amount = 85_000
+        tx.currency = "IDR"
+        tx.categoryRaw = "other"
         context.insert(tx)
         card.transactions.append(tx)
         try context.save()
         return (card.id, tx.id)
+    }
+
+    /// The frozen V1 copies must describe the same store as the live classes
+    /// did before V2: same entities, same stored properties.
+    func testFrozenV1MatchesTheLiveModelsMinusWhatV2Added() {
+        let v1 = SchemaFingerprintTests.fingerprint(Schema(versionedSchema: DiPoSchemaV1.self))
+        let v2 = SchemaFingerprintTests.fingerprint(Schema(versionedSchema: DiPoSchemaV2.self))
+        let v2WithoutAssets = v2.split(separator: "\n").filter { !$0.hasPrefix("PhysicalAsset.") }
+        XCTAssertEqual(v1.split(separator: "\n"), v2WithoutAssets)
+    }
+
+    func testV1StoreOpensAsV2WithItsRowsAndAnEmptyAssetTable() throws {
+        let url = dir.appendingPathComponent("default.store")
+        let ids = try writeUnversionedStore(at: url)
+
+        let schema = Schema(versionedSchema: DiPoSchemaV2.self)
+        let container = try ModelContainer(for: schema, migrationPlan: DiPoMigrationPlan.self,
+                                           configurations: ModelConfiguration(schema: schema, url: url))
+        let context = ModelContext(container)
+        XCTAssertEqual(try context.fetch(FetchDescriptor<TxRecord>()).map(\.id), [ids.txID])
+        XCTAssertEqual(try context.fetch(FetchDescriptor<PhysicalAsset>()).count, 0)
+
+        context.insert(PhysicalAsset(kind: .motorcycle, name: "Beat", currency: "IDR",
+                                     purchasePrice: 18_000_000, purchaseDate: .now))
+        try context.save()
+        XCTAssertEqual(try context.fetch(FetchDescriptor<PhysicalAsset>()).count, 1)
     }
 
     func testUnversionedStoreOpensUnderV1WithItsRows() throws {

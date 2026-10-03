@@ -77,6 +77,10 @@ struct BackupPayload: Codable {
     /// transactions the user has not decided on yet, and a restore that drops
     /// them silently throws away decisions still to be made.
     var pending:      [BackupPending]? = nil
+    /// House, land, vehicles, electronics (schema V2). Optional so older
+    /// backups still decode, and an older build reading a newer file simply
+    /// ignores the key.
+    var assets:       [BackupAsset]? = nil
 }
 
 // MARK: - DTOs (mirror SwiftData @Model classes 1:1)
@@ -335,6 +339,22 @@ struct BackupPending: Codable {
     let cardID: String?
 }
 
+struct BackupAsset: Codable {
+    let id: String
+    let kindRaw: String
+    let name: String
+    let currency: String
+    let purchasePrice: Double
+    let purchaseDate: Date
+    let manualValue: Double
+    let manualValueDate: Date?
+    let annualRate: Double
+    let taxDueDate: Date?
+    let notes: String
+    let createdAt: Date
+    let sortOrder: Int
+}
+
 struct BackupDayCheckIn: Codable {
     let dayKey: String
     let answeredAt: Date
@@ -550,6 +570,7 @@ enum BackupService {
         let receivables: [Receivable] = (try? context.fetch(FetchDescriptor<Receivable>())) ?? []
         let installments: [CardInstallment] = (try? context.fetch(FetchDescriptor<CardInstallment>())) ?? []
         let pending: [PendingTransaction] = (try? context.fetch(FetchDescriptor<PendingTransaction>())) ?? []
+        let assets: [PhysicalAsset] = (try? context.fetch(FetchDescriptor<PhysicalAsset>())) ?? []
 
         // Build a card-id → list-of-tx index so we know which card each tx
         // belongs to without traversing relationships at write time.
@@ -708,6 +729,13 @@ enum BackupService {
                               rawText: p.rawText, name: p.name, amount: p.amount,
                               currency: p.currency, date: p.date, categoryRaw: p.categoryRaw,
                               cardID: p.cardID?.uuidString)
+            },
+            assets: assets.map { a in
+                BackupAsset(id: a.id.uuidString, kindRaw: a.kindRaw, name: a.name, currency: a.currency,
+                            purchasePrice: a.purchasePrice, purchaseDate: a.purchaseDate,
+                            manualValue: a.manualValue, manualValueDate: a.manualValueDate,
+                            annualRate: a.annualRate, taxDueDate: a.taxDueDate, notes: a.notes,
+                            createdAt: a.createdAt, sortOrder: a.sortOrder)
             }
         )
 
@@ -782,6 +810,7 @@ enum BackupService {
             try? context.delete(model: CardInstallment.self)
             try? context.delete(model: PendingTransaction.self)
             try? context.delete(model: RecurringExpense.self)
+            try? context.delete(model: PhysicalAsset.self)
             try context.save()
 
         // The restored data is a different set of cycles and debts than
@@ -969,6 +998,20 @@ enum BackupService {
             context.insert(item)
         }
 
+        for a in payload.assets ?? [] {
+            let asset = PhysicalAsset(kind: AssetKind(rawValue: a.kindRaw) ?? .other, name: a.name,
+                                      currency: a.currency, purchasePrice: a.purchasePrice,
+                                      purchaseDate: a.purchaseDate, annualRate: a.annualRate,
+                                      taxDueDate: a.taxDueDate, notes: a.notes, sortOrder: a.sortOrder)
+            if let id = UUID(uuidString: a.id) { asset.id = id }
+            // Kept as written, even a kind this build doesn't know.
+            asset.kindRaw = a.kindRaw
+            asset.manualValue = a.manualValue
+            asset.manualValueDate = a.manualValueDate
+            asset.createdAt = a.createdAt
+            context.insert(asset)
+        }
+
         for i in payload.installments ?? [] {
             guard let cardID = UUID(uuidString: i.cardID) else { continue }
             let inst = CardInstallment(cardID: cardID, merchant: i.merchant,
@@ -1036,6 +1079,7 @@ enum BackupService {
                 try? context.delete(model: CardInstallment.self)
                 try? context.delete(model: PendingTransaction.self)
                 try? context.delete(model: RecurringExpense.self)
+                try? context.delete(model: PhysicalAsset.self)
                 try? context.save()
                 NotificationManager.clearDeliveryDedupState()
                 Self.applyPayload(snap, context: context)
@@ -1211,6 +1255,20 @@ enum BackupService {
             if let id = UUID(uuidString: p.id) { item.id = id }
             item.capturedAt = p.capturedAt
             context.insert(item)
+        }
+
+        for a in payload.assets ?? [] {
+            let asset = PhysicalAsset(kind: AssetKind(rawValue: a.kindRaw) ?? .other, name: a.name,
+                                      currency: a.currency, purchasePrice: a.purchasePrice,
+                                      purchaseDate: a.purchaseDate, annualRate: a.annualRate,
+                                      taxDueDate: a.taxDueDate, notes: a.notes, sortOrder: a.sortOrder)
+            if let id = UUID(uuidString: a.id) { asset.id = id }
+            // Kept as written, even a kind this build doesn't know.
+            asset.kindRaw = a.kindRaw
+            asset.manualValue = a.manualValue
+            asset.manualValueDate = a.manualValueDate
+            asset.createdAt = a.createdAt
+            context.insert(asset)
         }
 
         for i in payload.installments ?? [] {

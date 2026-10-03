@@ -1379,6 +1379,9 @@ enum NotificationScheduler {
         // ── Debt due-date reminders ────────────────────────────────────
         scheduleDebtReminders(context: context, preferred: preferred, cal: cal, now: now)
 
+        // ── Yearly asset taxes (STNK, PBB) ─────────────────────────────
+        AssetTaxReminders.scheduleAll(assets: (try? context.fetch(FetchDescriptor<PhysicalAsset>())) ?? [])
+
         // ── Smart Budget per-group over-budget alert ───────────────────
         checkSmartBudgetAlerts(txs: txs, context: context, preferred: preferred)
     }
