@@ -405,9 +405,62 @@ extension StatisticsView {
                     .buttonStyle(.plain)
                 }
             }
+
+            nonFlowSection
         }
         .padding(16)
         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.xl))
+    }
+
+    /// Transfers for the current tab, shown beside the breakdown and never
+    /// added to it (see NonFlowMovements).
+    var nonFlowRows: [NonFlowMovements.Row] {
+        NonFlowMovements.rows(filteredTx, incoming: statsVM.selectedStatTab != .expenses,
+                              amount: { convertedAmount($0) })
+    }
+
+    @ViewBuilder
+    var nonFlowSection: some View {
+        let rows = nonFlowRows
+        if !rows.isEmpty {
+            let incoming = statsVM.selectedStatTab != .expenses
+            VStack(alignment: .leading, spacing: 10) {
+                Rectangle().fill(AppTheme.cardMid.opacity(0.7)).frame(height: 1)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(loc(incoming ? "stats.nonflow.in_title" : "stats.nonflow.out_title"))
+                        .font(.system(.subheadline, weight: .semibold))
+                        .foregroundStyle(AppTheme.textPrimary)
+                    Text(loc(incoming ? "stats.nonflow.in_sub" : "stats.nonflow.out_sub"))
+                        .font(.system(.caption2))
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                ForEach(rows.prefix(5), id: \.label) { r in
+                    HStack(spacing: 12) {
+                        Image(systemName: incoming ? "arrow.down.left" : "arrow.up.right")
+                            .font(.system(.caption, weight: .bold))
+                            .foregroundStyle(AppTheme.textSecondary)
+                            .frame(width: 36, height: 36)
+                            .background(AppTheme.cardMid, in: Circle())
+                        Text(r.label)
+                            .font(.system(.subheadline))
+                            .foregroundStyle(AppTheme.textPrimary)
+                            .lineLimit(1)
+                        Spacer(minLength: 8)
+                        Text(money(r.amount))
+                            .font(.system(.subheadline, weight: .semibold))
+                            .foregroundStyle(AppTheme.textSecondary)
+                            .lineLimit(1).minimumScaleFactor(0.8)
+                    }
+                }
+                if rows.count > 5 {
+                    Text(String(format: loc("stats.nonflow.more"), rows.count - 5))
+                        .font(.system(.caption2))
+                        .foregroundStyle(AppTheme.textSecondary)
+                }
+            }
+            .padding(.top, 4)
+        }
     }
 
     /// Money out / money in, as two small pills.
