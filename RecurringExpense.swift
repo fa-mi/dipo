@@ -364,6 +364,30 @@ enum RecurringHistory {
         s.trimmingCharacters(in: .whitespaces).lowercased()
     }
 
+    /// The charge already posted for the bill's current due date, if any —
+    /// the one a change of amount would otherwise leave at the old figure.
+    static func currentCharge(for e: RecurringExpense, in cards: [BankCard],
+                              cal: Calendar = .current) -> TxRecord? {
+        guard e.isChargedForCurrentDue else { return nil }
+        return charges(named: e.label, in: cards).map(\.tx).first {
+            cal.component(.month, from: $0.date) == e.lastChargedMonth
+                && cal.component(.year, from: $0.date) == e.lastChargedYear
+        }
+    }
+
+    /// Sets a posted charge to a new bill amount, keeping the exchange rate it
+    /// was frozen at when the bill is in another currency than the card.
+    static func reprice(_ tx: TxRecord, to amount: Double, billCurrency: String) {
+        if tx.fxRate > 0, tx.fxOriginalCurrency == billCurrency {
+            tx.fxOriginalAmount = -abs(amount)
+            tx.amount = -abs(amount * tx.fxRate)
+        } else if tx.currency.isEmpty || tx.currency == billCurrency {
+            tx.amount = -abs(amount)
+        } else {
+            tx.amount = -abs(CurrencyManager.shared.convert(amount, from: billCurrency, to: tx.currency))
+        }
+    }
+
     static func charges(named label: String, in cards: [BankCard]) -> [(tx: TxRecord, card: BankCard)] {
         let key = normalized(label)
         return cards.flatMap { card in
@@ -1033,6 +1057,9 @@ struct RecurringFormSheet: View {
     @Bindable var vm: RecurringExpenseViewModel
     let context: ModelContext
     @Environment(\.dismiss) private var dismiss
+    /// This month's charge is already posted and the amount just changed:
+    /// ask whether it should change too, rather than silently leaving it.
+    @State private var repriceCharge: TxRecord?
     @Query(sort: \BankCard.sortOrder) private var cards: [BankCard]
     // Needed to answer "what does this do to my plan" while the form is open.
     @Query private var allRecurrings: [RecurringExpense]
@@ -1134,6 +1161,31 @@ struct RecurringFormSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(loc("common.cancel")) { dismiss() }.foregroundStyle(AppTheme.textSecondary)
+                }
+            }
+            .confirmationDialog(loc("recurring.reprice_title"),
+                                isPresented: Binding(get: { repriceCharge != nil },
+                                                     set: { if !$0 { repriceCharge = nil } }),
+                                titleVisibility: .visible) {
+                Button(loc("recurring.reprice_also")) {
+                    if let tx = repriceCharge {
+                        RecurringHistory.reprice(tx, to: NumberInput.amount(vm.formAmount),
+                                                 billCurrency: vm.formCurrency)
+                    }
+                    repriceCharge = nil
+                    save()
+                }
+                Button(loc("recurring.reprice_next_only")) {
+                    repriceCharge = nil
+                    save()
+                }
+                Button(loc("common.cancel"), role: .cancel) { repriceCharge = nil }
+            } message: {
+                if let tx = repriceCharge {
+                    Text(String(format: loc("recurring.reprice_msg"),
+                                CurrencyManager.shared.formatted(abs(tx.amount), currency: tx.currency),
+                                CurrencyManager.shared.formatted(NumberInput.amount(vm.formAmount),
+                                                                 currency: vm.formCurrency)))
                 }
             }
             .onAppear {
@@ -1280,7 +1332,13 @@ struct RecurringFormSheet: View {
     private var saveButton: some View {
         Button {
             guard vm.validate() else { HapticManager.shared.error(); return }
-            save()
+            if let e = vm.editing,
+               let tx = RecurringHistory.currentCharge(for: e, in: cards),
+               abs(NumberInput.amount(vm.formAmount) - e.amount) > 0.001 {
+                repriceCharge = tx
+            } else {
+                save()
+            }
         } label: {
             HStack(spacing: 10) {
                 Image(systemName: "checkmark.circle.fill").font(.system(.body))

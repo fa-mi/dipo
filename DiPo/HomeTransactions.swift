@@ -534,6 +534,38 @@ struct TxRow: View {
         return f.string(from: tx.date)
     }
 
+    /// A marker for a transaction the engine treats specially: a refund or
+    /// transfer (subtype), or one DiPo posted itself (recurring charge, salary).
+    /// Without it users can't tell at a glance which rows the budget skips or
+    /// where an unexpected charge came from. Shown in place of the type label,
+    /// which for these rows says little ("Purchase" on a transfer misleads).
+    private var badge: AnyView? {
+        if tx.txSubtype != .normal {
+            return AnyView(Self.badge(icon: tx.txSubtype.icon, text: tx.txSubtype.displayLabel, tint: AppTheme.orange))
+        }
+        if tx.notes == "tx.note.recurring_auto" || tx.notes == "tx.note.salary_auto" {
+            let isSalary = tx.notes == "tx.note.salary_auto"
+            return AnyView(Self.badge(icon: isSalary ? "banknote" : "arrow.clockwise",
+                                      text: loc(isSalary ? "tx.badge.auto_salary" : "tx.badge.auto_recurring"),
+                                      tint: isSalary ? AppTheme.accent : AppTheme.blue))
+        }
+        return nil
+    }
+
+    private static func badge(icon: String, text: String, tint: Color) -> some View {
+        HStack(spacing: 3) {
+            Image(systemName: icon)
+                .font(.system(.caption2, weight: .semibold)).imageScale(.small)
+            Text(text)
+                .font(.system(.caption2, weight: .bold))
+                .lineLimit(1)
+        }
+        .foregroundStyle(tint)
+        .padding(.horizontal, 5).padding(.vertical, 2)
+        .background(tint.opacity(0.15), in: Capsule())
+        .fixedSize()
+    }
+
     var body: some View {
         HStack(spacing: 14) {
             ZStack {
@@ -544,52 +576,12 @@ struct TxRow: View {
             }
 
             VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 6) {
-                    // Two lines at most. A long name used to wrap to three and
-                    // squeeze the badge beside it until the badge wrapped too —
-                    // "Salary" came out as "Salar / y".
-                    Text(tx.name)
-                        .font(.system(.subheadline, weight: .medium)).foregroundStyle(AppTheme.textPrimary)
-                        .lineLimit(2)
-                    // Subtype badge — small inline marker showing this tx is
-                    // a refund or transfer. Without this, users can't tell
-                    // at a glance which tx is treated specially by the
-                    // engine; they'd have to tap each one to check. Hidden
-                    // for .normal which is the default and would just add
-                    // noise to most rows.
-                    if tx.txSubtype != .normal {
-                        HStack(spacing: 3) {
-                            Image(systemName: tx.txSubtype.icon)
-                                .font(.system(.caption2, weight: .semibold)).imageScale(.small)
-                            Text(tx.txSubtype.displayLabel)
-                                .font(.system(.caption2, weight: .bold))
-                                .lineLimit(1)
-                        }
-                        .foregroundStyle(AppTheme.orange)
-                        .padding(.horizontal, 5).padding(.vertical, 2)
-                        .background(AppTheme.orange.opacity(0.15), in: Capsule())
-                        .fixedSize()
-                    }
-                    // Auto-posted marker — a recurring charge or salary credit
-                    // the engine created. Answers "where did my balance go?"
-                    // right in the list instead of looking like a manual entry.
-                    if tx.notes == "tx.note.recurring_auto" || tx.notes == "tx.note.salary_auto" {
-                        let isSalary = tx.notes == "tx.note.salary_auto"
-                        HStack(spacing: 3) {
-                            Image(systemName: isSalary ? "banknote" : "arrow.clockwise")
-                                .font(.system(.caption2, weight: .semibold)).imageScale(.small)
-                            Text(loc(isSalary ? "tx.badge.auto_salary" : "tx.badge.auto_recurring"))
-                                .font(.system(.caption2, weight: .bold))
-                                .lineLimit(1)
-                        }
-                        .foregroundStyle(isSalary ? AppTheme.accent : AppTheme.blue)
-                        .padding(.horizontal, 5).padding(.vertical, 2)
-                        .background((isSalary ? AppTheme.accent : AppTheme.blue).opacity(0.13), in: Capsule())
-                        // A label, not a column: it keeps its width and the name
-                        // beside it gives way instead.
-                        .fixedSize()
-                    }
-                }
+                // Two lines at most, and the whole width: the Transfer / Auto
+                // badge used to sit beside the name and squeeze it down to
+                // "Toko-pedi…". It now takes the type label's place on the right.
+                Text(tx.name)
+                    .font(.system(.subheadline, weight: .medium)).foregroundStyle(AppTheme.textPrimary)
+                    .lineLimit(2)
                 HStack(spacing: 6) {
                     Text(timeOnly)
                         .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
@@ -619,9 +611,14 @@ struct TxRow: View {
                      : CurrencyManager.shared.formatted(tx.amount, currency: tx.currency))
                     .font(.system(.subheadline, weight: .semibold))
                     .foregroundStyle(tx.amount >= 0 ? AppTheme.green : AppTheme.textPrimary)
-                Text(tx.displayType)
-                    .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
+                if let badge {
+                    badge
+                } else {
+                    Text(tx.displayType)
+                        .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
+                }
             }
+            .fixedSize()
         }
         .opacity(animateEntrance ? (appeared ? 1 : 0) : 1)
         .offset(x: animateEntrance ? (appeared ? 0 : 20) : 0)

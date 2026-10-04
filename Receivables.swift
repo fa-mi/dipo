@@ -61,8 +61,10 @@ extension Receivable {
     func repaidAmount(from transactions: [TxRecord]) -> Double {
         let key = id.uuidString
         var total: Double = 0
-        for tx in transactions where tx.linkedReceivableID == key {
-            // Repayments are positive (money coming back in).
+        // Only money coming IN. The loan itself is linked too (negative, when
+        // "record the money leaving" is on) and used to count as repaid —
+        // a fresh Rp 5 jt loan read as already settled.
+        for tx in transactions where tx.linkedReceivableID == key && tx.amount > 0 {
             total += CurrencyManager.shared.convert(abs(tx.amount),
                                                     from: tx.currency.isEmpty ? currency : tx.currency,
                                                     to: currency)
@@ -156,6 +158,7 @@ struct ReceivablesView: View {
     @Query(sort: \BankCard.sortOrder) private var cards: [BankCard]
     @State private var vm = ReceivableViewModel()
     @State private var repaying: Receivable? = nil
+    @State private var detail: Receivable? = nil
     @State private var appeared = false
     /// True when shown as a segment inside ObligationsView, which already owns
     /// the navigation chrome. A nested NavigationStack there would give the
@@ -239,6 +242,15 @@ struct ReceivablesView: View {
                     .presentationDetents([.height(460)])
                     .presentationBackground(AppTheme.bg).preferredColorScheme(appColorScheme())
             }
+            .sheet(item: $detail) { r in
+                ReceivableDetailSheet(receivable: r, cards: cards, context: context) {
+                    // One sheet at a time: close the detail, then open the form.
+                    detail = nil
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { vm.loadForEdit(r) }
+                }
+                .presentationDetents([.large]).presentationDragIndicator(.visible)
+                .presentationBackground(AppTheme.bg).preferredColorScheme(appColorScheme())
+            }
     }
 
     private var summaryCard: some View {
@@ -296,6 +308,12 @@ struct ReceivablesView: View {
         let left = r.outstanding(from: allTx)
         let pct = r.progress(from: allTx)
         return VStack(spacing: 10) {
+            // The top of the card opens the detail; the buttons below keep
+            // their own taps.
+            Button {
+                HapticManager.shared.tap()
+                detail = r
+            } label: {
             HStack(spacing: 12) {
                 ZStack {
                     Circle().fill((r.isSettled ? AppTheme.accent : AppTheme.blue).opacity(0.15))
@@ -327,7 +345,13 @@ struct ReceivablesView: View {
                 Text(CurrencyManager.shared.formatted(left, currency: r.currency))
                     .font(.system(.subheadline, weight: .bold))
                     .foregroundStyle(r.isSettled ? AppTheme.textSecondary : AppTheme.textPrimary)
+                Image(systemName: "chevron.right")
+                    .font(.system(.caption2, weight: .semibold))
+                    .foregroundStyle(AppTheme.textSecondary)
             }
+            .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
 
             if !r.isSettled {
                 GeometryReader { geo in
@@ -640,5 +664,216 @@ struct RepaymentSheet: View {
         try? context.save()
         HapticManager.shared.success()
         dismiss()
+    }
+}
+
+// MARK: - Detail
+
+/// Everything about one person's debt to you: what was lent, what came back
+/// and when, what is left — and the actions, in one place.
+struct ReceivableDetailSheet: View {
+    let receivable: Receivable
+    let cards: [BankCard]
+    let context: ModelContext
+    /// Edit uses the list's form sheet; the list closes this one first.
+    let onEdit: () -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var repaying = false
+    @State private var confirmDelete = false
+
+    private var allTx: [TxRecord] { cards.flatMap(\.transactions) }
+    private var r: Receivable { receivable }
+
+    /// Every transaction linked to this claim, newest first, with its card.
+    private var history: [(tx: TxRecord, card: BankCard)] {
+        let key = r.id.uuidString
+        return cards.flatMap { card in
+            card.transactions.filter { $0.linkedReceivableID == key }.map { ($0, card) }
+        }
+        .sorted { $0.tx.date > $1.tx.date }
+    }
+
+    private func money(_ v: Double, _ cur: String? = nil) -> String {
+        CurrencyManager.shared.formatted(v, currency: cur ?? r.currency)
+    }
+    private func day(_ d: Date) -> String {
+        d.formatted(.dateTime.day().month(.abbreviated).year().locale(LanguageManager.shared.currentLocale))
+    }
+
+    var body: some View {
+        let repaid = r.repaidAmount(from: allTx)
+        let left = r.outstanding(from: allTx)
+        let pct = r.progress(from: allTx)
+        NavigationStack {
+            ZStack {
+                AppTheme.bg.ignoresSafeArea()
+                ScrollView(showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 16) {
+                        // Header
+                        VStack(spacing: 8) {
+                            ZStack {
+                                Circle().fill((r.isSettled ? AppTheme.accent : AppTheme.blue).opacity(0.15))
+                                    .frame(width: 56, height: 56)
+                                Text(String(r.personName.prefix(1).uppercased()))
+                                    .font(.system(.title3, weight: .bold))
+                                    .foregroundStyle(r.isSettled ? AppTheme.accent : AppTheme.blue)
+                            }
+                            Text(r.isSettled ? loc("receivable.settled") : loc("receivable.remaining"))
+                                .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
+                            Text(money(left))
+                                .font(.system(.largeTitle, weight: .bold))
+                                .foregroundStyle(r.isSettled ? AppTheme.textSecondary : AppTheme.textPrimary)
+                                .minimumScaleFactor(0.7).lineLimit(1)
+                            Text(String(format: loc("receivable.of_total"), money(repaid), money(r.amount)))
+                                .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
+                            GeometryReader { geo in
+                                ZStack(alignment: .leading) {
+                                    Capsule().fill(AppTheme.accentTrack).frame(height: 6)
+                                    Capsule().fill(AppTheme.accentFill).frame(width: geo.size.width * pct, height: 6)
+                                }
+                            }
+                            .frame(height: 6)
+                            .padding(.top, 4)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(18)
+                        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+
+                        // Facts
+                        VStack(spacing: 0) {
+                            fact(loc("receivable.detail.lent_on"), day(r.lentAt))
+                            if let due = r.dueDate {
+                                divider
+                                fact(loc("receivable.detail.due"), day(due),
+                                     tint: r.isOverdue ? AppTheme.red : AppTheme.textPrimary)
+                            }
+                            if !r.notes.isEmpty {
+                                divider
+                                fact(loc("receivable.notes"), r.notes)
+                            }
+                        }
+                        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+
+                        // History
+                        Text(loc("receivable.detail.history"))
+                            .font(.system(.subheadline, weight: .bold))
+                            .foregroundStyle(AppTheme.textPrimary)
+                        if history.isEmpty {
+                            Text(loc("receivable.detail.no_history"))
+                                .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        } else {
+                            VStack(spacing: 0) {
+                                ForEach(Array(history.enumerated()), id: \.element.tx.id) { i, item in
+                                    if i > 0 { divider }
+                                    historyRow(item.tx, item.card)
+                                }
+                            }
+                            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+                        }
+
+                        // Actions
+                        VStack(spacing: 10) {
+                            if !r.isSettled {
+                                actionButton(loc("receivable.record_repayment"), tint: AppTheme.accent, filled: true) {
+                                    repaying = true
+                                }
+                                actionButton(loc("receivable.mark_settled"), tint: AppTheme.textSecondary) {
+                                    HapticManager.shared.success()
+                                    r.isSettled = true
+                                    try? context.save()
+                                }
+                            } else {
+                                actionButton(loc("receivable.reopen"), tint: AppTheme.textSecondary) {
+                                    r.isSettled = false
+                                    try? context.save()
+                                }
+                            }
+                            HStack(spacing: 10) {
+                                actionButton(loc("action.edit"), tint: AppTheme.textPrimary) { onEdit() }
+                                actionButton(loc("action.delete"), tint: AppTheme.red) { confirmDelete = true }
+                            }
+                        }
+                        .padding(.top, 4)
+                        Spacer(minLength: 20)
+                    }
+                    .padding(22)
+                    .containerRelativeFrame(.horizontal)
+                }
+            }
+            .navigationTitle(r.personName)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(AppTheme.bg, for: .navigationBar)
+            .doneToolbar { dismiss() }
+            .sheet(isPresented: $repaying) {
+                RepaymentSheet(receivable: r, cards: cards, allTx: allTx, context: context)
+                    .presentationDetents([.height(460)])
+                    .presentationBackground(AppTheme.bg).preferredColorScheme(appColorScheme())
+            }
+            .confirmationDialog(loc("receivable.detail.delete_title"), isPresented: $confirmDelete,
+                                titleVisibility: .visible) {
+                Button(loc("action.delete"), role: .destructive) {
+                    context.delete(r)
+                    try? context.save()
+                    dismiss()
+                }
+            } message: {
+                Text(loc("receivable.detail.delete_msg"))
+            }
+        }
+    }
+
+    private var divider: some View {
+        Rectangle().fill(AppTheme.cardMid.opacity(0.7)).frame(height: 1).padding(.leading, 14)
+    }
+
+    private func fact(_ label: String, _ value: String, tint: Color = AppTheme.textPrimary) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Text(label).font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
+            Spacer(minLength: 8)
+            Text(value).font(.system(.caption, weight: .semibold)).foregroundStyle(tint)
+                .multilineTextAlignment(.trailing)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(14)
+    }
+
+    private func historyRow(_ tx: TxRecord, _ card: BankCard) -> some View {
+        let isRepayment = tx.amount > 0
+        return HStack(spacing: 12) {
+            Image(systemName: isRepayment ? "arrow.down.left" : "arrow.up.right")
+                .font(.system(.caption, weight: .bold))
+                .foregroundStyle(isRepayment ? AppTheme.accent : AppTheme.textSecondary)
+                .frame(width: 30, height: 30)
+                .background((isRepayment ? AppTheme.accent : AppTheme.textSecondary).opacity(0.12), in: Circle())
+            VStack(alignment: .leading, spacing: 2) {
+                Text(loc(isRepayment ? "receivable.detail.repayment" : "receivable.detail.lent"))
+                    .font(.system(.caption, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                Text("\(day(tx.date)) · ••\(String(card.cardNumber.suffix(2)))")
+                    .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
+            }
+            Spacer(minLength: 8)
+            Text((isRepayment ? "+" : "−") + money(abs(tx.amount), tx.currency.isEmpty ? r.currency : tx.currency))
+                .font(.system(.caption, weight: .bold))
+                .foregroundStyle(isRepayment ? AppTheme.accent : AppTheme.textPrimary)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 14).padding(.vertical, 12)
+    }
+
+    private func actionButton(_ title: String, tint: Color, filled: Bool = false,
+                              action: @escaping () -> Void) -> some View {
+        Button {
+            HapticManager.shared.tap()
+            action()
+        } label: {
+            Text(title)
+                .font(.system(.subheadline, weight: .semibold))
+                .foregroundStyle(filled ? AppTheme.onVividFill : tint)
+                .frame(maxWidth: .infinity).padding(.vertical, 13)
+                .background(filled ? AppTheme.accentFill : AppTheme.cardDark,
+                            in: RoundedRectangle(cornerRadius: AppRadius.md))
+        }
+        .buttonStyle(ScaleButtonStyle())
     }
 }
