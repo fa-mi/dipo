@@ -17,6 +17,7 @@ struct PlanView: View {
     @Query private var holdings: [InvestmentHolding]
     @Query private var cards: [BankCard]
     @Query private var debts: [DebtRecord]
+    @Query private var physicalAssets: [PhysicalAsset]
     @State private var pm = PremiumManager.shared
     @State private var budget = SmartBudgetManager.shared
     @State private var showPaywall = false
@@ -57,6 +58,10 @@ struct PlanView: View {
                             row(.investments, icon: "chart.line.uptrend.xyaxis", tint: AppTheme.accent,
                                 title: loc("premium.feature.investments"), status: investStatus,
                                 feature: .investments)
+                            divider
+                            row(.assets, icon: "house.fill", tint: AppTheme.teal,
+                                title: loc("premium.feature.assets"), status: assetsStatus,
+                                feature: .assets)
                         }
                         section(loc("plan.section_help")) {
                             askRow
@@ -80,6 +85,7 @@ struct PlanView: View {
                 case .investments: InvestmentView().pushedFeature()
                 case .holding(let h): HoldingDetailView(holding: h).pushedFeature()
                 case .ladder: FinancialLadderView().pushedFeature()
+                case .assets: AssetsView().pushedFeature()
                 }
             }
             .sheet(isPresented: $showPaywall) {
@@ -158,6 +164,17 @@ struct PlanView: View {
         return holdings.count == 1
             ? String(format: loc("invest.status.summary_one"), money)
             : String(format: loc("invest.status.summary"), holdings.count, money)
+    }
+
+    private var assetsStatus: String {
+        guard pm.canAccess(.assets) else { return loc("profile.requires_royal") }
+        guard !physicalAssets.isEmpty else { return loc("asset.status.empty") }
+        let pref = CurrencyManager.shared.preferredCurrency
+        let total = AssetSummary.of(physicalAssets, currency: pref).totalValue
+        let money = CurrencyManager.shared.formatted(total.rounded(), currency: pref)
+        return physicalAssets.count == 1
+            ? String(format: loc("asset.status.summary_one"), money)
+            : String(format: loc("asset.status.summary"), physicalAssets.count, money)
     }
 
     // MARK: Building blocks

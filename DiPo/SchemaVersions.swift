@@ -40,7 +40,9 @@ import SwiftData
 // If the model also goes through BackupService, keep the backup in step with
 // it too (see CLAUDE.md).
 
-/// Every installed build before versioning, and the live models today.
+/// Every installed build up to 3.3. Its models are the frozen copies in
+/// SchemaV1Frozen.swift — inside this enum, `BankCard` and the rest resolve to
+/// those nested copies, not to the live classes.
 nonisolated enum DiPoSchemaV1: VersionedSchema {
     static let versionIdentifier = Schema.Version(1, 0, 0)
 
@@ -79,15 +81,37 @@ nonisolated enum DiPoSchemaV1: VersionedSchema {
     }
 }
 
+/// V2 adds physical assets (house, land, vehicles, electronics). Every other
+/// model is unchanged from V1, so the step is lightweight.
+nonisolated enum DiPoSchemaV2: VersionedSchema {
+    static let versionIdentifier = Schema.Version(2, 0, 0)
+
+    static var models: [any PersistentModel.Type] {
+        [
+            BankCard.self, TxRecord.self, SalarySchedule.self,
+            DebtRecord.self, SavingsGoal.self, RecurringExpense.self,
+            Receivable.self, CardInstallment.self, CardBudgetConfig.self,
+            CycleIntent.self, InvestmentHolding.self, InvestmentLot.self,
+            DailyRollup.self, DayCheckIn.self, PendingTransaction.self,
+            // What the household owns outside its accounts (Royal). See
+            // DiPo/PhysicalAsset.swift.
+            PhysicalAsset.self,
+        ]
+    }
+}
+
 /// The version the app runs on. Move it forward with each new version.
-typealias DiPoSchemaCurrent = DiPoSchemaV1
+typealias DiPoSchemaCurrent = DiPoSchemaV2
 
 nonisolated enum DiPoMigrationPlan: SchemaMigrationPlan {
     static var schemas: [any VersionedSchema.Type] {
-        [DiPoSchemaV1.self]
+        [DiPoSchemaV1.self, DiPoSchemaV2.self]
     }
 
     static var stages: [MigrationStage] {
-        []
+        [
+            // A new model only: SwiftData creates its empty table.
+            .lightweight(fromVersion: DiPoSchemaV1.self, toVersion: DiPoSchemaV2.self),
+        ]
     }
 }

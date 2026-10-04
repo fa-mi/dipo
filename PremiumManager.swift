@@ -79,6 +79,7 @@ enum PremiumFeature: String {
     case aiAdvisor       = "aiAdvisor"
     case cardTransfer    = "cardTransfer"
     case investments     = "investments"
+    case assets          = "assets"
 
     var icon: String {
         switch self {
@@ -90,6 +91,7 @@ enum PremiumFeature: String {
         case .aiAdvisor:       return "sparkles"
         case .cardTransfer:    return "arrow.left.arrow.right"
         case .investments:     return "chart.line.uptrend.xyaxis"
+        case .assets:          return "house.fill"
         }
     }
 
@@ -104,6 +106,7 @@ enum PremiumFeature: String {
         case .aiAdvisor:       return AppTheme.purple
         case .cardTransfer:    return AppTheme.blue
         case .investments:     return AppTheme.accent
+        case .assets:          return AppTheme.teal
         }
     }
 
@@ -115,7 +118,7 @@ enum PremiumFeature: String {
         switch self {
         case .smartConversion, .savingsGoals, .smartDebt,
              .smartBudget, .scanReceipt, .aiAdvisor, .cardTransfer,
-             .investments:
+             .investments, .assets:
             return .royal
         }
     }
@@ -131,6 +134,7 @@ enum PremiumFeature: String {
         case .aiAdvisor:       return loc("premium.feature.ai_advisor")
         case .cardTransfer:    return loc("premium.feature.transfer")
         case .investments:     return loc("premium.feature.investments")
+        case .assets:          return loc("premium.feature.assets")
         }
     }
 
@@ -144,6 +148,7 @@ enum PremiumFeature: String {
         case .aiAdvisor:       return loc("premium.feature.ai_advisor_desc")
         case .cardTransfer:    return loc("premium.feature.transfer_desc")
         case .investments:     return loc("premium.feature.investments_desc")
+        case .assets:          return loc("premium.feature.assets_desc")
         }
     }
 }

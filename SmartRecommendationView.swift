@@ -19,6 +19,7 @@ struct SmartRecommendationView: View {
     @Query private var cardBudgetConfigs: [CardBudgetConfig]
     @Query private var cycleIntents: [CycleIntent]
     @Query private var holdings: [InvestmentHolding]
+    @Query private var physicalAssets: [PhysicalAsset]
     @Environment(\.modelContext) private var context
 
     /// Called after the user taps "Apply" so the parent can refresh its state.
@@ -288,7 +289,15 @@ struct SmartRecommendationView: View {
             salaryDayOfMonth: salaries.first(where: { $0.isActive })?.dayOfMonth,
             recurrings: recurringExpenses,
             intents: activeIntents,
-            portfolioValue: portfolioValue)
+            portfolioValue: portfolioValue,
+            assetMonthlyWear: assetMonthlyWear)
+    }
+
+    /// Monthly wear on vehicles and electronics, unless a replacement goal
+    /// already covers it.
+    private var assetMonthlyWear: Double {
+        guard AssetAdvice.replacementGoal(in: goals) == nil else { return 0 }
+        return AssetSummary.of(physicalAssets, currency: currency).monthlyWear
     }
 
     /// What the user's investments are worth now, so the investing advice
