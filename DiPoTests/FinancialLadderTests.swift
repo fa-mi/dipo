@@ -55,13 +55,46 @@ final class FinancialLadderTests: XCTestCase {
         XCTAssertEqual(r.doneCount, 5)
     }
 
-    func testSmallButRegularInvestingCountsWhenThereIsAPortfolio() {
-        var i = household()
+    func testATokenAmountIsNotRegularInvesting() {
+        var i = household()                                               // Rp 4 jt income
         i.cash = 6_000_000
-        i.investedMonthly = 100_000
+        i.investedMonthly = 100_000                                       // 2,5%
         XCTAssertFalse(FinancialLadder.evaluate(i).rung(.investing).done)
-        i.portfolioValue = 2_000_000
+        i.portfolioValue = 2_000_000                                      // holds something: aim 5%
+        XCTAssertFalse(FinancialLadder.evaluate(i).rung(.investing).done)
+        XCTAssertEqual(FinancialLadder.evaluate(i).rung(.investing).progress, 0.5, accuracy: 0.001)
+        i.investedMonthly = 200_000
         XCTAssertTrue(FinancialLadder.evaluate(i).rung(.investing).done)
+    }
+
+    func testOneBigMonthDoesNotMakeEveryMonthADeficit() {
+        // Rp 3 jt, Rp 25 jt (the month of the motorbike), Rp 3,5 jt.
+        XCTAssertEqual(FinancialLadder.median([3_000_000, 25_000_000, 3_500_000]), 3_500_000)
+        XCTAssertEqual(FinancialLadder.median([3_000_000, 4_000_000]), 3_500_000)
+        XCTAssertEqual(FinancialLadder.median([]), 0)
+    }
+
+    func testMonthTotalsUseCompleteMonthsSinceLoggingBegan() {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "Asia/Jakarta")!
+        func d(_ m: Int, _ day: Int) -> Date { cal.date(from: DateComponents(year: 2026, month: m, day: day, hour: 12))! }
+        let items: [(date: Date, amount: Double)] = [
+            (d(7, 20), 1_000_000),                       // July: logging began on the 15th
+            (d(8, 5), 2_000_000), (d(8, 20), 1_000_000),  // August: 3 jt
+            (d(9, 10), 4_000_000),                        // September: 4 jt
+            (d(10, 2), 9_000_000),                        // October: still running, left out
+        ]
+        let totals = FinancialLadder.completeMonthTotals(items, count: 3, firstActivity: d(7, 15),
+                                                         now: d(10, 5), cal: cal)
+        XCTAssertEqual(totals, [3_000_000, 4_000_000])
+    }
+
+    func testOnlyAnOlderCardBalanceIsCarried() {
+        // Rp 9,4 jt owed, all of it charged this month and last: the open bill.
+        XCTAssertEqual(FinancialLadder.carriedOver(owed: 9_443_509, recentCharges: 9_500_000), 0)
+        // Rp 2 jt of it predates last month: carried, and charged interest.
+        XCTAssertEqual(FinancialLadder.carriedOver(owed: 9_443_509, recentCharges: 7_443_509), 2_000_000,
+                       accuracy: 0.01)
     }
 
     func testThinLoggingStillSizesTheBufferFromHalfOfSpending() {
