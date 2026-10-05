@@ -22,6 +22,10 @@ struct ObligationLoad {
     let debtMinimums: Double
     /// Declared recurring commitments (rent, subscriptions, standing transfers).
     let commitments: Double
+    /// Credit cards: running instalments (cicilan) plus the minimum payment on
+    /// a balance being carried. A card instalment is as fixed as any loan, and
+    /// leaving it out made a household paying three of them read as debt-free.
+    var cardPayments: Double = 0
     /// Smart Budget's own allocations, so this card checks obligations against
     /// the framework the user already configured instead of inventing a second
     /// one beside it. Debt payments belong to Invest & Debt; rent, transfers and
@@ -35,21 +39,23 @@ struct ObligationLoad {
     var incomeElsewhere: Double = 0
     var jobsElsewhere: Int = 0
 
-    var total: Double { debtMinimums + commitments }
+    /// Every debt instalment: debt records plus credit cards.
+    var debtPayments: Double { debtMinimums + cardPayments }
+    var total: Double { debtPayments + commitments }
     var ratio: Double { monthlyIncome > 0 ? total / monthlyIncome : 0 }
 
     var debtAllowance: Double { monthlyIncome * debtAllowanceRatio }
     var dailyAllowance: Double { monthlyIncome * dailyAllowanceRatio }
     /// The share the plan reserves for saving and investing — debt payments
     /// come out of it, so whatever debt does not use stays reserved.
-    var setAside: Double { max(debtAllowance, debtMinimums) }
+    var setAside: Double { max(debtAllowance, debtPayments) }
 
     /// What is left after everything contractual AND after the plan's own
     /// reserve. Subtracting only debt and commitments left the Invest & Debt
     /// allocation sitting in "free to decide", so this card said Rp 6.295.000
     /// while the Salary Allocation Plan directly below it said Rp 4.295.000 —
     /// two answers to one question, on one screen.
-    var freeAfterObligations: Double { max(monthlyIncome - total - setAside + debtMinimums, 0) }
+    var freeAfterObligations: Double { max(monthlyIncome - total - setAside + debtPayments, 0) }
 
     // Standard back-end DTI bands. This measure is exactly what lenders call
     // back-end debt-to-income: debt payments PLUS housing and other contractual
@@ -84,16 +90,52 @@ struct ObligationLoad {
         ObligationLoad(monthlyIncome: monthlyIncome,
                        debtMinimums: debtMinimums + instalment,
                        commitments: commitments,
+                       cardPayments: cardPayments,
                        debtAllowanceRatio: debtAllowanceRatio,
                        dailyAllowanceRatio: dailyAllowanceRatio,
                        incomeElsewhere: incomeElsewhere,
                        jobsElsewhere: jobsElsewhere)
     }
 
+    /// Minimum payment on a carried card balance: 5% of what is owed, the
+    /// floor Bank Indonesia sets for credit cards.
+    static let cardMinimumShare = 0.05
+
+    /// What credit cards add to the month. Instalments always count. The
+    /// minimum on a revolving balance counts only for the part carried over
+    /// from before last month — recent charges are the normal bill, paid in
+    /// full — and only when no credit-card debt is already recorded by hand,
+    /// which would be the same balance counted twice.
+    static func cardPayments(cards: [BankCard], installments: [CardInstallment],
+                             debts: [DebtRecord], currency: String, now: Date = .now) -> Double {
+        let cm = CurrencyManager.shared
+        let cal = Calendar.current
+        let thisMonth = cal.date(from: cal.dateComponents([.year, .month], from: now)) ?? now
+        let lastMonth = cal.date(byAdding: .month, value: -1, to: thisMonth) ?? thisMonth
+        let cardDebtRecorded = debts.contains {
+            $0.isActive && !$0.manuallyClosed && $0.type == DebtType.creditCard.rawValue
+        }
+        var sum = 0.0
+        for card in cards where card.isCreditCard {
+            var monthly = card.installmentMonthlyCharge(installments)
+            if !cardDebtRecorded {
+                let recent = card.transactions
+                    .filter { $0.date >= lastMonth && $0.amount < 0 && $0.txSubtype != .transfer }
+                    .reduce(0.0) { $0 + abs(cm.convert($1.amount, from: $1.currency, to: card.resolvedCurrency)) }
+                let carried = FinancialLadder.carriedOver(owed: card.owedBalance(), recentCharges: recent)
+                monthly += carried * cardMinimumShare
+            }
+            sum += cm.convert(monthly, from: card.resolvedCurrency, to: currency)
+        }
+        return sum
+    }
+
     static func build(debts: [DebtRecord],
                       recurrings: [RecurringExpense],
                       salaries: [SalarySchedule],
-                      configs: [CardBudgetConfig]) -> ObligationLoad {
+                      configs: [CardBudgetConfig],
+                      cards: [BankCard] = [],
+                      installments: [CardInstallment] = []) -> ObligationLoad {
         let cm = CurrencyManager.shared
         let pref = cm.preferredCurrency
 
@@ -121,6 +163,8 @@ struct ObligationLoad {
         return ObligationLoad(monthlyIncome: income,
                               debtMinimums: minimums,
                               commitments: commitments,
+                              cardPayments: cardPayments(cards: cards, installments: installments,
+                                                         debts: debts, currency: pref),
                               debtAllowanceRatio: r.investDebt,
                               dailyAllowanceRatio: r.daily,
                               incomeElsewhere: otherIncome,
@@ -200,8 +244,8 @@ struct ObligationLoadCard: View {
                 // rather than one lump against an unrelated ceiling.
                 VStack(spacing: 7) {
                     line(String(format: loc("oblig.vs_debt"), pct(load.debtAllowanceRatio)),
-                         money(shown.debtMinimums) + " / " + money(load.debtAllowance),
-                         tint: shown.debtMinimums > load.debtAllowance ? AppTheme.red : AppTheme.textPrimary)
+                         money(shown.debtPayments) + " / " + money(load.debtAllowance),
+                         tint: shown.debtPayments > load.debtAllowance ? AppTheme.red : AppTheme.textPrimary)
                     line(String(format: loc("oblig.vs_daily"), pct(load.dailyAllowanceRatio)),
                          money(shown.commitments) + " / " + money(load.dailyAllowance),
                          tint: shown.commitments > load.dailyAllowance ? AppTheme.red : AppTheme.textPrimary)
@@ -265,6 +309,8 @@ struct ObligationsView: View {
     @Query private var recurrings: [RecurringExpense]
     @Query private var salaries: [SalarySchedule]
     @Query private var budgetConfigs: [CardBudgetConfig]
+    @Query private var cards: [BankCard]
+    @Query private var installments: [CardInstallment]
 
     enum Tab: String, CaseIterable, Identifiable {
         case owed, lent, simulate
@@ -281,7 +327,7 @@ struct ObligationsView: View {
 
     private var load: ObligationLoad {
         ObligationLoad.build(debts: debts, recurrings: recurrings, salaries: salaries,
-                             configs: budgetConfigs)
+                             configs: budgetConfigs, cards: cards, installments: installments)
     }
 
     var body: some View {
