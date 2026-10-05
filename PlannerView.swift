@@ -554,15 +554,13 @@ struct CalculatorSheet: View {
                     .padding(.horizontal, 22)
                 VStack(alignment: .leading, spacing: 12) {
                     if a.limit == .noRoom {
-                        Text(loc("afford.no_room_title"))
-                            .font(.system(.headline)).foregroundStyle(AppTheme.red)
-                        Text(a.lenderRuleBinds
-                             ? String(format: loc("afford.no_room_lender"), pct(load.debtPayments / load.monthlyIncome),
-                                      ceiling, money(a.overBy))
-                             : String(format: loc("afford.no_room_load"), pct(load.ratio), ceiling,
-                                      money(a.overBy)))
-                            .font(.system(.caption)).foregroundStyle(AppTheme.textPrimary)
-                            .fixedSize(horizontal: false, vertical: true)
+                        warning(loc("afford.no_room_title"),
+                                a.lenderRuleBinds
+                                ? String(format: loc("afford.no_room_lender"), pct(load.debtPayments / load.monthlyIncome),
+                                         ceiling, money(a.overBy))
+                                : String(format: loc("afford.no_room_load"), pct(load.ratio), ceiling,
+                                         money(a.overBy)),
+                                tint: AppTheme.red)
                     } else {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(loc(isHouse ? "afford.max_price_house" : "afford.max_price_vehicle"))
@@ -585,9 +583,9 @@ struct CalculatorSheet: View {
                             .font(.system(.caption)).foregroundStyle(AppTheme.textPrimary)
                             .fixedSize(horizontal: false, vertical: true)
                         if p > a.maxLoan + 1 {
-                            Text(String(format: loc("afford.typed_over"), money(p), money(p - a.maxLoan)))
-                                .font(.system(.caption, weight: .semibold)).foregroundStyle(AppTheme.orange)
-                                .fixedSize(horizontal: false, vertical: true)
+                            warning(loc("afford.typed_over_title"),
+                                    String(format: loc("afford.typed_over"), money(p), money(p - a.maxLoan)),
+                                    tint: AppTheme.orange)
                         } else {
                             Text(String(format: loc("afford.typed_ok"), money(p)))
                                 .font(.system(.caption, weight: .semibold)).foregroundStyle(AppTheme.accent)
@@ -605,6 +603,29 @@ struct CalculatorSheet: View {
                 .padding(.horizontal, 22)
             }
         }
+    }
+
+    /// A warning the eye can't skim past: icon, tinted box, edged in the same tint.
+    private func warning(_ title: String, _ body: String, tint: Color) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(.subheadline, weight: .semibold))
+                .foregroundStyle(tint)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.system(.subheadline, weight: .bold)).foregroundStyle(tint)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(body)
+                    .font(.system(.caption)).foregroundStyle(AppTheme.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(12)
+        .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: AppRadius.sm))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.sm).stroke(tint.opacity(0.45), lineWidth: 1))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(title + ". " + body)
     }
 
     private func affordRow(_ label: String, _ value: String) -> some View {
