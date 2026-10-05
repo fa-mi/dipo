@@ -132,16 +132,19 @@ struct FinancialLadderView: View {
     @Query private var goals: [SavingsGoal]
     @Query private var salaries: [SalarySchedule]
     @State private var openWhy: LadderStep?
+    /// Read from the whole history, so refreshed on save, not per render —
+    /// opening a "Why?" redraws the screen.
+    @State private var cached: LadderResult?
 
     private var currency: String { CurrencyManager.shared.preferredCurrency }
 
-    private var result: LadderResult {
+    private func computeResult() -> LadderResult {
         FinancialLadder.evaluate(.gather(cards: cards, debts: debts, holdings: holdings,
                                          goals: goals, salaries: salaries, currency: currency))
     }
 
     var body: some View {
-        let r = result
+        let r = cached ?? computeResult()
         ZStack {
             AppTheme.bg.ignoresSafeArea()
             ScrollView(showsIndicators: false) {
@@ -179,6 +182,7 @@ struct FinancialLadderView: View {
         }
         // Always pushed from Plan: the bar is there for the back button only.
         .featureBar(pushed: true)
+        .onStoreChange { cached = computeResult() }
     }
 
     private func rungRow(_ rung: LadderRung, _ r: LadderResult) -> some View {

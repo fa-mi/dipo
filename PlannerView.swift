@@ -306,6 +306,9 @@ struct CalculatorSheet: View {
     @Query private var goals: [SavingsGoal]
     /// Fields DiPo filled from the user's records this visit, to say so.
     @State private var filledFromRecords: Set<String> = []
+    /// Read from the whole history, so computed on appear and on save — not
+    /// on every keystroke in the fields above.
+    @State private var spareCash: (spare: Double, emergency: Double)?
 
     /// Examples shown in grey until the user gives their own figure.
     enum Example {
@@ -364,6 +367,7 @@ struct CalculatorSheet: View {
             .toolbarBackground(AppTheme.bg, for: .navigationBar)
             .doneToolbar { dismiss() }
             .onAppear(perform: prefillFromRecords)
+            .onStoreChange { spareCash = computeSpareCash() }
         }
     }
 
@@ -525,7 +529,7 @@ struct CalculatorSheet: View {
 
     /// Cash and liquid holdings beyond the emergency fund — what a down
     /// payment can come from without leaving the household exposed.
-    private var spareCash: (spare: Double, emergency: Double) {
+    private func computeSpareCash() -> (spare: Double, emergency: Double) {
         let inputs = LadderInputs.gather(cards: cards, debts: debts, holdings: holdings,
                                          goals: goals, salaries: salaries, currency: pref)
         let ladder = FinancialLadder.evaluate(inputs)
@@ -537,10 +541,9 @@ struct CalculatorSheet: View {
     /// their income and savings carry at the rate and term typed above.
     @ViewBuilder
     private func affordabilityCard(_ method: LoanAffordability.Method) -> some View {
-        if let load, load.monthlyIncome > 0 {
+        if let load, load.monthlyIncome > 0, let cash = spareCash {
             let isHouse = method == .annuity
             let minDown = isHouse ? LoanAffordability.houseMinDown : LoanAffordability.vehicleMinDown
-            let cash = spareCash
             let a = LoanAffordability.evaluate(income: load.monthlyIncome, debtPayments: load.debtPayments,
                                                fixedBills: load.commitments, spareCash: cash.spare,
                                                annualRatePercent: r, years: y, method: method,
