@@ -301,6 +301,9 @@ struct CalculatorSheet: View {
     @AppStorage("planner.in.jhtYears")   private var jhtYears   = ""
     @Query private var salaries: [SalarySchedule]
     @Query private var holdings: [InvestmentHolding]
+    @Query private var cards: [BankCard]
+    @Query private var debts: [DebtRecord]
+    @Query private var goals: [SavingsGoal]
     /// Fields DiPo filled from the user's records this visit, to say so.
     @State private var filledFromRecords: Set<String> = []
 
@@ -497,6 +500,7 @@ struct CalculatorSheet: View {
                 (loc("planner.method"), loc("planner.method_annuity")),
             ], accent: AppTheme.blue)
             impactCard(instalment: monthly)
+            affordabilityCard(.annuity)
         }
     }
 
@@ -517,6 +521,102 @@ struct CalculatorSheet: View {
         }
     }
 
+    // MARK: Affordability
+
+    /// Cash and liquid holdings beyond the emergency fund — what a down
+    /// payment can come from without leaving the household exposed.
+    private var spareCash: (spare: Double, emergency: Double) {
+        let inputs = LadderInputs.gather(cards: cards, debts: debts, holdings: holdings,
+                                         goals: goals, salaries: salaries, currency: pref)
+        let ladder = FinancialLadder.evaluate(inputs)
+        let buffer = max(inputs.cash, 0) + max(inputs.liquidHoldings, 0)
+        return (buffer - ladder.emergencyTarget, ladder.emergencyTarget)
+    }
+
+    /// Worked backwards from the user's records: the house or vehicle price
+    /// their income and savings carry at the rate and term typed above.
+    @ViewBuilder
+    private func affordabilityCard(_ method: LoanAffordability.Method) -> some View {
+        if let load, load.monthlyIncome > 0 {
+            let isHouse = method == .annuity
+            let minDown = isHouse ? LoanAffordability.houseMinDown : LoanAffordability.vehicleMinDown
+            let cash = spareCash
+            let a = LoanAffordability.evaluate(income: load.monthlyIncome, debtPayments: load.debtPayments,
+                                               fixedBills: load.commitments, spareCash: cash.spare,
+                                               annualRatePercent: r, years: y, method: method,
+                                               minDownShare: minDown)
+            let pct = { (v: Double) in String(format: "%.0f%%", v * 100) }
+            let ceiling = pct(a.lenderRuleBinds ? LoanAffordability.lenderCeiling : ObligationLoad.healthyCeiling)
+            VStack(alignment: .leading, spacing: 8) {
+                Text(loc("afford.title"))
+                    .font(.system(.caption2, weight: .semibold))
+                    .foregroundStyle(AppTheme.textSecondary)
+                    .padding(.horizontal, 22)
+                VStack(alignment: .leading, spacing: 12) {
+                    if a.limit == .noRoom {
+                        Text(loc("afford.no_room_title"))
+                            .font(.system(.headline)).foregroundStyle(AppTheme.red)
+                        Text(a.lenderRuleBinds
+                             ? String(format: loc("afford.no_room_lender"), pct(load.debtPayments / load.monthlyIncome),
+                                      ceiling, money(a.overBy))
+                             : String(format: loc("afford.no_room_load"), pct(load.ratio), ceiling,
+                                      money(a.overBy)))
+                            .font(.system(.caption)).foregroundStyle(AppTheme.textPrimary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    } else {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(loc(isHouse ? "afford.max_price_house" : "afford.max_price_vehicle"))
+                                .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
+                            Text(a.maxPrice > 0 ? "≈ " + money(a.maxPrice) : money(0))
+                                .font(.system(.title2, weight: .bold)).foregroundStyle(AppTheme.accent)
+                        }
+                        Divider().overlay(AppTheme.cardMid)
+                        VStack(spacing: 7) {
+                            affordRow(loc("afford.row_instalment"), money(a.maxInstalment))
+                            affordRow(String(format: loc("afford.row_loan"), String(format: "%g", r),
+                                             String(format: "%g", y)), money(a.maxLoan))
+                            affordRow(String(format: loc("afford.row_down"), pct(minDown)),
+                                      money(max(a.maxPrice - a.maxLoan, 0)))
+                        }
+                        Text(a.limit == .downPayment
+                             ? String(format: loc("afford.limit_down"), money(a.downPaymentCash),
+                                      money(a.downPaymentShortfall), money(a.priceIfSaved))
+                             : String(format: loc("afford.limit_income"), money(a.maxInstalment), ceiling))
+                            .font(.system(.caption)).foregroundStyle(AppTheme.textPrimary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        if p > a.maxLoan + 1 {
+                            Text(String(format: loc("afford.typed_over"), money(p), money(p - a.maxLoan)))
+                                .font(.system(.caption, weight: .semibold)).foregroundStyle(AppTheme.orange)
+                                .fixedSize(horizontal: false, vertical: true)
+                        } else {
+                            Text(String(format: loc("afford.typed_ok"), money(p)))
+                                .font(.system(.caption, weight: .semibold)).foregroundStyle(AppTheme.accent)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    Text(String(format: loc(isHouse ? "afford.note_house" : "afford.note_vehicle"),
+                                money(max(cash.emergency, 0))))
+                        .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(16)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+                .padding(.horizontal, 22)
+            }
+        }
+    }
+
+    private func affordRow(_ label: String, _ value: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            Text(label).font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 8)
+            Text(value).font(.system(.caption, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                .fixedSize()
+        }
+    }
+
     private var vehicleResult: some View {
         let flat = PlannerMath.flatInstalment(principal: p, annualRatePercent: r, years: y)
         let equivalent = PlannerMath.flatRateEquivalentAnnual(principal: p, flatRatePercent: r, years: y)
@@ -527,6 +627,7 @@ struct CalculatorSheet: View {
                 (loc("planner.method"), loc("planner.method_flat")),
             ], accent: AppTheme.orange)
             impactCard(instalment: flat.monthly)
+            affordabilityCard(.flat)
 
             // The single most useful number here. A flat quote looks cheap next
             // to a KPR rate until it's restated on the same basis.
