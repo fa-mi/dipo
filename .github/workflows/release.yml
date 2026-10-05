@@ -202,7 +202,15 @@ jobs:
             MARKETING_VERSION="$VERSION" \
             CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
             | tee "$RUNNER_TEMP/archive.log" | grep -E "error:|warning: .*(sign|provision)|ARCHIVE (SUCCEEDED|FAILED)" || true
-          test -d "$ARCHIVE" || { echo "::error::Archive failed; see the archive-log artifact"; exit 1; }
+          if [ ! -d "$ARCHIVE" ]; then
+            # Surface the actual errors as annotations: they show on the run
+            # page and through the API, where the log artifact can't be read.
+            grep -E "error:|error -|Code Signing Error|Provisioning|requires a provisioning|No profiles|Failed to" "$RUNNER_TEMP/archive.log" \
+              | sort -u | head -15 | while IFS= read -r line; do echo "::error::${line:0:900}"; done || true
+            tail -n 25 "$RUNNER_TEMP/archive.log" | while IFS= read -r line; do echo "::notice::${line:0:900}"; done || true
+            echo "::error::Archive failed; see the archive-log artifact"
+            exit 1
+          fi
 
       - name: Export${{ inputs.upload && ' and upload' || '' }}
         env:
