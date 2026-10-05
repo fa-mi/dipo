@@ -1,5 +1,6 @@
 import XCTest
 import SwiftData
+import UIKit
 @testable import DiPo
 
 /// Physical assets: their estimated value, the wear advice, and the yearly
@@ -104,6 +105,13 @@ final class PhysicalAssetTests: XCTestCase {
                     "asset.networth_line", "notif.asset_tax_week_body", "reco.item.replace_title",
                     "asset.status.summary_one"] {
             XCTAssertNotEqual(loc(key), key, key)
+        }
+    }
+
+    /// A misspelt or too-new SF Symbol draws nothing at all, silently.
+    func testEveryKindIconIsARealSymbol() {
+        for kind in AssetKind.allCases {
+            XCTAssertNotNil(UIImage(systemName: kind.icon), "\(kind): \(kind.icon)")
         }
     }
 }

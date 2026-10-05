@@ -323,12 +323,19 @@ extension StatisticsView {
         let total = rows.reduce(0) { $0 + $1.amount }
         let shown = showAllCategories ? rows : Array(rows.prefix(Self.categoryPreview))
         return VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .center) {
-                Text(loc(statsVM.selectedStatTab == .expenses ? "stats.where_title" : "stats.where_income_title"))
-                    .font(.system(.body, weight: .bold))
-                    .foregroundStyle(AppTheme.textPrimary)
-                Spacer(minLength: 8)
-                flowToggle
+            // Title and toggle share a row only while both fit whole. Squeezed
+            // side by side, "Pemasukan" and "Pengeluaran" broke mid-word over
+            // two lines; when they don't fit, the toggle gets its own row.
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .center) {
+                    categoriesTitle.fixedSize()
+                    Spacer(minLength: 8)
+                    flowToggle(fill: false)
+                }
+                VStack(alignment: .leading, spacing: 10) {
+                    categoriesTitle
+                    flowToggle(fill: true)
+                }
             }
 
             if rows.isEmpty {
@@ -464,7 +471,14 @@ extension StatisticsView {
     }
 
     /// Money out / money in, as two small pills.
-    var flowToggle: some View {
+    private var categoriesTitle: some View {
+        Text(loc(statsVM.selectedStatTab == .expenses ? "stats.where_title" : "stats.where_income_title"))
+            .font(.system(.body, weight: .bold))
+            .foregroundStyle(AppTheme.textPrimary)
+    }
+
+    /// `fill`: segments share the full width, for when it sits on its own row.
+    func flowToggle(fill: Bool) -> some View {
         HStack(spacing: 2) {
             ForEach(StatTab.allCases, id: \.self) { tab in
                 let on = statsVM.selectedStatTab == tab
@@ -475,8 +489,12 @@ extension StatisticsView {
                     Text(tab.localizedLabel)
                         .font(.system(.caption, weight: .semibold))
                         .foregroundStyle(on ? AppTheme.textPrimary : AppTheme.textSecondary)
+                        .lineLimit(1)
+                        .fixedSize()
                         .padding(.horizontal, 10).padding(.vertical, 6)
+                        .frame(maxWidth: fill ? .infinity : nil)
                         .background(on ? AppTheme.bg : Color.clear, in: Capsule())
+                        .contentShape(Capsule())
                 }
                 .buttonStyle(.plain)
             }

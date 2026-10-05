@@ -34,7 +34,7 @@ enum AssetKind: String, CaseIterable, Identifiable, Codable {
         switch self {
         case .house:       return "house.fill"
         case .land:        return "map.fill"
-        case .motorcycle:  return "scooter"
+        case .motorcycle:  return "motorcycle"
         case .car:         return "car.fill"
         case .electronics: return "iphone"
         case .other:       return "shippingbox.fill"
