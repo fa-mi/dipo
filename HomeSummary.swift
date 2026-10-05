@@ -25,7 +25,9 @@ struct MonthFlowCard: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            half(icon: "arrow.up.right",
+            // Money coming IN points in, money going OUT points out — the
+            // same directions the add-transaction form and Statistics use.
+            half(icon: "arrow.down.left",
                  label: loc("home.income"),
                  amount: income,
                  tint: AppTheme.flowIn)
@@ -35,7 +37,7 @@ struct MonthFlowCard: View {
                 .fill(AppTheme.cardMid)
                 .frame(width: 1, height: 46)
 
-            half(icon: "arrow.down.left",
+            half(icon: "arrow.up.right",
                  label: loc("home.expense"),
                  amount: expense,
                  tint: AppTheme.flowOut)
