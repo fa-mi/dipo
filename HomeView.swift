@@ -679,7 +679,7 @@ struct HomeView: View {
         switch kind {
         case .openBudgetSettings: vm.open(PlanRoute.budget)
         case .openSavingsGoals:   vm.open(PlanRoute.goals)
-        case .openDebt:           vm.open(WalletRoute.obligations)
+        case .openDebt:           vm.open(PlanRoute.obligations)
         case .acknowledge:        break  // banner state managed elsewhere
         }
     }
