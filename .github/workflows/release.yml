@@ -14,6 +14,9 @@
 #                              App Manager with access to Certificates).
 # Provisioning profiles for the app, widget and share extension are created
 # or refreshed by Xcode through the same key (-allowProvisioningUpdates).
+# Archiving also makes Xcode create an Apple Development certificate on the
+# fresh runner; the run revokes that certificate when it ends
+# (ci/asc-dev-certs.mjs), so they don't pile up to Apple's limit.
 #
 # What it deliberately does NOT do: submit for review. Picking the build,
 # release notes, App Privacy and "Submit for Review" stay in App Store Connect.
@@ -179,6 +182,22 @@ jobs:
           grep -q 'buildForArchiving = "YES"' "$scheme" \
             || { echo "::error::$scheme has no target built for archiving"; exit 1; }
 
+      # Archiving creates a development certificate through the API key (see
+      # ci/asc-dev-certs.mjs). Note which ones exist now, so the run can revoke
+      # exactly the one it adds.
+      - name: Development certificates before archiving
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          snap="$RUNNER_TEMP/dev-certs.json"
+          # Never blocks the release: without a snapshot, the revoke step is skipped.
+          if node ci/asc-dev-certs.mjs snapshot "$snap"; then
+            echo "DEV_CERTS_SNAPSHOT=$snap" >> "$GITHUB_ENV"
+          else
+            echo "::warning::Could not list development certificates; this run's one won't be revoked"
+          fi
+
       - name: Archive
         env:
           VERSION: ${{ inputs.marketing_version }}
@@ -279,6 +298,18 @@ jobs:
             ${{ runner.temp }}/archive.log
             ${{ runner.temp }}/export.log
           retention-days: 7
+
+      # Runs whether the release passed or failed, before the API key is
+      # deleted. A failure here doesn't undo the upload; it only leaves one
+      # certificate behind to revoke by hand.
+      - name: Revoke this run's development certificate
+        if: always() && env.DEV_CERTS_SNAPSHOT != ''
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          node ci/asc-dev-certs.mjs revoke-new "$DEV_CERTS_SNAPSHOT" \
+            || echo "::warning::Could not revoke this run's development certificate; revoke the newest 'Created via API' one in Certificates, Identifiers & Profiles"
 
       - name: Clean up
         if: always()
