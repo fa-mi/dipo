@@ -63,6 +63,14 @@ struct PlanView: View {
                                 title: loc("premium.feature.assets"), status: assetsStatus,
                                 feature: .assets)
                         }
+                        // What is owed and what is owed back belongs with the plan,
+                        // not with the cards: it used to sit under Wallet, so
+                        // checking a debt meant switching tabs mid-plan.
+                        section(loc("plan.section_debts")) {
+                            row(.obligations, icon: "scalemass.fill", tint: AppTheme.teal,
+                                title: loc("oblig.nav"), status: debtsStatus,
+                                feature: .smartDebt)
+                        }
                         section(loc("plan.section_help")) {
                             askRow
                         }
@@ -86,6 +94,7 @@ struct PlanView: View {
                 case .holding(let h): HoldingDetailView(holding: h).pushedFeature()
                 case .ladder: FinancialLadderView().pushedFeature()
                 case .assets: AssetsView().pushedFeature()
+                case .obligations: ObligationsView().pushedFeature()
                 }
             }
             .sheet(isPresented: $showPaywall) {
@@ -164,6 +173,12 @@ struct PlanView: View {
         return holdings.count == 1
             ? String(format: loc("invest.status.summary_one"), money)
             : String(format: loc("invest.status.summary"), holdings.count, money)
+    }
+
+    private var debtsStatus: String {
+        guard pm.canAccess(.smartDebt) else { return loc("profile.requires_royal") }
+        let active = debts.filter(\.isActive).count
+        return active > 0 ? String(format: loc("wallet.debts_status"), active) : loc("oblig.entry_sub")
     }
 
     private var assetsStatus: String {

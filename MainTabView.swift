@@ -334,7 +334,7 @@ struct MainTabView: View {
             route { vm.open(PlanRoute.budget) }
         }
         .onReceive(NotificationCenter.default.publisher(for: .requestOpenDebt)) { _ in
-            route { vm.open(WalletRoute.obligations) }
+            route { vm.open(PlanRoute.obligations) }
         }
         .onReceive(NotificationCenter.default.publisher(for: .requestOpenSavingsGoals)) { _ in
             route { vm.open(PlanRoute.goals) }

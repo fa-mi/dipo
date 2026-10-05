@@ -51,6 +51,18 @@ final class ReceivableAndBillEditTests: XCTestCase {
         XCTAssertEqual(usd.amount, -400_000, accuracy: 0.01)
     }
 
+    func testSystemNotesAreRecognisedAndUserNotesAreNot() {
+        let auto = tx(-350_000); auto.notes = "tx.note.recurring_auto"
+        let legacy = tx(10_000_000); legacy.notes = "Auto-credited on payday"
+        let mine = tx(-75_000); mine.notes = "makan sama tim"
+        let empty = tx(-75_000)
+        XCTAssertTrue(auto.hasSystemNote)
+        XCTAssertTrue(legacy.hasSystemNote)
+        XCTAssertFalse(mine.hasSystemNote)
+        XCTAssertFalse(empty.hasSystemNote)
+        XCTAssertFalse(auto.displayNotes.hasPrefix("tx.note."))
+    }
+
     func testNewStringsInBothLanguages() {
         for key in ["receivable.detail.history", "receivable.detail.no_history", "receivable.detail.repayment",
                     "recurring.reprice_title", "recurring.reprice_msg", "recurring.reprice_also",

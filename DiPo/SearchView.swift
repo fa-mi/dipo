@@ -121,7 +121,7 @@ struct SearchView: View {
                 $0.name.lowercased().contains(q) ||
                 $0.type.lowercased().contains(q) ||
                 $0.category.rawValue.lowercased().contains(q) ||
-                $0.notes.lowercased().contains(q)
+                $0.displayNotes.lowercased().contains(q)
             }
         }
         if let cat = selectedFilter {

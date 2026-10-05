@@ -483,12 +483,32 @@ struct TransactionDetailSheet: View {
             }
             .padding(.horizontal, 22)
 
-            IconField(label: loc("tx.notes"),
-                      icon: "text.alignleft",
-                      placeholder: loc("tx.notes_placeholder"),
-                      text: $editNotes,
-                      optionalHint: loc("common.optional"))
+            if tx.hasSystemNote {
+                // Read-only: what DiPo knows about where this came from.
+                VStack(alignment: .leading, spacing: 10) {
+                    FormSectionLabel(text: loc("tx.notes"))
+                    HStack(spacing: 10) {
+                        Image(systemName: "info.circle")
+                            .font(.system(.subheadline))
+                            .foregroundStyle(AppTheme.textSecondary)
+                        Text(tx.displayNotes)
+                            .font(.system(.subheadline))
+                            .foregroundStyle(AppTheme.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.horizontal, 16).padding(.vertical, 14)
+                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+                }
                 .padding(.horizontal, 22)
+            } else {
+                IconField(label: loc("tx.notes"),
+                          icon: "text.alignleft",
+                          placeholder: loc("tx.notes_placeholder"),
+                          text: $editNotes,
+                          optionalHint: loc("common.optional"))
+                    .padding(.horizontal, 22)
+            }
 
             Button { saveEdits() } label: {
                 let canSave = NumberInput.amount(editAmount) > 0
@@ -531,7 +551,8 @@ struct TransactionDetailSheet: View {
         tx.category  = editCategory
         tx.iconBgHex = editCategory.iconBg
         tx.date      = editDate
-        tx.notes     = editNotes
+        // A system marker stays as it is; only the user's own words change.
+        if !tx.hasSystemNote { tx.notes = editNotes }
         tx.type      = editType == .expense ? "tx.type.purchase" : "tx.type.income"
         try? context.save()
         HapticManager.shared.success()
