@@ -22,6 +22,8 @@ struct PlanView: View {
     @State private var budget = SmartBudgetManager.shared
     @State private var showPaywall = false
     @State private var showAskDiPo = false
+    /// Read from the whole history, so refreshed on save, not per render.
+    @State private var ladder: LadderResult?
 
     var body: some View {
         NavigationStack(path: $vm.planPath) {
@@ -36,7 +38,8 @@ struct PlanView: View {
                             HapticManager.shared.tap()
                             vm.planPath.append(PlanRoute.ladder)
                         } label: {
-                            FinancialLadderCard(result: ladder, currency: CurrencyManager.shared.preferredCurrency)
+                            FinancialLadderCard(result: ladder ?? computeLadder(),
+                                                currency: CurrencyManager.shared.preferredCurrency)
                         }
                         .buttonStyle(.plain)
                         section(loc("plan.section_month")) {
@@ -84,6 +87,7 @@ struct PlanView: View {
             // Hidden, but still the back button's label on every screen below.
             .navigationTitle(loc("tab.plan"))
             .toolbar(.hidden, for: .navigationBar)
+            .onStoreChange { ladder = computeLadder() }
             .navigationDestination(for: PlanRoute.self) { route in
                 switch route {
                 case .budget: SmartBudgetSettingsSheet().pushedFeature()
@@ -112,7 +116,7 @@ struct PlanView: View {
         }
     }
 
-    private var ladder: LadderResult {
+    private func computeLadder() -> LadderResult {
         FinancialLadder.evaluate(.gather(cards: cards, debts: debts, holdings: holdings, goals: goals,
                                          salaries: schedules,
                                          currency: CurrencyManager.shared.preferredCurrency))

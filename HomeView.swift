@@ -58,6 +58,9 @@ struct HomeView: View {
     /// whole history on every body pass — the exact pattern that made the
     /// transaction list stall. Refreshed from the same places the insight
     /// cache is refreshed.
+    /// Net worth and its parts, refreshed on save rather than per render (see
+    /// `onStoreChange`): each part reads the whole history.
+    @State private var worth = NetWorthParts()
     @State private var monthIncome: Double = 0
     @State private var monthExpense: Double = 0
     @State private var flowPeriodLabel: String = ""
@@ -110,7 +113,6 @@ struct HomeView: View {
         let debt = activeDebts.reduce(0.0) { $0 + cm.convert($1.currentBalance, from: $1.currency, to: pref) }
         return cc + debt
     }
-    private var hasLiabilities: Bool { totalLiabilities > 0.5 }
 
     /// Net worth aggregates data from two Royal-only features — savings goals
     /// and debt tracking. The chip had no entitlement check at all, so a user
@@ -165,8 +167,16 @@ struct HomeView: View {
 
     /// Net worth = cash + savings goals + receivables + investments + physical
     /// assets − liabilities.
-    private var netWorth: Double {
-        totalBalance + goalSavings + receivableAssets + investmentValue + physicalAssetValue - totalLiabilities
+    struct NetWorthParts: Equatable {
+        var balance = 0.0, goals = 0.0, receivables = 0.0, investments = 0.0, assets = 0.0, liabilities = 0.0
+        var total: Double { balance + goals + receivables + investments + assets - liabilities }
+    }
+
+    private func recomputeNetWorth() {
+        let parts = NetWorthParts(balance: totalBalance, goals: goalSavings, receivables: receivableAssets,
+                                  investments: investmentValue, assets: physicalAssetValue,
+                                  liabilities: totalLiabilities)
+        if parts != worth { worth = parts }
     }
 
     // Transactions for the currently selected card only
@@ -491,7 +501,8 @@ struct HomeView: View {
                         // Net Worth — cash minus liabilities. Only shown when the
                         // user actually has liabilities (credit cards / debts),
                         // otherwise it's just the cash total again.
-                        if hasLiabilities && canSeeNetWorth {
+                        if worth.liabilities > 0.5 && canSeeNetWorth {
+                            let netWorth = worth.total
                             let fmt = { (v: Double) in CurrencyManager.shared.formatted(v, currency: CurrencyManager.shared.preferredCurrency) }
                             VStack(alignment: .leading, spacing: 5) {
                                 HStack(spacing: 10) {
@@ -511,24 +522,24 @@ struct HomeView: View {
                                 // Spell out the arithmetic — a bare "net worth"
                                 // figure (especially a negative one) is alarming
                                 // and unreadable without its parts.
-                                Text(goalSavings > 0.5
+                                Text(worth.goals > 0.5
                                      ? String(format: loc("home.net_worth_breakdown_savings"),
-                                              fmt(totalBalance), fmt(goalSavings), fmt(totalLiabilities))
+                                              fmt(worth.balance), fmt(worth.goals), fmt(worth.liabilities))
                                      : String(format: loc("home.net_worth_breakdown"),
-                                              fmt(totalBalance), fmt(totalLiabilities)))
+                                              fmt(worth.balance), fmt(worth.liabilities)))
                                     .font(.system(.caption2))
                                     .foregroundStyle(AppTheme.textSecondary.opacity(0.75))
                                     .fixedSize(horizontal: false, vertical: true)
                                 // Investments live in their own menu, so name their
                                 // share of net worth here rather than leaving the
                                 // total unexplained.
-                                if investmentValue > 0.5 {
-                                    Text(String(format: loc("invest.networth_line"), fmt(investmentValue)))
+                                if worth.investments > 0.5 {
+                                    Text(String(format: loc("invest.networth_line"), fmt(worth.investments)))
                                         .font(.system(.caption2, weight: .medium))
                                         .foregroundStyle(AppTheme.accent)
                                 }
-                                if physicalAssetValue > 0.5 {
-                                    Text(String(format: loc("asset.networth_line"), fmt(physicalAssetValue)))
+                                if worth.assets > 0.5 {
+                                    Text(String(format: loc("asset.networth_line"), fmt(worth.assets)))
                                         .font(.system(.caption2, weight: .medium))
                                         .foregroundStyle(AppTheme.teal)
                                 }
@@ -599,6 +610,7 @@ struct HomeView: View {
         // Recompute memoized insights only when their inputs actually change —
         // not on every render. Keeps Home smooth as transactions pile up.
         .onChange(of: totalTxCount)            { _, _ in recomputeHomeInsights(); recomputeMonthFlow() }
+        .onStoreChange(perform: recomputeNetWorth)
         // Editing an existing amount changes no COUNT, so the tx-count trigger
         // above misses it — the card face would move while income/expense sat
         // on a stale figure. The balance is already computed each body pass, so

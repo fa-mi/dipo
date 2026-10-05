@@ -34,7 +34,7 @@ final class PhysicalAssetTests: XCTestCase {
         return a
     }
 
-    /// 10% in the first year, spread across it, then 5% a year.
+    /// 10% in the first year, spread across it, then 6% a year.
     func testAMotorbikeDropsMostInItsFirstYearThenSlowly() {
         let bought = date(2023, 1, 1)
         let k = AssetKind.motorcycle
@@ -44,7 +44,7 @@ final class PhysicalAssetTests: XCTestCase {
         XCTAssertEqual(AssetValuation.value(i, at: bought.addingTimeInterval(0.5 * year)),
                        18_000_000 * 0.95, accuracy: 1)
         XCTAssertEqual(AssetValuation.value(i, at: bought.addingTimeInterval(2 * year)),
-                       18_000_000 * 0.90 * 0.95, accuracy: 1)
+                       18_000_000 * 0.90 * 0.94, accuracy: 1)
         // Never worth nothing on paper.
         XCTAssertEqual(AssetValuation.value(i, at: bought.addingTimeInterval(80 * year)),
                        1_800_000, accuracy: 1)
@@ -59,34 +59,56 @@ final class PhysicalAssetTests: XCTestCase {
         let vario = asset(.motorcycle, "Vario", 25_000_000, bought: date(2023, 6, 1))
         let brioRange = try XCTUnwrap(brio.marketRange(at: now))
         let varioRange = try XCTUnwrap(vario.marketRange(at: now))
-        XCTAssertEqual(brioRange.lowerBound, 103_000_000, accuracy: 2_000_000)
+        XCTAssertEqual(brioRange.lowerBound, 106_000_000, accuracy: 2_000_000)
         XCTAssertGreaterThan(brioRange.upperBound, 107_000_000)
-        XCTAssertEqual(varioRange.lowerBound, 20_000_000, accuracy: 500_000)
+        XCTAssertEqual(varioRange.lowerBound, 19_500_000, accuracy: 500_000)
         XCTAssertGreaterThan(varioRange.upperBound, 20_400_000)
         // Nothing sold second-hand, no range.
         XCTAssertNil(asset(.land, "Sawah", 100_000_000, bought: date(2020, 1, 1)).marketRange(at: now))
     }
 
-    /// An asset saved by the first version carries its -12% default; it now
-    /// follows the current curve instead of the old flat rate.
-    func testAnOldDefaultRateFollowsTheNewCurve() {
+    /// Nothing lets a user set the rate, so a stored one is only ever an older
+    /// default: the estimate always follows the current curve.
+    func testAStoredRateFollowsTheCurrentCurve() {
         let bike = asset(.motorcycle, "Beat", 18_000_000, bought: date(2024, 1, 1))
-        bike.annualRate = -12
-        XCTAssertEqual(bike.effectiveRate, AssetKind.motorcycle.defaultAnnualRate)
-        bike.annualRate = -8
-        XCTAssertEqual(bike.effectiveRate, -8)
+        for old in [-12.0, -5.0] {
+            bike.annualRate = old
+            XCTAssertEqual(bike.effectiveRate, AssetKind.motorcycle.defaultAnnualRate)
+        }
+    }
+
+    /// Each curve, as a share of the price new, sits inside (or just under)
+    /// the second-hand bands reported in 2025–26 — never above them.
+    func testCurvesSitOnTheLowSideOfReportedMarketBands() {
+        func share(_ k: AssetKind, years: Double) -> Double {
+            let start = date(2020, 1, 1)
+            let i = AssetValuation.Input(purchasePrice: 100, purchaseDate: start, annualRate: k.defaultAnnualRate,
+                                         firstYearDrop: k.firstYearDrop)
+            return AssetValuation.value(i, at: start.addingTimeInterval(years * year)) / 100
+        }
+        // (kind, years, band low, band high) — BeAT, Avanza/Brio, iPhone 13.
+        let bands: [(AssetKind, Double, Double, Double)] = [
+            (.motorcycle, 1, 0.86, 0.92), (.motorcycle, 3, 0.74, 0.80), (.motorcycle, 5, 0.66, 0.71),
+            (.car, 3, 0.73, 0.84), (.car, 5, 0.72, 0.87), (.car, 7, 0.57, 0.70), (.car, 9.3, 0.58, 0.71),
+            (.electronics, 4, 0.42, 0.54),
+        ]
+        for (kind, years, low, high) in bands {
+            let v = share(kind, years: years)
+            XCTAssertLessThanOrEqual(v, high, "\(kind) at \(years) yrs: \(v)")
+            XCTAssertGreaterThanOrEqual(v, low - 0.05, "\(kind) at \(years) yrs: \(v)")
+        }
     }
 
     func testLandGainsAndAUserValueBecomesTheNewStart() {
         let bought = date(2020, 6, 1)
         var i = AssetValuation.Input(purchasePrice: 100_000_000, purchaseDate: bought,
                                      annualRate: AssetKind.land.defaultAnnualRate)
-        XCTAssertEqual(AssetValuation.value(i, at: bought.addingTimeInterval(year)), 105_000_000, accuracy: 1)
+        XCTAssertEqual(AssetValuation.value(i, at: bought.addingTimeInterval(year)), 103_000_000, accuracy: 1)
         let set = bought.addingTimeInterval(3 * year)
         i.manualValue = 150_000_000
         i.manualValueDate = set
         XCTAssertEqual(AssetValuation.value(i, at: set), 150_000_000, accuracy: 1)
-        XCTAssertEqual(AssetValuation.value(i, at: set.addingTimeInterval(year)), 157_500_000, accuracy: 1)
+        XCTAssertEqual(AssetValuation.value(i, at: set.addingTimeInterval(year)), 154_500_000, accuracy: 1)
     }
 
     func testWearCountsOnlyThingsThatGetReplaced() {
