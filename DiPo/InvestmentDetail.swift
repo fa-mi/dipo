@@ -260,7 +260,10 @@ struct HoldingDetailView: View {
 
     private var priceChartCard: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(loc("invest.price_chart")).font(.system(.caption, weight: .medium))
+            // Amount-based holdings have no unit price to chart — the line is
+            // the value of each rupiah put in, which reads as "Value".
+            Text(loc(holding.type.isAmountBased ? "invest.value_chart" : "invest.price_chart"))
+                .font(.system(.caption, weight: .medium))
                 .foregroundStyle(AppTheme.textSecondary)
             MiniSparkline(values: holding.priceHistory, trend: investTrend(s.unrealizedPL)).frame(height: 70)
         }
@@ -268,7 +271,40 @@ struct HoldingDetailView: View {
         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
     }
 
+    @ViewBuilder
     private var detailRows: some View {
+        if holding.type.isAmountBased { amountRows } else { unitRows }
+    }
+
+    /// Pension funds, bonds and deposits are kept as rupiah, one "unit" per
+    /// rupiah — so average and current price always read Rp 1 and volume
+    /// repeats what was put in. Show what such a balance is actually about:
+    /// what went in, what it's worth, and the return.
+    private var amountRows: some View {
+        let isPension = holding.type == .pension
+        let gain = s.marketValue - s.costBasis
+        return VStack(spacing: 0) {
+            detailRow(loc(isPension ? "invest.field.contributed" : "invest.field.amount"),
+                      investMoney(s.costBasis, cur))
+            rowDivider
+            detailRow(loc("invest.field.current_total"), investMoney(s.marketValue, cur))
+            if !holding.type.priceIsFixed, abs(gain) >= 0.5 {
+                rowDivider
+                detailRow(loc("invest.pl_short"),
+                          investSigned(gain, cur) + " (" + investPct(s.costBasis > 0 ? gain / s.costBasis : 0) + ")",
+                          tint: investPLColor(gain))
+            }
+            if let t = holding.priceUpdatedAt {
+                rowDivider
+                detailRow(loc("invest.last_updated"),
+                          t.formatted(date: .abbreviated, time: .shortened))
+            }
+        }
+        .padding(.vertical, 4)
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+    }
+
+    private var unitRows: some View {
         let isGold = holding.type == .gold
         // Gold prices carry their unit, as a gold app prints them.
         let perGram = isGold ? " /" + holding.type.unitLabel : ""

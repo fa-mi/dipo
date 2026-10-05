@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 
 // MARK: - Planner
 //
@@ -284,16 +285,54 @@ struct CalculatorSheet: View {
     var load: ObligationLoad? = nil
     @Environment(\.dismiss) private var dismiss
 
-    @State private var principal  = "500000000"
-    @State private var ratePct    = "10"
-    @State private var years      = "15"
-    @State private var grossPay   = "10000000"
-    @State private var married    = false
-    @State private var dependants = 0
-    @State private var jhtMonthly = "570000"
-    @State private var jhtOpening = "0"
-    @State private var jhtRate    = "5.5"
-    @State private var jhtYears   = "25"
+    // What the user typed, remembered between visits. Empty means "not given
+    // yet": the field then shows the example in grey and the result uses it,
+    // so nothing reads as the user's own figure unless they typed it or DiPo
+    // filled it from their records.
+    @AppStorage("planner.in.principal")  private var principal  = ""
+    @AppStorage("planner.in.rate")       private var ratePct    = ""
+    @AppStorage("planner.in.years")      private var years      = ""
+    @AppStorage("planner.in.gross")      private var grossPay   = ""
+    @AppStorage("planner.in.married")    private var married    = false
+    @AppStorage("planner.in.dependants") private var dependants = 0
+    @AppStorage("planner.in.jhtMonthly") private var jhtMonthly = ""
+    @AppStorage("planner.in.jhtOpening") private var jhtOpening = ""
+    @AppStorage("planner.in.jhtRate")    private var jhtRate    = ""
+    @AppStorage("planner.in.jhtYears")   private var jhtYears   = ""
+    @Query private var salaries: [SalarySchedule]
+    @Query private var holdings: [InvestmentHolding]
+    /// Fields DiPo filled from the user's records this visit, to say so.
+    @State private var filledFromRecords: Set<String> = []
+
+    /// Examples shown in grey until the user gives their own figure.
+    enum Example {
+        static let principal = "500000000", rate = "10", years = "15", gross = "10000000"
+        static let jhtMonthly = "570000", jhtOpening = "0", jhtRate = "5.5", jhtYears = "25"
+    }
+    /// JHT is 5.7% of wages: 2% from the worker, 3.7% from the employer.
+    static let jhtShareOfWage = 0.057
+
+    /// The typed figure, or the example while the field is empty.
+    private func num(_ text: String, _ example: String) -> Double {
+        Double(text.trimmingCharacters(in: .whitespaces)) ?? Double(example) ?? 0
+    }
+
+    /// Fills what DiPo already knows, once, and only into empty fields — a
+    /// figure the user typed is never overwritten.
+    private func prefillFromRecords() {
+        let salary = salaries.filter(\.isActive)
+            .reduce(0.0) { $0 + cm.convert($1.amount, from: $1.currency, to: pref) }
+        if jhtMonthly.isEmpty, salary > 0 {
+            jhtMonthly = String(Int((salary * Self.jhtShareOfWage).rounded()))
+            filledFromRecords.insert("jhtMonthly")
+        }
+        let pension = holdings.filter { $0.type == .pension }
+            .reduce(0.0) { $0 + cm.convert($1.stats().marketValue, from: $1.currency, to: pref) }
+        if jhtOpening.isEmpty, pension > 0 {
+            jhtOpening = String(Int(pension.rounded()))
+            filledFromRecords.insert("jhtOpening")
+        }
+    }
 
     private var cm: CurrencyManager { CurrencyManager.shared }
     private var pref: String { cm.preferredCurrency }
@@ -321,17 +360,19 @@ struct CalculatorSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(AppTheme.bg, for: .navigationBar)
             .doneToolbar { dismiss() }
+            .onAppear(perform: prefillFromRecords)
         }
     }
 
     // MARK: Inputs
 
-    private func numberField(_ labelKey: String, _ binding: Binding<String>, suffix: String? = nil) -> some View {
+    private func numberField(_ labelKey: String, _ binding: Binding<String>, suffix: String? = nil,
+                             example: String = "0", note: String? = nil) -> some View {
         VStack(spacing: 6) {
             Text(loc(labelKey)).font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
             HStack(spacing: 8) {
-                TextField("0", text: binding)
+                TextField(example, text: binding)
                     .font(.system(.body, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
                     .keyboardType(.decimalPad)
                 if let suffix {
@@ -340,21 +381,41 @@ struct CalculatorSheet: View {
             }
             .padding(.horizontal, 14).padding(.vertical, 12)
             .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.sm))
+            if let note {
+                Text(note).font(.system(.caption2)).foregroundStyle(AppTheme.accent)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
         .padding(.horizontal, 22)
     }
 
+    /// Said once under the inputs while any field still shows its example.
+    @ViewBuilder
+    private func exampleHint(_ fields: [String]) -> some View {
+        if fields.contains(where: { $0.trimmingCharacters(in: .whitespaces).isEmpty }) {
+            Text(loc("planner.example_hint"))
+                .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 22)
+        }
+    }
+
     private var loanInputs: some View {
         VStack(spacing: 14) {
-            numberField("planner.principal", $principal, suffix: pref)
-            numberField(tool == .vehicle ? "planner.rate_flat" : "planner.rate_annual", $ratePct, suffix: "%")
-            numberField("planner.term", $years, suffix: loc("planner.years"))
+            numberField("planner.principal", $principal, suffix: pref, example: Example.principal)
+            numberField(tool == .vehicle ? "planner.rate_flat" : "planner.rate_annual", $ratePct, suffix: "%",
+                        example: Example.rate)
+            numberField("planner.term", $years, suffix: loc("planner.years"), example: Example.years)
+            exampleHint([principal, ratePct, years])
         }
     }
 
     private var takeHomeInputs: some View {
         VStack(spacing: 14) {
-            numberField("planner.gross", $grossPay, suffix: pref)
+            numberField("planner.gross", $grossPay, suffix: pref, example: Example.gross)
+            exampleHint([grossPay])
             VStack(spacing: 10) {
                 Toggle(isOn: $married) {
                     Text(loc("planner.married")).font(.system(.subheadline)).foregroundStyle(AppTheme.textPrimary)
@@ -382,10 +443,13 @@ struct CalculatorSheet: View {
 
     private var jhtInputs: some View {
         VStack(spacing: 14) {
-            numberField("planner.jht_monthly", $jhtMonthly, suffix: pref)
-            numberField("planner.jht_opening", $jhtOpening, suffix: pref)
-            numberField("planner.jht_rate", $jhtRate, suffix: "%")
-            numberField("planner.jht_years", $jhtYears, suffix: loc("planner.years"))
+            numberField("planner.jht_monthly", $jhtMonthly, suffix: pref, example: Example.jhtMonthly,
+                        note: filledFromRecords.contains("jhtMonthly") ? loc("planner.filled_jht_monthly") : nil)
+            numberField("planner.jht_opening", $jhtOpening, suffix: pref, example: Example.jhtOpening,
+                        note: filledFromRecords.contains("jhtOpening") ? loc("planner.filled_jht_opening") : nil)
+            numberField("planner.jht_rate", $jhtRate, suffix: "%", example: Example.jhtRate)
+            numberField("planner.jht_years", $jhtYears, suffix: loc("planner.years"), example: Example.jhtYears)
+            exampleHint([jhtMonthly, jhtOpening, jhtRate, jhtYears])
         }
     }
 
@@ -419,9 +483,9 @@ struct CalculatorSheet: View {
         .padding(.horizontal, 22)
     }
 
-    private var p: Double { Double(principal) ?? 0 }
-    private var r: Double { Double(ratePct) ?? 0 }
-    private var y: Double { Double(years) ?? 1 }
+    private var p: Double { num(principal, Example.principal) }
+    private var r: Double { num(ratePct, Example.rate) }
+    private var y: Double { max(num(years, Example.years), 1) }
 
     private var kprResult: some View {
         let monthly = PlannerMath.annuityInstalment(principal: p, annualRatePercent: r, years: y)
@@ -482,7 +546,7 @@ struct CalculatorSheet: View {
     }
 
     private var takeHomeResult: some View {
-        let g = Double(grossPay) ?? 0
+        let g = num(grossPay, Example.gross)
         let t = PlannerMath.takeHomePay(monthlyGross: g, married: married, dependants: dependants)
         return resultCard("planner.net_monthly", money(t.net), rows: [
             (loc("planner.gross"), money(t.gross)),
@@ -498,10 +562,10 @@ struct CalculatorSheet: View {
     }
 
     private var jhtResult: some View {
-        let m = Double(jhtMonthly) ?? 0
-        let o = Double(jhtOpening) ?? 0
-        let rate = Double(jhtRate) ?? 0
-        let yrs = Double(jhtYears) ?? 0
+        let m = num(jhtMonthly, Example.jhtMonthly)
+        let o = num(jhtOpening, Example.jhtOpening)
+        let rate = num(jhtRate, Example.jhtRate)
+        let yrs = num(jhtYears, Example.jhtYears)
         let fv = PlannerMath.futureValue(monthly: m, annualRatePercent: rate, years: yrs, opening: o)
         let contributed = o + m * yrs * 12
         return resultCard("planner.projected_value", money(fv), rows: [

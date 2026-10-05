@@ -27,11 +27,13 @@ enum LadderCopy {
                 ? String(format: loc("ladder.emergency.ok"), months(r.emergencyMonths))
                 : String(format: loc("ladder.emergency.short"), months(r.emergencyMonths), money(r.emergencyGap))
         case .investing:
-            let aim = money(i.monthlyIncome * FinancialLadder.investShareTarget)
+            let share = FinancialLadder.investShare(for: i)
+            let aim = money(i.monthlyIncome * share)
+            let pct = Int((share * 100).rounded())
             if r.rung(.investing).done { return String(format: loc("ladder.investing.ok"), money(i.investedMonthly)) }
             return i.investedMonthly > 0
-                ? String(format: loc("ladder.investing.some"), money(i.investedMonthly), aim)
-                : String(format: loc("ladder.investing.none"), aim)
+                ? String(format: loc("ladder.investing.some"), money(i.investedMonthly), aim, pct)
+                : String(format: loc("ladder.investing.none"), aim, pct)
         case .future:
             switch (i.pensionValue > 0, i.activeGoals > 0) {
             case (true, true):  return String(format: loc("ladder.future.both"), money(i.pensionValue), i.activeGoals)

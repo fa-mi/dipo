@@ -59,7 +59,8 @@ final class PensionFundTests: XCTestCase {
     func testPensionStringsInBothLanguages() {
         for key in ["invest.type.pension", "invest.cadence.monthly", "invest.field.contributed",
                     "invest.field.contributed_hint", "invest.field.pension_value_hint",
-                    "invest.liquid", "invest.locked_pension", "invest.status.summary_one"] {
+                    "invest.liquid", "invest.locked_pension", "invest.status.summary_one",
+                    "invest.value_chart"] {
             XCTAssertNotEqual(loc(key), key, key)
         }
     }
