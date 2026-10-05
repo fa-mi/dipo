@@ -224,6 +224,15 @@ extension TxRecord {
     /// 1. Pre-formatted string with placeholder args already substituted (conversion note) → display as-is.
     /// 2. Stable key stored at creation time (tx.note.*) → translate via loc().
     /// 3. User-entered free-form note → display as-is.
+    /// The note is a marker DiPo wrote ("tx.note.recurring_auto"), not words
+    /// the user typed. Code reads these to know where a transaction came from
+    /// — a monthly bill, a loan repaid, a card bill — so they are shown
+    /// translated and never put in an editable field, where one keystroke
+    /// would break the link.
+    var hasSystemNote: Bool {
+        notes == "Auto-credited on payday" || (notes.hasPrefix("tx.note.") && !notes.contains(" "))
+    }
+
     var displayNotes: String {
         guard !notes.isEmpty else { return "" }
         // A stored stable key looks like "tx.note.xxx" — no spaces, starts with tx.note.
