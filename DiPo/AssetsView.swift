@@ -137,6 +137,12 @@ struct AssetsView: View {
                 .font(.system(.largeTitle, weight: .bold))
                 .foregroundStyle(AppTheme.textPrimary)
                 .minimumScaleFactor(0.7).lineLimit(1)
+            if s.marketHigh > s.totalValue + 1 {
+                Text(String(format: loc("asset.market_range"), money(s.totalValue), money(s.marketHigh)))
+                    .font(.system(.caption, weight: .semibold))
+                    .foregroundStyle(AppTheme.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             Text(String(format: loc("asset.bought_for"), money(s.purchaseTotal)))
                 .font(.system(.caption))
                 .foregroundStyle(AppTheme.textSecondary)
@@ -267,6 +273,14 @@ private struct AssetRow: View {
                         .font(.system(.caption2, weight: .semibold))
                         .foregroundStyle(change > 0 ? AppTheme.accent : AppTheme.orange)
                 }
+                if let range = asset.marketRange() {
+                    Text(String(format: loc("asset.row_up_to"),
+                                cm.formatted(cm.convert(range.upperBound, from: asset.currency, to: currency).rounded(),
+                                             currency: currency)))
+                        .font(.system(.caption2))
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .lineLimit(1).minimumScaleFactor(0.8)
+                }
             }
         }
         .padding(.horizontal, 14).padding(.vertical, 14)
@@ -385,13 +399,22 @@ struct AssetFormSheet: View {
     /// What DiPo would estimate today, so the user can see whether to correct it.
     private var estimateHint: String {
         let p = InvestmentInput.number(price)
-        let rate = asset?.annualRate ?? kind.defaultAnnualRate
-        let trend = rate == 0 ? loc("asset.trend_flat")
+        // The kind picked now, not the one stored: switching kind resets the rate.
+        let rate = asset.map { $0.kind == kind ? $0.effectiveRate : kind.defaultAnnualRate } ?? kind.defaultAnnualRate
+        let drop = kind.firstYearDrop
+        let trend = drop > 0
+            ? String(format: loc("asset.trend_down_first"), Int(drop), Int(abs(rate)))
+            : rate == 0 ? loc("asset.trend_flat")
             : String(format: loc(rate < 0 ? "asset.trend_down" : "asset.trend_up"), Int(abs(rate)))
         guard p > 0 else { return trend }
-        let est = AssetValuation.value(.init(purchasePrice: p, purchaseDate: purchaseDate, annualRate: rate), at: .now)
-        return String(format: loc("asset.field.value_now_hint"),
-                      CurrencyManager.shared.formatted(est.rounded(), currency: currency), trend)
+        let est = AssetValuation.value(.init(purchasePrice: p, purchaseDate: purchaseDate, annualRate: rate,
+                                             firstYearDrop: drop), at: .now)
+        let cm = CurrencyManager.shared
+        let shown = drop > 0
+            ? String(format: loc("asset.range_inline"), cm.formatted(est.rounded(), currency: currency),
+                     cm.formatted((est * (1 + AssetValuation.askingPremium)).rounded(), currency: currency))
+            : cm.formatted(est.rounded(), currency: currency)
+        return String(format: loc("asset.field.value_now_hint"), shown, trend)
     }
 
     private var kindPicker: some View {
