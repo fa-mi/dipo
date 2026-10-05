@@ -14,12 +14,25 @@ import SwiftData
 //
 // Things that wear out lose most in the first year, then slowly. The first
 // version used one flat rate (12% a year for vehicles), which put a 2017
-// Honda Brio at Rp 50 jt while OLX listed the same car at Rp 107–125 jt, and a
-// 2023 Vario 125 at Rp 16,5 jt against Rp 20,4–21,8 jt. Popular vehicles in
-// Indonesia hold their value far better than that. The curve below was fitted
-// to those listings and lands at or just under the cheapest of them: the
-// estimate is the LOWEST realistic second-hand price, what a quick sale would
-// fetch. Asking prices run up to `askingPremium` above it, shown as a range.
+// Honda Brio at Rp 50 jt while OLX listed the same car at Rp 107–125 jt.
+// Vehicles in Indonesia hold their value far better than that, partly because
+// new prices keep rising and pull used ones up with them.
+//
+// The rates are fitted to second-hand prices reported in 2025–2026 (OLX,
+// detik oto, GridOto), as the share of the price new:
+//   Honda BeAT     1 yr ≈ 90%   3 yrs 74–80%   5 yrs 66–71%
+//   Vario 125      3–3,5 yrs 81–87%
+//   Toyota Avanza  3 yrs ≈ 75%  5 yrs ≈ 76%    7 yrs ≈ 60%   10 yrs 60–74%
+//   Honda Brio     3–5 yrs 81–87%              9 yrs 61–71%
+//   iPhone 13      4 yrs 42–54% of its launch price
+// and each curve runs along the LOW side of those bands: the estimate is the
+// lowest realistic second-hand price, what a quick sale would fetch, so net
+// worth is never overstated. Asking prices run up to `askingPremium` above
+// it, shown as a range.
+//
+// House prices rose only 1–2,3% a year in 2024–25 (BI's residential index,
+// Rumah123's resale index); land has no national index, so it gets a modest
+// rate rather than the 10–15% that circulates in sales copy.
 //
 // Kinds are the universal ones only. Livestock and rice fields depend too much
 // on the region to estimate well, so they wait.
@@ -65,10 +78,10 @@ enum AssetKind: String, CaseIterable, Identifiable, Codable {
     /// on purpose — the user can set the real value whenever they know it.
     var defaultAnnualRate: Double {
         switch self {
-        case .house:       return 3
-        case .land:        return 5
-        case .motorcycle:  return -5
-        case .car:         return -5
+        case .house:       return 2
+        case .land:        return 3
+        case .motorcycle:  return -6
+        case .car:         return -4
         case .electronics: return -15
         case .other:       return 0
         }
@@ -78,21 +91,13 @@ enum AssetKind: String, CaseIterable, Identifiable, Codable {
     /// "new" to "second-hand". Zero for what doesn't wear out.
     var firstYearDrop: Double {
         switch self {
-        case .motorcycle, .car: return 10
-        case .electronics:      return 20
+        case .motorcycle:  return 10
+        case .car:         return 15
+        case .electronics: return 20
         default:                return 0
         }
     }
 
-    /// Rates the first version stored as defaults. An asset still carrying one
-    /// was never set by hand, so it follows the current default instead.
-    var legacyDefaultRates: [Double] {
-        switch self {
-        case .motorcycle, .car: return [-12]
-        case .electronics:      return [-25]
-        default:                return []
-        }
-    }
 
     /// Kinds that wear out and get replaced: the ones a replacement fund is for.
     var isReplaceable: Bool { self == .motorcycle || self == .car || self == .electronics }
@@ -147,11 +152,11 @@ final class PhysicalAsset {
 
     var kind: AssetKind { AssetKind(rawValue: kindRaw) ?? .other }
 
-    /// The stored rate, or the kind's current default when the stored one is a
-    /// default from an earlier version.
-    var effectiveRate: Double {
-        kind.legacyDefaultRates.contains(annualRate) ? kind.defaultAnnualRate : annualRate
-    }
+    /// The rate the estimate uses: always the kind's current default. Nothing
+    /// lets a user set `annualRate`, so a stored value is only ever an older
+    /// default, and the rates are recalibrated as market data comes in. A
+    /// user who knows better enters the value itself, which wins.
+    var effectiveRate: Double { kind.defaultAnnualRate }
 
     var valuation: AssetValuation.Input {
         AssetValuation.Input(purchasePrice: purchasePrice, purchaseDate: purchaseDate,
