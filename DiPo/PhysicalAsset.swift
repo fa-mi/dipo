@@ -8,9 +8,18 @@ import SwiftData
 // and leaving it out made net worth read as if it didn't exist.
 //
 // Valued by estimate: the purchase price moved by a yearly rate for the kind
-// (a motorbike loses about 12% a year, land gains about 5%), or from a value
-// the user set themselves when they know better. Never counted as emergency
-// money — none of it turns into cash within days.
+// (land gains about 5% a year), or from a value the user set themselves when
+// they know better. Never counted as emergency money — none of it turns into
+// cash within days.
+//
+// Things that wear out lose most in the first year, then slowly. The first
+// version used one flat rate (12% a year for vehicles), which put a 2017
+// Honda Brio at Rp 50 jt while OLX listed the same car at Rp 107–125 jt, and a
+// 2023 Vario 125 at Rp 16,5 jt against Rp 20,4–21,8 jt. Popular vehicles in
+// Indonesia hold their value far better than that. The curve below was fitted
+// to those listings and lands at or just under the cheapest of them: the
+// estimate is the LOWEST realistic second-hand price, what a quick sale would
+// fetch. Asking prices run up to `askingPremium` above it, shown as a range.
 //
 // Kinds are the universal ones only. Livestock and rice fields depend too much
 // on the region to estimate well, so they wait.
@@ -52,16 +61,36 @@ enum AssetKind: String, CaseIterable, Identifiable, Codable {
         }
     }
 
-    /// Typical yearly change in value, in percent. Rough on purpose — the user
-    /// can set the real value whenever they know it.
+    /// Typical yearly change in value after the first year, in percent. Rough
+    /// on purpose — the user can set the real value whenever they know it.
     var defaultAnnualRate: Double {
         switch self {
         case .house:       return 3
         case .land:        return 5
-        case .motorcycle:  return -12
-        case .car:         return -12
-        case .electronics: return -25
+        case .motorcycle:  return -5
+        case .car:         return -5
+        case .electronics: return -15
         case .other:       return 0
+        }
+    }
+
+    /// Share lost in the first year of owning it, in percent: the drop from
+    /// "new" to "second-hand". Zero for what doesn't wear out.
+    var firstYearDrop: Double {
+        switch self {
+        case .motorcycle, .car: return 10
+        case .electronics:      return 20
+        default:                return 0
+        }
+    }
+
+    /// Rates the first version stored as defaults. An asset still carrying one
+    /// was never set by hand, so it follows the current default instead.
+    var legacyDefaultRates: [Double] {
+        switch self {
+        case .motorcycle, .car: return [-12]
+        case .electronics:      return [-25]
+        default:                return []
         }
     }
 
@@ -118,10 +147,23 @@ final class PhysicalAsset {
 
     var kind: AssetKind { AssetKind(rawValue: kindRaw) ?? .other }
 
+    /// The stored rate, or the kind's current default when the stored one is a
+    /// default from an earlier version.
+    var effectiveRate: Double {
+        kind.legacyDefaultRates.contains(annualRate) ? kind.defaultAnnualRate : annualRate
+    }
+
     var valuation: AssetValuation.Input {
         AssetValuation.Input(purchasePrice: purchasePrice, purchaseDate: purchaseDate,
                              manualValue: manualValue, manualValueDate: manualValueDate,
-                             annualRate: annualRate)
+                             annualRate: effectiveRate, firstYearDrop: kind.firstYearDrop)
+    }
+
+    /// Lowest realistic price and a typical asking price, for things sold second-hand.
+    func marketRange(at date: Date = .now) -> ClosedRange<Double>? {
+        guard kind.firstYearDrop > 0 else { return nil }
+        let low = value(at: date)
+        return low...(low * (1 + AssetValuation.askingPremium))
     }
 
     func value(at date: Date = .now) -> Double { AssetValuation.value(valuation, at: date) }
@@ -136,22 +178,38 @@ enum AssetValuation {
         var manualValue: Double = 0
         var manualValueDate: Date? = nil
         var annualRate: Double
+        /// Percent lost over the first year after purchase.
+        var firstYearDrop: Double = 0
     }
+
+    /// Marketplace asking prices sit up to this much above what a quick sale
+    /// fetches; the listings the curve was fitted to spread about this wide.
+    static let askingPremium = 0.15
 
     /// Something that wears out is never worth nothing on paper — a ten-year-old
     /// motorbike still sells. Value floors at this share of where it started.
     static let wearFloor = 0.10
 
-    /// Compounded yearly from the latest known value: the user's own figure
-    /// when there is one, else the purchase price.
+    /// From the latest known value: the user's own figure when there is one,
+    /// else the purchase price. From the purchase price, the first year's drop
+    /// comes first, spread evenly across that year, then the yearly rate
+    /// compounds. A value the user set is already second-hand, so it only
+    /// takes the yearly rate.
     static func value(_ i: Input, at date: Date) -> Double {
-        let (base, from) = i.manualValue > 0
+        let fromUser = i.manualValue > 0
+        let (base, from) = fromUser
             ? (i.manualValue, i.manualValueDate ?? i.purchaseDate)
             : (i.purchasePrice, i.purchaseDate)
         guard base > 0 else { return 0 }
         let years = max(0, date.timeIntervalSince(from) / (365.25 * 86_400))
-        let grown = base * pow(1 + i.annualRate / 100, years)
-        return i.annualRate < 0 ? max(grown, base * wearFloor) : grown
+        let grown: Double
+        if fromUser || i.firstYearDrop <= 0 {
+            grown = base * pow(1 + i.annualRate / 100, years)
+        } else {
+            let first = 1 - i.firstYearDrop / 100 * min(years, 1)
+            grown = base * first * pow(1 + i.annualRate / 100, max(years - 1, 0))
+        }
+        return i.annualRate < 0 || i.firstYearDrop > 0 ? max(grown, base * wearFloor) : grown
     }
 
     /// Value lost (negative) or gained over the coming year, from today's value.
@@ -165,6 +223,9 @@ enum AssetValuation {
 /// The year's total wear across replaceable things, and what to set aside for it.
 struct AssetSummary: Equatable {
     var totalValue: Double = 0
+    /// Top of the market range: `totalValue` with asking prices for what is
+    /// sold second-hand. Equal to `totalValue` when nothing is.
+    var marketHigh: Double = 0
     var purchaseTotal: Double = 0
     /// Value lost per month across things that wear out (positive number).
     var monthlyWear: Double = 0
@@ -178,6 +239,7 @@ struct AssetSummary: Equatable {
         for a in assets {
             let conv = { (v: Double) in cm.convert(v, from: a.currency, to: currency) }
             s.totalValue += conv(a.value(at: now))
+            s.marketHigh += conv(a.marketRange(at: now)?.upperBound ?? a.value(at: now))
             s.purchaseTotal += conv(a.purchasePrice)
             if a.kind.isReplaceable {
                 let change = AssetValuation.yearlyChange(a.valuation, at: now)
