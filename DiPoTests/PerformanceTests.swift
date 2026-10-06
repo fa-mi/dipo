@@ -141,7 +141,7 @@ final class PerformanceTests: XCTestCase {
                                                     type: "tx.type.purchase", icon: "cup",
                                                     iconBgHex: TxCategory.food.iconBg, category: .food,
                                                     currency: "IDR"))
-            return RollupStore.shared.rebuild(context: l.context).count
+            return RollupStore.shared.rebuildIfStale(context: l.context, txCount: l.count).count
         }
 
         // Plan
