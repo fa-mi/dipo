@@ -23,8 +23,8 @@ final class PerformanceTests: XCTestCase {
         let receivables: [Receivable]
         let recurrings: [RecurringExpense]
         let installments: [CardInstallment]
-        var context: ModelContext { container.mainContext }
-        var count: Int { cards.reduce(0) { $0 + $1.transactions.count } }
+        @MainActor var context: ModelContext { container.mainContext }
+        @MainActor var count: Int { cards.reduce(0) { $0 + $1.transactions.count } }
     }
 
     private func card(_ name: String, _ number: String, credit: Bool = false, order: Int) -> BankCard {
