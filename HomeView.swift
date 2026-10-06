@@ -341,6 +341,15 @@ struct HomeView: View {
         // uses) so Home and Smart Budget can't disagree about being over budget.
         let cycleStart: Date? = MainCard.payDay(salarySchedules)
             .map { StatPeriod.payCycleRange(payDay: $0).start }
+        // Debt still due each month, so the surplus advice can put it before
+        // investing: debt minimums plus credit-card instalments and minimums,
+        // the same figure the Fixed Monthly Payments card counts.
+        let cm = CurrencyManager.shared
+        SmartBudgetManager.shared.debtDueMonthly =
+            activeDebts.filter { !$0.manuallyClosed }
+                .reduce(0.0) { $0 + cm.convert($1.minimumPayment, from: $1.currency, to: budgetCurrency) }
+            + ObligationLoad.cardPayments(cards: vm.cards, installments: installments,
+                                          debts: activeDebts, currency: budgetCurrency)
         cachedInsights = SmartBudgetManager.shared.evaluateAll(
             allTransactions: tx, income: totalMonthlyIncome,
             cardID: budgetCard?.id.uuidString, configs: cardBudgetConfigs,

@@ -406,6 +406,11 @@ struct AddHoldingSheet: View {
     /// on the total because that is the number its apps put in front of you.
     @State private var priceMode: InvestmentInput.PriceMode = .total
     @State private var market: StockMarket = .idx
+    @State private var goldSource: GoldSource = .savings
+    @State private var goldIsOther = false
+    /// The name the gold choice filled in, so a later choice can replace it
+    /// without overwriting one the user typed.
+    @State private var autoName = ""
 
     /// A stock is kept in its market's currency (a US share in dollars, as the
     /// broker shows it); everything else in the preferred currency.
@@ -434,6 +439,9 @@ struct AddHoldingSheet: View {
 
                     // What it is — name + (for auto types) the lookup symbol.
                     groupCard {
+                        if type == .gold && cur.uppercased() == "IDR" {
+                            GoldSourcePicker(source: $goldSource, isOther: $goldIsOther)
+                        }
                         PlainField(label: loc("invest.field.name"), placeholder: loc("invest.field.name_ph"),
                                    bg: AppTheme.bg, text: $name)
                         if type == .stock {
@@ -544,7 +552,17 @@ struct AddHoldingSheet: View {
             .background(AppTheme.bg)
             .navigationTitle(loc("invest.add_holding"))
             .navigationBarTitleDisplayMode(.inline)
-            .onChange(of: type) { _, t in priceMode = t == .gold ? .total : .perUnit }
+            .onChange(of: type) { _, t in
+                priceMode = t == .gold ? .total : .perUnit
+                if t == .gold {
+                    suggestGoldName()
+                } else if name.trimmingCharacters(in: .whitespaces) == autoName {
+                    name = ""; autoName = ""
+                }
+            }
+            .onChange(of: goldSource) { _, _ in suggestGoldName() }
+            .onChange(of: goldIsOther) { _, _ in suggestGoldName() }
+            .onAppear { if type == .gold { suggestGoldName() } }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(loc("common.cancel")) { dismiss() }.foregroundStyle(AppTheme.textSecondary)
@@ -557,6 +575,26 @@ struct AddHoldingSheet: View {
                 }
             }
         }
+    }
+
+    /// "Emas Antam", "Perhiasan 70%"… — only into an empty name or one the
+    /// previous choice filled. "Other" leaves it to the user.
+    private func suggestGoldName() {
+        let trimmed = name.trimmingCharacters(in: .whitespaces)
+        guard trimmed.isEmpty || trimmed == autoName else { return }
+        let suggestion: String
+        if goldIsOther {
+            suggestion = ""
+        } else {
+            switch goldSource {
+            case .savings, .manual:    suggestion = loc("gold.name.savings")
+            case .bar(let b):          suggestion = String(format: loc("gold.name.bar"), b.displayName)
+            case .jewelry(let purity): suggestion = String(format: loc("gold.src.jewelry_n"),
+                                                           GoldSource.purityLabel(purity))
+            }
+        }
+        name = suggestion
+        autoName = suggestion
     }
 
     private var typePicker: some View {
@@ -678,7 +716,7 @@ struct AddHoldingSheet: View {
         // Rupiah gold follows Pegadaian's daily price from the start (what
         // BRImo/Tring and Pegadaian show); it can be switched off on the
         // holding. The price typed here stands until the first refresh.
-        if type == .gold { h.setGoldFeed(true) }
+        if type == .gold { h.setGoldSource(goldSource) }
         h.pushPrice(price); h.pushPrice(lastPrice)   // seed the sparkline: buy → now
         context.insert(h)
         let lot = InvestmentLot(kind: .buy, date: date, units: holdingUnits,

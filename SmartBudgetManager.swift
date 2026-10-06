@@ -326,6 +326,54 @@ final class SmartBudgetManager {
 
     // MARK: - Smart Insights
 
+    /// Debt instalments due each month — debt minimums plus credit-card
+    /// instalments and minimums — set by Home when it refreshes, so the
+    /// surplus advice can put debt before investing.
+    var debtDueMonthly: Double = 0
+
+    /// What unspent money should do, in the order the plan runs: debt
+    /// instalments still due this period first, then the savings and
+    /// investing share, then daily needs, and lifestyle last — not whatever
+    /// is left at the end of the month.
+    ///
+    /// Debt and investing share one pot (Invest & Debt), so they're worked
+    /// out together: debt still due is paid from the unspent money first,
+    /// and investing gets what the pot's share leaves after all debt.
+    func surplusInsight(unspent: Double, debtPaid: Double, invested: Double,
+                        debtDue: Double, income: Double,
+                        investShare: Double, currency: String) -> SmartInsight {
+        let cm = CurrencyManager.shared
+        let money = { (v: Double) in cm.formatted(v.rounded(), currency: currency) }
+        let plan = income * investShare
+        let filled = debtPaid + invested
+        // Debt is contractual: what is still due gets paid whatever the share says.
+        let payDebt = min(max(debtDue - debtPaid, 0), unspent)
+        let invest = min(max(plan - filled - payDebt, 0), unspent - payDebt)
+        let title = String(format: loc("insight.surplus_title"), money(unspent))
+        let action = SmartInsightAction(label: loc("insight.action.adjust_budget"), kind: .openBudgetSettings)
+        let pct = Int((investShare * 100).rounded())
+
+        switch (payDebt >= 1, invest >= 1) {
+        case (true, true):
+            return SmartInsight(icon: "tray.and.arrow.down", color: AppTheme.orange, title: title,
+                                body: String(format: loc("insight.surplus_debt_invest_body"),
+                                             money(filled), money(plan), pct, money(payDebt), money(invest)),
+                                action: action)
+        case (true, false):
+            return SmartInsight(icon: "tray.and.arrow.down", color: AppTheme.orange, title: title,
+                                body: String(format: loc("insight.surplus_debt_body"), money(payDebt)),
+                                action: action)
+        case (false, true):
+            return SmartInsight(icon: "tray.and.arrow.down", color: AppTheme.orange, title: title,
+                                body: String(format: loc("insight.surplus_ratio_body"),
+                                             money(filled), money(plan), pct, money(invest)),
+                                action: action)
+        case (false, false):
+            return SmartInsight(icon: "tray.and.arrow.down", color: AppTheme.blue, title: title,
+                                body: String(format: loc("insight.surplus_body"), Int((unspent / income) * 100)))
+        }
+    }
+
     /// Generate the top insight for the home screen.
     ///
     /// `cardID` and `configs` together let this method use per-card budget
@@ -402,17 +450,22 @@ final class SmartBudgetManager {
         // so it cheerfully reported "saving 49%" right next to "over budget".
         let monthStart = periodStart
             ?? cal.safeDate(from: cal.dateComponents([.year, .month], from: Date()))
-        let thisTx = allTransactions.filter { $0.date >= monthStart && $0.amount < 0 }
+        // Transfers are money moving, not spent — the same rule Statistics and
+        // the share report use. Counting them made "still unspent" read
+        // Rp 1,4 jt on a report whose "Left" said Rp 4 jt.
+        let thisTx = allTransactions.filter { $0.date >= monthStart && $0.amount < 0 && $0.txSubtype != .transfer }
         let debtPaid = allTransactions
             .filter { $0.amount < 0 && $0.date >= monthStart && $0.category == .debtPayment }
             .reduce(0.0) { sum, tx in
                 let txCur = tx.currency.isEmpty ? target : tx.currency
                 return sum + CurrencyManager.shared.convert(abs(tx.amount), from: txCur, to: target)
             }
-        let totalSpent = thisTx.reduce(0.0) { sum, tx in
+        // Debt payments may be recorded as transfers, so they're left out by
+        // category rather than subtracted from a total that may not hold them.
+        let totalSpent = thisTx.filter { $0.category != .debtPayment }.reduce(0.0) { sum, tx in
             let txCur = tx.currency.isEmpty ? target : tx.currency
             return sum + CurrencyManager.shared.convert(abs(tx.amount), from: txCur, to: target)
-        } - debtPaid
+        }
         let savings = income - totalSpent - debtPaid
         // Money ACTUALLY set aside this cycle — investments and debt payments.
         //
@@ -463,14 +516,11 @@ final class SmartBudgetManager {
                 // A surplus with nothing moved out of it. Reported as the
                 // surplus it is — which is useful, and is the one sentence that
                 // turns it into a decision rather than a compliment.
-                results.append(SmartInsight(
-                    icon: "tray.and.arrow.down",
-                    color: AppTheme.blue,
-                    title: String(format: loc("insight.surplus_title"),
-                                  CurrencyManager.shared.formatted(savings, currency: target)),
-                    body: String(format: loc("insight.surplus_body"),
-                                 Int((savings / income) * 100))
-                ))
+                results.append(surplusInsight(unspent: savings, debtPaid: debtPaid,
+                                              invested: max(setAside - debtPaid, 0),
+                                              debtDue: debtDueMonthly, income: income,
+                                              investShare: ratios(forCardID: cardID, configs: configs).investDebt,
+                                              currency: target))
             }
         }
 
@@ -539,13 +589,22 @@ final class SmartBudgetManager {
         let elapsed = now.timeIntervalSince(cycleStart)
         let prevCutoff = prevCycleStart.addingTimeInterval(elapsed)
 
-        let thisTx = allTransactions.filter { $0.date >= cycleStart && $0.amount < 0 }
-        let lastTx = allTransactions.filter { $0.date >= prevCycleStart && $0.date < prevCutoff && $0.amount < 0 }
+        // Transfers are money moving, not spent (see the secondary pass).
+        let thisTx = allTransactions.filter {
+            $0.date >= cycleStart && $0.amount < 0 && $0.txSubtype != .transfer
+        }
+        let lastTx = allTransactions.filter {
+            $0.date >= prevCycleStart && $0.date < prevCutoff && $0.amount < 0 && $0.txSubtype != .transfer
+        }
 
         // Check each group for overspend using PER-CARD ratios.
         // spent() is called with targetCurrency so IDR spend and USD income
         // are always compared in the same unit.
-        for grp in BudgetGroup.allCases {
+        //
+        // Lifestyle first: when spending swells, it is the first thing to look
+        // at — wants give way before needs — so when both are over, the card
+        // names Lifestyle.
+        for grp in [BudgetGroup.lifestyle, .daily, .investDebt] {
             let limit: Double = {
                 switch grp {
                 case .daily:      return income * r.daily
@@ -662,7 +721,20 @@ final class SmartBudgetManager {
                     // they actually want the decomposition. Stacking six
                     // figures into a paragraph meant none of them were read.
                     let overFmt = CurrencyManager.shared.formatted(spent - limit, currency: target)
-                    let bodyWithTarget = String(format: loc("insight.over_by_recover"), daysLeft, overFmt)
+                    var bodyWithTarget = String(format: loc("insight.over_by_recover"), daysLeft, overFmt)
+                    // Where to look first. Needs over budget: trim Lifestyle
+                    // before cutting what the household needs, when there is
+                    // Lifestyle spending to trim.
+                    if grp == .lifestyle {
+                        bodyWithTarget += " " + loc("insight.lifestyle_first_cut")
+                    } else if grp == .daily {
+                        let lifestyleSpent = self.spent(in: .lifestyle, transactions: allTransactions,
+                                                        targetCurrency: target, periodStart: periodStart)
+                        if lifestyleSpent >= 1 {
+                            bodyWithTarget += " " + String(format: loc("insight.review_lifestyle_first"),
+                                CurrencyManager.shared.formatted(lifestyleSpent.rounded(), currency: target))
+                        }
+                    }
                     return SmartInsight(
                         icon: "exclamationmark.triangle.fill",
                         color: AppTheme.red,
@@ -795,10 +867,12 @@ final class SmartBudgetManager {
                 let txCur = tx.currency.isEmpty ? target : tx.currency
                 return sum + CurrencyManager.shared.convert(abs(tx.amount), from: txCur, to: target)
             }
-        let totalSpent = thisTx.reduce(0.0) { sum, tx in
+        // Debt payments may be recorded as transfers, so they're left out by
+        // category rather than subtracted from a total that may not hold them.
+        let totalSpent = thisTx.filter { $0.category != .debtPayment }.reduce(0.0) { sum, tx in
             let txCur = tx.currency.isEmpty ? target : tx.currency
             return sum + CurrencyManager.shared.convert(abs(tx.amount), from: txCur, to: target)
-        } - debtPaid
+        }
         let savings = income - totalSpent - debtPaid  // unspent, NOT money saved
         // Money ACTUALLY set aside this cycle — investments and debt payments.
         //
@@ -856,13 +930,10 @@ final class SmartBudgetManager {
         if savings > 0, income > 0 {
             let rate = Int((setAside / income) * 100)
             guard rate > 0 else {
-                return SmartInsight(
-                    icon: "tray.and.arrow.down", color: AppTheme.blue,
-                    title: String(format: loc("insight.surplus_title"),
-                                  CurrencyManager.shared.formatted(savings, currency: target)),
-                    body: String(format: loc("insight.surplus_body"),
-                                 Int((savings / income) * 100))
-                )
+                return surplusInsight(unspent: savings, debtPaid: debtPaid,
+                                      invested: max(setAside - debtPaid, 0),
+                                      debtDue: debtDueMonthly, income: income,
+                                      investShare: r.investDebt, currency: target)
             }
             let icon = rate >= 20 ? "checkmark.seal.fill" : "info.circle.fill"
             let color: Color = rate >= 20 ? AppTheme.accent : AppTheme.orange

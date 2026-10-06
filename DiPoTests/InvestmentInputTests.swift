@@ -190,9 +190,10 @@ final class GoldFeedTests: XCTestCase {
         XCTAssertTrue(gold.isAutoPriced)
         XCTAssertTrue(gold.followsGoldFeed)
 
+        // Pausing keeps which gold it is, so turning it back on resumes it.
         gold.setGoldFeed(false)
         XCTAssertFalse(gold.isAutoPriced)
-        XCTAssertEqual(gold.symbol, "")
+        XCTAssertEqual(gold.symbol, GoldFeed.symbol)
     }
 
     @MainActor

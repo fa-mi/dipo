@@ -237,16 +237,32 @@ extension InvestmentHolding {
         return followsGoldFeed
     }
 
-    /// Gold set to follow Pegadaian's price (on or paused).
-    var followsGoldFeed: Bool {
-        type == .gold && currency.uppercased() == "IDR"
-            && symbol.trimmingCharacters(in: .whitespaces).lowercased() == GoldFeed.symbol
+    /// Which gold this is, for rupiah gold; `.manual` for anything else.
+    var goldSource: GoldSource {
+        guard type == .gold, currency.uppercased() == "IDR" else { return .manual }
+        return GoldSource(symbol: symbol)
     }
 
-    /// Point a rupiah gold holding at Pegadaian's price, or back to by hand.
+    /// Gold set to follow a price feed (on or paused): savings, a bar brand
+    /// or jewellery by purity.
+    var followsGoldFeed: Bool { goldSource != .manual }
+
+    /// Follow a gold source's price, or keep it by hand. Pausing keeps the
+    /// source, so turning the feed back on picks up where it was.
+    func setGoldSource(_ source: GoldSource) {
+        guard type == .gold, currency.uppercased() == "IDR" else { return }
+        symbol = source.symbol
+        manualPrice = source == .manual
+    }
+
+    /// Turn the feed on (savings unless a source is already chosen) or pause it.
     func setGoldFeed(_ on: Bool) {
         guard type == .gold, currency.uppercased() == "IDR" else { return }
-        symbol = on ? GoldFeed.symbol : ""
-        manualPrice = !on
+        if on {
+            if goldSource == .manual { symbol = GoldFeed.symbol }
+            manualPrice = false
+        } else {
+            manualPrice = true
+        }
     }
 }
