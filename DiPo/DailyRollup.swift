@@ -60,6 +60,19 @@ final class DailyRollup {
         self.updatedAt = .now
     }
 
+    /// Overwrite with a recomputed bucket for the same (card, day).
+    func update(from b: DailyBucket) {
+        incomeByCurrency = b.incomeByCurrency
+        expenseByCurrency = b.expenseByCurrency
+        transferNetByCurrency = b.transferNetByCurrency
+        expenseByCategory = DailyRollup.encodeCats(b.expenseByCategory)
+        incomeByCategory = DailyRollup.encodeCats(b.incomeByCategory)
+        grossExpenseByCategory = DailyRollup.encodeCats(b.grossExpenseByCategory)
+        grossInflowByCurrency = b.grossInflowByCurrency
+        txCount = b.txCount
+        updatedAt = .now
+    }
+
     static func key(cardID: String, day: Date, calendar: Calendar = .current) -> String {
         let c = calendar.dateComponents([.year, .month, .day], from: day)
         return String(format: "%@|%04d-%02d-%02d", cardID, c.year ?? 0, c.month ?? 0, c.day ?? 0)
@@ -153,12 +166,35 @@ final class RollupStore {
     }
 
     private func persist(_ computed: [DailyBucket], context: ModelContext) {
-        // Full replace. One row per active day is a tiny set (~365/yr), so a
-        // wholesale swap is simpler to reason about than a per-day diff and the
-        // cost is negligible next to the transaction scan that produced it.
+        // Only the days that changed. A full delete-and-insert of every row
+        // (≈1.800 a card for five years) on each new transaction was most of
+        // a rebuild's cost — over a second for a busy five-year ledger, on the
+        // main thread, every time a transaction was added. Adding one now
+        // touches one row.
         let existing = (try? context.fetch(FetchDescriptor<DailyRollup>())) ?? []
-        for row in existing { context.delete(row) }
-        for b in computed { context.insert(DailyRollup(b)) }
-        try? context.save()
+        var byKey: [String: DailyRollup] = [:]
+        for row in existing {
+            if byKey[row.dayKey] != nil { context.delete(row) } else { byKey[row.dayKey] = row }
+        }
+        var changed = false
+        var kept = Set<String>()
+        for b in computed {
+            let key = DailyRollup.key(cardID: b.cardID, day: b.dayStart)
+            kept.insert(key)
+            if let row = byKey[key] {
+                if row.toBucket() != b {
+                    row.update(from: b)
+                    changed = true
+                }
+            } else {
+                context.insert(DailyRollup(b))
+                changed = true
+            }
+        }
+        for (key, row) in byKey where !kept.contains(key) {
+            context.delete(row)
+            changed = true
+        }
+        if changed || existing.count != byKey.count { try? context.save() }
     }
 }

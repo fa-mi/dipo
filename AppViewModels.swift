@@ -48,9 +48,6 @@ final class AppViewModel {
         return cards[selectedCardIndex]
     }
 
-    var recentTransactions: [TxRecord] {
-        cards.flatMap { $0.transactions }.sorted { $0.date > $1.date }
-    }
 
     // Uses the canonical cross-currency helper from BankCardHelpers.swift
     // instead of duplicating the conversion logic inline.

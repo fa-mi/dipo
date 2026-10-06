@@ -58,6 +58,78 @@ enum SearchPeriod: String, CaseIterable {
         }
     }
 }
+// MARK: - Search engine
+//
+// Search used to re-sort EVERY transaction and re-filter the lot several times
+// per redraw — once for the count, once for the total, once for the category
+// pills, once per group — and on every keystroke. At five years of a busy
+// ledger that was seconds per letter typed. It now runs once per change of
+// what was asked, sorts on dates read once, and hands the screen only the
+// rows it shows; the rest wait behind "Show more".
+
+struct SearchResults {
+    var count = 0
+    var total = 0.0
+    var currency: String?
+    /// Categories present in the period, for the filter pills.
+    var categories: [TxCategory] = []
+    /// The rows shown, in order, grouped by day unless sorted by amount.
+    var groups: [(day: Date, txs: [TxRecord])] = []
+    /// Matching rows beyond `limit`.
+    var hidden = 0
+}
+
+enum SearchEngine {
+    static func run(_ all: [TxRecord], query: String, range: (start: Date, end: Date)?,
+                    category: TxCategory?, sort: SearchView.SearchSort, limit: Int,
+                    convert: (TxRecord) -> Double, cal: Calendar = .current) -> SearchResults {
+        var out = SearchResults()
+        let inPeriod = range.map { r in all.filter { $0.date >= r.start && $0.date <= r.end } } ?? all
+        let used = Set(inPeriod.map(\.category))
+        out.categories = TxCategory.allCases.filter { used.contains($0) }
+
+        var matches = inPeriod
+        let q = query.trimmingCharacters(in: .whitespaces).lowercased()
+        if !q.isEmpty {
+            matches = matches.filter {
+                $0.name.lowercased().contains(q) || $0.type.lowercased().contains(q)
+                    || $0.category.rawValue.lowercased().contains(q) || $0.displayNotes.lowercased().contains(q)
+            }
+        }
+        if let category { matches = matches.filter { $0.category == category } }
+
+        out.count = matches.count
+        out.total = matches.reduce(0) { $0 + $1.amount }
+        out.currency = matches.first?.currency
+
+        // Each key read once: comparing model properties inside the sort
+        // reads them n·log n times, and that was most of the cost.
+        let shown: [TxRecord]
+        if sort.isByAmount {
+            let keyed = matches.map { (key: abs(convert($0)), tx: $0) }
+            shown = keyed.sorted { sort == .largest ? $0.key > $1.key : $0.key < $1.key }
+                .prefix(limit).map(\.tx)
+        } else {
+            let keyed = matches.map { (key: $0.date, tx: $0) }
+            shown = keyed.sorted { sort == .newest ? $0.key > $1.key : $0.key < $1.key }
+                .prefix(limit).map(\.tx)
+        }
+        out.hidden = max(matches.count - shown.count, 0)
+
+        if sort.isByAmount {
+            out.groups = shown.isEmpty ? [] : [(day: .distantPast, txs: shown)]
+        } else {
+            // `shown` is already in order, so days come out in order too.
+            for tx in shown {
+                let day = cal.startOfDay(for: tx.date)
+                if out.groups.last?.day == day { out.groups[out.groups.count - 1].txs.append(tx) }
+                else { out.groups.append((day: day, txs: [tx])) }
+            }
+        }
+        return out
+    }
+}
+
 // MARK: - Search View
 
 struct SearchView: View {
@@ -95,6 +167,11 @@ struct SearchView: View {
         var isByAmount: Bool { self == .largest || self == .smallest }
     }
     @State private var sort: SearchSort = .newest
+    @State private var results = SearchResults()
+    @State private var lastQuery = ""
+    /// Rows shown; "Show more" adds a page.
+    @State private var limit = SearchView.pageSize
+    static let pageSize = 200
     @State private var appeared = false
     @FocusState private var focused: Bool
     @State private var selectedTx: TxRecord? = nil
@@ -102,68 +179,37 @@ struct SearchView: View {
     @State private var customStart: Date = Calendar.current.safeDate(byAdding: .month, value: -1, to: Date())
     @State private var customEnd: Date = Date()
 
-    var allTransactions: [TxRecord] { vm.recentTransactions }
+    /// Every transaction, unsorted: the engine orders only what it shows.
+    private var allTransactions: [TxRecord] { vm.cards.flatMap(\.transactions) }
 
-    var periodFiltered: [TxRecord] {
+    private var range: (start: Date, end: Date)? {
         if selectedPeriod == .custom {
             let end = Calendar.current.date(bySettingHour: 23, minute: 59, second: 59, of: customEnd) ?? customEnd
-            return allTransactions.filter { $0.date >= customStart && $0.date <= end }
+            return (customStart, end)
         }
-        guard let range = selectedPeriod.range() else { return allTransactions }
-        return allTransactions.filter { $0.date >= range.start && $0.date <= range.end }
+        return selectedPeriod.range()
     }
 
-    var filtered: [TxRecord] {
-        var result = periodFiltered
-        if !query.trimmingCharacters(in: .whitespaces).isEmpty {
-            let q = query.lowercased()
-            result = result.filter {
-                $0.name.lowercased().contains(q) ||
-                $0.type.lowercased().contains(q) ||
-                $0.category.rawValue.lowercased().contains(q) ||
-                $0.displayNotes.lowercased().contains(q)
-            }
-        }
-        if let cat = selectedFilter {
-            result = result.filter { $0.category == cat }
-        }
-        return result
+    /// Everything a search depends on; a change re-runs it, nothing else does.
+    private struct Request: Hashable {
+        var query: String, period: SearchPeriod, category: TxCategory?, sort: SearchSort
+        var customStart: Date, customEnd: Date, limit: Int, txCount: Int
+    }
+    private var request: Request {
+        Request(query: query, period: selectedPeriod, category: selectedFilter, sort: sort,
+                customStart: customStart, customEnd: customEnd, limit: limit,
+                txCount: vm.cards.reduce(0) { $0 + $1.transactions.count })
     }
 
-    // Group filtered results by date section
-    var grouped: [(label: String, date: Date, txs: [TxRecord])] {
+    private func dayLabel(_ day: Date) -> String {
         let cal = Calendar.current
-        var dict: [Date: [TxRecord]] = [:]
-        for tx in filtered {
-            let day = cal.startOfDay(for: tx.date)
-            dict[day, default: []].append(tx)
-        }
-        // By amount: one flat section, no day headers — see `SearchSort`.
-        if sort.isByAmount {
-            let ordered = filtered.sorted {
-                let a = abs(convertedForSort($0)), b = abs(convertedForSort($1))
-                return sort == .largest ? a > b : a < b
-            }
-            return ordered.isEmpty ? [] : [(label: "", date: Date.distantPast, txs: ordered)]
-        }
-        return dict.keys.sorted(by: sort == .newest ? (>) : (<)).map { day in
-            let label: String
-            if cal.isDateInToday(day)          { label = loc("common.today") }
-            else if cal.isDateInYesterday(day) { label = loc("common.yesterday") }
-            else {
-                let weekAgo = cal.safeDate(byAdding: .day, value: -7, to: Date())
-                let df: DateFormatter
-                if day >= weekAgo {
-                    df = DateFormatterCache.template("EEEE")
-                } else {
-                    df = DateFormatterCache.template("dMMMMyyyy")
-                }
-                label = df.string(from: day)
-            }
-            let dayTxs = (dict[day] ?? []).sorted { sort == .newest ? $0.date > $1.date : $0.date < $1.date }
-            return (label: label, date: day, txs: dayTxs)
-        }
+        if cal.isDateInToday(day) { return loc("common.today") }
+        if cal.isDateInYesterday(day) { return loc("common.yesterday") }
+        let weekAgo = cal.safeDate(byAdding: .day, value: -7, to: Date())
+        return DateFormatterCache.template(day >= weekAgo ? "EEEE" : "dMMMMyyyy").string(from: day)
     }
+
+    private var totalAmount: Double { results.total }
 
     /// Ranking across mixed currencies has to compare like with like, or a
     /// $10 purchase sorts below a Rp 20.000 one on the raw number alone.
@@ -172,13 +218,6 @@ struct SearchView: View {
         return CurrencyManager.shared.convert(
             tx.amount, from: tx.currency.isEmpty ? pref : tx.currency, to: pref)
     }
-
-    var availableCategories: [TxCategory] {
-        let used = Set(periodFiltered.map { $0.category })
-        return TxCategory.allCases.filter { used.contains($0) }
-    }
-
-    var totalAmount: Double { filtered.reduce(0) { $0 + $1.amount } }
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -257,14 +296,14 @@ struct SearchView: View {
                     .padding(.bottom, 8)
 
                     // Category filter pills
-                    if !availableCategories.isEmpty {
+                    if !results.categories.isEmpty {
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 8) {
                                 FilterPill(label: loc("search.all_categories"), isSelected: selectedFilter == nil) {
                                     HapticManager.shared.tap()
                                     withAnimation(.spring(response: 0.3)) { selectedFilter = nil }
                                 }
-                                ForEach(availableCategories, id: \.self) { cat in
+                                ForEach(results.categories, id: \.self) { cat in
                                     FilterPill(label: cat.shortLabel, isSelected: selectedFilter == cat, color: cat.color) {
                                         HapticManager.shared.tap()
                                         withAnimation(.spring(response: 0.3)) {
@@ -280,7 +319,7 @@ struct SearchView: View {
 
                     Divider().background(AppTheme.cardMid)
 
-                    if filtered.isEmpty {
+                    if results.count == 0 {
                         VStack(spacing: 14) {
                             Image(systemName: "magnifyingglass")
                                 .font(.system(size: 40)).foregroundStyle(AppTheme.textSecondary)
@@ -294,10 +333,10 @@ struct SearchView: View {
                             VStack(spacing: 0) {
                                 // Summary bar
                                 HStack {
-                                    let fmt = filtered.count == 1
+                                    let fmt = results.count == 1
                                         ? loc("search.result_count")
                                         : loc("search.results_count")
-                                    Text(String(format: fmt, filtered.count))
+                                    Text(String(format: fmt, results.count))
                                         .font(.system(.footnote)).foregroundStyle(AppTheme.textSecondary)
                                     // Order: by time, or by amount.
                                     Menu {
@@ -324,25 +363,26 @@ struct SearchView: View {
                                     .padding(.leading, 10)
                                     Spacer()
                                     Text(totalAmount >= 0
-                                         ? "+\(CurrencyManager.shared.formatted(totalAmount, currency: filtered.first?.currency ?? CurrencyManager.shared.preferredCurrency))"
-                                         : CurrencyManager.shared.formatted(totalAmount, currency: filtered.first?.currency ?? CurrencyManager.shared.preferredCurrency))
+                                         ? "+\(CurrencyManager.shared.formatted(totalAmount, currency: results.currency ?? CurrencyManager.shared.preferredCurrency))"
+                                         : CurrencyManager.shared.formatted(totalAmount, currency: results.currency ?? CurrencyManager.shared.preferredCurrency))
                                         .font(.system(.footnote, weight: .semibold))
                                         .foregroundStyle(totalAmount >= 0 ? AppTheme.accent : AppTheme.red)
                                 }
                                 .padding(.horizontal, 22).padding(.vertical, 12)
 
                                 // Grouped results
-                                VStack(spacing: 20) {
-                                    ForEach(grouped, id: \.date) { group in
+                                LazyVStack(spacing: 20) {
+                                    ForEach(results.groups, id: \.day) { group in
+                                        let label = group.day == .distantPast ? "" : dayLabel(group.day)
                                         VStack(alignment: .leading, spacing: 8) {
                                             // Group header
                                             let groupTotal = group.txs.reduce(0) { $0 + $1.amount }
                                             // Empty label = the flat, amount-ordered list. A
                                             // running total across unrelated days would be a
                                             // number about nothing.
-                                            if !group.label.isEmpty {
+                                            if !label.isEmpty {
                                             HStack {
-                                                Text(group.label)
+                                                Text(label)
                                                     .font(.system(.footnote, weight: .semibold))
                                                     .foregroundStyle(AppTheme.textSecondary)
                                                 Spacer()
@@ -372,7 +412,23 @@ struct SearchView: View {
                                         }
                                     }
                                 }
-                                .padding(.bottom, 40)
+                                .padding(.bottom, results.hidden > 0 ? 12 : 40)
+
+                                if results.hidden > 0 {
+                                    Button {
+                                        HapticManager.shared.tap()
+                                        limit += SearchView.pageSize
+                                    } label: {
+                                        Text(String(format: loc("search.show_more"),
+                                                    min(results.hidden, SearchView.pageSize), results.hidden))
+                                            .font(.system(.footnote, weight: .semibold))
+                                            .foregroundStyle(AppTheme.accent)
+                                            .padding(.horizontal, 16).padding(.vertical, 10)
+                                            .background(AppTheme.accent.opacity(0.1), in: Capsule())
+                                    }
+                                    .buttonStyle(.plain)
+                                    .padding(.bottom, 40)
+                                }
                             }
                             .containerRelativeFrame(.horizontal)
                         }
@@ -382,6 +438,23 @@ struct SearchView: View {
             .onAppear {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { focused = true }
         }
+        // One search per change of what was asked. Typing waits a beat so a
+        // word runs once, not once per letter; a new question starts from the
+        // first page again.
+        .task(id: request) {
+            let req = request
+            if !req.query.isEmpty, req.query != lastQuery {
+                try? await Task.sleep(for: .milliseconds(150))
+                guard !Task.isCancelled else { return }
+            }
+            lastQuery = req.query
+            results = SearchEngine.run(allTransactions, query: req.query, range: range,
+                                       category: req.category, sort: req.sort, limit: req.limit,
+                                       convert: convertedForSort)
+        }
+        .onChange(of: query) { _, _ in limit = SearchView.pageSize }
+        .onChange(of: selectedPeriod) { _, _ in limit = SearchView.pageSize }
+        .onChange(of: selectedFilter) { _, _ in limit = SearchView.pageSize }
         .sheet(item: $selectedTx) { tx in
             TransactionDetailSheet(tx: tx)
                 .presentationDetents([.medium, .large])
