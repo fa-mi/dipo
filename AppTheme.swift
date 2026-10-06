@@ -84,12 +84,6 @@ struct AppTheme {
     /// and a deep green glow reads as a smudge. Never text, icon or fill.
     static let voiceGlow = Color(uiColor: .systemGreen)
 
-    // The 3D coin garden (CoinGarden.swift). Its own tokens, the same in both
-    // themes: gold is gold in the dark and in the light.
-    static let coinGold   = Color(hex: "#F2B43A")   // coin face and side
-    static let coinGroove = Color(hex: "#C98A1E")   // rings and edge groove
-    static let gardenBase = Color(hex: "#15885A")   // the round base and the stem; a deeper accent
-
     /// The track behind a green progress bar: a quiet surface in both modes.
     static let accentTrack = Color(UIColor.adaptive(dark: "#2A3330", light: "#E4EAE8"))
 

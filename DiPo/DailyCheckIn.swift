@@ -141,10 +141,10 @@ struct DailyCheckInCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 10) {
-                Image("DiPoMascot")
-                    .resizable().scaledToFill()
-                    .frame(width: 34, height: 34)
-                    .clipShape(Circle())
+                // DiPo himself, in 3D — tap him and he hops
+                DiPoDragonView()
+                    .frame(width: 62, height: 62)
+                    .padding(-8)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(headline)
                         .font(.system(.subheadline, weight: .semibold))

@@ -49,10 +49,6 @@ final class PaletteLockTests: XCTestCase {
             ("slate",         AppTheme.slate,         "#94A3B8", "#6E829F"),
 
             ("accentTrack",   AppTheme.accentTrack,   "#2A3330", "#E4EAE8"),
-            // 3D coin garden, the same in both themes.
-            ("coinGold",      AppTheme.coinGold,      "#F2B43A", "#F2B43A"),
-            ("coinGroove",    AppTheme.coinGroove,    "#C98A1E", "#C98A1E"),
-            ("gardenBase",    AppTheme.gardenBase,    "#15885A", "#15885A"),
             ("onVividFill",   AppTheme.onVividFill,   "#0D1514", "#FFFFFF"),
         ]
 

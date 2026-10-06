@@ -446,15 +446,19 @@ struct HomeView: View {
         return items.sorted { $0.rank < $1.rank }
     }
 
+    private static let topAnchor = "home.top"
+
     var body: some View {
         ZStack {
             AppTheme.bg.ignoresSafeArea()
 
+            ScrollViewReader { proxy in
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 0) {
 
                     // Header always visible
                     HomeHeader(vm: vm, showSearch: $showSearch, showNotifications: $showNotifications)
+                        .id(Self.topAnchor)
                         .padding(.horizontal, 22)
                         .padding(.top, 18)
                         .opacity(headerAppeared ? 1 : 0)
@@ -624,7 +628,14 @@ struct HomeView: View {
                 // page could be dragged sideways. This clamps it to the container.
                 .containerRelativeFrame(.horizontal)
             }
-            
+            // Tapping Home while already on Home brings the page back to the top.
+            .onChange(of: vm.homeScrollToTop) { _, _ in
+                withAnimation(.spring(response: 0.45, dampingFraction: 0.9)) {
+                    proxy.scrollTo(Self.topAnchor, anchor: .top)
+                }
+            }
+            }
+
             // Receipt scan moved into AddTransactionSheet as an entry button at
             // the top of the form — discoverable in the same place users go to
             // record any expense, instead of a separate floating button.
