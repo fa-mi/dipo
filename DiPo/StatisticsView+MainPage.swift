@@ -253,12 +253,15 @@ extension StatisticsView {
 
     /// One line of the breakdown. Totals carry "=", the rest their sign.
     func reconLine(_ label: String, _ value: Double, total: Bool = false) -> some View {
-        HStack {
+        let sign: String
+        if total { sign = value < 0 ? "= −" : "= " } else { sign = value < 0 ? "− " : "+ " }
+        let figure: String = sign + money(abs(value))
+        return HStack {
             Text(label)
                 .font(.system(.caption2, weight: total ? .semibold : .regular))
                 .foregroundStyle(total ? AppTheme.textPrimary : AppTheme.textSecondary)
             Spacer(minLength: 8)
-            Text((total ? "= " : (value < 0 ? "− " : "+ ")) + (total && value < 0 ? "−" : "") + money(abs(value)))
+            Text(figure)
                 .font(.system(.caption, weight: total ? .bold : .medium))
                 .foregroundStyle(total ? AppTheme.textPrimary : AppTheme.textSecondary)
                 .monospacedDigit()
@@ -268,11 +271,13 @@ extension StatisticsView {
 
     var metricStrip: some View {
         let top = topCategories.first
+        // Rounded, as every other percentage is; held below 100 until the
+        // income is actually all gone.
+        let usedPct: Int = min(BudgetGroup.pct(spentRatio), spentRatio < 1 ? 99 : 100)
+        let usedText: String = filteredIncome > 0 ? "\(usedPct)%" : "—"
         return HStack(spacing: 0) {
             metricCell("chart.pie.fill", AppTheme.accent,
-                       // Rounded, as every other percentage is; held below 100 until
-                       // the income is actually all gone.
-                       filteredIncome > 0 ? "\(min(BudgetGroup.pct(spentRatio), spentRatio < 1 ? 99 : 100))%" : "—",
+                       usedText,
                        loc("stats.metric_budget"))
             metricDivider
             metricCell("sun.max.fill", AppTheme.amber, money(todaySpend), loc("common.today"))

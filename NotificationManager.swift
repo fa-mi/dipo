@@ -1494,15 +1494,16 @@ enum NotificationScheduler {
         // else income transactions logged within the window.
         var income = active.reduce(0.0) { $0 + cm.convert($1.amount, from: $1.currency, to: preferred) }
         if income <= 0 {
-            income = scopedTx.filter { $0.date >= periodStart && $0.amount > 0 && $0.txSubtype == .normal }
+            income = scopedTx.filter { $0.date >= periodStart && $0.amount > 0 && $0.txSubtype == TxSubtype.normal }
                 .reduce(0.0) { $0 + cm.convert($1.amount, from: ($1.currency.isEmpty ? preferred : $1.currency), to: preferred) }
         }
         guard income > 0 else { return }
 
         // Refunds included: they give their amount back to the group, as on
         // the Smart Budget screen.
-        let windowTx = scopedTx.filter {
-            $0.date >= periodStart && $0.txSubtype != .transfer && ($0.amount < 0 || $0.txSubtype == .refund)
+        let windowTx = scopedTx.filter { (tx: TxRecord) -> Bool in
+            guard tx.date >= periodStart, tx.txSubtype != TxSubtype.transfer else { return false }
+            return tx.amount < 0 || tx.txSubtype == TxSubtype.refund
         }
         let cycleKey = ISO8601DateFormatter.dayString(from: periodStart)
 

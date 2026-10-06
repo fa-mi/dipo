@@ -100,7 +100,7 @@ struct SmartRecommendationView: View {
         let cal = Calendar.current
         var byMonth: [DateComponents: Double] = [:]
         // Real income only — a refund gives back an expense, it isn't pay.
-        for tx in allTx where tx.amount > 0 && tx.txSubtype == .normal {
+        for tx in allTx where tx.amount > 0 && tx.txSubtype == TxSubtype.normal {
             let key = cal.dateComponents([.year, .month], from: tx.date)
             byMonth[key, default: 0] += cm.convert(
                 tx.amount, from: tx.currency.isEmpty ? currency : tx.currency, to: currency)
@@ -260,9 +260,9 @@ struct SmartRecommendationView: View {
             : min(max(now.timeIntervalSince(start) / max(judged.end.timeIntervalSince(start), 1), 0), 1)
 
         // The groups as Smart Budget shows them: refunds give their amount back.
-        let budgetWindow = scopedTx.filter {
-            $0.date >= start && $0.date < end && $0.txSubtype != .transfer
-                && ($0.amount < 0 || $0.txSubtype == .refund)
+        let budgetWindow = scopedTx.filter { (tx: TxRecord) -> Bool in
+            guard tx.date >= start, tx.date < end, tx.txSubtype != TxSubtype.transfer else { return false }
+            return tx.amount < 0 || tx.txSubtype == TxSubtype.refund
         }
         return RecoCycleSnapshot(
             daily:      mgr.spent(in: .daily,      transactions: budgetWindow, targetCurrency: currency, periodStart: start),

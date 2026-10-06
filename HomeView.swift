@@ -259,7 +259,7 @@ struct HomeView: View {
                 }
             }
             return card.transactions
-                .filter { $0.amount > 0 && $0.txSubtype == .normal && $0.date >= monthStart }
+                .filter { $0.amount > 0 && $0.txSubtype == TxSubtype.normal && $0.date >= monthStart }
                 .reduce(0.0) { $0 + conv($1) }
         }
         
@@ -269,9 +269,13 @@ struct HomeView: View {
         let scheduled = MainCard.salaries(salarySchedules)
             .reduce(0.0) { $0 + CurrencyManager.shared.toPreferred($1.amount, from: $1.currency) }
         if scheduled > 0 { return scheduled }
-        return vm.cards.flatMap { $0.transactions }
-            .filter { $0.amount > 0 && $0.txSubtype == .normal && $0.date >= monthStart }
-            .reduce(0.0) { $0 + CurrencyManager.shared.toPreferred($1.amount, from: $1.currency) }
+        let everyTx: [TxRecord] = vm.cards.flatMap { $0.transactions }
+        let received: [TxRecord] = everyTx.filter { (tx: TxRecord) -> Bool in
+            tx.amount > 0 && tx.txSubtype == TxSubtype.normal && tx.date >= monthStart
+        }
+        return received.reduce(0.0) { (sum: Double, tx: TxRecord) -> Double in
+            sum + CurrencyManager.shared.toPreferred(tx.amount, from: tx.currency)
+        }
     }
 
     /// Transactions to feed into insight engines. When a budget card is set,

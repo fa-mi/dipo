@@ -124,7 +124,7 @@ struct SmartBudgetSettingsSheet: View {
         //    when a schedule exists, else calendar month).
         // Real income only — a refund gives back an expense, it isn't pay.
         return budgetTx
-            .filter { $0.amount > 0 && $0.txSubtype == .normal && $0.date >= periodStart }
+            .filter { $0.amount > 0 && $0.txSubtype == TxSubtype.normal && $0.date >= periodStart }
             .reduce(0.0) { sum, tx in
                 sum + mgr.convert(tx.amount, from: tx.currency, to: cardCurrency)
             }
@@ -1021,9 +1021,9 @@ struct BudgetGroupCard: View {
                                 }
                                 Text(tx.name).font(.system(.caption, weight: .medium)).foregroundStyle(AppTheme.textPrimary).lineLimit(1)
                                 Spacer()
-                                Text((tx.txSubtype == .refund ? "+" : "") + CurrencyManager.shared.formatted(abs(tx.amount), currency: tx.currency))
+                                Text(BudgetGroupMath.amountLabel(tx))
                                     .font(.system(.caption, weight: .semibold))
-                                    .foregroundStyle(tx.txSubtype == .refund ? AppTheme.accent : AppTheme.textSecondary)
+                                    .foregroundStyle(BudgetGroupMath.isRefund(tx) ? AppTheme.accent : AppTheme.textSecondary)
                             }
                         }
                         if groupTx.count > 2 { Text(String(format: loc("common.plus_more"), groupTx.count - 2)).font(.system(.caption2)).foregroundStyle(group.color).frame(maxWidth: .infinity, alignment: .leading) }
@@ -1417,7 +1417,7 @@ struct BudgetGroupDetailView: View {
                                                     }
                                                     Spacer()
                                                     VStack(alignment: .trailing, spacing: 2) {
-                                                        Text((tx.txSubtype == .refund ? "+" : "") + CurrencyManager.shared.formatted(abs(tx.amount), currency: tx.currency)).font(.system(.subheadline, weight: .semibold)).foregroundStyle(tx.txSubtype == .refund ? AppTheme.accent : AppTheme.textPrimary)
+                                                        Text(BudgetGroupMath.amountLabel(tx)).font(.system(.subheadline, weight: .semibold)).foregroundStyle(BudgetGroupMath.isRefund(tx) ? AppTheme.accent : AppTheme.textPrimary)
                                                         if tx.currency.uppercased() != currencyCode.uppercased() {
                                                             Text("≈ \(CurrencyManager.shared.formatted(converted, currency: currencyCode))").font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                                                         }
@@ -1467,9 +1467,9 @@ enum BudgetGroupMath {
     /// The group's rows from `start` on — outflows and refunds — newest first.
     static func rows(_ group: BudgetGroup, in txs: [TxRecord], from start: Date) -> [TxRecord] {
         let cats = Set(SmartBudgetManager.shared.categories(for: group))
-        return txs.filter {
-            $0.date >= start && $0.txSubtype != .transfer && cats.contains($0.category)
-                && ($0.amount < 0 || $0.txSubtype == .refund)
+        return txs.filter { (tx: TxRecord) -> Bool in
+            guard tx.date >= start, tx.txSubtype != TxSubtype.transfer, cats.contains(tx.category) else { return false }
+            return tx.amount < 0 || tx.txSubtype == TxSubtype.refund
         }
         .sorted { $0.date > $1.date }
     }
@@ -1477,11 +1477,19 @@ enum BudgetGroupMath {
     /// Outflows less refunds, in `currency`, never below zero.
     static func spent(_ rows: [TxRecord], currency: String) -> Double {
         let cm = CurrencyManager.shared
-        let net = rows.reduce(0.0) { sum, tx in
+        let net = rows.reduce(0.0) { (sum: Double, tx: TxRecord) -> Double in
             let amt = cm.convert(abs(tx.amount), from: tx.currency.isEmpty ? currency : tx.currency, to: currency)
-            if tx.txSubtype == .refund { return sum - amt }
+            if tx.txSubtype == TxSubtype.refund { return sum - amt }
             return tx.amount < 0 ? sum + amt : sum
         }
         return max(net, 0)
     }
+
+    /// A row's amount as listed: a refund shows what came back, with "+".
+    static func amountLabel(_ tx: TxRecord) -> String {
+        let text = CurrencyManager.shared.formatted(abs(tx.amount), currency: tx.currency)
+        return tx.txSubtype == TxSubtype.refund ? "+" + text : text
+    }
+
+    static func isRefund(_ tx: TxRecord) -> Bool { tx.txSubtype == TxSubtype.refund }
 }

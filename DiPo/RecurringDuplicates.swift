@@ -79,8 +79,8 @@ enum RecurringDuplicates {
         func value(_ tx: TxRecord) -> Double {
             cm.convert(abs(tx.amount), from: tx.currency.isEmpty ? currency : tx.currency, to: currency)
         }
-        let expenses = transactions.filter {
-            $0.date >= since && $0.amount < 0 && $0.txSubtype != .transfer
+        let expenses = transactions.filter { (tx: TxRecord) -> Bool in
+            tx.date >= since && tx.amount < 0 && tx.txSubtype != TxSubtype.transfer
         }
         let planNames = Set(recurrings.map { RecurringHistory.normalized($0.label) })
         var periodCache: [Date: Date] = [:]
@@ -97,27 +97,28 @@ enum RecurringDuplicates {
         for plan in recurrings where plan.isActive {
             let key = RecurringHistory.normalized(plan.label)
             let recorded = expenses
-                .filter { $0.notes == "tx.note.recurring_auto" && RecurringHistory.normalized($0.name) == key }
+                .filter { (tx: TxRecord) -> Bool in
+                    tx.notes == "tx.note.recurring_auto" && RecurringHistory.normalized(tx.name) == key
+                }
                 .sorted { $0.date < $1.date }
             for charge in recorded where !used.contains(charge.id) {
                 let amt = value(charge)
                 guard amt > 0 else { continue }
-                let tolerance = max(amt * 0.01, currency == "IDR" ? 1_000 : 0.01)
+                let tolerance: Double = max(amt * 0.01, currency == "IDR" ? 1_000 : 0.01)
                 let home = period(charge.date)
-                let twin = expenses
-                    .filter { tx in
-                        tx.id != charge.id && !used.contains(tx.id)
-                            && abs(value(tx) - amt) <= tolerance
-                            && (SmartBudgetManager.fixedCategories.contains(tx.category)
-                                || tx.category == charge.category)
-                            // Another bill's own recorded charge is that bill's,
-                            // not a twin of this one — the Netlify case.
-                            && !(tx.notes == "tx.note.recurring_auto"
-                                 && RecurringHistory.normalized(tx.name) != key
-                                 && planNames.contains(RecurringHistory.normalized(tx.name)))
-                            && period(tx.date) == home
-                    }
-                    .min { abs($0.date.timeIntervalSince(charge.date)) < abs($1.date.timeIntervalSince(charge.date)) }
+                func isTwin(_ tx: TxRecord) -> Bool {
+                    guard tx.id != charge.id, !used.contains(tx.id) else { return false }
+                    guard abs(value(tx) - amt) <= tolerance else { return false }
+                    guard SmartBudgetManager.fixedCategories.contains(tx.category)
+                            || tx.category == charge.category else { return false }
+                    // Another bill's own recorded charge is that bill's, not a
+                    // twin of this one — the Netlify case.
+                    let name = RecurringHistory.normalized(tx.name)
+                    if tx.notes == "tx.note.recurring_auto", name != key, planNames.contains(name) { return false }
+                    return period(tx.date) == home
+                }
+                func gap(_ tx: TxRecord) -> TimeInterval { abs(tx.date.timeIntervalSince(charge.date)) }
+                let twin = expenses.filter(isTwin).min { gap($0) < gap($1) }
                 guard let twin else { continue }
                 let pair = RecurringDuplicatePair(planLabel: plan.label, recorded: charge, twin: twin,
                                                   amount: amt, periodStart: home)

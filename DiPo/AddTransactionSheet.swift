@@ -72,9 +72,13 @@ struct AddTransactionSheet: View {
         // No schedule → fall back to income actually received this month.
         let cal = Calendar.current
         let monthStart = cal.safeDate(from: cal.dateComponents([.year, .month], from: Date()))
-        return (MainCard.resolve(in: vm.cards)?.transactions ?? allCardTransactions)
-            .filter { $0.amount > 0 && $0.txSubtype == .normal && $0.date >= monthStart }
-            .reduce(0.0) { $0 + CurrencyManager.shared.convert($1.amount, from: $1.currency, to: cur) }
+        let source: [TxRecord] = MainCard.resolve(in: vm.cards)?.transactions ?? allCardTransactions
+        let received: [TxRecord] = source.filter { (tx: TxRecord) -> Bool in
+            tx.amount > 0 && tx.txSubtype == TxSubtype.normal && tx.date >= monthStart
+        }
+        return received.reduce(0.0) { (sum: Double, tx: TxRecord) -> Double in
+            sum + CurrencyManager.shared.convert(tx.amount, from: tx.currency, to: cur)
+        }
     }
 
     private var allCardTransactions: [TxRecord] {
