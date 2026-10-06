@@ -90,8 +90,9 @@ struct RecoCycleSnapshot {
     /// — a user who transfers to a goal every payday was being rated "Weak"
     /// purely because their living costs used the rest of the income.
     let savingsDeposits: Double
-    /// Income actually received in the cycle, floored at the scheduled
-    /// salary so a mid-cycle view before payday does not divide by ~0.
+    /// The regular income the period is judged against: the salary schedule.
+    /// One-off money (a bonus, a leave payout, a withdrawal from savings) is
+    /// left out on purpose — see SmartRecommendationView.currentCycleSnapshot.
     let income: Double
     /// How far through the pay period this snapshot is, 0…1. Below 1 the
     /// period is still running: what hasn't been spent YET is not left over.
@@ -331,19 +332,12 @@ enum SmartRecommendationEngine {
         // never assume the user saves money that's really going to unlogged
         // essentials.
         //
-        // Measured against the income that actually came in over the same
-        // window when that was more than the salary schedule — a bonus or side
-        // income spent in the same months is not a deficit. Money taken back
-        // out of savings or an investment is not income, so it is left out
-        // (the rule "Check these entries" uses). Without this, months funded by
-        // real extra income read as "you spent Rp 6,5 jt more than you earned".
-        let receivedAvg = transactions
-            .filter { tx in
-                tx.amount > 0 && tx.txSubtype != .transfer && !DataIntegrityCheck.isLikelyWithdrawal(tx)
-                    && (cycleWindow.map { tx.date >= $0.start && tx.date < $0.end } ?? true)
-            }
-            .reduce(0.0) { $0 + toPref($1.amount, $1.currency) } / monthsDivisor
-        let histIncome = max(income, receivedAvg)
+        // Judged against the REGULAR income — the salary schedule — not
+        // whatever arrived. A bonus, a leave payout or money taken back out of
+        // savings is not something next month can count on; spending that
+        // only balanced because of it is exactly the habit this card exists
+        // to catch. (One-off money has its own card: what the extra did.)
+        let histIncome = income
         let currentSaving = histIncome - effectiveExpense
         let savingsRate   = histIncome > 0 ? currentSaving / histIncome : 0
 

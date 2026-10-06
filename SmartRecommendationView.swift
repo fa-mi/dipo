@@ -229,23 +229,11 @@ struct SmartRecommendationView: View {
             .reduce(0.0) { $0 + CurrencyManager.shared.convert(
                 abs($1.amount), from: $1.currency.isEmpty ? currency : $1.currency, to: currency) }
 
-        // Income ACTUALLY received in this cycle — not the salary schedule.
-        //
-        // The schedule was the wrong denominator for a backward-looking
-        // analysis. A cycle where a bonus arrived and was partly spent got
-        // measured against salary alone: living costs came out at 256% of
-        // "income" and the cycle read as Rp 16,8jt overspent when the real gap
-        // was Rp 9,08jt. The spending side was exact; only the denominator
-        // pretended half the money never existed.
-        //
-        // This is deliberately the OPPOSITE call from the allocation plan in
-        // Debt Tracker. That one looks FORWARD and must not raise next month's
-        // budget because a bonus landed once. This looks BACKWARD at what
-        // actually happened, where ignoring money that genuinely arrived is
-        // simply wrong.
-        //
-        // `max` with the schedule keeps a mid-cycle view sane: before payday
-        // lands, actual income is near zero and every ratio would explode.
+        // Judged against the salary schedule — the regular income — not
+        // everything that arrived. A bonus, a leave payout or money taken back
+        // out of savings can't be counted on next month, and spending that only
+        // balanced because of one is what this score should notice. What the
+        // extra money did has its own card (WindfallCard).
         // How far through the period `end` (now, for the running one) is, so
         // the engine doesn't read the days still to come as money saved. A
         // judged previous period is complete.
@@ -253,17 +241,12 @@ struct SmartRecommendationView: View {
         let elapsedFraction = end < now ? 1
             : min(max(now.timeIntervalSince(start) / max(periodEnd.timeIntervalSince(start), 1), 0), 1)
 
-        let receivedIncome = scopedTx
-            .filter { $0.date >= start && $0.date < end && $0.amount > 0 && $0.txSubtype != .transfer }
-            .reduce(0.0) { $0 + CurrencyManager.shared.convert(
-                $1.amount, from: $1.currency.isEmpty ? currency : $1.currency, to: currency) }
-
         return RecoCycleSnapshot(
             daily:      mgr.spent(in: .daily,      transactions: windowTx, targetCurrency: currency, periodStart: start),
             lifestyle:  mgr.spent(in: .lifestyle,  transactions: windowTx, targetCurrency: currency, periodStart: start),
             investDebt: mgr.spent(in: .investDebt, transactions: windowTx, targetCurrency: currency, periodStart: start),
             savingsDeposits: savingsDeposits,
-            income:     max(receivedIncome, monthlyIncome),
+            income:     monthlyIncome,
             elapsedFraction: elapsedFraction,
             topCategory:       top?.key.displayLabel,
             topCategoryAmount: top?.value.total ?? 0,
