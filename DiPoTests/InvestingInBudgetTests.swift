@@ -52,6 +52,22 @@ final class InvestingInBudgetTests: XCTestCase {
         XCTAssertNil(SmartBudgetManager.investingShortfall(invested: 1, consumed: 0, income: 0))
     }
 
+    /// Moving money to another account or paying a card bill isn't spending:
+    /// a transfer must not change the advice. It did — "still unspent" read
+    /// Rp 1,4 jt on a report whose "Left" said Rp 4 jt.
+    func testATransferDoesNotChangeTheInsight() {
+        let start = Calendar.current.date(byAdding: .day, value: -10, to: .now)!
+        let spending = [tx(-1_200_000, .food), tx(-1_650_000, .commitment), tx(-420_000, .bills)]
+        let withTransfer = spending + [tx(-2_650_000, .other, subtype: .transfer)]
+        let sb = SmartBudgetManager.shared
+        let plain = sb.topInsight(allTransactions: spending, income: 10_000_000,
+                                  targetCurrency: "IDR", periodStart: start)
+        let moved = sb.topInsight(allTransactions: withTransfer, income: 10_000_000,
+                                  targetCurrency: "IDR", periodStart: start)
+        XCTAssertEqual(plain?.title, moved?.title)
+        XCTAssertEqual(plain?.body, moved?.body)
+    }
+
     func testNewStringsInBothLanguages() {
         for key in ["tx.note.invest_buy", "reco.item.invest_keep_title", "reco.item.invest_keep_sub",
                     "reco.item.invest_more_title", "reco.item.invest_more_sub",

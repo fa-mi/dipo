@@ -402,17 +402,22 @@ final class SmartBudgetManager {
         // so it cheerfully reported "saving 49%" right next to "over budget".
         let monthStart = periodStart
             ?? cal.safeDate(from: cal.dateComponents([.year, .month], from: Date()))
-        let thisTx = allTransactions.filter { $0.date >= monthStart && $0.amount < 0 }
+        // Transfers are money moving, not spent — the same rule Statistics and
+        // the share report use. Counting them made "still unspent" read
+        // Rp 1,4 jt on a report whose "Left" said Rp 4 jt.
+        let thisTx = allTransactions.filter { $0.date >= monthStart && $0.amount < 0 && $0.txSubtype != .transfer }
         let debtPaid = allTransactions
             .filter { $0.amount < 0 && $0.date >= monthStart && $0.category == .debtPayment }
             .reduce(0.0) { sum, tx in
                 let txCur = tx.currency.isEmpty ? target : tx.currency
                 return sum + CurrencyManager.shared.convert(abs(tx.amount), from: txCur, to: target)
             }
-        let totalSpent = thisTx.reduce(0.0) { sum, tx in
+        // Debt payments may be recorded as transfers, so they're left out by
+        // category rather than subtracted from a total that may not hold them.
+        let totalSpent = thisTx.filter { $0.category != .debtPayment }.reduce(0.0) { sum, tx in
             let txCur = tx.currency.isEmpty ? target : tx.currency
             return sum + CurrencyManager.shared.convert(abs(tx.amount), from: txCur, to: target)
-        } - debtPaid
+        }
         let savings = income - totalSpent - debtPaid
         // Money ACTUALLY set aside this cycle — investments and debt payments.
         //
@@ -539,8 +544,13 @@ final class SmartBudgetManager {
         let elapsed = now.timeIntervalSince(cycleStart)
         let prevCutoff = prevCycleStart.addingTimeInterval(elapsed)
 
-        let thisTx = allTransactions.filter { $0.date >= cycleStart && $0.amount < 0 }
-        let lastTx = allTransactions.filter { $0.date >= prevCycleStart && $0.date < prevCutoff && $0.amount < 0 }
+        // Transfers are money moving, not spent (see the secondary pass).
+        let thisTx = allTransactions.filter {
+            $0.date >= cycleStart && $0.amount < 0 && $0.txSubtype != .transfer
+        }
+        let lastTx = allTransactions.filter {
+            $0.date >= prevCycleStart && $0.date < prevCutoff && $0.amount < 0 && $0.txSubtype != .transfer
+        }
 
         // Check each group for overspend using PER-CARD ratios.
         // spent() is called with targetCurrency so IDR spend and USD income
@@ -795,10 +805,12 @@ final class SmartBudgetManager {
                 let txCur = tx.currency.isEmpty ? target : tx.currency
                 return sum + CurrencyManager.shared.convert(abs(tx.amount), from: txCur, to: target)
             }
-        let totalSpent = thisTx.reduce(0.0) { sum, tx in
+        // Debt payments may be recorded as transfers, so they're left out by
+        // category rather than subtracted from a total that may not hold them.
+        let totalSpent = thisTx.filter { $0.category != .debtPayment }.reduce(0.0) { sum, tx in
             let txCur = tx.currency.isEmpty ? target : tx.currency
             return sum + CurrencyManager.shared.convert(abs(tx.amount), from: txCur, to: target)
-        } - debtPaid
+        }
         let savings = income - totalSpent - debtPaid  // unspent, NOT money saved
         // Money ACTUALLY set aside this cycle — investments and debt payments.
         //
