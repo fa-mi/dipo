@@ -204,18 +204,23 @@ enum DataIntegrityCheck {
     // as income it inflates the denominator of every ratio and can hide a real
     // deficit — the cycle looks balanced because the shortfall was quietly
     // covered by the user's own savings.
+    /// Money coming back from somewhere the user already owned it — out of
+    /// savings or an investment — rather than earned. Shared with the money
+    /// score, which must not count it as income either.
+    static func isLikelyWithdrawal(_ t: TxRecord) -> Bool {
+        guard t.amount > 0 else { return false }
+        // Structural signal, and the stronger of the two: `investment` and
+        // `debtPayment` are outflow categories. A POSITIVE amount filed
+        // under one is money coming back, not money earned.
+        if t.category == .investment || t.category == .debtPayment { return true }
+        // Otherwise fall back to what the user named it.
+        let n = t.name.lowercased()
+        return withdrawalWords.contains { n.contains($0) }
+    }
+
     private static func withdrawalsAsIncome(_ tx: [TxRecord],
                                             conv: (TxRecord) -> Double) -> [IntegrityFinding] {
-        let suspects = tx.filter { t in
-            guard t.amount > 0 else { return false }
-            // Structural signal, and the stronger of the two: `investment` and
-            // `debtPayment` are outflow categories. A POSITIVE amount filed
-            // under one is money coming back, not money earned.
-            if t.category == .investment || t.category == .debtPayment { return true }
-            // Otherwise fall back to what the user named it.
-            let n = t.name.lowercased()
-            return withdrawalWords.contains { n.contains($0) }
-        }
+        let suspects = tx.filter(isLikelyWithdrawal)
         guard !suspects.isEmpty else { return [] }
         let total = suspects.reduce(0.0) { $0 + conv($1) }
         return [IntegrityFinding(kind: .withdrawalAsIncome,
