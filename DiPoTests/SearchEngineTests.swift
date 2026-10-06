@@ -32,10 +32,30 @@ final class SearchEngineTests: XCTestCase {
         XCTAssertEqual(Set(c.categories), [.salary, .transport, .food], "pills list the whole period")
     }
 
+    /// Money out and in by Statistics' rules: a salary, a loan paid back and
+    /// both legs of a move between accounts are not netted into spending.
+    /// The old single sum showed "+Rp 7.128.500" for a period that spent
+    /// Rp 7.971.500.
+    func testSummarySplitsOutAndInAndLeavesTransfersOut() {
+        func t(_ name: String, _ amount: Double, _ cat: TxCategory, _ sub: TxSubtype = .normal) -> TxRecord {
+            TxRecord(name: name, date: Date().addingTimeInterval(-86_400), amount: amount, type: "tx.type.purchase",
+                     icon: "circle", iconBgHex: cat.iconBg, category: cat, currency: "IDR", subtype: sub)
+        }
+        let all = [t("Gaji", 10_000_000, .salary), t("Repaid by Mom", 5_000_000, .incomeOther, .transfer),
+                   t("Belanja", -7_971_500, .food), t("Ke OVO", -50_000, .other, .transfer),
+                   t("Dari BRI", 50_000, .other, .transfer), t("Refund", 20_000, .food, .refund)]
+        let r = SearchEngine.run(all, query: "", range: nil, category: nil, sort: .newest, limit: 50, convert: raw)
+        XCTAssertEqual(r.spent, 7_951_500, accuracy: 0.01)
+        XCTAssertEqual(r.received, 10_000_000, accuracy: 0.01)
+        XCTAssertEqual(r.count, 6, "every row is still listed")
+    }
+
     func testShowMoreStringInBothLanguages() {
         for lang in LanguageManager.Language.allCases {
             LanguageManager.shared.withLanguage(lang) {
-                XCTAssertNotEqual(loc("search.show_more"), "search.show_more")
+                for key in ["search.show_more", "search.spent", "search.received", "search.sum_note"] {
+                    XCTAssertNotEqual(loc(key), key)
+                }
             }
         }
     }

@@ -69,8 +69,16 @@ enum SearchPeriod: String, CaseIterable {
 
 struct SearchResults {
     var count = 0
-    var total = 0.0
-    var currency: String?
+    /// Money out and money in among the matches, by Statistics' rules:
+    /// transfers left out, a refund taking back its expense, income counting
+    /// real income only — in the preferred currency. The single signed sum
+    /// this replaced added everything: a salary, a loan paid back, both legs
+    /// of a move between accounts, and spending, so a period that spent
+    /// Rp 7.971.500 showed "+Rp 7.128.500".
+    var spent = 0.0
+    var received = 0.0
+    /// Received less spent.
+    var total: Double { received - spent }
     /// Categories present in the period, for the filter pills.
     var categories: [TxCategory] = []
     /// The rows shown, in order, grouped by day unless sorted by amount.
@@ -99,8 +107,8 @@ enum SearchEngine {
         if let category { matches = matches.filter { $0.category == category } }
 
         out.count = matches.count
-        out.total = matches.reduce(0) { $0 + $1.amount }
-        out.currency = matches.first?.currency
+        out.spent = max(StatisticsView.expenses(matches, convert: convert), 0)
+        out.received = StatisticsView.income(matches, convert: convert)
 
         // Each key read once: comparing model properties inside the sort
         // reads them n·log n times, and that was most of the cost.
@@ -209,7 +217,38 @@ struct SearchView: View {
         return DateFormatterCache.template(day >= weekAgo ? "EEEE" : "dMMMMyyyy").string(from: day)
     }
 
-    private var totalAmount: Double { results.total }
+    private var pref: String { CurrencyManager.shared.preferredCurrency }
+
+    /// A day's money out and in, by the same rules as the summary.
+    private func dayFigures(_ txs: [TxRecord]) -> (spent: Double, received: Double) {
+        (max(StatisticsView.expenses(txs, convert: convertedForSort), 0),
+         StatisticsView.income(txs, convert: convertedForSort))
+    }
+
+    @ViewBuilder
+    private func moneyPair(spent: Double, received: Double, font: Font) -> some View {
+        HStack(spacing: 8) {
+            if spent >= 1 {
+                Text("−" + CurrencyManager.shared.formatted(spent, currency: pref))
+                    .foregroundStyle(AppTheme.red)
+            }
+            if received >= 1 {
+                Text("+" + CurrencyManager.shared.formatted(received, currency: pref))
+                    .foregroundStyle(AppTheme.accent)
+            }
+        }
+        .font(font)
+        .lineLimit(1).minimumScaleFactor(0.7)
+    }
+
+    private func summaryFigure(_ label: String, _ value: Double, _ tint: Color) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(label).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
+            Text(CurrencyManager.shared.formatted(value, currency: pref))
+                .font(.system(.subheadline, weight: .bold)).foregroundStyle(tint)
+                .lineLimit(1).minimumScaleFactor(0.7)
+        }
+    }
 
     /// Ranking across mixed currencies has to compare like with like, or a
     /// $10 purchase sorts below a Rp 20.000 one on the raw number alone.
@@ -362,13 +401,29 @@ struct SearchView: View {
                                     }
                                     .padding(.leading, 10)
                                     Spacer()
-                                    Text(totalAmount >= 0
-                                         ? "+\(CurrencyManager.shared.formatted(totalAmount, currency: results.currency ?? CurrencyManager.shared.preferredCurrency))"
-                                         : CurrencyManager.shared.formatted(totalAmount, currency: results.currency ?? CurrencyManager.shared.preferredCurrency))
-                                        .font(.system(.footnote, weight: .semibold))
-                                        .foregroundStyle(totalAmount >= 0 ? AppTheme.accent : AppTheme.red)
                                 }
-                                .padding(.horizontal, 22).padding(.vertical, 12)
+                                .padding(.horizontal, 22).padding(.top, 12)
+
+                                // Money out and in, each on its own — never one
+                                // signed sum of spending, salary and transfers.
+                                if results.spent >= 1 || results.received >= 1 {
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        HStack(spacing: 16) {
+                                            if results.spent >= 1 {
+                                                summaryFigure(loc("search.spent"), results.spent, AppTheme.red)
+                                            }
+                                            if results.received >= 1 {
+                                                summaryFigure(loc("search.received"), results.received, AppTheme.accent)
+                                            }
+                                            Spacer(minLength: 0)
+                                        }
+                                        Text(loc("search.sum_note"))
+                                            .font(.system(.caption2))
+                                            .foregroundStyle(AppTheme.textSecondary)
+                                    }
+                                    .padding(.horizontal, 22).padding(.top, 8)
+                                }
+                                Color.clear.frame(height: 12)
 
                                 // Grouped results
                                 LazyVStack(spacing: 20) {
@@ -376,7 +431,7 @@ struct SearchView: View {
                                         let label = group.day == .distantPast ? "" : dayLabel(group.day)
                                         VStack(alignment: .leading, spacing: 8) {
                                             // Group header
-                                            let groupTotal = group.txs.reduce(0) { $0 + $1.amount }
+                                            let figures = dayFigures(group.txs)
                                             // Empty label = the flat, amount-ordered list. A
                                             // running total across unrelated days would be a
                                             // number about nothing.
@@ -386,11 +441,8 @@ struct SearchView: View {
                                                     .font(.system(.footnote, weight: .semibold))
                                                     .foregroundStyle(AppTheme.textSecondary)
                                                 Spacer()
-                                                Text(groupTotal >= 0
-                                                     ? "+\(CurrencyManager.shared.formatted(groupTotal, currency: group.txs.first?.currency ?? CurrencyManager.shared.preferredCurrency))"
-                                                     : CurrencyManager.shared.formatted(groupTotal, currency: group.txs.first?.currency ?? CurrencyManager.shared.preferredCurrency))
-                                                    .font(.system(.caption, weight: .medium))
-                                                    .foregroundStyle(groupTotal >= 0 ? AppTheme.accent.opacity(0.8) : AppTheme.red.opacity(0.8))
+                                                moneyPair(spent: figures.spent, received: figures.received,
+                                                          font: .system(.caption, weight: .medium))
                                             }
                                             .padding(.horizontal, 22)
                                             }
