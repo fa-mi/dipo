@@ -116,4 +116,70 @@ enum StatPeriod: String, CaseIterable {
             for: SalaryDateEngine.actualPayDate(dayOfMonth: payDay, month: prevMonth, year: prevYear))
         return (lastPay, now)
     }
+
+    // MARK: The pay cycle, one definition
+    //
+    // Home, Statistics, Smart Budget, the score and the full explanation each
+    // worked out the cycle themselves: some snapped the start onto the day the
+    // salary actually landed and some did not, and most ended it "start plus
+    // one month" — the 25th — when the next salary lands on Friday the 23rd.
+    // The same screen then counted different days left from the next one, and
+    // a salary paid a day early opened the new cycle on one screen only.
+
+    /// The scheduled payday (business-day adjusted, start of day) `months`
+    /// after the one in `month`'s calendar month.
+    private static func scheduledPayday(_ payDay: Int, monthsAfter months: Int, from month: Date) -> Date {
+        let cal = Calendar.current
+        let c = cal.dateComponents([.year, .month], from: month)
+        let first = cal.safeDate(from: DateComponents(year: c.year, month: c.month, day: 1))
+        let target = cal.safeDate(byAdding: .month, value: months, to: first)
+        let t = cal.dateComponents([.year, .month], from: target)
+        return cal.startOfDay(for: SalaryDateEngine.actualPayDate(
+            dayOfMonth: payDay, month: t.month ?? 1, year: t.year ?? 2000))
+    }
+
+    /// Where the pay cycle `offset` cycles from the running one begins: 0 is
+    /// the running cycle's start, 1 the next payday, -1 the previous start.
+    /// Each boundary is snapped onto the salary that actually opened it, and a
+    /// salary that has already landed early opens its cycle on that day.
+    static func cycleBoundary(offset: Int, payDay: Int, salaryDates: [Date],
+                              now: Date = Date()) -> Date {
+        let today = Calendar.current.startOfDay(for: now)
+        // The scheduled payday that opened the running cycle, unsnapped. Its
+        // month — not the snapped date's — is what later paydays count from,
+        // or a salary landing on the 31st for a payday on the 1st would put
+        // the next one a month late.
+        var base = payCycleRange(payDay: payDay, now: now).start
+        let next = scheduledPayday(payDay, monthsAfter: 1, from: base)
+        if anchoredStart(next, salaryDates: salaryDates) <= today { base = next }
+        return anchoredStart(scheduledPayday(payDay, monthsAfter: offset, from: base),
+                             salaryDates: salaryDates)
+    }
+
+    /// The running pay cycle as [start, end): from the day the salary landed
+    /// to the next payday.
+    static func cycle(payDay: Int, salaryDates: [Date], now: Date = Date()) -> (start: Date, end: Date) {
+        let start = cycleBoundary(offset: 0, payDay: payDay, salaryDates: salaryDates, now: now)
+        let end = cycleBoundary(offset: 1, payDay: payDay, salaryDates: salaryDates, now: now)
+        return (start, max(end, start.addingTimeInterval(86_400)))
+    }
+
+    /// Day N of M for a running cycle — today counted, the next payday not.
+    static func cycleDay(_ cycle: (start: Date, end: Date), now: Date = Date()) -> (day: Int, of: Int) {
+        let cal = Calendar.current
+        let total = max(cal.dateComponents([.day], from: cycle.start, to: cycle.end).day ?? 30, 1)
+        let day = (cal.dateComponents([.day], from: cycle.start, to: cal.startOfDay(for: now)).day ?? 0) + 1
+        return (min(max(day, 1), total), total)
+    }
+
+    /// Days still to run in the cycle, today included.
+    static func daysLeft(in cycle: (start: Date, end: Date), now: Date = Date()) -> Int {
+        let cal = Calendar.current
+        return max(cal.dateComponents([.day], from: cal.startOfDay(for: now), to: cycle.end).day ?? 0, 0)
+    }
+
+    /// Dates the salary landed on `card` — what cycle boundaries snap onto.
+    static func salaryDates(on card: BankCard?) -> [Date] {
+        (card?.transactions ?? []).filter { $0.category == .salary && $0.amount > 0 }.map(\.date)
+    }
 }

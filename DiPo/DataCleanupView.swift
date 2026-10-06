@@ -41,8 +41,7 @@ struct DataCleanupView: View {
     /// the set of transactions it operates on.
     private var window: (start: Date, end: Date) {
         if let day = payDay {
-            let r = StatPeriod.payCycleRange(payDay: day)
-            return (StatPeriod.anchoredStart(r.start, salaryDates: salaryDates), r.end)
+            return (StatPeriod.cycle(payDay: day, salaryDates: salaryDates).start, Date())
         }
         return StatPeriod.thisMonth.dateRange()
     }

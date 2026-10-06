@@ -825,7 +825,7 @@ struct AIChatView: View {
 
         let sb = SmartBudgetManager.shared
         if sb.hasActiveBudget {
-            lines.append("Budget plan: Daily \(Int(sb.dailyRatio*100))% / Lifestyle \(Int(sb.lifestyleRatio*100))% / Invest-Debt \(Int(sb.investDebtRatio*100))% of income.")
+            lines.append("Budget plan: Daily \(BudgetGroup.pct(sb.dailyRatio))% / Lifestyle \(BudgetGroup.pct(sb.lifestyleRatio))% / Invest-Debt \(BudgetGroup.pct(sb.investDebtRatio))% of income.")
         }
 
         // Recurring plan + duplicate suspicion. Without this the assistant
@@ -839,15 +839,13 @@ struct AIChatView: View {
                 "\($0.label) \(cm.formatted(toPref($0.amount, $0.currency), currency: pref)) (day \($0.dayOfMonth))"
             }.joined(separator: "; ")
             lines.append("Recurring plan (fixed commitments): \(r).")
-            let recentExpense = allTx.filter {
-                $0.amount < 0 && $0.txSubtype == .normal
-                    && $0.date >= Date().addingTimeInterval(-31 * 86_400)
-            }
-            let dupes = sb.detectRecurringDuplicates(
-                expenseTx: recentExpense, recurrings: activeRecurrings,
-                expectedPerPlan: 1, currency: pref)
-            for s in dupes {
-                lines.append("Possible duplicate: '\(s.label)' shows \(s.found) similar-amount charges (\(cm.formatted(s.chargeAmount, currency: pref)) each) in the last 31 days but the plan expects \(s.expected) — a manual entry may twin the auto-recorded one. Verify before counting both as variable living costs.")
+            // The same check the Smart Budget screen runs: a bill DiPo recorded
+            // and another entry of the same amount in the same month.
+            let dupes = RecurringDuplicates.find(
+                transactions: allTx, recurrings: activeRecurrings, payDay: nil, salaryDates: [],
+                currency: pref, since: Date().addingTimeInterval(-31 * 86_400))
+            for d in dupes {
+                lines.append("Possible duplicate: '\(d.planLabel)' was recorded by DiPo and a second entry of \(cm.formatted(d.amount, currency: pref)) ('\(d.twin.name)') sits in the same month — one may be a manual twin of the other. Verify before counting both as living costs.")
             }
         }
 

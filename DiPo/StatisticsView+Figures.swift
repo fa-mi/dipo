@@ -40,14 +40,7 @@ extension StatisticsView {
     /// gaps are 28 and 32 days, not two equal months.
     static func cycleBoundary(monthsFromNow offset: Int, payDay: Int?, salaryDates: [Date]) -> Date? {
         guard let day = payDay else { return nil }
-        let cal = Calendar.current
-        let base = StatPeriod.anchoredStart(StatPeriod.payCycleRange(payDay: day).start,
-                                            salaryDates: salaryDates)
-        let shifted = cal.safeDate(byAdding: .month, value: offset, to: base)
-        let m = cal.component(.month, from: shifted), y = cal.component(.year, from: shifted)
-        return StatPeriod.anchoredStart(
-            cal.startOfDay(for: SalaryDateEngine.actualPayDate(dayOfMonth: day, month: m, year: y)),
-            salaryDates: salaryDates)
+        return StatPeriod.cycleBoundary(offset: offset, payDay: day, salaryDates: salaryDates)
     }
 
     func cycleBoundary(monthsFromNow offset: Int) -> Date? {
@@ -57,8 +50,7 @@ extension StatisticsView {
     var effectiveRange: (start: Date, end: Date) {
         if selectedPeriod == .custom { return (customStart, customEnd) }
         if selectedPeriod == .payCycle, let day = payCycleDay {
-            let r = StatPeriod.payCycleRange(payDay: day)
-            return (StatPeriod.anchoredStart(r.start, salaryDates: salaryTxDates), r.end)
+            return (StatPeriod.cycle(payDay: day, salaryDates: salaryTxDates).start, Date())
         }
         return selectedPeriod.dateRange()
     }
@@ -162,17 +154,17 @@ extension StatisticsView {
             return CurrencyManager.shared.convert(tx.amount, from: from, to: currency)
         }
         let all = card.transactions
-        let salaryDates = all.filter { $0.category == .salary && $0.amount > 0 }.map(\.date)
-        let r = StatPeriod.payCycleRange(payDay: payDay)
-        let start = StatPeriod.anchoredStart(r.start, salaryDates: salaryDates)
-        let window = all.filter { $0.date >= start && $0.date <= r.end }
-        let p = progress(start: start, end: r.end, payDay: payDay, salaryDates: salaryDates)
+        let salaryDates = StatPeriod.salaryDates(on: card)
+        let now = Date()
+        let start = StatPeriod.cycle(payDay: payDay, salaryDates: salaryDates, now: now).start
+        let window = all.filter { $0.date >= start && $0.date <= now }
+        let p = progress(start: start, end: now, payDay: payDay, salaryDates: salaryDates)
         let prevStart = previousCycleStart(before: start, payDay: payDay)
         let cutoff = p.flatMap {
             Calendar.current.date(byAdding: .day, value: $0.elapsed, to: prevStart)
         } ?? start
         return CycleFigures(
-            start: start, end: r.end,
+            start: start, end: now,
             income: income(window, convert: convert),
             spent: expenses(window, convert: convert),
             progress: p,
@@ -182,8 +174,11 @@ extension StatisticsView {
 
     var periodProgress: (elapsed: Int, total: Int)? {
         let (start, end) = effectiveRange
+        // A calendar month runs to the 1st, not to payday: passing the payday
+        // for "This month" ended October on the 23rd.
         return Self.progress(start: start, end: end,
-                             payDay: payCycleDay, salaryDates: salaryTxDates)
+                             payDay: selectedPeriod == .payCycle ? payCycleDay : nil,
+                             salaryDates: salaryTxDates)
     }
 
     /// Income over the same elapsed length one period back.
@@ -803,14 +798,14 @@ extension StatisticsView {
         for (s, e) in bucketStarts {
             let rows = card.transactions
                 .filter { $0.date >= s && $0.date < e && $0.txSubtype != .transfer }
-            var inc = 0.0, exp = 0.0
-            for t in rows {
-                let v = convertedAmount(t)
-                if v >= 0 { inc += v } else { exp += -v }
-            }
+            // The hero's rules, so the last bar and "spent" above it are one
+            // figure: a refund takes back its expense rather than counting as
+            // income.
             points.append(CycleTrendPoint(label: fmt.string(from: payCycleDay != nil ? e : s),
                                           start: s, end: e,
-                                          income: inc, expense: exp, txCount: rows.count))
+                                          income: Self.income(rows, convert: convertedAmount),
+                                          expense: Self.expenses(rows, convert: convertedAmount),
+                                          txCount: rows.count))
         }
         // Drop months that pre-date the account's first transaction. Rendering
         // them as placeholder tracks filled a third of the chart with bars for
@@ -889,20 +884,48 @@ extension StatisticsView {
     /// pace so far. Nil once the period is over — a finished period needs no
     /// forecast, it has a result.
     var projectedSpend: Double? {
-        guard let p = periodProgress, p.elapsed > 0, filteredExpenses > 0 else { return nil }
-        // Straight-lining EVERYTHING multiplied the monthly charges by however
-        // much of the cycle had elapsed. On day 9 of 31 that is 3.4×, so a
-        // single Rp 2.100.000 kos payment projected as Rp 7.200.000 of rent for
-        // one month, and the screen announced a pace of Rp 13.565.600 against
-        // Rp 10.000.000 of income. The alarm was arithmetic, not behaviour.
-        //
-        // Three parts, each treated as what it is:
-        //   • day-to-day spending, projected at the rate it is actually running;
-        //   • fixed charges already made, counted once;
-        //   • fixed charges still to come, taken from the recurring plans rather
-        //     than guessed — DiPo knows the rent is due on the 8th.
-        let rated = variableSpend / Double(p.elapsed) * Double(p.total)
-        return rated + fixedSpend + upcomingFixed
+        guard let p = periodProgress, filteredExpenses > 0 else { return nil }
+        return Self.projection(variable: variableSpend, fixed: fixedSpend,
+                               upcoming: upcomingFixed, progress: p)
+    }
+
+    /// Straight-lining EVERYTHING multiplied the monthly charges by however
+    /// much of the cycle had elapsed. On day 9 of 31 that is 3.4×, so a single
+    /// Rp 2.100.000 kos payment projected as Rp 7.200.000 of rent for one
+    /// month, and the screen announced a pace of Rp 13.565.600 against
+    /// Rp 10.000.000 of income. The alarm was arithmetic, not behaviour.
+    ///
+    /// Three parts, each treated as what it is:
+    ///   • day-to-day spending, projected at the rate it is actually running;
+    ///   • fixed charges already made, counted once;
+    ///   • fixed charges still to come, taken from the recurring plans rather
+    ///     than guessed — DiPo knows the rent is due on the 8th.
+    static func projection(variable: Double, fixed: Double, upcoming: Double,
+                           progress p: (elapsed: Int, total: Int)) -> Double? {
+        guard p.elapsed > 0, p.total > 0 else { return nil }
+        return variable / Double(p.elapsed) * Double(p.total) + fixed + upcoming
+    }
+
+    /// The same projection for a caller that is not this screen — Home's
+    /// pace warning — built from the same pieces, so the two quote one figure.
+    /// Nil when there is no running cycle or nothing has been spent yet.
+    static func projectedCycleSpend(card: BankCard, payDay: Int, recurrings: [RecurringExpense],
+                                    currency: String, now: Date = Date()) -> Double? {
+        let convert: (TxRecord) -> Double = { tx in
+            let from = tx.currency.isEmpty ? card.resolvedCurrency : tx.currency
+            return CurrencyManager.shared.convert(tx.amount, from: from, to: currency)
+        }
+        let salaryDates = StatPeriod.salaryDates(on: card)
+        let cycle = StatPeriod.cycle(payDay: payDay, salaryDates: salaryDates, now: now)
+        let window = card.transactions.filter { $0.date >= cycle.start && $0.date <= now }
+        guard expenses(window, convert: convert) > 0,
+              let p = progress(start: cycle.start, end: now, payDay: payDay, salaryDates: salaryDates)
+        else { return nil }
+        let rhythm = SpendingRhythm(history: card.transactions, convert: convert)
+        let f = figures(for: window, rhythm: rhythm, convert: convert)
+        let upcoming = upcomingFixed(recurrings: recurrings, cardID: card.id,
+                                     periodEnd: cycle.end, currency: currency, now: now)
+        return projection(variable: f.variable, fixed: f.fixed, upcoming: upcoming, progress: p)
     }
 
     /// Recurring charges falling in the remainder of this period. Counted at
@@ -913,16 +936,21 @@ extension StatisticsView {
         // NOT `effectiveRange.end`: for a running pay cycle that is NOW, so
         // `end > now` was false on every render and this entire component
         // silently evaluated to zero. The window has to reach the next payday.
-        guard let periodEnd = cycleBoundary(monthsFromNow: 1)
+        guard let periodEnd = (selectedPeriod == .payCycle ? cycleBoundary(monthsFromNow: 1) : nil)
                 ?? cal.date(byAdding: .month, value: 1, to: start) else { return 0 }
-        let today = cal.startOfDay(for: Date())
+        return Self.upcomingFixed(recurrings: recurringPlans, cardID: selectedCard?.id,
+                                  periodEnd: periodEnd, currency: displayCurrency)
+    }
+
+    static func upcomingFixed(recurrings: [RecurringExpense], cardID: UUID?, periodEnd: Date,
+                              currency: String, now: Date = Date()) -> Double {
+        let today = Calendar.current.startOfDay(for: now)
         let cm = CurrencyManager.shared
         // Only plans that charge THIS card. Statistics reports the main card;
         // adding a subscription billed to another account would project money
         // that will never leave the one being measured.
-        let mainID = selectedCard?.id
-        return recurringPlans
-            .filter { $0.isActive && ($0.cardID == nil || $0.cardID == mainID) }
+        return recurrings
+            .filter { $0.isActive && ($0.cardID == nil || $0.cardID == cardID) }
             .reduce(0.0) { sum, plan in
                 let due = RecurringDateEngine.nextDueDate(dayOfMonth: plan.dayOfMonth)
                 // `due` is midnight; comparing it against `now` dropped a charge
@@ -932,7 +960,7 @@ extension StatisticsView {
                 // Already posted → it is in `fixedSpend`; counting it again here
                 // would double it.
                 guard !plan.isChargedForCurrentDue else { return sum }
-                return sum + cm.convert(abs(plan.amount), from: plan.currency, to: displayCurrency)
+                return sum + cm.convert(abs(plan.amount), from: plan.currency, to: currency)
             }
     }
 

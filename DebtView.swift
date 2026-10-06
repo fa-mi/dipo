@@ -118,10 +118,11 @@ struct DebtView: View {
         // announced Rp 19,1jt of overspending, for a cycle that actually
         // finished Rp 748k ahead.
         let cycleStart: Date = {
-            guard let day = salaries.first(where: { $0.isActive })?.dayOfMonth else {
+            guard let day = MainCard.payDay(salaries) else {
                 return cal.safeDate(from: cal.dateComponents([.year, .month], from: now))
             }
-            return StatPeriod.payCycleRange(payDay: day).start
+            return StatPeriod.cycle(payDay: day,
+                                    salaryDates: StatPeriod.salaryDates(on: MainCard.resolve(in: cards))).start
         }()
         return allTx.filter {
             $0.amount < 0 &&
@@ -167,7 +168,8 @@ struct DebtView: View {
         let cm = CurrencyManager.shared
         let pref = cm.preferredCurrency
         guard let day = MainCard.payDay(salaries) else { return 0 }
-        let start = StatPeriod.payCycleRange(payDay: day).start
+        let start = StatPeriod.cycle(payDay: day,
+                                     salaryDates: StatPeriod.salaryDates(on: MainCard.resolve(in: cards))).start
         return scopedTx
             .filter { $0.date >= start && $0.amount > 0 && $0.txSubtype != .transfer
                       && $0.category != .salary

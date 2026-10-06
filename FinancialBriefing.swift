@@ -96,11 +96,14 @@ enum FinancialBriefingEngine {
                       recurrings: [RecurringExpense],
                       salaries: [SalarySchedule],
                       installments: [CardInstallment] = [],
-                      intents: [CycleIntent] = []) -> FinancialBriefing {
+                      intents: [CycleIntent] = [],
+                      plan: (daily: Double, lifestyle: Double, investDebt: Double)? = nil,
+                      duplicates: [RecurringDuplicatePair] = [],
+                      projectedSpend: Double? = nil,
+                      now: Date = Date()) -> FinancialBriefing {
         let cm = CurrencyManager.shared
         let pref = cm.preferredCurrency
         let cal = Calendar.current
-        let now = Date()
         func fmt(_ v: Double) -> String { cm.formatted(v, currency: pref) }
         func toPref(_ amount: Double, _ cur: String) -> Double {
             cm.convert(amount, from: cur.isEmpty ? pref : cur, to: pref)
@@ -110,25 +113,33 @@ enum FinancialBriefingEngine {
         let activeSalaries = MainCard.salaries(salaries)
         let income = activeSalaries.reduce(0.0) { $0 + toPref($1.amount, $1.currency) }
 
-        // Cycle window = actual-pay-date anchored, same as everywhere else.
-        let cycleStart: Date = {
-            if let day = MainCard.anchor(among: activeSalaries)?.dayOfMonth {
-                return StatPeriod.payCycleRange(payDay: day).start
-            }
-            return cal.safeDate(from: cal.dateComponents([.year, .month], from: now))
+        // The main card, like every other figure on these screens: the score
+        // beside this sheet reads the main card only, and this summed all of
+        // them.
+        let mainCard = MainCard.resolve(in: cards)
+        let salaryDates = StatPeriod.salaryDates(on: mainCard)
+        let payDay = MainCard.anchor(among: activeSalaries)?.dayOfMonth
+
+        // Cycle window = the shared one: opened the day the salary landed,
+        // closed at the next payday.
+        let cycle: (start: Date, end: Date) = {
+            if let day = payDay { return StatPeriod.cycle(payDay: day, salaryDates: salaryDates, now: now) }
+            let start = cal.safeDate(from: cal.dateComponents([.year, .month], from: now))
+            return (start, cal.safeDate(byAdding: .month, value: 1, to: start))
         }()
+        let cycleStart = cycle.start
         // Judge the last COMPLETE cycle while the current one is <7 days old —
         // same rationale as the Smart Score.
         let elapsed = cal.dateComponents([.day], from: cycleStart, to: now).day ?? 0
         var windowStart = cycleStart
         var windowEnd = now
         var isCompleteCycle = false
-        if elapsed < 7, let day = MainCard.anchor(among: activeSalaries)?.dayOfMonth,
-           let dayBefore = cal.date(byAdding: .day, value: -1, to: cycleStart) {
-            windowStart = StatPeriod.payCycleRange(payDay: day, now: dayBefore).start
+        if elapsed < 7, let day = payDay {
+            windowStart = StatPeriod.cycleBoundary(offset: -1, payDay: day, salaryDates: salaryDates, now: now)
             windowEnd = cycleStart
             isCompleteCycle = true
         }
+        let dayOf = StatPeriod.cycleDay(cycle, now: now)
 
         // Explicit period label so the user always knows WHAT month of their
         // life these numbers describe — pay-cycle aligned, not calendar-month.
@@ -143,7 +154,7 @@ enum FinancialBriefingEngine {
                                   f.string(from: windowStart), f.string(from: lastDay))
                 }
                 return String(format: loc("brief.period_progress"),
-                              f.string(from: windowStart), elapsed + 1)
+                              f.string(from: windowStart), dayOf.day)
             }
             return loc("brief.period_calmonth")
         }()
@@ -155,7 +166,7 @@ enum FinancialBriefingEngine {
         let declared = CycleIntentSet.resolve(
             intents, cycleKey: ISO8601DateFormatter.dayString(from: windowStart))
 
-        let allTx = cards.flatMap { $0.transactions }
+        let allTx = mainCard?.transactions ?? cards.flatMap { $0.transactions }
         let windowExpense = allTx.filter {
             $0.date >= windowStart && $0.date < windowEnd
             && $0.amount < 0 && $0.txSubtype == .normal
@@ -183,31 +194,33 @@ enum FinancialBriefingEngine {
         let activeRecurring = recurrings.filter { $0.isActive }
         let recurringMonthly = activeRecurring.reduce(0.0) { $0 + toPref($1.amount, $1.currency) }
         let activeDebts = debts.filter { $0.isActive && $0.currentBalance > 0 }
-        // Credit-card balances carry a real monthly minimum too (~10% is the
-        // Indonesian norm). Leaving them out made this screen recommend a
-        // smaller Invest & debt share than the recommendation screen did for
-        // the very same cycle. `effectiveMinimumPayment` also covers 0%
-        // installments where the user never typed a minimum.
-        let creditCardsOwedForMin = cards.filter { $0.isCreditCard }
-            .reduce(0.0) { $0 + toPref($1.owedBalance(), $1.resolvedCurrency) }
-        // Instalments bill a fixed amount each month, so they are added at
-        // face value rather than folded into the 10% revolving estimate above.
-        let installmentMonthly = cards.filter { $0.isCreditCard }
-            .reduce(0.0) { $0 + toPref($1.installmentMonthlyCharge(installments), $1.resolvedCurrency) }
+        // Credit cards ask for their instalments plus the 5% BI minimum on a
+        // balance carried from earlier months — the figure the Fixed Monthly
+        // Payments card, Home and the recommendation all use. This took 10%
+        // of everything owed, so the same card cost twice as much here.
+        // `effectiveMinimumPayment` also covers 0% installments where the user
+        // never typed a minimum.
         let debtMin = activeDebts.reduce(0.0) { $0 + toPref($1.effectiveMinimumPayment, $1.currency) }
-                    + creditCardsOwedForMin * 0.10
-                    + installmentMonthly
+                    + ObligationLoad.cardPayments(cards: cards, installments: installments,
+                                                  debts: debts, currency: pref, now: now)
         let totalDebt = activeDebts.reduce(0.0) { $0 + toPref($1.currentBalance, $1.currency) }
         let creditCards = cards.filter { $0.isCreditCard }
         let ccOwed = creditCards.reduce(0.0) { $0 + toPref($1.totalOwed(installments), $1.resolvedCurrency) }
+        let cardCarried = ObligationLoad.cardCarried(cards: cards, currency: pref, now: now)
         let goalPace = goals.filter { !$0.isCompleted }
             .reduce(0.0) { $0 + toPref($1.monthlyContribution, $1.currency) }
 
         let committed = recurringMonthly + debtMin
         let leftAfterCommitted = income - committed
         let savingsRate = income > 0 ? max(0, leftAfterAll / income) : 0
+        let pctKept = Int((savingsRate * 100).rounded())
 
         // ── Headline ── quotes the SAME left-over number the table ends on.
+        //
+        // A period still running has not finished spending: "you kept 20% of
+        // your income" on day 12 of 28 is money not spent YET. While it runs,
+        // the headline says where the period is heading instead — Statistics'
+        // own projection, passed in.
         let headline: String
         if income <= 0 {
             headline = loc("brief.headline.no_income")
@@ -215,10 +228,16 @@ enum FinancialBriefingEngine {
             headline = String(format: loc(declared.excusesDeficit ? "brief.headline.deficit_planned"
                                                                  : "brief.headline.deficit"),
                               fmt(-leftAfterAll))
+        } else if !isCompleteCycle, let projected = projectedSpend, projected > income {
+            headline = String(format: loc("brief.headline.pace_over"), dayOf.day, dayOf.of,
+                              fmt(projected.rounded()), fmt((projected - income).rounded()))
+        } else if !isCompleteCycle {
+            headline = String(format: loc("brief.headline.running"), dayOf.day, dayOf.of,
+                              fmt(income - leftAfterAll), fmt(income))
         } else if savingsRate >= 0.20 {
-            headline = String(format: loc("brief.headline.strong"), Int(savingsRate * 100))
+            headline = String(format: loc("brief.headline.strong"), pctKept)
         } else if savingsRate > 0.05 {
-            headline = String(format: loc("brief.headline.tight"), Int(savingsRate * 100))
+            headline = String(format: loc("brief.headline.tight"), pctKept)
         } else {
             headline = loc("brief.headline.breakeven")
         }
@@ -271,7 +290,7 @@ enum FinancialBriefingEngine {
             }
 
             flow.append(CashflowRow(
-                label: loc("brief.flow.left"), amount: leftAfterAll,
+                label: loc(isCompleteCycle ? "brief.flow.left" : "brief.flow.left_so_far"), amount: leftAfterAll,
                 tone: leftAfterAll >= 0 ? 1 : -1,
                 caption: leftAfterAll < 0 ? loc("brief.flow.deficit_note") : nil))
         }
@@ -279,28 +298,22 @@ enum FinancialBriefingEngine {
         // ── Findings ────────────────────────────────────────────────────
         var findings: [BriefingFinding] = []
 
-        // 0. Double-logged commitment — a manual twin of a recurring charge.
-        // Matched by amount (±1%) in fixed categories, NOT by name: the twin
-        // usually has a different name than the plan ("Tranfer ibu bulanan"
-        // vs plan "transfer mom"). Flag-only — both charges can be real.
-        for plan in activeRecurring {
-            let amt = toPref(plan.amount, plan.currency)
-            guard amt > 0 else { continue }
-            let tol = max(amt * 0.01, 1_000)
-            let twins = windowExpense.filter {
-                (SmartBudgetManager.fixedCategories.contains($0.category)
-                 || $0.notes == "tx.note.recurring_auto")
-                && abs(toPref(abs($0.amount), $0.currency) - amt) <= tol
-            }
-            if twins.count > 1 {
-                findings.append(BriefingFinding(
-                    severity: .warning,
-                    title: loc("brief.dupe_title"),
-                    body: String(format: loc("brief.dupe_body"),
-                                 plan.label, twins.count, fmt(amt),
-                                 fmt(Double(twins.count - 1) * amt)),
-                    action: loc("brief.dupe_action")))
-            }
+        // 0. Double-logged bill — DiPo's recorded charge and another row of the
+        // same amount in the same pay period (see RecurringDuplicates). The
+        // old amount-only match named the wrong bill. Flag-only — both can be real.
+        let dayFmt = DateFormatter()
+        dayFmt.locale = LanguageManager.shared.currentLocale
+        dayFmt.setLocalizedDateFormatFromTemplate("d MMM")
+        for pair in duplicates where pair.periodStart >= windowStart && pair.periodStart < windowEnd {
+            findings.append(BriefingFinding(
+                severity: .warning,
+                title: loc("brief.dupe_title"),
+                body: String(format: loc("brief.dupe_body"),
+                             pair.planLabel,
+                             dayFmt.string(from: min(pair.recorded.date, pair.twin.date)),
+                             dayFmt.string(from: max(pair.recorded.date, pair.twin.date)),
+                             fmt(pair.amount)),
+                action: loc("brief.dupe_action")))
         }
 
         // 1. Rigid cost structure — committed share of income.
@@ -382,6 +395,15 @@ enum FinancialBriefingEngine {
                 body: String(format: loc("brief.interest_body"), worst.name,
                              Int(worst.annualInterestRate), fmt(toPref(worst.currentBalance, worst.currency))),
                 action: loc("brief.interest_action")))
+        } else if cardCarried >= 1 {
+            // A card balance carried from earlier months IS charged interest,
+            // whatever rate was typed in. This told someone carrying Rp 8,4 jt
+            // on a card that their debt "costs nothing extra".
+            findings.append(BriefingFinding(
+                severity: .critical,
+                title: loc("brief.card_interest_title"),
+                body: String(format: loc("brief.card_interest_body"), fmt(cardCarried)),
+                action: loc("brief.interest_action")))
         } else if totalDebt + ccOwed > 0 {
             findings.append(BriefingFinding(
                 severity: .positive,
@@ -397,7 +419,7 @@ enum FinancialBriefingEngine {
                 findings.append(BriefingFinding(
                     severity: .warning,
                     title: String(format: loc("brief.cc_util_title"), cc.holderName),
-                    body: String(format: loc("brief.cc_util_body"), Int(util * 100),
+                    body: String(format: loc("brief.cc_util_body"), Int((util * 100).rounded()),
                                  fmt(owed), fmt(toPref(cc.availableCredit(installments), cc.resolvedCurrency)))))
             }
         }
@@ -447,17 +469,25 @@ enum FinancialBriefingEngine {
         var allocationNote: String? = nil
         if income > 0, windowExpense.count >= 15 {
             func snap5(_ x: Double) -> Double { (x * 20).rounded() / 20 }
-            let fixedShare = fixedSpent / income
-            // Essential variable capped at 25% so current overspending doesn't
-            // get baked in as a "need".
-            let essentialShare = min(essentialVar / income, 0.25)
-            let daily = snap5(min(max(fixedShare + essentialShare, 0.40), 0.65))
-            var invest = snap5(min(max(isDeficit ? 0.10 : 0.20, debtMin / income + 0.05), 0.35))
-            // Same "heavy debt" test the recommendation engine uses: either
-            // interest-bearing, or minimums already eating >10% of income.
-            if !costly.isEmpty || debtMin > income * 0.10 { invest = max(invest, 0.30) }
-            if daily + invest > 0.90 { invest = max(0.90 - daily, 0.10) }   // keep ≥10% lifestyle
-            let lifestyle = 1.0 - daily - invest
+            // The plan the recommendation screen proposes, when this sheet is
+            // opened from it: one split, explained — not a second one worked out
+            // from this period alone, which disagreed with the first.
+            let daily: Double, lifestyle: Double, invest: Double
+            if let plan {
+                daily = plan.daily; lifestyle = plan.lifestyle; invest = plan.investDebt
+            } else {
+                let fixedShare = fixedSpent / income
+                // Essential variable capped at 25% so current overspending doesn't
+                // get baked in as a "need".
+                let essentialShare = min(essentialVar / income, 0.25)
+                let d = snap5(min(max(fixedShare + essentialShare, 0.40), 0.65))
+                var inv = snap5(min(max(isDeficit ? 0.10 : 0.20, debtMin / income + 0.05), 0.35))
+                // Same "heavy debt" test the recommendation engine uses: either
+                // interest-bearing, or minimums already eating >10% of income.
+                if !costly.isEmpty || debtMin > income * 0.10 { inv = max(inv, 0.30) }
+                if d + inv > 0.90 { inv = max(0.90 - d, 0.10) }   // keep ≥10% lifestyle
+                daily = d; lifestyle = 1.0 - d - inv; invest = inv
+            }
 
             let dailyCur = Int(((fixedSpent + essentialVar) / income * 100).rounded())
             let lifeCur  = Int((lifestyleVar / income * 100).rounded())
@@ -466,17 +496,17 @@ enum FinancialBriefingEngine {
 
             allocation = [
                 AllocationRec(
-                    label: loc("brief.alloc.daily"), pct: Int(daily * 100),
+                    label: loc("brief.alloc.daily"), pct: BudgetGroup.pct(daily),
                     amount: income * daily, currentPct: dailyCur,
                     detail: String(format: loc("brief.alloc.daily_detail"), fmt(fixedSpent)),
                     color: AppTheme.accent),
                 AllocationRec(
-                    label: loc("brief.alloc.lifestyle"), pct: Int(lifestyle * 100),
+                    label: loc("brief.alloc.lifestyle"), pct: BudgetGroup.pct(lifestyle),
                     amount: income * lifestyle, currentPct: lifeCur,
                     detail: loc("brief.alloc.lifestyle_detail"),
                     color: AppTheme.orange),
                 AllocationRec(
-                    label: loc("brief.alloc.investdebt"), pct: Int(invest * 100),
+                    label: loc("brief.alloc.investdebt"), pct: BudgetGroup.pct(invest),
                     amount: income * invest, currentPct: invCur,
                     detail: String(format: loc("brief.alloc.invest_detail"),
                                    fmt(debtMin), fmt(max(income * invest - debtMin, 0)),
@@ -538,6 +568,10 @@ enum FinancialBriefingEngine {
 // MARK: - View
 
 struct FinancialBriefingView: View {
+    /// The split the recommendation screen proposes, so this explains it.
+    var plan: (daily: Double, lifestyle: Double, investDebt: Double)? = nil
+    /// Suspected double-logged bills, found by the screen that opened this.
+    var duplicates: [RecurringDuplicatePair] = []
     @Environment(\.dismiss) private var dismiss
     @Query(sort: \BankCard.sortOrder) private var cards: [BankCard]
     @Query private var debts: [DebtRecord]
@@ -675,11 +709,20 @@ struct FinancialBriefingView: View {
             .toolbarBackground(AppTheme.bg, for: .navigationBar)
             .doneToolbar { dismiss() }
             .onAppear {
+                let projected: Double? = {
+                    guard let card = MainCard.resolve(in: cards),
+                          let day = MainCard.payDay(salaries) else { return nil }
+                    return StatisticsView.projectedCycleSpend(card: card, payDay: day,
+                                                              recurrings: recurrings,
+                                                              currency: CurrencyManager.shared.preferredCurrency)
+                }()
                 briefing = FinancialBriefingEngine.build(
                     cards: cards, debts: debts, goals: goals,
                     recurrings: recurrings, salaries: salaries,
                     installments: installments,
-                    intents: cycleIntents)
+                    intents: cycleIntents,
+                    plan: plan, duplicates: duplicates,
+                    projectedSpend: projected)
                 withAnimation(.spring(response: 0.5, dampingFraction: 0.85)) { appeared = true }
             }
         }

@@ -122,8 +122,9 @@ struct SmartBudgetSettingsSheet: View {
 
         // 2. Income transactions on the selected card this period (pay cycle
         //    when a schedule exists, else calendar month).
+        // Real income only — a refund gives back an expense, it isn't pay.
         return budgetTx
-            .filter { $0.amount > 0 && $0.txSubtype != .transfer && $0.date >= periodStart }
+            .filter { $0.amount > 0 && $0.txSubtype == TxSubtype.normal && $0.date >= periodStart }
             .reduce(0.0) { sum, tx in
                 sum + mgr.convert(tx.amount, from: tx.currency, to: cardCurrency)
             }
@@ -163,22 +164,41 @@ struct SmartBudgetSettingsSheet: View {
     /// month almost nothing is "spent yet", which understated usage badly.
     /// Falls back to the 1st of the month when there's no schedule.
     private var periodStart: Date {
-        if let day = payCycleDay { return StatPeriod.payCycleRange(payDay: day).start }
+        if let c = cycle { return c.start }
         let cal = Calendar.current
         return cal.safeDate(from: cal.dateComponents([.year, .month], from: Date()))
     }
 
-    /// Human label for the current budget window — a date range for the pay
-    /// cycle, or the month name for the calendar-month fallback.
+    /// The running pay cycle — opened on the day the salary landed and closed
+    /// at the next payday — the same window Statistics and Home measure.
+    private var cycle: (start: Date, end: Date)? {
+        guard let day = payCycleDay else { return nil }
+        return StatPeriod.cycle(payDay: day, salaryDates: StatPeriod.salaryDates(on: selectedCard))
+    }
+
+    /// Where the budget window ends: the next payday, or the 1st of next month.
+    private var periodEnd: Date {
+        cycle?.end ?? Calendar.current.safeDate(byAdding: .month, value: 1, to: periodStart)
+    }
+
+    /// The whole budget window, payday to the day before the next one. It
+    /// used to end at today ("Sep 25 – Oct 6"), which read as a short period
+    /// that had already ended.
     private var periodLabel: String {
-        if let day = payCycleDay {
-            let (start, end) = StatPeriod.payCycleRange(payDay: day)
+        if let c = cycle {
             let f = DateFormatter()
             f.locale = LanguageManager.shared.currentLocale
             f.dateFormat = DateFormatter.dateFormat(fromTemplate: "dMMM", options: 0, locale: f.locale)
-            return "\(f.string(from: start)) – \(f.string(from: end))"
+            let lastDay = Calendar.current.safeDate(byAdding: .day, value: -1, to: c.end)
+            return "\(f.string(from: c.start)) – \(f.string(from: lastDay))"
         }
         return Date().formatted(.dateTime.month(.wide).year())
+    }
+
+    /// "Day 12 of 28" while the window runs.
+    private var periodDayLine: String? {
+        let d = StatPeriod.cycleDay((periodStart, periodEnd))
+        return String(format: loc("stats.day_of"), d.day, d.of)
     }
 
     /// Total transactions across cards — the cheap change-signal that tells the
@@ -191,18 +211,23 @@ struct SmartBudgetSettingsSheet: View {
         rollupBuckets = RollupStore.shared.rebuildIfStale(context: context, txCount: totalTxCount)
     }
 
-    // Over-budget groups using ratios for the selected card (per-card with global fallback)
+    /// What each group has taken this period, refunds given back — the same
+    /// rule Statistics uses, so Needs + Wants + Savings & debt adds up to the
+    /// "spent" figure there.
+    private func groupSpent(_ grp: BudgetGroup) -> Double {
+        SmartBudgetManager.shared.spent(in: grp, buckets: rollupBuckets,
+                                        targetCurrency: cardCurrency,
+                                        periodStart: periodStart,
+                                        cardID: selectedCardID)
+    }
+
+    // Groups past their LIMIT. Only Needs and Wants have one: Savings & debt is
+    // a target to reach, and going past it is the point, not a warning.
     private var overGroups: [(group: BudgetGroup, spent: Double, limit: Double, ratio: Double)] {
         guard monthlyIncome > 0 else { return [] }
         let r = SmartBudgetManager.shared.ratios(forCardID: selectedCardID, configs: cardConfigs)
-        return BudgetGroup.allCases.compactMap { grp in
-            // Gross expense (refunds excluded via amount<0) over the pay cycle,
-            // scoped to the selected card — read from the rollup, identical to the
-            // former `budgetTx.filter { amount<0 … }.reduce` scan.
-            let s = SmartBudgetManager.shared.spent(in: grp, buckets: rollupBuckets,
-                                                    targetCurrency: cardCurrency,
-                                                    periodStart: periodStart,
-                                                    cardID: selectedCardID, gross: true)
+        return BudgetGroup.allCases.filter(\.isCeiling).compactMap { grp in
+            let s = groupSpent(grp)
             let ratio: Double = {
                 switch grp {
                 case .daily:      return r.daily
@@ -214,6 +239,15 @@ struct SmartBudgetSettingsSheet: View {
             guard s > l else { return nil }
             return (grp, s, l, ratio)
         }
+    }
+
+    /// Savings & debt once it has reached its target: worth saying, in green.
+    private var investAhead: (spent: Double, ratio: Double)? {
+        guard monthlyIncome > 0 else { return nil }
+        let ratio = SmartBudgetManager.shared.ratio(for: .investDebt, cardID: selectedCardID, configs: cardConfigs)
+        let s = groupSpent(.investDebt)
+        guard ratio > 0, s >= monthlyIncome * ratio else { return nil }
+        return (s, ratio)
     }
 
     var body: some View {
@@ -254,12 +288,12 @@ struct SmartBudgetSettingsSheet: View {
                                         .padding(.horizontal, 22).padding(.top, 16)
 
                     // Over-budget alerts
-                    if isEnabled && !overGroups.isEmpty {
+                    if isEnabled && (!overGroups.isEmpty || investAhead != nil) {
                         VStack(spacing: 8) {
                             ForEach(overGroups, id: \.group.rawValue) { item in
-                                let actualPct = Int((item.spent / monthlyIncome) * 100)
-                                let targetPct = Int(item.ratio * 100)
-                                let overPct   = actualPct - targetPct
+                                let actualPct = BudgetGroup.pct(item.spent, of: monthlyIncome)
+                                let targetPct = BudgetGroup.pct(item.ratio)
+                                let overPct   = max(actualPct - targetPct, 0)
                                 HStack(spacing: 12) {
                                     ZStack {
                                         Circle().fill(AppTheme.red.opacity(0.15)).frame(width: 36, height: 36)
@@ -277,6 +311,28 @@ struct SmartBudgetSettingsSheet: View {
                                 .padding(12)
                                 .background(AppTheme.red.opacity(0.07), in: RoundedRectangle(cornerRadius: AppRadius.sm))
                                 .overlay(RoundedRectangle(cornerRadius: AppRadius.sm).stroke(AppTheme.red.opacity(0.22), lineWidth: 1))
+                            }
+                            if let ahead = investAhead {
+                                let actualPct = BudgetGroup.pct(ahead.spent, of: monthlyIncome)
+                                let targetPct = BudgetGroup.pct(ahead.ratio)
+                                HStack(spacing: 12) {
+                                    ZStack {
+                                        Circle().fill(AppTheme.accent.opacity(0.15)).frame(width: 36, height: 36)
+                                        Image(systemName: "checkmark.seal.fill").font(.system(.subheadline)).foregroundStyle(AppTheme.accent)
+                                    }
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        Text(String(format: loc("budget.ahead_title"), BudgetGroup.investDebt.label))
+                                            .font(.system(.footnote, weight: .bold)).foregroundStyle(AppTheme.accent)
+                                        Text(actualPct > targetPct
+                                             ? String(format: loc("budget.ahead_detail"), actualPct, actualPct - targetPct, targetPct)
+                                             : String(format: loc("budget.met_detail"), actualPct))
+                                            .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
+                                            .fixedSize(horizontal: false, vertical: true)
+                                    }
+                                    Spacer()
+                                }
+                                .padding(12)
+                                .background(AppTheme.accent.opacity(0.08), in: RoundedRectangle(cornerRadius: AppRadius.sm))
                             }
                         }
                         .padding(.horizontal, 22).padding(.top, 12)
@@ -490,6 +546,9 @@ struct SmartBudgetSettingsSheet: View {
                     .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                 Text(periodLabel)
                     .font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                if let line = periodDayLine {
+                    Text(line).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
+                }
             }
             Spacer()
             if monthlyIncome > 0 {
@@ -510,7 +569,7 @@ struct SmartBudgetSettingsSheet: View {
 
         if monthlyIncome > 0 {
             ForEach(BudgetGroup.allCases, id: \.rawValue) { grp in
-                BudgetGroupCard(group: grp, budgetTx: budgetTx, income: monthlyIncome, currency: cardCurrency, cardID: selectedCardID, configs: cardConfigs, periodStart: periodStart)
+                BudgetGroupCard(group: grp, budgetTx: budgetTx, income: monthlyIncome, currency: cardCurrency, cardID: selectedCardID, configs: cardConfigs, periodStart: periodStart, periodEnd: periodEnd)
                     .padding(.horizontal, 22)
             }
         } else {
@@ -711,9 +770,9 @@ struct SmartBudgetSettingsSheet: View {
     /// never directly for highlighting (two presets can share a ratio).
     private func ratiosMatch(_ preset: BudgetProfile) -> Bool {
         let r = preset.ratios
-        return Int(r.daily * 100)      == dailyPct
-            && Int(r.lifestyle * 100)  == lifestylePct
-            && Int(r.investDebt * 100) == investPct
+        return Self.pct(r.daily)      == dailyPct
+            && Self.pct(r.lifestyle)  == lifestylePct
+            && Self.pct(r.investDebt) == investPct
     }
 
     /// Highlight rule for a preset card: a preset is "selected" only when it
@@ -744,9 +803,9 @@ struct SmartBudgetSettingsSheet: View {
         let r = preset.ratios
         selectedPreset = preset
         withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
-            dailyPct      = Int(r.daily * 100)
-            lifestylePct  = Int(r.lifestyle * 100)
-            investPct     = Int(r.investDebt * 100)
+            dailyPct      = Self.pct(r.daily)
+            lifestylePct  = Self.pct(r.lifestyle)
+            investPct     = Self.pct(r.investDebt)
         }
     }
 }
@@ -780,7 +839,7 @@ struct BudgetPresetCard: View {
                     .foregroundStyle(AppTheme.textPrimary)
                     .lineLimit(1)
                 // Ratio summary — at a glance "this preset is 50/30/20"
-                Text("\(Int(preset.ratios.daily * 100))/\(Int(preset.ratios.lifestyle * 100))/\(Int(preset.ratios.investDebt * 100))")
+                Text("\(BudgetGroup.pct(preset.ratios.daily))/\(BudgetGroup.pct(preset.ratios.lifestyle))/\(BudgetGroup.pct(preset.ratios.investDebt))")
                     .font(.system(.caption2, weight: .semibold))
                     .foregroundStyle(preset.color)
                 Text(preset.tagline)
@@ -886,23 +945,26 @@ struct BudgetGroupCard: View {
     /// Start of the budget window (pay-cycle aware). Defaults to the 1st of the
     /// month so any legacy call site keeps calendar-month behavior.
     var periodStart: Date = Calendar.current.safeDate(from: Calendar.current.dateComponents([.year, .month], from: Date()))
+    /// Next payday (or the 1st of next month) — passed on so the detail
+    /// screen counts the days actually left.
+    var periodEnd: Date? = nil
     @State private var animatedProgress: Double = 0
 
     private var monthStart: Date { periodStart }
-    private var groupTx: [TxRecord] {
-        let cats = SmartBudgetManager.shared.categories(for: group)
-        return budgetTx.filter { $0.amount < 0 && $0.txSubtype != .transfer && $0.date >= monthStart && cats.contains($0.category) }.sorted { $0.date > $1.date }
-    }
-    private var spent: Double  { groupTx.reduce(0) { $0 + CurrencyManager.shared.convert(abs($1.amount), from: $1.currency, to: currency) } }
+    private var groupTx: [TxRecord] { BudgetGroupMath.rows(group, in: budgetTx, from: monthStart) }
+    private var spent: Double  { BudgetGroupMath.spent(groupTx, currency: currency) }
     private var ratio: Double  { SmartBudgetManager.shared.ratio(for: group, cardID: cardID, configs: configs) }
     private var limit: Double  { income * ratio }
     private var progress: Double { limit > 0 ? min(spent / limit, 1.5) : 0 }
-    private var isOver: Bool   { spent > limit && limit > 0 }
-    private var actualPct: Int { income > 0 ? Int((spent / income) * 100) : 0 }
-    private var targetPct: Int { Int(ratio * 100) }
+    /// Past a LIMIT (Needs, Wants) — Savings & debt has a target instead.
+    private var isOver: Bool   { group.isCeiling && spent > limit && limit > 0 }
+    /// Savings & debt at or past its target.
+    private var isAhead: Bool  { !group.isCeiling && spent >= limit && limit > 0 }
+    private var actualPct: Int { BudgetGroup.pct(spent, of: income) }
+    private var targetPct: Int { BudgetGroup.pct(ratio) }
 
     var body: some View {
-        NavigationLink(destination: BudgetGroupDetailView(group: group, budgetTx: budgetTx, income: income, currency: currency, cardID: cardID, configs: configs, periodStart: periodStart)) {
+        NavigationLink(destination: BudgetGroupDetailView(group: group, budgetTx: budgetTx, income: income, currency: currency, cardID: cardID, configs: configs, periodStart: periodStart, periodEnd: periodEnd)) {
             VStack(spacing: 12) {
                 HStack {
                     HStack(spacing: 8) {
@@ -915,6 +977,14 @@ struct BudgetGroupCard: View {
                             .font(.system(.caption2, weight: .bold)).foregroundStyle(AppTheme.red)
                             .padding(.horizontal, 8).padding(.vertical, 3)
                             .background(AppTheme.red.opacity(0.12), in: Capsule())
+                    } else if isAhead {
+                        HStack(spacing: 3) {
+                            Image(systemName: "checkmark").font(.system(.caption2, weight: .heavy))
+                            Text("\(actualPct)% / \(targetPct)%")
+                        }
+                        .font(.system(.caption2, weight: .bold)).foregroundStyle(AppTheme.accent)
+                        .padding(.horizontal, 8).padding(.vertical, 3)
+                        .background(AppTheme.accent.opacity(0.12), in: Capsule())
                     }
                     Image(systemName: "chevron.right").font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                 }
@@ -934,7 +1004,7 @@ struct BudgetGroupCard: View {
                     Spacer()
                     if limit > 0 {
                         VStack(alignment: .trailing, spacing: 2) {
-                            Text(String(format: loc("budget.target_label"), targetPct)).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
+                            Text(String(format: loc(group.isCeiling ? "budget.target_label" : "budget.goal_label"), targetPct)).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                             Text(CurrencyManager.shared.formatted(limit, currency: currency))
                                 .font(.system(.subheadline, weight: .bold)).foregroundStyle(group.color)
                         }
@@ -951,8 +1021,9 @@ struct BudgetGroupCard: View {
                                 }
                                 Text(tx.name).font(.system(.caption, weight: .medium)).foregroundStyle(AppTheme.textPrimary).lineLimit(1)
                                 Spacer()
-                                Text(CurrencyManager.shared.formatted(abs(tx.amount), currency: tx.currency))
-                                    .font(.system(.caption, weight: .semibold)).foregroundStyle(AppTheme.textSecondary)
+                                Text(BudgetGroupMath.amountLabel(tx))
+                                    .font(.system(.caption, weight: .semibold))
+                                    .foregroundStyle(BudgetGroupMath.isRefund(tx) ? AppTheme.accent : AppTheme.textSecondary)
                             }
                         }
                         if groupTx.count > 2 { Text(String(format: loc("common.plus_more"), groupTx.count - 2)).font(.system(.caption2)).foregroundStyle(group.color).frame(maxWidth: .infinity, alignment: .leading) }
@@ -986,41 +1057,46 @@ struct BudgetGroupDetailView: View {
     var configs: [CardBudgetConfig] = []
     /// Start of the budget window (pay-cycle aware). Defaults to month start.
     var periodStart: Date = Calendar.current.safeDate(from: Calendar.current.dateComponents([.year, .month], from: Date()))
+    /// The next payday (or the 1st of next month). "Start plus one month" was
+    /// the 25th when the salary lands on Friday the 23rd: two days too many.
+    var periodEnd: Date? = nil
     @State private var appeared = false
 
     private var cal: Calendar  { Calendar.current }
     private var monthStart: Date { periodStart }
-    /// End of the current budget window: one month after its start — i.e. the
-    /// next payday for a pay cycle, or the 1st of next month in calendar mode.
-    private var periodEnd: Date { cal.date(byAdding: .month, value: 1, to: periodStart) ?? periodStart }
+    private var windowEnd: Date { periodEnd ?? cal.safeDate(byAdding: .month, value: 1, to: periodStart) }
     /// Days remaining until the window ends. Pay-cycle aware, so the
     /// "remaining/day" hint paces against days left until the next payday
     /// rather than the calendar month-end.
-    private var daysLeft: Int {
-        max(cal.dateComponents([.day], from: cal.startOfDay(for: Date()), to: periodEnd).day ?? 0, 0)
-    }
+    private var daysLeft: Int { StatPeriod.daysLeft(in: (periodStart, windowEnd)) }
     private var primary: String  { currency }
     private func fmt(_ amount: Double) -> String {
         CurrencyManager.shared.formatted(amount, currency: primary)
     }
 
-    private var groupTx: [TxRecord] {
-        let cats = SmartBudgetManager.shared.categories(for: group)
-        return budgetTx.filter { $0.amount < 0 && $0.txSubtype != .transfer && $0.date >= monthStart && cats.contains($0.category) }.sorted { $0.date > $1.date }
-    }
-    private var spent: Double    { groupTx.reduce(0) { $0 + CurrencyManager.shared.convert(abs($1.amount), from: $1.currency, to: currency) } }
+    private var groupTx: [TxRecord] { BudgetGroupMath.rows(group, in: budgetTx, from: monthStart) }
+    private var spent: Double    { BudgetGroupMath.spent(groupTx, currency: currency) }
     private var ratio: Double    { SmartBudgetManager.shared.ratio(for: group, cardID: cardID, configs: configs) }
     private var limit: Double    { income * ratio }
-    private var isOver: Bool     { spent > limit && limit > 0 }
+    /// Past a LIMIT. Savings & debt has a target, which it can only be short
+    /// of or ahead of — never "over".
+    private var isOver: Bool     { group.isCeiling && spent > limit && limit > 0 }
+    private var isAhead: Bool    { !group.isCeiling && spent >= limit && limit > 0 }
     private var remaining: Double { max(limit - spent, 0) }
     private var overAmt: Double  { max(spent - limit, 0) }
-    private var actualPct: Int   { income > 0 ? Int((spent / income) * 100) : 0 }
-    private var targetPct: Int   { Int(ratio * 100) }
+    private var actualPct: Int   { BudgetGroup.pct(spent, of: income) }
+    private var targetPct: Int   { BudgetGroup.pct(ratio) }
     private var overPct: Int     { max(actualPct - targetPct, 0) }
+    /// Everything spent this period, every group — Statistics' figure.
+    private var totalSpent: Double {
+        BudgetGroup.allCases.reduce(0.0) {
+            $0 + BudgetGroupMath.spent(BudgetGroupMath.rows($1, in: budgetTx, from: monthStart), currency: currency)
+        }
+    }
 
     private var catBreakdown: [(cat: TxCategory, amount: Double)] {
         SmartBudgetManager.shared.categories(for: group).compactMap { cat in
-            let a = groupTx.filter { $0.category == cat }.reduce(0) { $0 + CurrencyManager.shared.convert(abs($1.amount), from: $1.currency, to: currency) }
+            let a = BudgetGroupMath.spent(groupTx.filter { $0.category == cat }, currency: currency)
             return a > 0 ? (cat, a) : nil
         }.sorted { $0.amount > $1.amount }
     }
@@ -1033,6 +1109,37 @@ struct BudgetGroupDetailView: View {
                     : d.formatted(.dateTime.weekday(.wide).day().month(.abbreviated))
             return (lbl, d, (dict[d] ?? []).sorted { $0.date > $1.date })
         }
+    }
+
+    /// The sentence under the bar.
+    private var statusLine: String {
+        if isOver { return String(format: loc("budget.over_detail"), actualPct, overPct, targetPct) }
+        if isAhead {
+            // Ahead of target is good — unless everything spent this period has
+            // already run past the pay, when the extra came out of the balance.
+            let base = String(format: loc("budget.ahead_detail"), actualPct, overPct, targetPct)
+            guard income > 0, totalSpent > income else { return base }
+            return base + " " + String(format: loc("budget.ahead_but_over"), fmt(totalSpent), fmt(income))
+        }
+        if !group.isCeiling { return String(format: loc("budget.goal_progress"), actualPct, targetPct) }
+        return String(format: loc("budget.under_detail"), actualPct, targetPct)
+    }
+
+    private var thirdLabelKey: String {
+        if isOver { return "budget.over_by" }
+        if isAhead { return "budget.ahead_by" }
+        return group.isCeiling ? "budget.left" : "budget.to_go"
+    }
+
+    /// What the rest of the period asks for: a daily pace under a limit, or
+    /// the amount still to put aside to reach a target.
+    private var paceNote: String? {
+        guard limit > 0, remaining > 0, daysLeft > 0 else { return nil }
+        if group.isCeiling {
+            guard !isOver else { return nil }
+            return String(format: loc("budget.pace_hint"), fmt(remaining / Double(daysLeft)), daysLeft, targetPct)
+        }
+        return String(format: loc("budget.goal_pace"), fmt(remaining), daysLeft, targetPct)
     }
 
     // MARK: - Budget Bar
@@ -1065,8 +1172,11 @@ struct BudgetGroupDetailView: View {
                                                      startPoint: .leading, endPoint: .trailing))
                                 .frame(width: W * CGFloat(appeared ? withinFraction : 0))
                             if overFraction > 0 {
+                                // Past a limit warms to red; past a target is
+                                // more of the good thing, in the group's colour.
                                 Capsule()
-                                    .fill(LinearGradient(colors: [AppTheme.orange, AppTheme.red],
+                                    .fill(LinearGradient(colors: group.isCeiling ? [AppTheme.orange, AppTheme.red]
+                                                                                 : [group.color, group.color.opacity(0.75)],
                                                          startPoint: .leading, endPoint: .trailing))
                                     .frame(width: W * CGFloat(appeared ? overFraction : 0))
                             }
@@ -1076,7 +1186,7 @@ struct BudgetGroupDetailView: View {
                         .animation(AppMotion.appear, value: appeared)
 
                         // Limit tick — only drawn when spending has run past it.
-                        if isOver {
+                        if isOver || isAhead {
                             Capsule().fill(Color.white.opacity(0.92))
                                 .frame(width: 2.5, height: 20)
                                 .shadow(color: .black.opacity(0.4), radius: 2)
@@ -1088,9 +1198,9 @@ struct BudgetGroupDetailView: View {
                 .frame(height: 20)
 
                 // Caption anchored under the limit tick.
-                if isOver {
+                if isOver || isAhead {
                     GeometryReader { g in
-                        Text(loc("budget.limit_marker"))
+                        Text(loc(group.isCeiling ? "budget.limit_marker" : "budget.target_marker"))
                             .font(.system(.caption2, weight: .bold))
                             .foregroundStyle(AppTheme.textSecondary)
                             .offset(x: max(min(g.size.width * CGFloat(limitFraction) - 12, g.size.width - 30), 0))
@@ -1148,6 +1258,13 @@ struct BudgetGroupDetailView: View {
                                 }
                                 .padding(.horizontal, 10).padding(.vertical, 6)
                                 .background(AppTheme.red.opacity(0.1), in: RoundedRectangle(cornerRadius: AppRadius.sm))
+                            } else if isAhead {
+                                VStack(spacing: 2) {
+                                    Image(systemName: "checkmark.seal.fill").font(.system(.caption)).foregroundStyle(AppTheme.accent)
+                                    Text(loc("budget.on_target")).font(.system(.caption2, weight: .bold)).foregroundStyle(AppTheme.accent)
+                                }
+                                .padding(.horizontal, 10).padding(.vertical, 6)
+                                .background(AppTheme.accent.opacity(0.1), in: RoundedRectangle(cornerRadius: AppRadius.sm))
                             }
                         }
                         .padding(.horizontal, 18).padding(.top, 18).padding(.bottom, 14)
@@ -1158,11 +1275,9 @@ struct BudgetGroupDetailView: View {
                         HStack(alignment: .top) {
                             HStack(alignment: .top, spacing: 5) {
                                 Circle().fill(isOver ? AppTheme.red : group.color).frame(width: 6, height: 6).padding(.top, 4)
-                                Text(isOver
-                                     ? String(format: loc("budget.over_detail"), actualPct, overPct, targetPct)
-                                     : String(format: loc("budget.under_detail"), actualPct, targetPct))
+                                Text(statusLine)
                                     .font(.system(.caption2, weight: .medium))
-                                    .foregroundStyle(isOver ? AppTheme.red : AppTheme.textSecondary)
+                                    .foregroundStyle(isOver ? AppTheme.red : isAhead ? AppTheme.accent : AppTheme.textSecondary)
                                     .fixedSize(horizontal: false, vertical: true)
                             }
                             Spacer(minLength: 10)
@@ -1194,24 +1309,24 @@ struct BudgetGroupDetailView: View {
                             }.frame(maxWidth: .infinity).padding(.vertical, 4)
                             Rectangle().fill(AppTheme.cardMid).frame(width: 1, height: 52)
                             VStack(spacing: 5) {
-                                HStack(spacing: 4) { Circle().fill(group.color).frame(width: 6, height: 6); Text(loc("debt.budget")).font(.system(.caption2, weight: .medium)).foregroundStyle(AppTheme.textSecondary) }
+                                HStack(spacing: 4) { Circle().fill(group.color).frame(width: 6, height: 6); Text(loc(group.isCeiling ? "debt.budget" : "budget.target")).font(.system(.caption2, weight: .medium)).foregroundStyle(AppTheme.textSecondary) }
                                 Text(limit > 0 ? fmt(limit) : "—").font(.system(.subheadline, weight: .bold)).foregroundStyle(group.color).minimumScaleFactor(0.6).lineLimit(1)
                                 Text(String(format: loc("budget.pct_income"), targetPct)).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                             }.frame(maxWidth: .infinity).padding(.vertical, 4)
                             Rectangle().fill(AppTheme.cardMid).frame(width: 1, height: 52)
                             VStack(spacing: 5) {
-                                HStack(spacing: 4) { Circle().fill(isOver ? AppTheme.red : AppTheme.accent).frame(width: 6, height: 6); Text(isOver ? loc("budget.over_by") : loc("budget.left")).font(.system(.caption2, weight: .medium)).foregroundStyle(AppTheme.textSecondary) }
-                                Text(isOver ? fmt(overAmt) : fmt(remaining)).font(.system(.subheadline, weight: .bold)).foregroundStyle(isOver ? AppTheme.red : AppTheme.accent).minimumScaleFactor(0.6).lineLimit(1)
-                                Text(isOver ? "+\(overPct)%" : String(format: loc("budget.pct_income"), income > 0 ? Int((remaining/income)*100) : 0)).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
+                                HStack(spacing: 4) { Circle().fill(isOver ? AppTheme.red : AppTheme.accent).frame(width: 6, height: 6); Text(loc(thirdLabelKey)).font(.system(.caption2, weight: .medium)).foregroundStyle(AppTheme.textSecondary) }
+                                Text(isOver || isAhead ? fmt(overAmt) : fmt(remaining)).font(.system(.subheadline, weight: .bold)).foregroundStyle(isOver ? AppTheme.red : AppTheme.accent).minimumScaleFactor(0.6).lineLimit(1)
+                                Text(isOver || isAhead ? "+\(overPct)%" : String(format: loc("budget.pct_income"), BudgetGroup.pct(remaining, of: income))).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                             }.frame(maxWidth: .infinity).padding(.vertical, 4)
                         }
                         .padding(.horizontal, 10).padding(.bottom, 14)
 
-                        if !isOver && remaining > 0 && daysLeft > 0 && limit > 0 {
+                        if let note = paceNote {
                             Divider().background(AppTheme.cardMid).padding(.horizontal, 18)
                             HStack(spacing: 8) {
                                 Image(systemName: "calendar").font(.system(.caption)).foregroundStyle(group.color)
-                                Text(String(format: loc("budget.pace_hint"), fmt(remaining / Double(daysLeft)), daysLeft, targetPct))
+                                Text(note)
                                     .font(.system(.caption, weight: .medium)).foregroundStyle(AppTheme.textSecondary)
                                     .fixedSize(horizontal: false, vertical: true)
                                 Spacer()
@@ -1278,7 +1393,7 @@ struct BudgetGroupDetailView: View {
                             VStack(spacing: 12) {
                                 ForEach(grouped, id: \.date) { grp in
                                     VStack(alignment: .leading, spacing: 8) {
-                                        let dayTotal = grp.txs.reduce(0) { $0 + CurrencyManager.shared.convert(abs($1.amount), from: $1.currency, to: currency) }
+                                        let dayTotal = BudgetGroupMath.spent(grp.txs, currency: currency)
                                         HStack {
                                             Text(grp.label).font(.system(.caption, weight: .semibold)).foregroundStyle(AppTheme.textSecondary)
                                             Spacer()
@@ -1302,7 +1417,7 @@ struct BudgetGroupDetailView: View {
                                                     }
                                                     Spacer()
                                                     VStack(alignment: .trailing, spacing: 2) {
-                                                        Text(CurrencyManager.shared.formatted(abs(tx.amount), currency: tx.currency)).font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                                                        Text(BudgetGroupMath.amountLabel(tx)).font(.system(.subheadline, weight: .semibold)).foregroundStyle(BudgetGroupMath.isRefund(tx) ? AppTheme.accent : AppTheme.textPrimary)
                                                         if tx.currency.uppercased() != currencyCode.uppercased() {
                                                             Text("≈ \(CurrencyManager.shared.formatted(converted, currency: currencyCode))").font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                                                         }
@@ -1338,4 +1453,43 @@ struct BudgetGroupDetailView: View {
         .toolbarBackground(AppTheme.bg, for: .navigationBar)
         .onAppear { withAnimation { appeared = true } }
     }
+}
+
+
+// MARK: - Group arithmetic, one rule
+
+/// What a budget group took over a window, under the rule Statistics uses:
+/// outflows count, a refund gives its amount back, transfers are money moving
+/// between your own accounts. The card and its detail screen each summed only
+/// outflows, so a refunded purchase stayed in "Wants" while Statistics had
+/// already taken it out.
+enum BudgetGroupMath {
+    /// The group's rows from `start` on — outflows and refunds — newest first.
+    static func rows(_ group: BudgetGroup, in txs: [TxRecord], from start: Date) -> [TxRecord] {
+        let cats = Set(SmartBudgetManager.shared.categories(for: group))
+        return txs.filter { (tx: TxRecord) -> Bool in
+            guard tx.date >= start, tx.txSubtype != TxSubtype.transfer, cats.contains(tx.category) else { return false }
+            return tx.amount < 0 || tx.txSubtype == TxSubtype.refund
+        }
+        .sorted { $0.date > $1.date }
+    }
+
+    /// Outflows less refunds, in `currency`, never below zero.
+    static func spent(_ rows: [TxRecord], currency: String) -> Double {
+        let cm = CurrencyManager.shared
+        let net = rows.reduce(0.0) { (sum: Double, tx: TxRecord) -> Double in
+            let amt = cm.convert(abs(tx.amount), from: tx.currency.isEmpty ? currency : tx.currency, to: currency)
+            if tx.txSubtype == TxSubtype.refund { return sum - amt }
+            return tx.amount < 0 ? sum + amt : sum
+        }
+        return max(net, 0)
+    }
+
+    /// A row's amount as listed: a refund shows what came back, with "+".
+    static func amountLabel(_ tx: TxRecord) -> String {
+        let text = CurrencyManager.shared.formatted(abs(tx.amount), currency: tx.currency)
+        return tx.txSubtype == TxSubtype.refund ? "+" + text : text
+    }
+
+    static func isRefund(_ tx: TxRecord) -> Bool { tx.txSubtype == TxSubtype.refund }
 }

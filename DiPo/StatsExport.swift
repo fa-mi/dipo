@@ -307,7 +307,7 @@ struct StatsReportCard: View {
             if spendRatio > 0.9 {
                 return ("exclamationmark.triangle.fill", AppTheme.red,
                         loc("rec.overspend_title"),
-                        String(format: loc("rec.overspend_body"), Int(spendRatio * 100)))
+                        String(format: loc("rec.overspend_body"), BudgetGroup.pct(spendRatio)))
             }
             if savingsRate >= 20 {
                 return ("checkmark.seal.fill", AppTheme.accent,

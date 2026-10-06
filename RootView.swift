@@ -127,7 +127,8 @@ enum WidgetDataSync {
         // three ways for the lock screen to contradict the app behind it.
         let monthStart: Date = {
             if let day = MainCard.payDay(schedules) {
-                return StatPeriod.payCycleRange(payDay: day).start
+                return StatPeriod.cycle(payDay: day,
+                                        salaryDates: StatPeriod.salaryDates(on: MainCard.resolve(in: allCards))).start
             }
             return cal.date(from: cal.dateComponents([.year, .month], from: now)) ?? now
         }()
