@@ -44,7 +44,7 @@ final class DiPoDragonRig {
             body.addChildNode(model)
         }
 
-        scene.lightingEnvironment.contents = CoinGardenRig.environment()
+        scene.lightingEnvironment.contents = Self.environment()
         scene.lightingEnvironment.intensity = 1.0
 
         let camera = SCNNode()
@@ -119,6 +119,25 @@ final class DiPoDragonRig {
         back.timingMode = .easeOut
         turntable.runAction(back) { [weak self] in
             Task { @MainActor in self?.look() }
+        }
+    }
+
+    /// Warm studio light for him to reflect: bright above, two soft windows,
+    /// dim below.
+    private static func environment() -> UIImage {
+        let size = CGSize(width: 256, height: 128)
+        return UIGraphicsImageRenderer(size: size).image { ctx in
+            let cg = ctx.cgContext
+            let colors = [UIColor(red: 1, green: 0.97, blue: 0.91, alpha: 1).cgColor,
+                          UIColor(red: 0.95, green: 0.89, blue: 0.75, alpha: 1).cgColor,
+                          UIColor(red: 0.54, green: 0.48, blue: 0.35, alpha: 1).cgColor,
+                          UIColor(red: 0.23, green: 0.2, blue: 0.15, alpha: 1).cgColor] as CFArray
+            if let g = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors, locations: [0, 0.45, 0.55, 1]) {
+                cg.drawLinearGradient(g, start: .zero, end: CGPoint(x: 0, y: size.height), options: [])
+            }
+            cg.setFillColor(UIColor(white: 1, alpha: 0.9).cgColor)
+            cg.fill(CGRect(x: 40, y: 20, width: 50, height: 30))
+            cg.fill(CGRect(x: 170, y: 30, width: 40, height: 20))
         }
     }
 }
