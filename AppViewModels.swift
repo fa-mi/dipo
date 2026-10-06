@@ -55,6 +55,9 @@ final class AppViewModel {
         BankCard.totalBalanceAcrossCards(cards, preferredCurrency: CurrencyManager.shared.preferredCurrency)
     }
 
+    /// Bumped when the user taps Home while already on Home; HomeView scrolls to the top.
+    var homeScrollToTop = 0
+
     func selectTab(_ tab: AppTab) {
         HapticManager.shared.select()
         // A tab tap always lands on that tab's ROOT. Without this, a deep link
@@ -62,6 +65,8 @@ final class AppViewModel {
         // leave that path in place — and since the tab bar hides inside a
         // feature, tapping the tab would drop you into a screen you never
         // opened, with no tab bar to leave by.
+        // Tapping Home again while already at its root scrolls it back to the top.
+        if tab == .home, activeTab == .home, homePath.isEmpty { homeScrollToTop += 1 }
         switch tab {
         case .home:  homePath.removeAll()
         case .cards: walletPath.removeAll()
