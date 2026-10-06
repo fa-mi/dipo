@@ -645,6 +645,9 @@ struct HomeView: View {
                let idx = queriedCards.firstIndex(where: { $0.id == main.id }) {
                 vm.selectedCardIndex = idx
             }
+            // Once: card payments that paid off a carried balance were filed
+            // as transfers; re-file that part as the debt payment it was.
+            CardPaymentDebt.reclassifyPastPayments(cards: queriedCards, context: context)
             recomputeHomeInsights()
             recomputeMonthFlow()
         }

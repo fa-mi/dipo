@@ -494,19 +494,47 @@ struct CreditCardPaymentSheet: View {
         guard amount > 0,
               let id = fromCardID, let source = cards.first(where: { $0.id == id }) else { return }
         let ccName = creditCard.holderName.isEmpty ? loc("cc.title") : creditCard.holderName
+        let cm = CurrencyManager.shared
+        let now = Date()
 
-        let out = TxRecord(
-            name: String(format: loc("cc.tx_payment_out"), ccName),
-            date: .now, amount: -abs(amount), type: "tx.type.purchase",
-            icon: "CC", iconBgHex: TxCategory.other.iconBg,
-            category: .other, currency: source.resolvedCurrency,
-            notes: "tx.note.cc_payment", subtype: .transfer)
-        context.insert(out)
-        source.transactions.append(out)
+        // The part paying off a balance carried from before is a debt payment
+        // (Invest & Debt); the part covering recent purchases stays a
+        // transfer, as those were counted when they were made (CardPaymentDebt).
+        let inCard = { (tx: TxRecord) in cm.convert(tx.amount, from: tx.currency, to: creditCard.resolvedCurrency) }
+        let paidInCard = cm.convert(abs(amount), from: source.resolvedCurrency, to: creditCard.resolvedCurrency)
+        let debtInCard = CardPaymentDebt.debtPortion(
+            payment: paidInCard,
+            owedBefore: creditCard.owedBalance(),
+            recentCharges: CardPaymentDebt.recentCharges(transactions: creditCard.transactions,
+                                                         before: now, convert: inCard))
+        let debt = min(cm.convert(debtInCard, from: creditCard.resolvedCurrency, to: source.resolvedCurrency),
+                       abs(amount))
+        let settled = abs(amount) - debt
+
+        if debt >= 1 {
+            let paidDown = TxRecord(
+                name: String(format: loc("cc.tx_payment_out"), ccName),
+                date: now, amount: -debt, type: "tx.type.debt_payment",
+                icon: "CC", iconBgHex: TxCategory.debtPayment.iconBg,
+                category: .debtPayment, currency: source.resolvedCurrency,
+                notes: "tx.note.cc_payment", subtype: .normal)
+            context.insert(paidDown)
+            source.transactions.append(paidDown)
+        }
+        if settled >= 1 {
+            let out = TxRecord(
+                name: String(format: loc("cc.tx_payment_out"), ccName),
+                date: now, amount: -settled, type: "tx.type.purchase",
+                icon: "CC", iconBgHex: TxCategory.other.iconBg,
+                category: .other, currency: source.resolvedCurrency,
+                notes: "tx.note.cc_payment", subtype: .transfer)
+            context.insert(out)
+            source.transactions.append(out)
+        }
 
         let credit = TxRecord(
             name: String(format: loc("cc.tx_payment_in"), ccName),
-            date: .now, amount: abs(amount), type: "tx.type.income",
+            date: now.addingTimeInterval(0.001), amount: abs(amount), type: "tx.type.income",
             icon: "CC", iconBgHex: TxCategory.other.iconBg,
             category: .other, currency: creditCard.resolvedCurrency,
             notes: "tx.note.cc_payment", subtype: .transfer)
