@@ -326,6 +326,54 @@ final class SmartBudgetManager {
 
     // MARK: - Smart Insights
 
+    /// Debt instalments due each month — debt minimums plus credit-card
+    /// instalments and minimums — set by Home when it refreshes, so the
+    /// surplus advice can put debt before investing.
+    var debtDueMonthly: Double = 0
+
+    /// What unspent money should do, in the order the plan runs: debt
+    /// instalments still due this period first, then the savings and
+    /// investing share, then daily needs, and lifestyle last — not whatever
+    /// is left at the end of the month.
+    ///
+    /// Debt and investing share one pot (Invest & Debt), so they're worked
+    /// out together: debt still due is paid from the unspent money first,
+    /// and investing gets what the pot's share leaves after all debt.
+    func surplusInsight(unspent: Double, debtPaid: Double, invested: Double,
+                        debtDue: Double, income: Double,
+                        investShare: Double, currency: String) -> SmartInsight {
+        let cm = CurrencyManager.shared
+        let money = { (v: Double) in cm.formatted(v.rounded(), currency: currency) }
+        let plan = income * investShare
+        let filled = debtPaid + invested
+        // Debt is contractual: what is still due gets paid whatever the share says.
+        let payDebt = min(max(debtDue - debtPaid, 0), unspent)
+        let invest = min(max(plan - filled - payDebt, 0), unspent - payDebt)
+        let title = String(format: loc("insight.surplus_title"), money(unspent))
+        let action = SmartInsightAction(label: loc("insight.action.adjust_budget"), kind: .openBudgetSettings)
+        let pct = Int((investShare * 100).rounded())
+
+        switch (payDebt >= 1, invest >= 1) {
+        case (true, true):
+            return SmartInsight(icon: "tray.and.arrow.down", color: AppTheme.orange, title: title,
+                                body: String(format: loc("insight.surplus_debt_invest_body"),
+                                             money(filled), money(plan), pct, money(payDebt), money(invest)),
+                                action: action)
+        case (true, false):
+            return SmartInsight(icon: "tray.and.arrow.down", color: AppTheme.orange, title: title,
+                                body: String(format: loc("insight.surplus_debt_body"), money(payDebt)),
+                                action: action)
+        case (false, true):
+            return SmartInsight(icon: "tray.and.arrow.down", color: AppTheme.orange, title: title,
+                                body: String(format: loc("insight.surplus_ratio_body"),
+                                             money(filled), money(plan), pct, money(invest)),
+                                action: action)
+        case (false, false):
+            return SmartInsight(icon: "tray.and.arrow.down", color: AppTheme.blue, title: title,
+                                body: String(format: loc("insight.surplus_body"), Int((unspent / income) * 100)))
+        }
+    }
+
     /// Generate the top insight for the home screen.
     ///
     /// `cardID` and `configs` together let this method use per-card budget
@@ -343,34 +391,6 @@ final class SmartBudgetManager {
     /// (highest-priority) insight only — used by callers that just want a
     /// single primary banner. New callers wanting multi-banner UX should
     /// use `evaluateAll(...)` directly.
-    /// Money left unspent while the Invest & Debt share is not yet met. Says
-    /// how far short the plan is and how much to move now, in the order the
-    /// plan is meant to run: savings and investing first, then daily needs,
-    /// then lifestyle — not whatever is left at the end of the month.
-    func surplusInsight(unspent: Double, setAside: Double, income: Double,
-                        investShare: Double, currency: String) -> SmartInsight {
-        let cm = CurrencyManager.shared
-        let target = income * investShare
-        let short = max(target - setAside, 0)
-        let title = String(format: loc("insight.surplus_title"), cm.formatted(unspent.rounded(), currency: currency))
-        guard short >= 1 else {
-            return SmartInsight(icon: "tray.and.arrow.down", color: AppTheme.blue, title: title,
-                                body: String(format: loc("insight.surplus_body"), Int((unspent / income) * 100)))
-        }
-        let move = min(short, unspent)
-        return SmartInsight(
-            icon: "tray.and.arrow.down",
-            color: AppTheme.orange,
-            title: title,
-            body: String(format: loc("insight.surplus_ratio_body"),
-                         cm.formatted(setAside.rounded(), currency: currency),
-                         cm.formatted(target.rounded(), currency: currency),
-                         Int((investShare * 100).rounded()),
-                         cm.formatted(move.rounded(), currency: currency)),
-            action: SmartInsightAction(label: loc("insight.action.adjust_budget"), kind: .openBudgetSettings)
-        )
-    }
-
     func topInsight(allTransactions: [TxRecord], income: Double,
                     cardID: String? = nil,
                     configs: [CardBudgetConfig] = [],
@@ -496,7 +516,9 @@ final class SmartBudgetManager {
                 // A surplus with nothing moved out of it. Reported as the
                 // surplus it is — which is useful, and is the one sentence that
                 // turns it into a decision rather than a compliment.
-                results.append(surplusInsight(unspent: savings, setAside: setAside, income: income,
+                results.append(surplusInsight(unspent: savings, debtPaid: debtPaid,
+                                              invested: max(setAside - debtPaid, 0),
+                                              debtDue: debtDueMonthly, income: income,
                                               investShare: ratios(forCardID: cardID, configs: configs).investDebt,
                                               currency: target))
             }
@@ -908,7 +930,9 @@ final class SmartBudgetManager {
         if savings > 0, income > 0 {
             let rate = Int((setAside / income) * 100)
             guard rate > 0 else {
-                return surplusInsight(unspent: savings, setAside: setAside, income: income,
+                return surplusInsight(unspent: savings, debtPaid: debtPaid,
+                                      invested: max(setAside - debtPaid, 0),
+                                      debtDue: debtDueMonthly, income: income,
                                       investShare: r.investDebt, currency: target)
             }
             let icon = rate >= 20 ? "checkmark.seal.fill" : "info.circle.fill"

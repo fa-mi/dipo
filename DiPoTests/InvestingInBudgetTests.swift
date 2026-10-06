@@ -68,24 +68,41 @@ final class InvestingInBudgetTests: XCTestCase {
         XCTAssertEqual(plain?.body, moved?.body)
     }
 
-    /// Unspent money while Invest & Debt is short of its share: say how far
-    /// short, and move that much first — savings before needs and wants.
-    func testUnspentMoneyIsPointedAtTheInvestShareFirst() {
+    /// Unspent money, Invest & Debt worked out as one pot: debt instalments
+    /// still due come first, investing gets what the share leaves after them.
+    func testUnspentMoneyPaysDebtFirstThenInvests() {
         let sb = SmartBudgetManager.shared
         let idr = { (v: Double) in CurrencyManager.shared.formatted(v, currency: "IDR") }
-        let short = sb.surplusInsight(unspent: 4_072_500, setAside: 0, income: 10_000_000,
-                                      investShare: 0.20, currency: "IDR")
-        XCTAssertTrue(short.title.contains(idr(4_072_500)))
-        XCTAssertTrue(short.body.contains(idr(2_000_000)), short.body)   // the whole 20% is missing
-        XCTAssertNotNil(short.action)
-        // Less left than the gap: move what there is.
-        let thin = sb.surplusInsight(unspent: 500_000, setAside: 1_000_000, income: 10_000_000,
-                                     investShare: 0.20, currency: "IDR")
-        XCTAssertTrue(thin.body.contains(idr(500_000)), thin.body)
-        // Share already met: just the surplus.
-        let met = sb.surplusInsight(unspent: 1_000_000, setAside: 2_500_000, income: 10_000_000,
-                                    investShare: 0.20, currency: "IDR")
-        XCTAssertNil(met.action)
+        LanguageManager.shared.withLanguage(.english) {
+            // Rp 10 jt income, 20% share = Rp 2 jt; Rp 1,5 jt of instalments due, none paid.
+            let both = sb.surplusInsight(unspent: 4_072_500, debtPaid: 0, invested: 0, debtDue: 1_500_000,
+                                         income: 10_000_000, investShare: 0.20, currency: "IDR")
+            XCTAssertTrue(both.title.contains(idr(4_072_500)))
+            XCTAssertTrue(both.body.contains(idr(1_500_000)), both.body)   // debt first
+            XCTAssertTrue(both.body.contains(idr(500_000)), both.body)     // then the rest of the 2 jt
+            XCTAssertNotNil(both.action)
+
+            // Instalments bigger than the share: all of it goes to debt, nothing to invest.
+            let debtOnly = sb.surplusInsight(unspent: 4_000_000, debtPaid: 0, invested: 0, debtDue: 2_500_000,
+                                             income: 10_000_000, investShare: 0.20, currency: "IDR")
+            XCTAssertEqual(debtOnly.body, String(format: loc("insight.surplus_debt_body"), idr(2_500_000)))
+
+            // Debt already paid this period: the rest of the share goes to investing.
+            let investOnly = sb.surplusInsight(unspent: 4_000_000, debtPaid: 1_500_000, invested: 0,
+                                               debtDue: 1_500_000, income: 10_000_000, investShare: 0.20,
+                                               currency: "IDR")
+            XCTAssertTrue(investOnly.body.contains(idr(500_000)), investOnly.body)
+
+            // Less left than owed: the debt gets what there is.
+            let thin = sb.surplusInsight(unspent: 300_000, debtPaid: 0, invested: 0, debtDue: 1_500_000,
+                                         income: 10_000_000, investShare: 0.20, currency: "IDR")
+            XCTAssertEqual(thin.body, String(format: loc("insight.surplus_debt_body"), idr(300_000)))
+
+            // Nothing due and the share met: just the surplus.
+            let met = sb.surplusInsight(unspent: 1_000_000, debtPaid: 0, invested: 2_500_000, debtDue: 0,
+                                        income: 10_000_000, investShare: 0.20, currency: "IDR")
+            XCTAssertNil(met.action)
+        }
     }
 
     func testNewStringsInBothLanguages() {
@@ -93,6 +110,7 @@ final class InvestingInBudgetTests: XCTestCase {
                     "reco.item.invest_more_title", "reco.item.invest_more_sub",
                     "insight.invest_over_title", "insight.invest_over_body",
                     "insight.surplus_ratio_body", "insight.lifestyle_first_cut",
+                    "insight.surplus_debt_invest_body", "insight.surplus_debt_body",
                     "insight.review_lifestyle_first"] {
             XCTAssertNotEqual(loc(key), key, key)
         }
