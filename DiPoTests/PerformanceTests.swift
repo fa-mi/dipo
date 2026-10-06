@@ -135,6 +135,14 @@ final class PerformanceTests: XCTestCase {
             BankCard.totalBalanceAcrossCards(l.cards, preferredCurrency: "IDR")
         }
         time(scenario, "Rollup rebuild (daily buckets)") { RollupStore.shared.rebuild(context: l.context).count }
+        // The everyday case: one transaction added, the rollup brought up to date.
+        time(scenario, "Rollup after one new transaction", runs: 1) {
+            l.cards[0].transactions.append(TxRecord(name: "Kopi", date: .now, amount: -15_000,
+                                                    type: "tx.type.purchase", icon: "cup",
+                                                    iconBgHex: TxCategory.food.iconBg, category: .food,
+                                                    currency: "IDR"))
+            return RollupStore.shared.rebuild(context: l.context).count
+        }
 
         // Plan
         time(scenario, "Financial ladder gather+evaluate") {
@@ -153,6 +161,17 @@ final class PerformanceTests: XCTestCase {
                 $0 + SmartBudgetManager.shared.spent(in: $1, transactions: all, targetCurrency: "IDR",
                                                      periodStart: cycle)
             }
+        }
+
+        // Search: opening it (everything), then a word typed.
+        let idr = { (t: TxRecord) in t.amount }
+        time(scenario, "Search open (all, newest)") {
+            SearchEngine.run(l.cards.flatMap(\.transactions), query: "", range: nil, category: nil,
+                             sort: .newest, limit: SearchView.pageSize, convert: idr).count
+        }
+        time(scenario, "Search typed 'gaji'") {
+            SearchEngine.run(l.cards.flatMap(\.transactions), query: "gaji", range: nil, category: nil,
+                             sort: .newest, limit: SearchView.pageSize, convert: idr).count
         }
 
         // Statistics
