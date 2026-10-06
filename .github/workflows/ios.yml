@@ -51,7 +51,7 @@ jobs:
             -skipPackagePluginValidation -skipMacroValidation \
             CODE_SIGNING_ALLOWED=NO \
             2>&1 | tee xcodebuild.log \
-            | { grep -E '^(Test Suite|Test Case .*(passed|failed))|error:|\*\* (BUILD|TEST)' || true; }
+            | { grep -E '^(Test Suite|Test Case .*(passed|failed))|error:|\*\* (BUILD|TEST)|PERF\|' || true; }
           # pipefail makes the step fail with xcodebuild's status; the grep
           # group always succeeds, so it can't mask or cause a failure.
 
