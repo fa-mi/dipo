@@ -117,15 +117,10 @@ struct SocialLoginView: View {
 
                 // Logo + hero
                 VStack(spacing: 0) {
-                    // Mascot with glow
+                    // Savings growing, in 3D: tap drops a coin, drag turns it
                     ZStack {
-
-                        Image("DiPoMascot")
-                            .resizable()
-                            .scaledToFill()
-                            .frame(width: 180, height: 180)
-                            .clipShape(Circle())
-                            .blendMode(colorScheme == .dark ? .screen : .multiply)
+                        CoinGardenView(interactive: true, shadows: true)
+                            .frame(width: 240, height: 240)
                     }
                     .scaleEffect(appeared ? 1 : 0.6)
                     .opacity(appeared ? 1 : 0)
