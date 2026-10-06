@@ -68,10 +68,32 @@ final class InvestingInBudgetTests: XCTestCase {
         XCTAssertEqual(plain?.body, moved?.body)
     }
 
+    /// Unspent money while Invest & Debt is short of its share: say how far
+    /// short, and move that much first — savings before needs and wants.
+    func testUnspentMoneyIsPointedAtTheInvestShareFirst() {
+        let sb = SmartBudgetManager.shared
+        let idr = { (v: Double) in CurrencyManager.shared.formatted(v, currency: "IDR") }
+        let short = sb.surplusInsight(unspent: 4_072_500, setAside: 0, income: 10_000_000,
+                                      investShare: 0.20, currency: "IDR")
+        XCTAssertTrue(short.title.contains(idr(4_072_500)))
+        XCTAssertTrue(short.body.contains(idr(2_000_000)), short.body)   // the whole 20% is missing
+        XCTAssertNotNil(short.action)
+        // Less left than the gap: move what there is.
+        let thin = sb.surplusInsight(unspent: 500_000, setAside: 1_000_000, income: 10_000_000,
+                                     investShare: 0.20, currency: "IDR")
+        XCTAssertTrue(thin.body.contains(idr(500_000)), thin.body)
+        // Share already met: just the surplus.
+        let met = sb.surplusInsight(unspent: 1_000_000, setAside: 2_500_000, income: 10_000_000,
+                                    investShare: 0.20, currency: "IDR")
+        XCTAssertNil(met.action)
+    }
+
     func testNewStringsInBothLanguages() {
         for key in ["tx.note.invest_buy", "reco.item.invest_keep_title", "reco.item.invest_keep_sub",
                     "reco.item.invest_more_title", "reco.item.invest_more_sub",
-                    "insight.invest_over_title", "insight.invest_over_body"] {
+                    "insight.invest_over_title", "insight.invest_over_body",
+                    "insight.surplus_ratio_body", "insight.lifestyle_first_cut",
+                    "insight.review_lifestyle_first"] {
             XCTAssertNotEqual(loc(key), key, key)
         }
     }

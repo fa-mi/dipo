@@ -343,6 +343,34 @@ final class SmartBudgetManager {
     /// (highest-priority) insight only — used by callers that just want a
     /// single primary banner. New callers wanting multi-banner UX should
     /// use `evaluateAll(...)` directly.
+    /// Money left unspent while the Invest & Debt share is not yet met. Says
+    /// how far short the plan is and how much to move now, in the order the
+    /// plan is meant to run: savings and investing first, then daily needs,
+    /// then lifestyle — not whatever is left at the end of the month.
+    func surplusInsight(unspent: Double, setAside: Double, income: Double,
+                        investShare: Double, currency: String) -> SmartInsight {
+        let cm = CurrencyManager.shared
+        let target = income * investShare
+        let short = max(target - setAside, 0)
+        let title = String(format: loc("insight.surplus_title"), cm.formatted(unspent.rounded(), currency: currency))
+        guard short >= 1 else {
+            return SmartInsight(icon: "tray.and.arrow.down", color: AppTheme.blue, title: title,
+                                body: String(format: loc("insight.surplus_body"), Int((unspent / income) * 100)))
+        }
+        let move = min(short, unspent)
+        return SmartInsight(
+            icon: "tray.and.arrow.down",
+            color: AppTheme.orange,
+            title: title,
+            body: String(format: loc("insight.surplus_ratio_body"),
+                         cm.formatted(setAside.rounded(), currency: currency),
+                         cm.formatted(target.rounded(), currency: currency),
+                         Int((investShare * 100).rounded()),
+                         cm.formatted(move.rounded(), currency: currency)),
+            action: SmartInsightAction(label: loc("insight.action.adjust_budget"), kind: .openBudgetSettings)
+        )
+    }
+
     func topInsight(allTransactions: [TxRecord], income: Double,
                     cardID: String? = nil,
                     configs: [CardBudgetConfig] = [],
@@ -468,14 +496,9 @@ final class SmartBudgetManager {
                 // A surplus with nothing moved out of it. Reported as the
                 // surplus it is — which is useful, and is the one sentence that
                 // turns it into a decision rather than a compliment.
-                results.append(SmartInsight(
-                    icon: "tray.and.arrow.down",
-                    color: AppTheme.blue,
-                    title: String(format: loc("insight.surplus_title"),
-                                  CurrencyManager.shared.formatted(savings, currency: target)),
-                    body: String(format: loc("insight.surplus_body"),
-                                 Int((savings / income) * 100))
-                ))
+                results.append(surplusInsight(unspent: savings, setAside: setAside, income: income,
+                                              investShare: ratios(forCardID: cardID, configs: configs).investDebt,
+                                              currency: target))
             }
         }
 
@@ -555,7 +578,11 @@ final class SmartBudgetManager {
         // Check each group for overspend using PER-CARD ratios.
         // spent() is called with targetCurrency so IDR spend and USD income
         // are always compared in the same unit.
-        for grp in BudgetGroup.allCases {
+        //
+        // Lifestyle first: when spending swells, it is the first thing to look
+        // at — wants give way before needs — so when both are over, the card
+        // names Lifestyle.
+        for grp in [BudgetGroup.lifestyle, .daily, .investDebt] {
             let limit: Double = {
                 switch grp {
                 case .daily:      return income * r.daily
@@ -672,7 +699,20 @@ final class SmartBudgetManager {
                     // they actually want the decomposition. Stacking six
                     // figures into a paragraph meant none of them were read.
                     let overFmt = CurrencyManager.shared.formatted(spent - limit, currency: target)
-                    let bodyWithTarget = String(format: loc("insight.over_by_recover"), daysLeft, overFmt)
+                    var bodyWithTarget = String(format: loc("insight.over_by_recover"), daysLeft, overFmt)
+                    // Where to look first. Needs over budget: trim Lifestyle
+                    // before cutting what the household needs, when there is
+                    // Lifestyle spending to trim.
+                    if grp == .lifestyle {
+                        bodyWithTarget += " " + loc("insight.lifestyle_first_cut")
+                    } else if grp == .daily {
+                        let lifestyleSpent = self.spent(in: .lifestyle, transactions: allTransactions,
+                                                        targetCurrency: target, periodStart: periodStart)
+                        if lifestyleSpent >= 1 {
+                            bodyWithTarget += " " + String(format: loc("insight.review_lifestyle_first"),
+                                CurrencyManager.shared.formatted(lifestyleSpent.rounded(), currency: target))
+                        }
+                    }
                     return SmartInsight(
                         icon: "exclamationmark.triangle.fill",
                         color: AppTheme.red,
@@ -868,13 +908,8 @@ final class SmartBudgetManager {
         if savings > 0, income > 0 {
             let rate = Int((setAside / income) * 100)
             guard rate > 0 else {
-                return SmartInsight(
-                    icon: "tray.and.arrow.down", color: AppTheme.blue,
-                    title: String(format: loc("insight.surplus_title"),
-                                  CurrencyManager.shared.formatted(savings, currency: target)),
-                    body: String(format: loc("insight.surplus_body"),
-                                 Int((savings / income) * 100))
-                )
+                return surplusInsight(unspent: savings, setAside: setAside, income: income,
+                                      investShare: r.investDebt, currency: target)
             }
             let icon = rate >= 20 ? "checkmark.seal.fill" : "info.circle.fill"
             let color: Color = rate >= 20 ? AppTheme.accent : AppTheme.orange
