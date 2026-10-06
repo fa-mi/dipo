@@ -93,6 +93,9 @@ struct RecoCycleSnapshot {
     /// Income actually received in the cycle, floored at the scheduled
     /// salary so a mid-cycle view before payday does not divide by ~0.
     let income: Double
+    /// How far through the pay period this snapshot is, 0…1. Below 1 the
+    /// period is still running: what hasn't been spent YET is not left over.
+    var elapsedFraction: Double = 1
     /// Biggest single consumption category this cycle — turns "you're over by
     /// Rp X" into advice the user can actually act on ("Food & Drinks, 88 txs").
     var topCategory: String? = nil
@@ -327,13 +330,27 @@ enum SmartRecommendationEngine {
         // Surplus is computed against the *effective* (floored) expense so we
         // never assume the user saves money that's really going to unlogged
         // essentials.
-        let currentSaving = income - effectiveExpense
-        let savingsRate   = income > 0 ? currentSaving / income : 0
+        //
+        // Measured against the income that actually came in over the same
+        // window when that was more than the salary schedule — a bonus or side
+        // income spent in the same months is not a deficit. Money taken back
+        // out of savings or an investment is not income, so it is left out
+        // (the rule "Check these entries" uses). Without this, months funded by
+        // real extra income read as "you spent Rp 6,5 jt more than you earned".
+        let receivedAvg = transactions
+            .filter { tx in
+                tx.amount > 0 && tx.txSubtype != .transfer && !DataIntegrityCheck.isLikelyWithdrawal(tx)
+                    && (cycleWindow.map { tx.date >= $0.start && tx.date < $0.end } ?? true)
+            }
+            .reduce(0.0) { $0 + toPref($1.amount, $1.currency) } / monthsDivisor
+        let histIncome = max(income, receivedAvg)
+        let currentSaving = histIncome - effectiveExpense
+        let savingsRate   = histIncome > 0 ? currentSaving / histIncome : 0
 
         // ── Deficit mode ── average spending exceeds income. No savings target
         // is real until the gap closes, so the whole recommendation pivots:
         // cut first, save later, never suggest investing money that isn't there.
-        let isDeficit = income > 0 && currentSaving < 0
+        let isDeficit = histIncome > 0 && currentSaving < 0
         let deficitAmount = isDeficit ? -currentSaving : 0
 
         // Recommend a SUSTAINABLE set-aside, not the whole surplus. Rationale:
@@ -425,22 +442,36 @@ enum SmartRecommendationEngine {
         /// Share of income actually routed to investing / debt payoff.
         let rInvestShare: Double
         if let c = currentCycle, c.income > 0 {
-            rDailyShare  = c.daily / c.income
-            rLifeShare   = c.lifestyle / c.income
-            // Credit BOTH what's left over AND what was deliberately set aside.
-            rSavingsRate = max(max(0, (c.income - c.daily - c.lifestyle) / c.income),
+            // A period still running hasn't finished spending. Counting what
+            // is unspent SO FAR as left over scored "Saving: Great, 100" eleven
+            // days after payday, beside a card saying spending ran Rp 6,5 jt
+            // over income. So living costs are projected to the period's end:
+            // what was spent, plus the usual spending for the days still to
+            // come (the past full periods' average, or this period's pace when
+            // there's no history yet).
+            let f = min(max(c.elapsedFraction, 0.05), 1)
+            let soFar = c.daily + c.lifestyle
+            let usual = dailyAvg + lifestyleAvg
+            let rest: Double = f >= 1 ? 0
+                : (cycleWindow != nil && usual > 0 ? usual * (1 - f) : soFar / f * (1 - f))
+            let dailyWeight = usual > 0 ? dailyAvg / usual : (soFar > 0 ? c.daily / soFar : 0.5)
+            rDailyShare  = (c.daily + rest * dailyWeight) / c.income
+            rLifeShare   = (c.lifestyle + rest * (1 - dailyWeight)) / c.income
+            let projected = soFar + rest
+            // Credit BOTH what will be left over AND what was deliberately set aside.
+            rSavingsRate = max(max(0, (c.income - projected) / c.income),
                                c.savingsDeposits / c.income)
             rInvestShare = max(0, c.investDebt / c.income)
             // Living costs ALONE outrunning income is the real red flag. Money
             // routed to investing or debt payoff must not count as overspending
             // — including it scored good behaviour as "Poor" spending balance.
-            rOverspent   = (c.daily + c.lifestyle) > c.income
+            rOverspent   = projected > c.income
         } else {
-            rDailyShare  = income > 0 ? dailyAvg / income : 0
-            rLifeShare   = income > 0 ? lifestyleAvg / income : 0
+            rDailyShare  = histIncome > 0 ? dailyAvg / histIncome : 0
+            rLifeShare   = histIncome > 0 ? lifestyleAvg / histIncome : 0
             rSavingsRate = savingsRate
-            rInvestShare = 0
-            rOverspent   = avgMonthlyExpense > income && income > 0
+            rInvestShare = histIncome > 0 ? avgGroup(SmartBudgetManager.investDebtCategories) / histIncome : 0
+            rOverspent   = avgMonthlyExpense > histIncome && histIncome > 0
         }
         let lifeShare = rLifeShare   // reused below for the "why" reasons
 
@@ -468,8 +499,11 @@ enum SmartRecommendationEngine {
         // Credit BOTH capacity (money still free) and what's already being put to
         // work. Judging on leftover alone rated someone routing 12% of income to
         // investing the same as someone routing nothing.
+        // What actually went to investing and debt payoff — not what could
+        // have. Crediting spare capacity here rated "Investing: High" for a
+        // period in which nothing had been invested.
         let investmentPotential: RecoRating = {
-            let signal = max(rSavingsRate, rInvestShare)
+            let signal = rInvestShare
             if signal >= 0.30 { return .high }
             if signal >= 0.15 { return .good }
             if signal > 0.05  { return .fair }
@@ -481,7 +515,7 @@ enum SmartRecommendationEngine {
         let pctLeft = Int((max(rSavingsRate, 0) * 100).rounded())
         let deposited = currentCycle?.savingsDeposits ?? 0
         let pctConsumed = Int(((rDailyShare + rLifeShare) * 100).rounded())
-        let pctInvested = Int((max(rInvestShare, rSavingsRate) * 100).rounded())
+        let pctInvested = Int((rInvestShare * 100).rounded())
         let metricDetails: [RecoMetricDetail] = [
             RecoMetricDetail(
                 icon: "waveform.path.ecg",
@@ -545,7 +579,7 @@ enum SmartRecommendationEngine {
         let balanceScore = 30 * min(max(1 - max(consumptionShare - 0.80, 0) / 0.30, 0), 1)
         // Invest: credit both spare capacity and money already put to work,
         // against the 20% invest/debt target.
-        let investScore = min(max(max(rSavingsRate, rInvestShare) / 0.20, 0), 1) * 25
+        let investScore = min(max(rInvestShare / 0.20, 0), 1) * 25
         // A declared pause shouldn't be scored as a miss. Rather than gifting
         // the points, re-weight: the remaining components are judged on their
         // own scale, so the score reflects how the user did at what they were

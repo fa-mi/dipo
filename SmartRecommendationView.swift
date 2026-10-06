@@ -246,6 +246,13 @@ struct SmartRecommendationView: View {
         //
         // `max` with the schedule keeps a mid-cycle view sane: before payday
         // lands, actual income is near zero and every ratio would explode.
+        // How far through the period `end` (now, for the running one) is, so
+        // the engine doesn't read the days still to come as money saved. A
+        // judged previous period is complete.
+        let periodEnd = cal.date(byAdding: .month, value: 1, to: start) ?? start.addingTimeInterval(30 * 86_400)
+        let elapsedFraction = end < now ? 1
+            : min(max(now.timeIntervalSince(start) / max(periodEnd.timeIntervalSince(start), 1), 0), 1)
+
         let receivedIncome = scopedTx
             .filter { $0.date >= start && $0.date < end && $0.amount > 0 && $0.txSubtype != .transfer }
             .reduce(0.0) { $0 + CurrencyManager.shared.convert(
@@ -257,6 +264,7 @@ struct SmartRecommendationView: View {
             investDebt: mgr.spent(in: .investDebt, transactions: windowTx, targetCurrency: currency, periodStart: start),
             savingsDeposits: savingsDeposits,
             income:     max(receivedIncome, monthlyIncome),
+            elapsedFraction: elapsedFraction,
             topCategory:       top?.key.displayLabel,
             topCategoryAmount: top?.value.total ?? 0,
             topCategoryCount:  top?.value.count ?? 0)

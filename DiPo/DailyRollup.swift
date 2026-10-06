@@ -119,6 +119,15 @@ final class RollupStore {
     /// The in-memory daily buckets screens read (fast: O(days-in-range)).
     private(set) var buckets: [DailyBucket] = []
 
+    // What the last rebuild saw, so the next one can redo only the days a
+    // change touched. Rebuilding everything re-read every transaction's
+    // fields — 0,8 s for a busy five-year ledger — each time one was added.
+    private var factsByID: [PersistentIdentifier: TxFact] = [:]
+    private var idsByCard: [String: Set<PersistentIdentifier>] = [:]
+    /// Transactions on each (card, day), keyed like `DailyRollup.dayKey`.
+    private var idsByDay: [String: Set<PersistentIdentifier>] = [:]
+    private var bucketsByKey: [String: DailyBucket] = [:]
+
     /// The transaction count the cache was built at — a cheap staleness signal,
     /// the same one StatisticsView uses (`statTxCount`). An edit that keeps the
     /// count but changes an amount is picked up on the next launch rebuild, the
@@ -147,14 +156,105 @@ final class RollupStore {
         // to its card, and the app's figures are per-card, so each fact is
         // tagged with the card whose ledger it sits in.
         let cards = (try? context.fetch(FetchDescriptor<BankCard>())) ?? []
-        let facts = cards.flatMap { card in
-            card.transactions.map { TxFact($0, cardID: card.id.uuidString) }
+        factsByID = [:]; idsByCard = [:]; idsByDay = [:]
+        var facts: [TxFact] = []
+        for card in cards {
+            let cid = card.id.uuidString
+            var ids = Set<PersistentIdentifier>()
+            for tx in card.transactions {
+                let f = TxFact(tx, cardID: cid)
+                let id = tx.persistentModelID
+                facts.append(f)
+                factsByID[id] = f
+                ids.insert(id)
+                idsByDay[DailyRollup.key(cardID: cid, day: f.date), default: []].insert(id)
+            }
+            idsByCard[cid] = ids
         }
         let computed = RollupEngine.daily(from: facts)
         buckets = computed
+        bucketsByKey = Dictionary(computed.map { (DailyRollup.key(cardID: $0.cardID, day: $0.dayStart), $0) },
+                                  uniquingKeysWith: { a, _ in a })
         builtAtTxCount = facts.count
         persist(computed, context: context)
         return computed
+    }
+
+    /// Bring the rollup up to date by redoing only the (card, day) buckets
+    /// whose transactions were added or removed since the last build. Reads
+    /// each transaction's identity, which is cheap, and the fields of only the
+    /// new ones. Falls back to a full rebuild when there is nothing to diff
+    /// against yet (first build since launch).
+    @discardableResult
+    func update(context: ModelContext) -> [DailyBucket] {
+        guard builtAtTxCount >= 0, !idsByCard.isEmpty || builtAtTxCount == 0 else {
+            return rebuild(context: context)
+        }
+        let cards = (try? context.fetch(FetchDescriptor<BankCard>())) ?? []
+        var touched = Set<String>()
+        var seenCards = Set<String>()
+        for card in cards {
+            let cid = card.id.uuidString
+            seenCards.insert(cid)
+            var current = Set<PersistentIdentifier>()
+            for tx in card.transactions {
+                let id = tx.persistentModelID
+                current.insert(id)
+                if factsByID[id] == nil {
+                    let f = TxFact(tx, cardID: cid)
+                    factsByID[id] = f
+                    let key = DailyRollup.key(cardID: cid, day: f.date)
+                    idsByDay[key, default: []].insert(id)
+                    touched.insert(key)
+                }
+            }
+            for gone in (idsByCard[cid] ?? []).subtracting(current) {
+                forget(gone, touched: &touched)
+            }
+            idsByCard[cid] = current
+        }
+        for (cid, ids) in idsByCard where !seenCards.contains(cid) {
+            for gone in ids { forget(gone, touched: &touched) }
+            idsByCard[cid] = nil
+        }
+        builtAtTxCount = factsByID.count
+        guard !touched.isEmpty else { return buckets }
+
+        for key in touched {
+            let facts = (idsByDay[key] ?? []).compactMap { factsByID[$0] }
+            if let b = RollupEngine.daily(from: facts).first { bucketsByKey[key] = b } else { bucketsByKey[key] = nil }
+        }
+        buckets = bucketsByKey.values.sorted { $0.dayStart < $1.dayStart }
+        persist(keys: touched, context: context)
+        return buckets
+    }
+
+    private func forget(_ id: PersistentIdentifier, touched: inout Set<String>) {
+        guard let f = factsByID.removeValue(forKey: id) else { return }
+        let key = DailyRollup.key(cardID: f.cardID, day: f.date)
+        idsByDay[key]?.remove(id)
+        if idsByDay[key]?.isEmpty == true { idsByDay[key] = nil }
+        touched.insert(key)
+    }
+
+    /// Save just the given days' rows.
+    private func persist(keys: Set<String>, context: ModelContext) {
+        let wanted = Array(keys)
+        let rows = (try? context.fetch(FetchDescriptor<DailyRollup>(
+            predicate: #Predicate { wanted.contains($0.dayKey) }))) ?? []
+        var byKey: [String: DailyRollup] = [:]
+        for row in rows {
+            if byKey[row.dayKey] != nil { context.delete(row) } else { byKey[row.dayKey] = row }
+        }
+        for key in keys {
+            switch (bucketsByKey[key], byKey[key]) {
+            case let (b?, row?): row.update(from: b)
+            case let (b?, nil):  context.insert(DailyRollup(b))
+            case let (nil, row?): context.delete(row)
+            case (nil, nil):     break
+            }
+        }
+        try? context.save()
     }
 
     /// Rebuild only when the transaction count changed since the cache was
@@ -162,7 +262,7 @@ final class RollupStore {
     /// cache is fresh at read time without a rebuild on every render.
     @discardableResult
     func rebuildIfStale(context: ModelContext, txCount: Int) -> [DailyBucket] {
-        txCount == builtAtTxCount ? buckets : rebuild(context: context)
+        txCount == builtAtTxCount ? buckets : update(context: context)
     }
 
     private func persist(_ computed: [DailyBucket], context: ModelContext) {
