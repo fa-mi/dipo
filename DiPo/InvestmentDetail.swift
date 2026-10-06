@@ -41,6 +41,8 @@ struct HoldingDetailView: View {
 
     @State private var sheet: DetailSheet? = nil
     @State private var pendingDelete: DeleteTarget? = nil
+    /// The gold picker's "Other" row, open while the user is choosing it.
+    @State private var goldIsOther = false
 
     private var s: HoldingStats { holding.stats() }
     private var cur: String { holding.currency }
@@ -380,31 +382,80 @@ struct HoldingDetailView: View {
 
     /// Gold can follow Pegadaian's daily buyback price — the one BRImo (Tring)
     /// values the balance at — instead of being updated by hand.
+    /// Which gold it is, whether its price follows that gold's feed, and how
+    /// far the buyback price is from what was paid.
     private var goldFeedCard: some View {
         let on = holding.isAutoPriced
-        return VStack(alignment: .leading, spacing: 6) {
-            Toggle(isOn: Binding(
-                get: { holding.isAutoPriced },
-                set: { newValue in
-                    HapticManager.shared.tap()
-                    holding.setGoldFeed(newValue)
+        let source = holding.goldSource
+        return VStack(alignment: .leading, spacing: 12) {
+            GoldSourcePicker(source: Binding(
+                get: { holding.goldSource },
+                set: { newSource in
+                    holding.setGoldSource(newSource)
                     try? context.save()
-                    guard newValue else { return }
+                    guard newSource != .manual else { return }
                     Task { await PriceService.refresh([holding], context: context) }
-                })) {
-                Text(loc("invest.gold_feed_title"))
-                    .font(.system(.subheadline, weight: .semibold))
-                    .foregroundStyle(AppTheme.textPrimary)
+                }), isOther: $goldIsOther, idle: AppTheme.bg)
+
+            if source != .manual {
+                Divider().overlay(AppTheme.cardMid)
+                Toggle(isOn: Binding(
+                    get: { holding.isAutoPriced },
+                    set: { newValue in
+                        HapticManager.shared.tap()
+                        holding.setGoldFeed(newValue)
+                        try? context.save()
+                        guard newValue else { return }
+                        Task { await PriceService.refresh([holding], context: context) }
+                    })) {
+                    Text(loc("invest.gold_feed_title"))
+                        .font(.system(.subheadline, weight: .semibold))
+                        .foregroundStyle(AppTheme.textPrimary)
+                }
+                .tint(AppTheme.accent)
+                Text(on ? String(format: loc("invest.gold_feed_on_src"), source.displayName)
+                        : loc("invest.gold_feed_off"))
+                    .font(.system(.caption))
+                    .foregroundStyle(AppTheme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                if on, GoldPricing.isEstimate(source) {
+                    Label(loc(goldEstimateKey(source)), systemImage: "info.circle")
+                        .font(.system(.caption2))
+                        .foregroundStyle(AppTheme.orange)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
-            .tint(AppTheme.accent)
-            Text(on ? loc("invest.gold_feed_on") : loc("invest.gold_feed_off"))
-                .font(.system(.caption))
-                .foregroundStyle(AppTheme.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
+
+            if let line = breakEvenLine {
+                Divider().overlay(AppTheme.cardMid)
+                Text(line.text)
+                    .font(.system(.caption, weight: .medium))
+                    .foregroundStyle(line.ahead ? AppTheme.accent : AppTheme.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+    }
+
+    private func goldEstimateKey(_ source: GoldSource) -> String {
+        if case .jewelry = source { return "gold.estimate_jewelry" }
+        return "gold.estimate_bar"
+    }
+
+    /// Gold is bought above the price it sells back at, so a new holding
+    /// starts behind. Say by how much, in the price the user can watch.
+    private var breakEvenLine: (text: String, ahead: Bool)? {
+        let avg = s.avgCost, buyback = holding.lastPrice
+        guard s.unitsHeld > 0, avg > 0, buyback > 0 else { return nil }
+        let rise = GoldPricing.riseToBreakEven(avgCost: avg, buyback: buyback)
+        if rise > 0.001 {
+            return (String(format: loc("gold.breakeven_behind"), investPctAbs(rise),
+                           investMoney(buyback, cur), investMoney(avg, cur)), false)
+        }
+        return (String(format: loc("gold.breakeven_ahead"), investMoney(buyback, cur),
+                       investMoney(avg, cur)), true)
     }
 
     /// Purchases recorded with a decimal in the wrong place — "22306" for

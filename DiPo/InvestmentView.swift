@@ -442,7 +442,7 @@ struct HoldingRow: View {
     private var subtitle: String {
         var parts = [holding.type.displayName]
         if holding.followsGoldFeed {
-            parts.append(holding.manualPrice ? loc("invest.manual") : loc("invest.gold_feed_name"))
+            parts.append(holding.manualPrice ? loc("invest.manual") : holding.goldSource.displayName)
             return parts.joined(separator: " · ")
         }
         if holding.type.supportsAutoPrice {

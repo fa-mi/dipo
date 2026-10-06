@@ -45,12 +45,27 @@ enum PriceService {
         guard !targets.isEmpty else { return out }
 
         var quotes = await workerQuotes(for: targets)
-        for h in targets where quotes[cacheKey(for: h)] == nil {
+        for h in targets where h.type != .gold && quotes[cacheKey(for: h)] == nil {
             if let q = await quote(for: h) { quotes[cacheKey(for: h)] = q }
         }
+        // Gold is priced from the feeds its source needs: a bar from its own
+        // brand when the Worker has it, else from Pegadaian's; jewellery from
+        // Pegadaian's by purity.
+        var goldQuotes: [String: Quote] = [:]
+        for sym in Set(targets.flatMap(\.goldSource.requestSymbols)) {
+            if let q = quotes[goldKey(sym)] { goldQuotes[sym] = q }
+        }
+        GoldPricing.rememberLiveBrands(Set(goldQuotes.keys))
 
         for h in targets {
-            guard let q = quotes[cacheKey(for: h)] else { continue }
+            let q: Quote?
+            if h.type == .gold {
+                q = GoldPricing.price(for: h.goldSource, quotes: goldQuotes)
+                    .map { Quote(price: $0.price, prevClose: $0.prevClose) }
+            } else {
+                q = quotes[cacheKey(for: h)]
+            }
+            guard let q else { continue }
             out.checked += 1
             // Compare before overwriting — a hundredth of a rupiah is noise.
             if abs(q.price - h.lastPrice) > 0.005 { out.changed += 1 }
@@ -80,6 +95,8 @@ enum PriceService {
         }
     }
 
+    private static func goldKey(_ symbol: String) -> String { "gold:\(symbol):idr" }
+
     private static func cacheKey(for h: InvestmentHolding) -> String {
         let kind = feedKind(h)
         return "\(kind):\(h.symbol.trimmingCharacters(in: .whitespaces).lowercased()):\(h.currency.lowercased())"
@@ -89,10 +106,14 @@ enum PriceService {
     /// symbol the Worker couldn't price is simply absent, never zero.
     private static func workerQuotes(for holdings: [InvestmentHolding]) async -> [String: Quote] {
         guard let url = URL(string: pricesURL) else { return [:] }
-        let items: [[String: String]] = holdings.map {
+        var items: [[String: String]] = holdings.filter { $0.type != .gold }.map {
             ["type": feedKind($0),
              "symbol": $0.symbol.trimmingCharacters(in: .whitespaces),
              "currency": $0.currency]
+        }
+        // One item per gold feed, however many holdings share it.
+        for sym in Set(holdings.flatMap(\.goldSource.requestSymbols)).sorted() {
+            items.append(["type": "gold", "symbol": sym, "currency": "IDR"])
         }
         var req = URLRequest(url: url, timeoutInterval: 12)
         req.httpMethod = "POST"
