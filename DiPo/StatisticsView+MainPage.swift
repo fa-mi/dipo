@@ -105,6 +105,9 @@ extension StatisticsView {
                     .foregroundStyle(AppTheme.textPrimary)
                     .contentTransition(.numericText())
                     .minimumScaleFactor(0.5).lineLimit(1)
+                if let left = leftToSpend, let recon = leftReconciliation(left: left) {
+                    leftExplainer(left: left, recon)
+                }
             }
 
             if filteredIncome > 0 {
@@ -171,11 +174,105 @@ extension StatisticsView {
         }
     }
 
+    // MARK: Left to spend is not the balance
+    //
+    // "Left to spend" is this period's income minus what went out of it. The
+    // card on Home shows the account balance, which also holds what was on
+    // the card before payday and every transfer in or out — Rp 6,3 jt there
+    // beside Rp 2 jt here read as a mistake. One line says which is which;
+    // tapped, it adds up from one to the other.
+
+    struct LeftReconciliation {
+        let balanceNow: Double
+        let transfers: Double
+        /// What the card held when the period began — the figure the other
+        /// lines are closed against, so the sum always lands on the balance.
+        let before: Double
+    }
+
+    /// Only for a period running up to today: a finished period's leftover
+    /// has nothing to do with today's balance.
+    func leftReconciliation(left: Double) -> LeftReconciliation? {
+        guard let card = selectedCard, Calendar.current.isDateInToday(effectiveRange.end) else { return nil }
+        let balance = CurrencyManager.shared.convert(card.computedBalance(),
+                                                     from: card.resolvedCurrency, to: displayCurrency)
+        let transfers = periodTransferNet
+        return LeftReconciliation(balanceNow: balance, transfers: transfers,
+                                  before: balance - left - transfers)
+    }
+
+    func leftExplainer(left: Double, _ r: LeftReconciliation) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Button {
+                HapticManager.shared.tap()
+                withAnimation(.spring(response: 0.3)) { showLeftBreakdown.toggle() }
+            } label: {
+                HStack(alignment: .top, spacing: 6) {
+                    Image(systemName: "info.circle")
+                        .font(.system(.caption))
+                    Text(String(format: loc("stats.left_from_income"),
+                                money(filteredIncome), money(r.balanceNow)))
+                        .font(.system(.caption))
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 4)
+                    Image(systemName: showLeftBreakdown ? "chevron.up" : "chevron.down")
+                        .font(.system(.caption2, weight: .semibold))
+                }
+                .foregroundStyle(AppTheme.textSecondary)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint(loc("stats.left_breakdown_hint"))
+
+            if showLeftBreakdown {
+                VStack(spacing: 6) {
+                    reconLine(loc("stats.recon_income"), filteredIncome)
+                    reconLine(loc("stats.recon_spent"), -filteredExpenses)
+                    reconLine(loc("stats.left_to_spend"), left, total: true)
+                    Divider().background(AppTheme.cardMid)
+                    reconLine(loc("stats.recon_start"), r.before)
+                    if abs(r.transfers) >= 1 {
+                        reconLine(loc("stats.recon_transfers"), r.transfers)
+                    }
+                    reconLine(loc("stats.card_balance_now"), r.balanceNow, total: true)
+                    Text(loc("stats.left_breakdown_note"))
+                        .font(.system(.caption2))
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.top, 2)
+                }
+                .padding(12)
+                .background(AppTheme.bg.opacity(0.55), in: RoundedRectangle(cornerRadius: AppRadius.md))
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+        .padding(.top, 4)
+    }
+
+    /// One line of the breakdown. Totals carry "=", the rest their sign.
+    func reconLine(_ label: String, _ value: Double, total: Bool = false) -> some View {
+        HStack {
+            Text(label)
+                .font(.system(.caption2, weight: total ? .semibold : .regular))
+                .foregroundStyle(total ? AppTheme.textPrimary : AppTheme.textSecondary)
+            Spacer(minLength: 8)
+            Text((total ? "= " : (value < 0 ? "− " : "+ ")) + (total && value < 0 ? "−" : "") + money(abs(value)))
+                .font(.system(.caption, weight: total ? .bold : .medium))
+                .foregroundStyle(total ? AppTheme.textPrimary : AppTheme.textSecondary)
+                .monospacedDigit()
+                .lineLimit(1).minimumScaleFactor(0.7)
+        }
+    }
+
     var metricStrip: some View {
         let top = topCategories.first
         return HStack(spacing: 0) {
             metricCell("chart.pie.fill", AppTheme.accent,
-                       filteredIncome > 0 ? "\(Int(spentRatio * 100))%" : "—",
+                       // Rounded, as every other percentage is; held below 100 until
+                       // the income is actually all gone.
+                       filteredIncome > 0 ? "\(min(BudgetGroup.pct(spentRatio), spentRatio < 1 ? 99 : 100))%" : "—",
                        loc("stats.metric_budget"))
             metricDivider
             metricCell("sun.max.fill", AppTheme.amber, money(todaySpend), loc("common.today"))
@@ -213,7 +310,10 @@ extension StatisticsView {
             miniStatCard(loc("stats.weekly"), loc("stats.this_week"), weekTotal,
                          "chart.bar.fill", AppTheme.blue, weekBars,
                          highlightLast: false, route: .weekly)
-            miniStatCard(loc("stats.trends"), loc("stats.this_month"), trendTotal,
+            // The trend buckets follow the pay cycle whenever there is a salary
+            // to anchor them, so the last bar is this PERIOD, not this month.
+            miniStatCard(loc("stats.trends"), loc(payCycleDay != nil ? "stats.this_period" : "stats.this_month"),
+                         trendTotal,
                          "chart.line.uptrend.xyaxis", AppTheme.accent, trendBars,
                          highlightLast: true, route: .trends)
         }

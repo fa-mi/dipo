@@ -278,18 +278,18 @@ final class SmartBudgetManager {
     /// Pass the currency of the transaction being added so amounts are correctly converted.
     func wouldExceed(category: TxCategory, amount: Double, currency: String = "IDR",
                      transactions: [TxRecord], income: Double,
-                     periodStart: Date? = nil) -> BudgetAlert? {
+                     periodStart: Date? = nil,
+                     cardID: String? = nil, configs: [CardBudgetConfig] = []) -> BudgetAlert? {
         // Defense-in-depth: bail on missing access too. Otherwise a logged-out
         // user with a stale `isEnabled = true` setting would get budget
         // exceedance prompts during transaction entry — visible leakage of a
         // premium feature.
         guard hasActiveBudget else { return nil }
 
-        // Debt payments are financially positive — never block regardless of ratio
-        if category == .debtPayment { return nil }
-
-        guard let grp = group(for: category) else { return nil }
-        let limit = monthlyLimit(for: grp, income: income)
+        // Savings & debt is a target, not a limit: paying a debt or investing
+        // past it is never a "this will exceed your budget" moment.
+        guard let grp = group(for: category), grp.isCeiling else { return nil }
+        let limit = monthlyLimit(for: grp, income: income, cardID: cardID, configs: configs)
         guard limit > 0 else { return nil }
 
         // Use the SAME accounting as everywhere else. The old investDebt branch
@@ -297,10 +297,11 @@ final class SmartBudgetManager {
         // payments — so the 20% invest/debt budget could be blown by debt
         // payments without the "you'll exceed" warning ever firing on the next
         // investment. `spent(in:)` already includes .debtPayment for this group.
-        let alreadySpent = spent(in: grp, transactions: transactions, periodStart: periodStart)
-
-        // Convert the new amount to preferred currency before comparing
-        let amountConverted = CurrencyManager.shared.toPreferred(abs(amount), from: currency)
+        // Everything in the income's currency — `currency` is what the caller's
+        // income and the new amount are both expressed in.
+        let alreadySpent = spent(in: grp, transactions: transactions, targetCurrency: currency,
+                                 periodStart: periodStart)
+        let amountConverted = abs(amount)
         let newTotal = alreadySpent + amountConverted
 
         if newTotal > limit {
@@ -370,7 +371,7 @@ final class SmartBudgetManager {
                                 action: action)
         case (false, false):
             return SmartInsight(icon: "tray.and.arrow.down", color: AppTheme.blue, title: title,
-                                body: String(format: loc("insight.surplus_body"), Int((unspent / income) * 100)))
+                                body: String(format: loc("insight.surplus_body"), BudgetGroup.pct(unspent, of: income)))
         }
     }
 
@@ -396,7 +397,9 @@ final class SmartBudgetManager {
                     configs: [CardBudgetConfig] = [],
                     targetCurrency: String? = nil,
                     goals: [SavingsGoal] = [],
-                    periodStart: Date? = nil) -> SmartInsight? {
+                    periodStart: Date? = nil,
+                    periodEnd: Date? = nil,
+                    projectedSpend: Double? = nil) -> SmartInsight? {
         evaluateAll(
             allTransactions: allTransactions,
             income: income,
@@ -404,7 +407,9 @@ final class SmartBudgetManager {
             configs: configs,
             targetCurrency: targetCurrency,
             goals: goals,
-            periodStart: periodStart
+            periodStart: periodStart,
+            periodEnd: periodEnd,
+            projectedSpend: projectedSpend
         ).first
     }
 
@@ -418,7 +423,9 @@ final class SmartBudgetManager {
                      configs: [CardBudgetConfig] = [],
                      targetCurrency: String? = nil,
                      goals: [SavingsGoal] = [],
-                     periodStart: Date? = nil) -> [SmartInsight] {
+                     periodStart: Date? = nil,
+                     periodEnd: Date? = nil,
+                     projectedSpend: Double? = nil) -> [SmartInsight] {
         // Royal-only feature. Defense-in-depth: every public engine method
         // checks hasActiveBudget so a future caller that forgets to gate
         // can't accidentally leak premium output. The wrapped methods
@@ -435,7 +442,8 @@ final class SmartBudgetManager {
             allTransactions: allTransactions, income: income,
             cardID: cardID, configs: configs,
             targetCurrency: targetCurrency, goals: goals,
-            periodStart: periodStart
+            periodStart: periodStart, periodEnd: periodEnd,
+            projectedSpend: projectedSpend
         ) {
             results.append(primary)
         }
@@ -492,26 +500,21 @@ final class SmartBudgetManager {
         // actually saving — this is the "balanced feedback" case.
         let primaryIsWarning = results.first?.color == AppTheme.red || results.first?.color == AppTheme.orange
         // Coherence guard: never celebrate savings while a consumption group is
-        // over its limit. Balanced feedback is good, self-contradiction is not.
+        // over its limit, or while the period is on pace to spend past the
+        // pay. Balanced feedback is good, self-contradiction is not.
         let anyGroupOver = [BudgetGroup.daily, .lifestyle].contains { grp in
             let limit = monthlyLimit(for: grp, income: income, cardID: cardID, configs: configs)
             guard limit > 0 else { return false }
             return spent(in: grp, transactions: allTransactions, targetCurrency: target,
                          periodStart: periodStart) > limit
         }
-        if primaryIsWarning, !anyGroupOver, savings > 0, income > 0 {
-            let rate = Int((setAside / income) * 100)
-            if rate >= 10 {  // only celebrate ≥10% — below that it's noise
-                results.append(SmartInsight(
-                    icon: rate >= 20 ? "checkmark.seal.fill" : "info.circle.fill",
-                    color: rate >= 20 ? AppTheme.accent : AppTheme.blue,
-                    title: rate >= 20
-                        ? loc("insight.savings_great_title")
-                        : String(format: loc("insight.savings_rate_title"), rate),
-                    body: rate >= 20
-                        ? String(format: loc("insight.savings_great_body"), rate)
-                        : String(format: loc("insight.savings_low_body"), rate)
-                ))
+        let headingOver = (projectedSpend ?? 0) > income
+        if primaryIsWarning, !anyGroupOver, !headingOver, savings > 0, income > 0 {
+            let rate = setAside / income
+            if rate >= 0.10 {  // only celebrate ≥10% — below that it's noise
+                results.append(setAsideInsight(setAside: setAside, income: income,
+                                               target: ratios(forCardID: cardID, configs: configs).investDebt,
+                                               currency: target))
             } else {
                 // A surplus with nothing moved out of it. Reported as the
                 // surplus it is — which is useful, and is the one sentence that
@@ -557,7 +560,8 @@ final class SmartBudgetManager {
     private func primaryInsight(allTransactions: [TxRecord], income: Double,
                                 cardID: String?, configs: [CardBudgetConfig],
                                 targetCurrency: String?, goals: [SavingsGoal],
-                                periodStart: Date? = nil) -> SmartInsight? {
+                                periodStart: Date? = nil, periodEnd: Date? = nil,
+                                projectedSpend: Double? = nil) -> SmartInsight? {
         // Premium gate: same defense-in-depth rationale as wouldExceed —
         // hasActiveBudget covers both "user toggled it off" and "user no
         // longer has Royal access".
@@ -701,8 +705,10 @@ final class SmartBudgetManager {
                     // Days left in the BUDGET window — the pay cycle when we have
                     // one, otherwise the calendar month.
                     let daysLeft: Int = {
+                        // The next payday when the caller knows it — "start plus
+                        // one month" is the 25th when the salary lands on the 23rd.
                         if let start = periodStart,
-                           let end = cal.date(byAdding: .month, value: 1, to: start) {
+                           let end = periodEnd ?? cal.date(byAdding: .month, value: 1, to: start) {
                             return max(cal.dateComponents([.day], from: cal.startOfDay(for: now), to: end).day ?? 1, 1)
                         }
                         let dayOfMonth = cal.component(.day, from: now)
@@ -747,6 +753,23 @@ final class SmartBudgetManager {
                     )
                 }
             }
+        }
+
+        // Where the period is heading. No group may be past its limit yet and
+        // the period can still be on course to spend past the pay — which is
+        // when a warning is worth most. The figure is Statistics' projection,
+        // passed in, so both screens quote the same amount.
+        if let projected = projectedSpend, projected > income {
+            let cm = CurrencyManager.shared
+            return SmartInsight(
+                icon: "speedometer",
+                color: AppTheme.orange,
+                title: loc("insight.pace_over_title"),
+                body: String(format: loc("stats.pace_over"),
+                             cm.formatted(projected.rounded(), currency: target),
+                             cm.formatted((projected - income).rounded(), currency: target)),
+                action: SmartInsightAction(label: loc("insight.action.adjust_budget"),
+                                           kind: .openBudgetSettings))
         }
 
         // Compare vs last month — all in target currency for consistency.
@@ -800,7 +823,7 @@ final class SmartBudgetManager {
         // Progress through the BUDGET window (pay cycle when known), so the
         // pacing check compares like with like against cycle-scoped spend.
         let monthProgress: Double = {
-            if let start = periodStart, let end = cal.date(byAdding: .month, value: 1, to: start) {
+            if let start = periodStart, let end = periodEnd ?? cal.date(byAdding: .month, value: 1, to: start) {
                 let total = max(cal.dateComponents([.day], from: start, to: end).day ?? 30, 1)
                 let done  = max(cal.dateComponents([.day], from: start, to: now).day ?? 0, 0)
                 return min(max(Double(done) / Double(total), 0), 1)
@@ -833,7 +856,7 @@ final class SmartBudgetManager {
         // This is a proactive insight — fires even if they haven't overspent yet,
         // because the *plan* itself is fragile.
         if r.lifestyle >= 0.60 {
-            let lifestylePct = Int(r.lifestyle * 100)
+            let lifestylePct = BudgetGroup.pct(r.lifestyle)
             return SmartInsight(
                 icon: "exclamationmark.triangle",
                 color: AppTheme.orange,
@@ -847,7 +870,7 @@ final class SmartBudgetManager {
         }
         // Very low daily ratio (<25%) — essentials might not fit
         if r.daily < 0.25 && r.daily > 0 {
-            let dailyPct = Int(r.daily * 100)
+            let dailyPct = BudgetGroup.pct(r.daily)
             return SmartInsight(
                 icon: "exclamationmark.triangle",
                 color: AppTheme.orange,
@@ -860,9 +883,11 @@ final class SmartBudgetManager {
             )
         }
 
-        // Savings rate — exclude debt payments (they're net-worth positive, not spending)
+        // Savings rate — exclude debt payments (they're net-worth positive, not spending).
+        // Over the BUDGET window: these used the calendar month while the
+        // spending beside them used the pay cycle.
         let debtPaid = allTransactions
-            .filter { $0.amount < 0 && $0.date >= monthStart && $0.category == .debtPayment }
+            .filter { $0.amount < 0 && $0.date >= cycleStart && $0.category == .debtPayment }
             .reduce(0.0) { sum, tx in
                 let txCur = tx.currency.isEmpty ? target : tx.currency
                 return sum + CurrencyManager.shared.convert(abs(tx.amount), from: txCur, to: target)
@@ -888,7 +913,7 @@ final class SmartBudgetManager {
         // praise expires on its own. The 20% goal is about money MOVED, so
         // that is what gets measured against it.
         let setAside = allTransactions
-            .filter { $0.amount < 0 && $0.date >= monthStart
+            .filter { $0.amount < 0 && $0.date >= cycleStart
                       && ($0.category == .investment || $0.category == .debtPayment) }
             .reduce(0.0) { sum, tx in
                 let txCur = tx.currency.isEmpty ? target : tx.currency
@@ -897,9 +922,11 @@ final class SmartBudgetManager {
 
         // If user is actively paying debt, show a debt-focused insight instead
         if debtPaid > 0 {
-            let debtPct = Int((debtPaid / income) * 100)
-            let trueSpendPct = Int((totalSpent / income) * 100)
-            if trueSpendPct <= Int((1 - r.daily - r.lifestyle) * 100) + 5 {
+            let debtPct = BudgetGroup.pct(debtPaid, of: income)
+            // Living costs within the Needs + Wants share. This compared them
+            // against the Savings & debt share (100% − Needs − Wants), which
+            // living costs only fit in a month with almost no spending.
+            if totalSpent <= income * (r.daily + r.lifestyle) {
                 return SmartInsight(
                     icon: "creditcard.fill",
                     color: AppTheme.accent,
@@ -928,27 +955,36 @@ final class SmartBudgetManager {
         }
 
         if savings > 0, income > 0 {
-            let rate = Int((setAside / income) * 100)
-            guard rate > 0 else {
+            guard setAside >= 1 else {
                 return surplusInsight(unspent: savings, debtPaid: debtPaid,
                                       invested: max(setAside - debtPaid, 0),
                                       debtDue: debtDueMonthly, income: income,
                                       investShare: r.investDebt, currency: target)
             }
-            let icon = rate >= 20 ? "checkmark.seal.fill" : "info.circle.fill"
-            let color: Color = rate >= 20 ? AppTheme.accent : AppTheme.orange
-            return SmartInsight(
-                icon: icon, color: color,
-                title: rate >= 20
-                    ? loc("insight.savings_great_title")
-                    : String(format: loc("insight.savings_rate_title"), rate),
-                body: rate >= 20
-                    ? String(format: loc("insight.savings_great_body"), rate)
-                    : String(format: loc("insight.savings_low_body"), rate)
-            )
+            return setAsideInsight(setAside: setAside, income: income,
+                                   target: r.investDebt, currency: target)
         }
 
         return nil
+    }
+
+    /// What went to savings, investing and debt this period, against the
+    /// user's own Savings & debt target. This was "Great savings rate! You're
+    /// saving 20% — above the 20% goal": a credit-card payment called saving,
+    /// and a goal fixed at 20% for someone whose target is 15%.
+    func setAsideInsight(setAside: Double, income: Double, target: Double,
+                         currency: String) -> SmartInsight {
+        let cm = CurrencyManager.shared
+        let reached = target > 0 && setAside >= income * target
+        let label = BudgetGroup.investDebt.label
+        return SmartInsight(
+            icon: reached ? "checkmark.seal.fill" : "info.circle.fill",
+            color: reached ? AppTheme.accent : AppTheme.blue,
+            title: String(format: loc(reached ? "insight.setaside_met_title" : "insight.setaside_title"),
+                          label, BudgetGroup.pct(setAside, of: income)),
+            body: String(format: loc(reached ? "insight.setaside_met_body" : "insight.setaside_body"),
+                         cm.formatted(setAside.rounded(), currency: currency), BudgetGroup.pct(target),
+                         cm.formatted(max(income * target - setAside, 0).rounded(), currency: currency)))
     }
 
     // MARK: - Goal-Linked Insight
@@ -1515,73 +1551,10 @@ final class SmartBudgetManager {
     }
 
     // MARK: - Recurring Duplicate Detection
-
-    /// A recurring plan that appears to be charged MORE times than the plan
-    /// expects within an analysis window — typically a manual entry coexisting
-    /// with the auto-recorded charge (the user pays and logs it by hand, and
-    /// the recurring engine also records it; or a manual log from before the
-    /// recurring was created falls inside the same pay cycle). These twins
-    /// silently inflate "variable living costs" in any analysis that treats
-    /// only the plan amount as fixed.
-    struct RecurringDuplicateSuspect: Identifiable {
-        let id = UUID()
-        let label: String
-        /// One charge, in the caller's preferred currency.
-        let chargeAmount: Double
-        let found: Int
-        let expected: Int
-        var excessAmount: Double { Double(max(found - expected, 0)) * chargeAmount }
-    }
-
-    /// Detect likely duplicate charges of active recurring plans inside
-    /// `expenseTx` (the caller's analysis window). `expectedPerPlan` is how
-    /// many charges of each plan the window should contain (1 per cycle or
-    /// month); plans younger than the window are only expected once per month
-    /// of their existence. Matching is by amount (±1%) within fixed-cost
-    /// categories (or the auto-record marker) rather than by name — the manual
-    /// twin usually has a different name than the plan ("Tranfer ibu bulanan"
-    /// vs plan "transfer mom"). Only FLAGS, never deletes or excludes: two
-    /// same-amount charges can both be real; only the user knows.
-    func detectRecurringDuplicates(expenseTx: [TxRecord],
-                                   recurrings: [RecurringExpense],
-                                   expectedPerPlan: Int,
-                                   currency: String,
-                                   now: Date = .now) -> [RecurringDuplicateSuspect] {
-        guard expectedPerPlan > 0, !recurrings.isEmpty else { return [] }
-        let cm = CurrencyManager.shared
-        let cal = Calendar.current
-        var used = Set<UUID>()
-        var result: [RecurringDuplicateSuspect] = []
-        // Larger plans claim transactions first so a big and a small plan with
-        // near amounts don't both count the same charge.
-        let plans = recurrings.filter { $0.isActive }.sorted {
-            cm.convert($0.amount, from: $0.currency, to: currency) >
-            cm.convert($1.amount, from: $1.currency, to: currency)
-        }
-        for plan in plans {
-            let amt = cm.convert(plan.amount, from: plan.currency, to: currency)
-            guard amt > 0 else { continue }
-            let tolerance = max(amt * 0.01, 1_000)
-            let matches = expenseTx.filter { tx in
-                guard !used.contains(tx.id) else { return false }
-                guard Self.fixedCategories.contains(tx.category)
-                        || tx.notes == "tx.note.recurring_auto" else { return false }
-                let txAmt = cm.convert(abs(tx.amount), from: tx.currency.isEmpty ? currency : tx.currency, to: currency)
-                return abs(txAmt - amt) <= tolerance
-            }
-            matches.forEach { used.insert($0.id) }
-            // A plan created mid-window can't owe a charge for every cycle the
-            // window covers — cap its expectation by its own age in months.
-            let ageMonths = (cal.dateComponents([.month], from: plan.createdAt, to: now).month ?? 0) + 1
-            let expected = min(expectedPerPlan, max(ageMonths, 1))
-            if matches.count > expected {
-                result.append(RecurringDuplicateSuspect(
-                    label: plan.label, chargeAmount: amt,
-                    found: matches.count, expected: expected))
-            }
-        }
-        return result
-    }
+    //
+    // Moved to RecurringDuplicates: a recorded bill paired with another entry
+    // of the same amount in the same pay period, rather than every charge of
+    // that amount anywhere in the window.
 
     /// Convenience: derive an InsightConfidence level from data age.
     /// Caller can override if it has additional signals (variance, etc.).
@@ -2199,6 +2172,20 @@ enum BudgetGroup: String, CaseIterable {
         case .lifestyle:  return AppTheme.purple
         case .investDebt: return AppTheme.accent
         }
+    }
+
+    /// Needs and Wants are LIMITS: past them is overspending. Savings & debt
+    /// is a TARGET: what counts is reaching it, and going past it — paying a
+    /// debt down faster, investing more — is good news, not a red warning.
+    var isCeiling: Bool { self != .investDebt }
+
+    /// A ratio as a whole percent, rounded. `Int(ratio * 100)` truncated, so a
+    /// stored 0.19999999999999998 (what 1 − 0.65 − 0.15 comes to) read 19%.
+    static func pct(_ ratio: Double) -> Int { Int((ratio * 100).rounded()) }
+
+    /// `part` as a whole percent of `whole`, rounded; 0 when there is no whole.
+    static func pct(_ part: Double, of whole: Double) -> Int {
+        whole > 0 ? Int((part / whole * 100).rounded()) : 0
     }
 }
 

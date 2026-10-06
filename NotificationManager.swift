@@ -1469,8 +1469,14 @@ enum NotificationScheduler {
         let salaries: [SalarySchedule] = (try? context.fetch(FetchDescriptor<SalarySchedule>())) ?? []
         let budgetConfigs: [CardBudgetConfig] = (try? context.fetch(FetchDescriptor<CardBudgetConfig>())) ?? []
         let active = MainCard.salaries(salaries)
+        let allCards: [BankCard] = (try? context.fetch(FetchDescriptor<BankCard>())) ?? []
+        // The period the Smart Budget screen measures: opened the day the
+        // salary landed on the main card.
         let periodStart: Date = {
-            if let day = MainCard.anchor(among: active)?.dayOfMonth { return StatPeriod.payCycleRange(payDay: day).start }
+            if let day = MainCard.anchor(among: active)?.dayOfMonth {
+                return StatPeriod.cycle(payDay: day,
+                                        salaryDates: StatPeriod.salaryDates(on: MainCard.resolve(in: allCards))).start
+            }
             return cal.date(from: cal.dateComponents([.year, .month], from: Date())) ?? Date()
         }()
 
@@ -1482,19 +1488,22 @@ enum NotificationScheduler {
         // saying they were comfortably under — with no way to tell which number
         // was lying. An alert the user cannot reproduce is worse than no alert:
         // it teaches them to ignore the next one.
-        let cards: [BankCard] = (try? context.fetch(FetchDescriptor<BankCard>())) ?? []
-        let scopedTx: [TxRecord] = MainCard.resolve(in: cards)?.transactions ?? txs
+        let scopedTx: [TxRecord] = MainCard.resolve(in: allCards)?.transactions ?? txs
 
         // Stated salary income first (the budget's signal even before payday);
         // else income transactions logged within the window.
         var income = active.reduce(0.0) { $0 + cm.convert($1.amount, from: $1.currency, to: preferred) }
         if income <= 0 {
-            income = scopedTx.filter { $0.date >= periodStart && $0.amount > 0 && $0.txSubtype != .transfer }
+            income = scopedTx.filter { $0.date >= periodStart && $0.amount > 0 && $0.txSubtype == .normal }
                 .reduce(0.0) { $0 + cm.convert($1.amount, from: ($1.currency.isEmpty ? preferred : $1.currency), to: preferred) }
         }
         guard income > 0 else { return }
 
-        let windowTx = scopedTx.filter { $0.date >= periodStart && $0.amount < 0 && $0.txSubtype != .transfer }
+        // Refunds included: they give their amount back to the group, as on
+        // the Smart Budget screen.
+        let windowTx = scopedTx.filter {
+            $0.date >= periodStart && $0.txSubtype != .transfer && ($0.amount < 0 || $0.txSubtype == .refund)
+        }
         let cycleKey = ISO8601DateFormatter.dayString(from: periodStart)
 
         // Only spending groups can be "over budget". Invest & Debt being UNDER

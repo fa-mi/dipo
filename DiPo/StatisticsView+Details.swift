@@ -178,7 +178,16 @@ extension StatisticsView {
         let avg = done.isEmpty ? 0 : done.reduce(0.0) { $0 + $1.expense } / Double(done.count)
         let highest = done.max { $0.expense < $1.expense }
         let lowest = done.min { $0.expense < $1.expense }
-        let prev = points.count >= 2 ? points[points.count - 2].expense : 0
+        // A running period set against a whole finished one always looks
+        // cheaper — day 12 against all 28. Compare the same number of days.
+        let prev: Double = {
+            guard points.count >= 2, let last = points.last else { return 0 }
+            let before = points[points.count - 2]
+            guard last.isRunning, let card = selectedCard else { return before.expense }
+            let cutoff = before.start.addingTimeInterval(Date().timeIntervalSince(last.start))
+            return Self.stretchTotal(card.transactions, from: before.start, to: min(cutoff, before.end),
+                                     income: false, convert: convertedAmount) ?? 0
+        }()
         let change: Double? = prev > 0 ? (trendTotal - prev) / prev * 100 : nil
 
         return ZStack {

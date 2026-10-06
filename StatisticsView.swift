@@ -50,6 +50,8 @@ struct StatisticsView: View {
     /// The slice picked in the ring. Held here rather than inside the chart so
     /// the figure beside it can follow the same choice.
     @State var donutSelection: String? = nil
+    /// Whether the hero's "where the rest of your balance is" lines are open.
+    @State var showLeftBreakdown = false
     /// Which day of the Weekly page is open, and which of its rows was tapped.
     @State var expandedDay: Date? = nil
     /// Category filter on the cycle page. Cleared whenever a different cycle opens.

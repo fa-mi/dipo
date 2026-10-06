@@ -119,15 +119,32 @@ struct ObligationLoad {
         for card in cards where card.isCreditCard {
             var monthly = card.installmentMonthlyCharge(installments)
             if !cardDebtRecorded {
-                let recent = card.transactions
-                    .filter { $0.date >= lastMonth && $0.amount < 0 && $0.txSubtype != .transfer }
-                    .reduce(0.0) { $0 + abs(cm.convert($1.amount, from: $1.currency, to: card.resolvedCurrency)) }
-                let carried = FinancialLadder.carriedOver(owed: card.owedBalance(), recentCharges: recent)
-                monthly += carried * cardMinimumShare
+                monthly += carried(on: card, since: lastMonth) * cardMinimumShare
             }
             sum += cm.convert(monthly, from: card.resolvedCurrency, to: currency)
         }
         return sum
+    }
+
+    /// The balance a card carries from before this month and last, in the
+    /// card's currency — the part that is being charged interest.
+    static func carried(on card: BankCard, since lastMonth: Date) -> Double {
+        let cm = CurrencyManager.shared
+        let recent = card.transactions
+            .filter { $0.date >= lastMonth && $0.amount < 0 && $0.txSubtype != .transfer }
+            .reduce(0.0) { $0 + abs(cm.convert($1.amount, from: $1.currency, to: card.resolvedCurrency)) }
+        return FinancialLadder.carriedOver(owed: card.owedBalance(), recentCharges: recent)
+    }
+
+    /// Every credit card's carried balance, in `currency`.
+    static func cardCarried(cards: [BankCard], currency: String, now: Date = .now) -> Double {
+        let cm = CurrencyManager.shared
+        let cal = Calendar.current
+        let thisMonth = cal.date(from: cal.dateComponents([.year, .month], from: now)) ?? now
+        let lastMonth = cal.date(byAdding: .month, value: -1, to: thisMonth) ?? thisMonth
+        return cards.filter(\.isCreditCard).reduce(0.0) {
+            $0 + cm.convert(carried(on: $1, since: lastMonth), from: $1.resolvedCurrency, to: currency)
+        }
     }
 
     static func build(debts: [DebtRecord],

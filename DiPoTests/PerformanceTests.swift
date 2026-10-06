@@ -181,6 +181,19 @@ final class PerformanceTests: XCTestCase {
             NonFlowMovements.rows(month, incoming: false, amount: { $0.amount }).count
         }
 
+        // Home's pace warning: Statistics' projection for the running cycle.
+        time(scenario, "Home projection (rhythm + figures)") {
+            StatisticsView.projectedCycleSpend(card: l.cards[0], payDay: 25, recurrings: l.recurrings,
+                                               currency: "IDR") ?? 0
+        }
+        // Smart Budget's duplicate check over twelve pay periods.
+        time(scenario, "Duplicate bills (12 periods)") {
+            RecurringDuplicates.find(transactions: l.cards[0].transactions, recurrings: l.recurrings,
+                                     payDay: 25, salaryDates: StatPeriod.salaryDates(on: l.cards[0]),
+                                     currency: "IDR",
+                                     since: Calendar.current.date(byAdding: .month, value: -12, to: .now)!).count
+        }
+
         // A full-history scan done once at launch.
         time(scenario, "Card payment reclassify (once)", runs: 1) {
             UserDefaults.standard.removeObject(forKey: "cardPaymentDebt.reclassified.v1")

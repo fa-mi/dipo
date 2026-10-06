@@ -430,8 +430,11 @@ final class WebSyncService {
         //
         // Sent as boundaries rather than as a precomputed total so the web can
         // still slice by category inside the window.
-        let cycle: (start: Date, end: Date)? = MainCard.payDay(salaries)
-            .map { StatPeriod.payCycleRange(payDay: $0) }
+        let cycle: (start: Date, end: Date)? = MainCard.payDay(salaries).map {
+            (StatPeriod.cycle(payDay: $0, salaryDates: StatPeriod.salaryDates(on: MainCard.resolve(in: cards)),
+                              now: now).start,
+             now)
+        }
 
         // The hero figures themselves, from the functions the Statistics screen
         // uses. The web rebuilt "left to spend" from the raw rows with its own
@@ -568,12 +571,25 @@ final class WebSyncService {
             // exist together here. Two passes over at most three insights costs
             // nothing measurable, and it is the difference between a dashboard
             // that switches language and one that switches half of itself.
+            // The same inputs Home gives the engine — the cycle's real end and
+            // Statistics' projection — so the dashboard says what the phone says.
+            let payDay = MainCard.payDay(salaries)
+            let mainCard = MainCard.resolve(in: cards)
+            let cycleEnd = payDay.map {
+                StatPeriod.cycle(payDay: $0, salaryDates: StatPeriod.salaryDates(on: mainCard), now: now).end
+            }
+            let projected: Double? = {
+                guard let day = payDay, let card = mainCard else { return nil }
+                return StatisticsView.projectedCycleSpend(card: card, payDay: day,
+                                                          recurrings: recurrings, currency: base, now: now)
+            }()
             func insights(in language: LanguageManager.Language) -> [[String: String]] {
                 LanguageManager.shared.withLanguage(language) {
                     sb.evaluateAll(
                         allTransactions: allTx, income: income,
                         cardID: sb.budgetCardID, configs: configs,
-                        targetCurrency: base, goals: goals, periodStart: cycle.start
+                        targetCurrency: base, goals: goals, periodStart: cycle.start,
+                        periodEnd: cycleEnd, projectedSpend: projected
                     ).prefix(3).map { ["title": $0.title, "body": $0.body] }
                 }
             }

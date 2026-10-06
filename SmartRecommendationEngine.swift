@@ -48,6 +48,13 @@ struct RecoItem: Identifiable {
     /// Short trailing badge, e.g. "+4 months", "Rp 850K", "High Impact".
     let badge: String
     let badgeTint: Color
+    /// What tapping the row opens, when it opens anything.
+    var action: RecoItemAction? = nil
+}
+
+enum RecoItemAction {
+    /// The suspected double-logged bills, with both rows to compare.
+    case reviewDuplicates
 }
 
 /// Why one health metric got the rating it did, in the user's own numbers.
@@ -200,7 +207,10 @@ enum SmartRecommendationEngine {
                         recurrings: [RecurringExpense] = [],
                         intents: CycleIntentSet = .empty,
                         portfolioValue: Double = 0,
-                        assetMonthlyWear: Double = 0) -> SmartRecommendation {
+                        assetMonthlyWear: Double = 0,
+                        duplicates: [RecurringDuplicatePair] = [],
+                        creditCardCarried: Double = 0,
+                        ratios: (daily: Double, lifestyle: Double, investDebt: Double)? = nil) -> SmartRecommendation {
 
         let sb = SmartBudgetManager.shared
         let cm = CurrencyManager.shared
@@ -215,6 +225,13 @@ enum SmartRecommendationEngine {
         // full cycle of data yet: whole history over its time span.
         func toPref(_ amt: Double, _ cur: String) -> Double {
             cm.convert(amt, from: cur.isEmpty ? currency : cur, to: currency)
+        }
+        /// A MEASURED figure — what happened — to the nearest Rp 1.000 (or
+        /// whole unit). `roundNice` steps of up to Rp 500.000 are for advice
+        /// ("aim for Rp 1.250.000"); on a fact they made "Rp 5.500.000 (56%)",
+        /// where 5,5 jt is 55% and the real figure was Rp 5.558.500.
+        func measured(_ v: Double) -> String {
+            cm.formatted(measuredValue(v, currency: currency), currency: currency)
         }
         // Only real spending — skip transfers (own-account moves) and refunds.
         let allExpenseTx = transactions.filter { $0.amount < 0 && $0.txSubtype == .normal }
@@ -245,7 +262,10 @@ enum SmartRecommendationEngine {
         // Money put into investments or savings goals left the account but was
         // not consumed: it is the set-aside itself. Counting it as spending made
         // a month with a gold purchase read as "you spent more than you earned".
-        let consumedTx = expenseTx.filter { $0.category != .investment }
+        // Paying down a debt is the same: it shrinks what is owed. Counting it
+        // made the leak Rp 6,5 jt where living costs ran Rp 5,8 jt past the
+        // salary — the debt payments were sitting inside "spending".
+        let consumedTx = expenseTx.filter { !SmartBudgetManager.investDebtCategories.contains($0.category) }
         let investedAvg = expenseTx.filter { $0.category == .investment }
             .reduce(0.0) { $0 + toPref(abs($1.amount), $1.currency) } / monthsDivisor
         let totalExpense = consumedTx.reduce(0.0) { $0 + toPref(abs($1.amount), $1.currency) }
@@ -277,14 +297,11 @@ enum SmartRecommendationEngine {
         let smallSpendCount = Int((Double(smallTx.count) / monthsDivisor).rounded())
         let hasSmallLeak = income > 0 && smallSpendMonthly > income * 0.08
 
-        // ── Duplicate recurring charges ── manual entries that look like twins
-        // of recurring-plan charges (matched by amount, not name). Flagged so
-        // the user can verify — never silently excluded from the math.
-        let expectedCharges = cycleWindow?.cycles ?? max(Int(monthsDivisor.rounded()), 1)
-        let dupeSuspects = sb.detectRecurringDuplicates(
-            expenseTx: expenseTx, recurrings: recurrings,
-            expectedPerPlan: expectedCharges, currency: currency)
-        let dupeExcess = dupeSuspects.reduce(0.0) { $0 + $1.excessAmount }
+        // ── Duplicate recurring charges ── a bill DiPo recorded, plus another
+        // row of the same amount in the same pay period (see
+        // RecurringDuplicates). Found by the caller, which can show both rows;
+        // flagged, never silently excluded from the math.
+        let dupeExcess = duplicates.reduce(0.0) { $0 + $1.amount }
 
         // ── Essential-cost floor ──
         // Logged expenses frequently miss rent, family transfers, and cash
@@ -314,7 +331,11 @@ enum SmartRecommendationEngine {
                             + creditCardMinPayment
         let totalDebt = activeDebts.reduce(0.0) { $0 + cm.convert($1.currentBalance, from: $1.currency, to: currency) }
                       + creditCardOwed
-        let hasCostlyDebt = activeDebts.contains { $0.annualInterestRate > 0 }
+        // A card balance carried from earlier months is charged interest
+        // whatever rate the user typed in — the same rule the Financial Ladder
+        // uses. It was treated as free debt here, so the plan put money into
+        // investing ahead of paying it off.
+        let hasCostlyDebt = activeDebts.contains { $0.annualInterestRate > 0 } || creditCardCarried >= 1
         let hasAnyDebt = !activeDebts.isEmpty || creditCardOwed > 0
         let goalContributions = goals.filter { !$0.isCompleted }
             .reduce(0.0) { $0 + cm.convert($1.monthlyContribution, from: $1.currency, to: currency) }
@@ -467,7 +488,6 @@ enum SmartRecommendationEngine {
             rInvestShare = histIncome > 0 ? avgGroup(SmartBudgetManager.investDebtCategories) / histIncome : 0
             rOverspent   = avgMonthlyExpense > histIncome && histIncome > 0
         }
-        let lifeShare = rLifeShare   // reused below for the "why" reasons
 
         let savingHabit: RecoRating = {
             if rSavingsRate >= 0.30 { return .great }
@@ -645,8 +665,11 @@ enum SmartRecommendationEngine {
         // `hasSurplus` gates any advice that assumes spare money exists.
         var cycleOverage: Double = 0
         if let c = currentCycle, c.income > 0 {
-            cycleOverage = max(c.daily - c.income * sb.dailyRatio, 0)
-                         + max(c.lifestyle - c.income * sb.lifestyleRatio, 0)
+            // The budget card's own split — the one Smart Budget measures — not
+            // the global default it may override.
+            let live = ratios ?? (sb.dailyRatio, sb.lifestyleRatio, sb.investDebtRatio)
+            cycleOverage = max(c.daily - c.income * live.daily, 0)
+                         + max(c.lifestyle - c.income * live.lifestyle, 0)
         }
         let hasSurplus = rSavingsRate >= 0.10
 
@@ -661,20 +684,31 @@ enum SmartRecommendationEngine {
                 tint: planned ? AppTheme.blue : AppTheme.red,
                 title: planned ? loc("reco.item.planned_gap_title") : loc("reco.item.leak_title"),
                 subtitle: String(format: loc(planned ? "reco.item.planned_gap_sub" : "reco.item.leak_sub"),
-                                 cm.formatted(roundNice(deficitAmount), currency: currency)),
+                                 measured(deficitAmount), dataMonthsDisplay),
                 badge: loc(planned ? "reco.badge.by_choice" : "reco.badge.priority"),
                 badgeTint: planned ? AppTheme.blue : AppTheme.red))
         }
         // Suspected duplicates come right after — verifying them can shrink the
         // apparent problem before any real cutting starts.
-        for s in dupeSuspects {
+        let dupeFmt = DateFormatter()
+        dupeFmt.locale = LanguageManager.shared.currentLocale
+        dupeFmt.setLocalizedDateFormatFromTemplate("d MMM")
+        var dupeLabels: [String] = []
+        for pair in duplicates where !dupeLabels.contains(pair.planLabel) {
+            dupeLabels.append(pair.planLabel)
+            let same = duplicates.filter { $0.planLabel == pair.planLabel }
+            let subtitle = same.count == 1
+                ? String(format: loc("reco.item.dupe_sub_pair"), measured(pair.amount),
+                         dupeFmt.string(from: min(pair.recorded.date, pair.twin.date)),
+                         dupeFmt.string(from: max(pair.recorded.date, pair.twin.date)))
+                : String(format: loc("reco.item.dupe_sub_many"), measured(pair.amount), same.count)
             items.append(RecoItem(
                 icon: "doc.on.doc.fill", tint: AppTheme.orange,
-                title: String(format: loc("reco.item.dupe_title"), s.label),
-                subtitle: String(format: loc("reco.item.dupe_sub"),
-                                 s.found, cm.formatted(s.chargeAmount, currency: currency), s.expected),
+                title: String(format: loc("reco.item.dupe_title"), pair.planLabel),
+                subtitle: subtitle,
                 badge: loc("reco.badge.check"),
-                badgeTint: AppTheme.orange))
+                badgeTint: AppTheme.orange,
+                action: .reviewDuplicates))
         }
         if cycleOverage > 0 {
             // Lead with the number the user can act on this cycle — and name the
@@ -725,13 +759,17 @@ enum SmartRecommendationEngine {
                 subtitle: String(format: loc("reco.item.smallspend_sub"),
                                  smallSpendCount,
                                  cm.formatted(smallThreshold, currency: currency),
-                                 cm.formatted(roundNice(smallSpendMonthly), currency: currency)),
+                                 measured(smallSpendMonthly)),
                 badge: String(format: loc("reco.badge.daily_cap"), cm.formatted(dailyCap, currency: currency)),
                 badgeTint: AppTheme.orange))
         }
         // Goal pledges the current cash flow can't actually fund — the fix is
         // moving the transfer to payday, before spending starts.
-        if goalContributions > 0, goalContributions > max(currentSaving, 0), !intents.excusesGoalFunding {
+        // Not while spending already runs past the pay: "automate Rp 1 jt to
+        // goals" under "stop the leak first" asked for money the month does
+        // not have. The leak card comes first; this one returns once it closes.
+        if goalContributions > 0, goalContributions > max(currentSaving, 0),
+           !isDeficit, !intents.excusesGoalFunding {
             items.append(RecoItem(
                 icon: "calendar.badge.clock", tint: AppTheme.blue,
                 title: String(format: loc("reco.item.goalfund_title"), cm.formatted(roundNice(goalContributions), currency: currency)),
@@ -742,15 +780,24 @@ enum SmartRecommendationEngine {
         // Interest-bearing debt beats investing: no fund reliably out-earns the
         // interest you're being charged. Recommend directing spare money to
         // payoff instead, and suppress the invest card while such debt exists.
-        if hasCostlyDebt, hasSurplus, let target = activeDebts.filter({ $0.annualInterestRate > 0 })
-            .max(by: { $0.annualInterestRate < $1.annualInterestRate }) {
-            let payoff = min(suggestedInvestment > 0 ? suggestedInvestment : income * 0.10,
-                             cm.convert(target.currentBalance, from: target.currency, to: currency))
-            items.append(RecoItem(
-                icon: "creditcard.fill", tint: AppTheme.red,
-                title: String(format: loc("reco.item.debt_title"), cm.formatted(roundNice(payoff), currency: currency)),
-                subtitle: String(format: loc("reco.item.debt_sub"), target.name, Int(target.annualInterestRate)),
-                badge: loc("reco.badge.high_impact"), badgeTint: AppTheme.red))
+        if hasCostlyDebt, hasSurplus {
+            let spare = suggestedInvestment > 0 ? suggestedInvestment : income * 0.10
+            if let target = activeDebts.filter({ $0.annualInterestRate > 0 })
+                .max(by: { $0.annualInterestRate < $1.annualInterestRate }) {
+                let payoff = min(spare, cm.convert(target.currentBalance, from: target.currency, to: currency))
+                items.append(RecoItem(
+                    icon: "creditcard.fill", tint: AppTheme.red,
+                    title: String(format: loc("reco.item.debt_title"), cm.formatted(roundNice(payoff), currency: currency)),
+                    subtitle: String(format: loc("reco.item.debt_sub"), target.name, Int(target.annualInterestRate.rounded())),
+                    badge: loc("reco.badge.high_impact"), badgeTint: AppTheme.red))
+            } else if creditCardCarried >= 1 {
+                let payoff = min(spare, creditCardCarried)
+                items.append(RecoItem(
+                    icon: "creditcard.fill", tint: AppTheme.red,
+                    title: String(format: loc("reco.item.debt_title"), cm.formatted(roundNice(payoff), currency: currency)),
+                    subtitle: String(format: loc("reco.item.debt_sub_card"), measured(creditCardCarried)),
+                    badge: loc("reco.badge.high_impact"), badgeTint: AppTheme.red))
+            }
         }
         // Only pitch investing when there is genuinely spare money AND no
         // interest-bearing debt to clear first. (0%-interest debt doesn't block
@@ -811,13 +858,13 @@ enum SmartRecommendationEngine {
                            ?? String(format: loc("reco.why.intent"), kind.label))
         }
         if isDeficit {
-            reasons.append(String(format: loc("reco.why.deficit"), cm.formatted(roundNice(deficitAmount), currency: currency)))
+            reasons.append(String(format: loc("reco.why.deficit"), measured(deficitAmount), dataMonthsDisplay))
         }
         if dupeExcess > 0 {
-            reasons.append(String(format: loc("reco.why.dupe"), cm.formatted(roundNice(dupeExcess), currency: currency)))
+            reasons.append(String(format: loc("reco.why.dupe"), measured(dupeExcess)))
         }
         if hasSmallLeak {
-            reasons.append(String(format: loc("reco.why.smallspend"), smallSpendCount, cm.formatted(roundNice(smallSpendMonthly), currency: currency)))
+            reasons.append(String(format: loc("reco.why.smallspend"), smallSpendCount, measured(smallSpendMonthly)))
         }
         // ONE bullet for fixed costs. Emitting both a "fixed share is 35%"
         // line (from actual spend) and a "recurring plan is 31%" line (from the
@@ -826,17 +873,19 @@ enum SmartRecommendationEngine {
         if income > 0, fixedAvg > 0 {
             let sharePct = Int((fixedAvg / income * 100).rounded())
             let names = recurringLabels.prefix(3).joined(separator: ", ")
-            let amount = cm.formatted(roundNice(fixedAvg), currency: currency)
+            let amount = measured(fixedAvg)
             if !names.isEmpty && recurringMonthly > 0 {
                 reasons.append(String(format: loc("reco.why.fixed_combined"),
-                                      amount, sharePct, names,
-                                      cm.formatted(roundNice(recurringMonthly), currency: currency)))
+                                      amount, sharePct, names, measured(recurringMonthly)))
             } else {
                 reasons.append(String(format: loc("reco.why.fixedshare"), sharePct))
             }
         }
-        if lifeShare > 0.30, !intents.excusesLifestyle {
-            reasons.append(String(format: loc("reco.why.lifestyle"), Int(lifeShare * 100)))
+        // The AVERAGE, as the sentence says — this quoted the running period's
+        // projection (43%) where the past periods averaged 51%.
+        let lifestyleAvgShare = histIncome > 0 ? lifestyleAvg / histIncome : 0
+        if lifestyleAvgShare > 0.30, !intents.excusesLifestyle {
+            reasons.append(String(format: loc("reco.why.lifestyle"), Int((lifestyleAvgShare * 100).rounded())))
         }
         // Only the pattern-detected fallback survives here — declared plans are
         // already named in the combined fixed-costs bullet above.
@@ -847,14 +896,11 @@ enum SmartRecommendationEngine {
         // Debt context — the engine now KNOWS the balance and monthly drag.
         if hasAnyDebt {
             let key = hasCostlyDebt ? "reco.why.debt_interest" : "reco.why.debt"
-            reasons.append(String(format: loc(key),
-                                  cm.formatted(roundNice(totalDebt), currency: currency),
-                                  cm.formatted(roundNice(debtMinPayments), currency: currency)))
+            reasons.append(String(format: loc(key), measured(totalDebt), measured(debtMinPayments)))
         }
         // Goal context — surface what's already being set aside toward a goal.
         if goalContributions > 0, let g = topGoal {
-            reasons.append(String(format: loc("reco.why.goal"),
-                                  cm.formatted(roundNice(goalContributions), currency: currency), g.name))
+            reasons.append(String(format: loc("reco.why.goal"), measured(goalContributions), g.name))
         }
         if savingsRate < 0.20 && !isDeficit {
             reasons.append(loc("reco.why.saverate"))
@@ -911,10 +957,13 @@ enum SmartRecommendationEngine {
         // ── Spending mix ── average monthly spend per category, biggest first.
         var byCat: [TxCategory: Double] = [:]
         for tx in consumedTx { byCat[tx.category, default: 0] += toPref(abs(tx.amount), tx.currency) }
+        // Per month over the SAME periods the totals came from. Dividing by
+        // `months` (the whole history's span) gave a different "a month" from
+        // every other figure as soon as the history outgrew the window.
         let spendingBreakdown: [RecoSlice] = byCat.sorted { $0.value > $1.value }.prefix(5).map { cat, val in
             RecoSlice(label: cat.displayLabel,
-                      pct: totalExpense > 0 ? Int((val / totalExpense) * 100) : 0,
-                      amount: val / Double(months),
+                      pct: totalExpense > 0 ? Int((val / totalExpense * 100).rounded()) : 0,
+                      amount: val / monthsDivisor,
                       color: cat.color)
         }
 
@@ -970,6 +1019,13 @@ enum SmartRecommendationEngine {
         guard !bills.isEmpty else { return nil }
         let total = bills.reduce(0.0) { $0 + cm.convert(abs($1.amount), from: $1.currency.isEmpty ? currency : $1.currency, to: currency) }
         return total / max(months, 1)
+    }
+
+    /// A measured amount to the nearest Rp 1.000 (whole unit elsewhere) — every
+    /// screen that quotes the same fact rounds it this way.
+    static func measuredValue(_ v: Double, currency: String) -> Double {
+        let unit: Double = currency == "IDR" ? 1_000 : 1
+        return (v / unit).rounded() * unit
     }
 
     /// Round an amount to a friendly figure so recommendations read cleanly

@@ -20,6 +20,7 @@ struct SmartRecommendationView: View {
     @Query private var cycleIntents: [CycleIntent]
     @Query private var holdings: [InvestmentHolding]
     @Query private var physicalAssets: [PhysicalAsset]
+    @Query private var installments: [CardInstallment]
     @Environment(\.modelContext) private var context
 
     /// Called after the user taps "Apply" so the parent can refresh its state.
@@ -42,8 +43,12 @@ struct SmartRecommendationView: View {
     @State private var analysis: SmartRecommendation? = nil
     @State private var findings: [IntegrityFinding] = []
     @State private var windfall: WindfallReview? = nil
+    /// Bills that look logged twice, with both rows, for the review sheet.
+    @State private var duplicates: [RecurringDuplicatePair] = []
+    @State private var showDuplicates = false
 
     private func refresh() {
+        duplicates = findDuplicates()
         let r = reco
         analysis = r
         findings = integrityFindings
@@ -94,7 +99,8 @@ struct SmartRecommendationView: View {
 
         let cal = Calendar.current
         var byMonth: [DateComponents: Double] = [:]
-        for tx in allTx where tx.amount > 0 && tx.txSubtype != .transfer {
+        // Real income only — a refund gives back an expense, it isn't pay.
+        for tx in allTx where tx.amount > 0 && tx.txSubtype == .normal {
             let key = cal.dateComponents([.year, .month], from: tx.date)
             byMonth[key, default: 0] += cm.convert(
                 tx.amount, from: tx.currency.isEmpty ? currency : tx.currency, to: currency)
@@ -117,9 +123,7 @@ struct SmartRecommendationView: View {
     /// What happened to income beyond the salary in the judged cycle — the
     /// question a cash-flow line cannot answer.
     private var windfallReview: WindfallReview? {
-        let cal = Calendar.current
-        let start = judgedCycleStart
-        let end = cal.safeDate(byAdding: .month, value: 1, to: start)
+        let (start, end, _) = judgedCycle
         let cycleTx = allTx.filter { $0.date >= start && $0.date < end }
         guard !cycleTx.isEmpty else { return nil }
         return WindfallReview.build(cycleTransactions: cycleTx, currency: currency)
@@ -136,22 +140,54 @@ struct SmartRecommendationView: View {
         allTx.filter { $0.category == .salary && $0.amount > 0 }.map(\.date)
     }
 
-    private var judgedCycleStart: Date {
+    /// The main card's payday — the same one every other screen anchors on.
+    private var payDay: Int? { MainCard.payDay(salaries) }
+
+    /// The pay period the score judges, as [start, end): the running one, or
+    /// the last complete one while the running one is under a week old (on
+    /// payday nothing has been spent yet, which would score a false "Great").
+    /// `end` is the real next payday — "start plus one month" ran two days
+    /// past a payday pulled forward off a weekend.
+    private var judgedCycle: (start: Date, end: Date, running: Bool) {
         let cal = Calendar.current
         let now = Date()
-        guard let day = salaries.first(where: { $0.isActive })?.dayOfMonth else {
-            return cal.date(from: cal.dateComponents([.year, .month], from: now)) ?? now
+        guard let day = payDay else {
+            let start = cal.date(from: cal.dateComponents([.year, .month], from: now)) ?? now
+            return (start, cal.safeDate(byAdding: .month, value: 1, to: start), true)
         }
-        let current = StatPeriod.anchoredStart(StatPeriod.payCycleRange(payDay: day).start,
-                                               salaryDates: salaryTxDates)
-        let elapsed = cal.dateComponents([.day], from: current, to: now).day ?? 0
-        if elapsed < 7, let dayBefore = cal.date(byAdding: .day, value: -1, to: current) {
-            return StatPeriod.anchoredStart(StatPeriod.payCycleRange(payDay: day, now: dayBefore).start,
-                                            salaryDates: salaryTxDates)
+        let current = StatPeriod.cycle(payDay: day, salaryDates: salaryTxDates, now: now)
+        let elapsed = cal.dateComponents([.day], from: current.start, to: now).day ?? 0
+        if elapsed < 7 {
+            let previous = StatPeriod.cycleBoundary(offset: -1, payDay: day, salaryDates: salaryTxDates, now: now)
+            return (previous, current.start, false)
         }
-        return current
+        return (current.start, current.end, true)
     }
+    private var judgedCycleStart: Date { judgedCycle.start }
     private var judgedCycleKey: String { ISO8601DateFormatter.dayString(from: judgedCycleStart) }
+
+    /// "25 Sep – 22 Oct": the period a declared intent applies to. The intent
+    /// sheet showed the analysis window instead ("3 pay periods, 25 Jun – 24
+    /// Sep") — not the period the choice is recorded against.
+    private var judgedCycleLabel: String {
+        let f = DateFormatter()
+        f.locale = LanguageManager.shared.currentLocale
+        f.setLocalizedDateFormatFromTemplate("d MMM")
+        let c = judgedCycle
+        let lastDay = Calendar.current.safeDate(byAdding: .day, value: -1, to: c.end)
+        return "\(f.string(from: c.start)) – \(f.string(from: lastDay))"
+    }
+
+    /// Suspected double-logged bills over the periods the analysis can reach
+    /// (up to twelve back) and the running one.
+    private func findDuplicates() -> [RecurringDuplicatePair] {
+        let since: Date = payDay.map {
+            StatPeriod.cycleBoundary(offset: -12, payDay: $0, salaryDates: salaryTxDates)
+        } ?? Calendar.current.safeDate(byAdding: .month, value: -12, to: Date())
+        return RecurringDuplicates.find(transactions: allTx, recurrings: recurringExpenses,
+                                        payDay: payDay, salaryDates: salaryTxDates,
+                                        currency: currency, since: since)
+    }
     private var activeIntents: CycleIntentSet {
         CycleIntentSet.resolve(cycleIntents, cycleKey: judgedCycleKey)
     }
@@ -160,7 +196,6 @@ struct SmartRecommendationView: View {
     /// the same reality as the Smart Budget screen (over budget = not "Great").
     private var currentCycleSnapshot: RecoCycleSnapshot? {
         guard monthlyIncome > 0 else { return nil }
-        let cal = Calendar.current
         let now = Date()
 
         // Which cycle should the SCORE judge? The current one is right until it's
@@ -169,25 +204,9 @@ struct SmartRecommendationView: View {
         // So while the current cycle is too young to be representative (< 7 days
         // in), judge on the LAST COMPLETE cycle instead — that's the real recent
         // habit the user is asking about.
-        let payDay = salaries.first(where: { $0.isActive })?.dayOfMonth
-        var start: Date
-        var end: Date = now
-        if let day = payDay {
-            let current = StatPeriod.anchoredStart(StatPeriod.payCycleRange(payDay: day).start,
-                                                   salaryDates: salaryTxDates)
-            let elapsed = cal.dateComponents([.day], from: current, to: now).day ?? 0
-            if elapsed < 7,
-               let dayBefore = cal.date(byAdding: .day, value: -1, to: current) {
-                // Previous complete cycle: [prevStart, currentStart).
-                start = StatPeriod.anchoredStart(StatPeriod.payCycleRange(payDay: day, now: dayBefore).start,
-                                                 salaryDates: salaryTxDates)
-                end = current
-            } else {
-                start = current
-            }
-        } else {
-            start = cal.date(from: cal.dateComponents([.year, .month], from: now)) ?? now
-        }
+        let judged = judgedCycle
+        let start = judged.start
+        let end: Date = judged.running ? now : judged.end
 
         // Scope to the SAME transactions the Smart Budget screen measures: when a
         // main budget card is set it counts only that card, so scoring across all
@@ -237,14 +256,18 @@ struct SmartRecommendationView: View {
         // How far through the period `end` (now, for the running one) is, so
         // the engine doesn't read the days still to come as money saved. A
         // judged previous period is complete.
-        let periodEnd = cal.date(byAdding: .month, value: 1, to: start) ?? start.addingTimeInterval(30 * 86_400)
-        let elapsedFraction = end < now ? 1
-            : min(max(now.timeIntervalSince(start) / max(periodEnd.timeIntervalSince(start), 1), 0), 1)
+        let elapsedFraction = !judged.running ? 1
+            : min(max(now.timeIntervalSince(start) / max(judged.end.timeIntervalSince(start), 1), 0), 1)
 
+        // The groups as Smart Budget shows them: refunds give their amount back.
+        let budgetWindow = scopedTx.filter {
+            $0.date >= start && $0.date < end && $0.txSubtype != .transfer
+                && ($0.amount < 0 || $0.txSubtype == .refund)
+        }
         return RecoCycleSnapshot(
-            daily:      mgr.spent(in: .daily,      transactions: windowTx, targetCurrency: currency, periodStart: start),
-            lifestyle:  mgr.spent(in: .lifestyle,  transactions: windowTx, targetCurrency: currency, periodStart: start),
-            investDebt: mgr.spent(in: .investDebt, transactions: windowTx, targetCurrency: currency, periodStart: start),
+            daily:      mgr.spent(in: .daily,      transactions: budgetWindow, targetCurrency: currency, periodStart: start),
+            lifestyle:  mgr.spent(in: .lifestyle,  transactions: budgetWindow, targetCurrency: currency, periodStart: start),
+            investDebt: mgr.spent(in: .investDebt, transactions: budgetWindow, targetCurrency: currency, periodStart: start),
             savingsDeposits: savingsDeposits,
             income:     monthlyIncome,
             elapsedFraction: elapsedFraction,
@@ -261,8 +284,7 @@ struct SmartRecommendationView: View {
             .sorted { $0.amount > $1.amount }
     }
 
-    /// Total owed across credit-card accounts + an estimated 10% minimum
-    /// payment (typical Indonesian CC minimum) — folded into the debt picture.
+    /// Total owed across credit-card accounts — folded into the debt picture.
     private var creditCardOwed: Double {
         cards.filter { $0.isCreditCard }
             .reduce(0.0) { $0 + CurrencyManager.shared.convert($1.owedBalance(), from: $1.resolvedCurrency, to: currency) }
@@ -276,12 +298,20 @@ struct SmartRecommendationView: View {
             recurringMonthly: activeRecurring.reduce(0) { $0 + $1.amount },
             recurringLabels: activeRecurring.map(\.label),
             creditCardOwed: creditCardOwed,
-            creditCardMinPayment: creditCardOwed * 0.10,
-            salaryDayOfMonth: salaries.first(where: { $0.isActive })?.dayOfMonth,
+            // What the cards actually ask for each month: instalments plus the
+            // 5% BI minimum on a carried balance — the figure the Fixed Monthly
+            // Payments card and Home use. This was 10% of everything owed.
+            creditCardMinPayment: ObligationLoad.cardPayments(cards: cards, installments: installments,
+                                                              debts: debts, currency: currency),
+            salaryDayOfMonth: payDay,
             recurrings: recurringExpenses,
             intents: activeIntents,
             portfolioValue: portfolioValue,
-            assetMonthlyWear: assetMonthlyWear)
+            assetMonthlyWear: assetMonthlyWear,
+            duplicates: duplicates,
+            creditCardCarried: ObligationLoad.cardCarried(cards: cards, currency: currency),
+            ratios: SmartBudgetManager.shared.ratios(forCardID: SmartBudgetManager.shared.budgetCardID,
+                                                     configs: cardBudgetConfigs))
     }
 
     /// Monthly wear on vehicles and electronics, unless a replacement goal
@@ -343,15 +373,24 @@ struct SmartRecommendationView: View {
             withAnimation(.spring(response: 0.6, dampingFraction: 0.85)) { appeared = true }
         }
         .onChange(of: cycleIntents.count) { _, _ in refresh() }
+        .sheet(isPresented: $showDuplicates, onDismiss: { refresh() }) {
+            DuplicateReviewSheet(pairs: duplicates, currency: currency)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+                .presentationBackground(AppTheme.bg)
+                .preferredColorScheme(appColorScheme())
+        }
         .sheet(isPresented: $showIntents, onDismiss: { refresh() }) {
-            CycleIntentView(cycleKey: judgedCycleKey, cycleLabel: analysis?.periodLabel ?? "")
+            CycleIntentView(cycleKey: judgedCycleKey, cycleLabel: judgedCycleLabel)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
                 .presentationBackground(AppTheme.bg)
                 .preferredColorScheme(appColorScheme())
         }
         .sheet(isPresented: $showBriefing) {
-            FinancialBriefingView()
+            // The plan this screen recommends, so "Full explanation" explains
+            // THIS split rather than working out a second one of its own.
+            FinancialBriefingView(plan: analysis?.recommendedRatios, duplicates: duplicates)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
                 .presentationBackground(AppTheme.bg)
@@ -551,37 +590,66 @@ struct SmartRecommendationView: View {
                     if i > 0 {
                         Rectangle().fill(AppTheme.cardMid.opacity(0.7)).frame(height: 1).padding(.leading, 66)
                     }
-                    HStack(alignment: .top, spacing: 12) {
-                        Image(systemName: item.icon)
-                            .font(.system(.callout, weight: .semibold))
-                            .foregroundStyle(item.tint)
-                            .frame(width: 40, height: 40)
-                            .background(item.tint.opacity(0.14), in: RoundedRectangle(cornerRadius: AppRadius.sm))
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(item.title)
-                                .font(.system(.subheadline, weight: .semibold))
-                                .foregroundStyle(AppTheme.textPrimary)
-                                .fixedSize(horizontal: false, vertical: true)
-                            Text(item.subtitle)
-                                .font(.system(.caption))
-                                .foregroundStyle(AppTheme.textSecondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                        Spacer(minLength: 6)
-                        if !item.badge.isEmpty {
-                            Text(item.badge)
-                                .font(.system(.caption2, weight: .bold))
-                                .foregroundStyle(item.badgeTint)
-                                .padding(.horizontal, 8).padding(.vertical, 4)
-                                .background(item.badgeTint.opacity(0.12), in: Capsule())
-                                .fixedSize()
-                        }
-                    }
-                    .padding(14)
+                    actionRow(item)
                 }
             }
             .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
         }
+    }
+
+    /// A recommendation that opens something — the duplicate review — is a
+    /// button with a chevron; the rest are plain rows.
+    @ViewBuilder
+    private func actionRow(_ item: RecoItem) -> some View {
+        if item.action == .reviewDuplicates, !duplicates.isEmpty {
+            Button {
+                HapticManager.shared.tap()
+                showDuplicates = true
+            } label: {
+                actionRowContent(item, chevron: true).contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint(loc("dupe.review_hint"))
+        } else {
+            actionRowContent(item, chevron: false)
+        }
+    }
+
+    private func actionRowContent(_ item: RecoItem, chevron: Bool) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: item.icon)
+                .font(.system(.callout, weight: .semibold))
+                .foregroundStyle(item.tint)
+                .frame(width: 40, height: 40)
+                .background(item.tint.opacity(0.14), in: RoundedRectangle(cornerRadius: AppRadius.sm))
+            VStack(alignment: .leading, spacing: 3) {
+                Text(item.title)
+                    .font(.system(.subheadline, weight: .semibold))
+                    .foregroundStyle(AppTheme.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(item.subtitle)
+                    .font(.system(.caption))
+                    .foregroundStyle(AppTheme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 6)
+            VStack(alignment: .trailing, spacing: 8) {
+                if !item.badge.isEmpty {
+                    Text(item.badge)
+                        .font(.system(.caption2, weight: .bold))
+                        .foregroundStyle(item.badgeTint)
+                        .padding(.horizontal, 8).padding(.vertical, 4)
+                        .background(item.badgeTint.opacity(0.12), in: Capsule())
+                        .fixedSize()
+                }
+                if chevron {
+                    Image(systemName: "chevron.right")
+                        .font(.system(.caption, weight: .semibold))
+                        .foregroundStyle(AppTheme.textSecondary)
+                }
+            }
+        }
+        .padding(14)
     }
 
     // MARK: Plan

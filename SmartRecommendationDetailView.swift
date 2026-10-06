@@ -23,7 +23,6 @@ struct SmartRecommendationDetailView: View {
         }
     }
     @State private var tab: Tab = .summary
-    @State private var autoSaveOn = true
 
     private func money(_ v: Double) -> String {
         CurrencyManager.shared.formatted(v, currency: reco.currency)
@@ -91,9 +90,10 @@ struct SmartRecommendationDetailView: View {
     /// 1. Where you stand — one sentence and the single number that matters.
     private var situationCard: some View {
         let positive = !reco.isDeficit
+        let measured = { SmartRecommendationEngine.measuredValue($0, currency: reco.currency) }
         let headline = positive
             ? money(reco.recommendedMonthlySaving)
-            : "-" + money(reco.deficitAmount)
+            : "-" + money(measured(reco.deficitAmount))
         return VStack(alignment: .leading, spacing: 8) {
             Text(loc("reco.sum.where_title"))
                 .font(.system(.caption, weight: .semibold))
@@ -103,9 +103,9 @@ struct SmartRecommendationDetailView: View {
                 .foregroundStyle(positive ? AppTheme.accent : AppTheme.red)
                 .minimumScaleFactor(0.7).lineLimit(1)
             Text(positive
-                 ? String(format: loc("reco.sum.where_surplus"), money(reco.avgMonthlyExpense))
+                 ? String(format: loc("reco.sum.where_surplus"), money(measured(reco.avgMonthlyExpense)))
                  : String(format: loc("reco.sum.where_deficit"),
-                          money(reco.avgMonthlyExpense), money(reco.monthlyIncome)))
+                          money(measured(reco.avgMonthlyExpense)), money(reco.monthlyIncome)))
                 .font(.system(.caption)).foregroundStyle(AppTheme.textPrimary)
                 .fixedSize(horizontal: false, vertical: true).lineSpacing(2)
             if !reco.periodLabel.isEmpty {
@@ -302,17 +302,17 @@ struct SmartRecommendationDetailView: View {
                 }
             }
 
-            // Auto-save suggestion
-            card {
-                HStack(alignment: .top) {
+            // Auto-save suggestion. A suggestion, not a setting: the switch
+            // that sat here changed nothing — DiPo does not move money — and
+            // in a deficit it offered to auto-save Rp 0.
+            if reco.autoSaveAmount > 0 {
+                card {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(loc("reco.autosave_title")).font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
                         Text(String(format: loc("reco.autosave_body"), money(reco.autoSaveAmount)))
                             .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
-                    Spacer(minLength: 8)
-                    DiPoSwitch(isOn: $autoSaveOn, onIcon: "bolt.fill", offIcon: "hand.point.up.left.fill")
                 }
             }
         }
@@ -333,8 +333,8 @@ struct SmartRecommendationDetailView: View {
             Text(String(format: loc("reco.deficit_zero_body"),
                         Int((reco.recommendedRatios.investDebt * 100).rounded()),
                         money(reco.monthlyIncome * reco.recommendedRatios.investDebt),
-                        money(reco.debtMinimumMonthly),
-                        money(reco.deficitAmount)))
+                        money(SmartRecommendationEngine.measuredValue(reco.debtMinimumMonthly, currency: reco.currency)),
+                        money(SmartRecommendationEngine.measuredValue(reco.deficitAmount, currency: reco.currency))))
                 .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true).lineSpacing(2)
         }

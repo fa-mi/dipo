@@ -259,7 +259,7 @@ struct HomeView: View {
                 }
             }
             return card.transactions
-                .filter { $0.amount > 0 && $0.txSubtype != .transfer && $0.date >= monthStart }
+                .filter { $0.amount > 0 && $0.txSubtype == .normal && $0.date >= monthStart }
                 .reduce(0.0) { $0 + conv($1) }
         }
         
@@ -270,7 +270,7 @@ struct HomeView: View {
             .reduce(0.0) { $0 + CurrencyManager.shared.toPreferred($1.amount, from: $1.currency) }
         if scheduled > 0 { return scheduled }
         return vm.cards.flatMap { $0.transactions }
-            .filter { $0.amount > 0 && $0.txSubtype != .transfer && $0.date >= monthStart }
+            .filter { $0.amount > 0 && $0.txSubtype == .normal && $0.date >= monthStart }
             .reduce(0.0) { $0 + CurrencyManager.shared.toPreferred($1.amount, from: $1.currency) }
     }
 
@@ -304,7 +304,10 @@ struct HomeView: View {
         let cal = Calendar.current
         let windowStart: Date
         if let payDay = MainCard.payDay(salarySchedules) {
-            windowStart = StatPeriod.payCycleRange(payDay: payDay).start
+            // The cycle Statistics and Smart Budget use: opened on the day the
+            // salary landed on the main card.
+            windowStart = StatPeriod.cycle(payDay: payDay,
+                                           salaryDates: StatPeriod.salaryDates(on: budgetCard)).start
             let df = DateFormatter()
             df.locale = LanguageManager.shared.currentLocale
             df.setLocalizedDateFormatFromTemplate("d MMM")
@@ -319,16 +322,15 @@ struct HomeView: View {
         // Read the pre-aggregated daily buckets instead of scanning the card's
         // whole ledger (see RollupEngine). This runs on the tx-count / balance /
         // payday change signals — off the render path — so keeping the cache
-        // fresh here is safe. Transfers are already excluded from the rollup's
-        // inflow/expense totals, and the figures match the former per-tx scan:
-        // gross inflow counts any amount >= 0 (a refund's positive included) and
-        // gross expense sums every outflow, the same rule this screen used.
+        // fresh here is safe. Statistics' rules: income is real income only and
+        // a refund takes back its expense. Counting a refund as income here
+        // made Home's two figures disagree with Statistics' for the same days.
         let buckets = RollupStore.shared.rebuildIfStale(context: context, txCount: totalTxCount)
         let window = RollupEngine.buckets(buckets, cardID: card.id.uuidString, from: windowStart)
         let totals = RollupEngine.totals(for: window, targetCurrency: cur,
                                          convert: { CurrencyManager.shared.convert($0, from: $1, to: $2) })
-        monthIncome = totals.grossInflow
-        monthExpense = totals.grossExpense
+        monthIncome = totals.income
+        monthExpense = max(totals.expenses, 0)
     }
 
     private func recomputeHomeInsights() {
@@ -339,8 +341,19 @@ struct HomeView: View {
         let tx = budgetTransactions
         // Scope insights to the PAY CYCLE (same window the Smart Budget screen
         // uses) so Home and Smart Budget can't disagree about being over budget.
-        let cycleStart: Date? = MainCard.payDay(salarySchedules)
-            .map { StatPeriod.payCycleRange(payDay: $0).start }
+        let payDay = MainCard.payDay(salarySchedules)
+        let cycle = payDay.map {
+            StatPeriod.cycle(payDay: $0, salaryDates: StatPeriod.salaryDates(on: budgetCard))
+        }
+        let cycleStart = cycle?.start
+        // Where this period's spending is heading — Statistics' own projection,
+        // so the warning here quotes the figure that screen shows.
+        let projected: Double? = {
+            guard let day = payDay, let card = budgetCard else { return nil }
+            return StatisticsView.projectedCycleSpend(card: card, payDay: day,
+                                                      recurrings: recurringExpenses,
+                                                      currency: budgetCurrency)
+        }()
         // Debt still due each month, so the surplus advice can put it before
         // investing: debt minimums plus credit-card instalments and minimums,
         // the same figure the Fixed Monthly Payments card counts.
@@ -354,7 +367,8 @@ struct HomeView: View {
             allTransactions: tx, income: totalMonthlyIncome,
             cardID: budgetCard?.id.uuidString, configs: cardBudgetConfigs,
             targetCurrency: budgetCurrency, goals: activeGoals,
-            periodStart: cycleStart)
+            periodStart: cycleStart, periodEnd: cycle?.end,
+            projectedSpend: projected)
         // Same `cycleStart` the insights above use — without it this ran on
         // calendar months and contradicted the card directly beside it.
         cachedAnomalies = SmartBudgetManager.shared.spendingAnomalies(
