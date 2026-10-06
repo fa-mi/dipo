@@ -225,7 +225,7 @@ final class CoinGardenRig {
 
     /// Warm studio light for the gold to reflect: bright above, two soft
     /// windows, dim below.
-    private static func environment() -> UIImage {
+    static func environment() -> UIImage {
         let size = CGSize(width: 256, height: 128)
         return UIGraphicsImageRenderer(size: size).image { ctx in
             let cg = ctx.cgContext

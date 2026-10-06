@@ -141,9 +141,9 @@ struct DailyCheckInCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 10) {
-                // Savings growing, in 3D: gold coins stacking up with a sprout on top
-                CoinGardenView()
-                    .frame(width: 58, height: 58)
+                // DiPo himself, in 3D — tap him and he hops
+                DiPoDragonView()
+                    .frame(width: 62, height: 62)
                     .padding(-8)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(headline)
