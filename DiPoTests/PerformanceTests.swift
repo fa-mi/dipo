@@ -54,30 +54,37 @@ final class PerformanceTests: XCTestCase {
         let days = years * 365
         let spend: [TxCategory] = [.food, .food, .food, .transport, .shopping, .bills, .health, .other]
         var rng = SystemRandomNumberGenerator()
+        // Built up in plain arrays and handed to each card once: appending to
+        // a model's relationship one row at a time is quadratic, and seeding
+        // five years that way took five minutes of every CI run.
+        var ledgers: [ObjectIdentifier: [TxRecord]] = [:]
+        func post(_ tx: TxRecord, to card: BankCard) { ledgers[ObjectIdentifier(card), default: []].append(tx) }
         for d in 0..<days {
             let day = cal.date(byAdding: .day, value: -d, to: today)!
             if cal.component(.day, from: day) == 25 {
-                bank.transactions.append(TxRecord(name: "Gaji", date: day.addingTimeInterval(3_600), amount: 4_000_000,
+                post(TxRecord(name: "Gaji", date: day.addingTimeInterval(3_600), amount: 4_000_000,
                                                   type: "tx.type.income", icon: "banknote", iconBgHex: TxCategory.salary.iconBg,
-                                                  category: .salary, currency: "IDR"))
-                bank.transactions.append(TxRecord(name: "Top up", date: day.addingTimeInterval(7_200), amount: -500_000,
+                                                  category: .salary, currency: "IDR"), to: bank)
+                post(TxRecord(name: "Top up", date: day.addingTimeInterval(7_200), amount: -500_000,
                                                   type: "tx.type.purchase", icon: "arrow", iconBgHex: TxCategory.other.iconBg,
-                                                  category: .other, currency: "IDR", subtype: .transfer))
-                bank.transactions.append(TxRecord(name: "CC bill", date: day.addingTimeInterval(7_300), amount: -600_000,
+                                                  category: .other, currency: "IDR", subtype: .transfer), to: bank)
+                post(TxRecord(name: "CC bill", date: day.addingTimeInterval(7_300), amount: -600_000,
                                                   type: "tx.type.purchase", icon: "CC", iconBgHex: TxCategory.other.iconBg,
                                                   category: .other, currency: "IDR", notes: "tx.note.cc_payment",
-                                                  subtype: .transfer))
+                                                  subtype: .transfer), to: bank)
             }
             for i in 0..<perDay {
                 let cat = spend[Int.random(in: 0..<spend.count, using: &rng)]
                 let target = i % 5 == 0 ? wallet : (i % 7 == 0 ? cc : bank)
-                target.transactions.append(TxRecord(
+                post(TxRecord(
                     name: "Belanja \(i)", date: day.addingTimeInterval(Double(9 + i) * 3_600),
                     amount: -Double(Int.random(in: 5...150, using: &rng) * 1_000),
                     type: "tx.type.purchase", icon: "cart", iconBgHex: cat.iconBg,
-                    category: cat, currency: "IDR"))
+                    category: cat, currency: "IDR"), to: target)
             }
         }
+
+        for c in [bank, wallet, cc] { c.transactions = ledgers[ObjectIdentifier(c)] ?? [] }
 
         let salary = SalarySchedule(label: "Gaji", amount: 4_000_000, dayOfMonth: 25, currency: "IDR", cardID: bank.id)
         let debt = DebtRecord(name: "KUR", type: "loan", totalAmount: 20_000_000, currentBalance: 12_000_000,
