@@ -308,6 +308,7 @@ struct AIChatView: View {
     var isRoyal: Bool = true
     @State private var showVoiceCapture = false
     @State private var showPaywall = false
+    @State private var showGame = false
 
     // DiPo in 3D at the top, reacting to what he says.
     @State private var dipoMood: DiPoMood = .idle
@@ -418,6 +419,10 @@ struct AIChatView: View {
             }
             .preferredColorScheme(appColorScheme())
         }
+        .fullScreenCover(isPresented: $showGame) {
+            DiPoRunGameView(isRoyal: isRoyal)
+                .preferredColorScheme(appColorScheme())
+        }
         .sheet(isPresented: $showPaywall) {
             PaywallView()
                 .presentationDetents([.large]).presentationDragIndicator(.visible)
@@ -463,6 +468,18 @@ struct AIChatView: View {
                     .background((credits == 0 ? AppTheme.red : AppTheme.orange).opacity(0.12),
                                 in: Capsule())
                 }
+                Button {
+                    HapticManager.shared.tap()
+                    showGame = true
+                } label: {
+                    Image(systemName: "gamecontroller.fill")
+                        .font(.system(.subheadline, weight: .semibold))
+                        .foregroundStyle(AppTheme.royalGoldText)
+                        .frame(width: 36, height: 36)
+                        .background(AppTheme.cardDark, in: Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(loc("game.title"))
                 Button {
                     HapticManager.shared.tap()
                     speakAlways.toggle()
@@ -630,12 +647,13 @@ struct AIChatView: View {
             .padding(.horizontal, 18)
         } else {
             VStack(alignment: .leading, spacing: 10) {
-                // DiPo speaks in comic bubbles, like on Home.
+                // DiPo speaks in his own bubble, like on Home.
                 Text(msg.text)
-                    .font(.system(.subheadline, weight: .medium))
-                    .foregroundStyle(msg.isError ? AppTheme.red : AppTheme.bubbleInk)
-                    .padding(.horizontal, 14).padding(.vertical, 10)
-                    .comicBubble()
+                    .font(.system(.subheadline))
+                    .lineSpacing(2)
+                    .foregroundStyle(msg.isError ? AppTheme.red : AppTheme.textPrimary)
+                    .padding(.horizontal, 16).padding(.vertical, 12)
+                    .dipoBubble()
                     .padding(.trailing, 30)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 ForEach(msg.transactions) { tx in

@@ -92,6 +92,13 @@ struct AppTheme {
     static let dipoCrown  = Color(hex: "#F2B51E")   // the Royal crown and his coins
     static let dipoSweat  = Color(hex: "#7CC8FF")   // the worried sweat drop
 
+    // DiPo's Royal bubble (DiPoTalk.swift): a gold hairline around frosted
+    // glass, and gold serif type for his opening word. The line is metallic in
+    // both themes; the type needs a deeper gold on white to stay readable.
+    static let royalGold      = Color(hex: "#C9A24D")   // hairline, darker stop
+    static let royalGoldLight = Color(hex: "#F1DDA0")   // hairline, highlight
+    static let royalGoldText  = Color(UIColor.adaptive(dark: "#E2C277", light: "#8E6A1F"))
+
     /// The track behind a green progress bar: a quiet surface in both modes.
     static let accentTrack = Color(UIColor.adaptive(dark: "#2A3330", light: "#E4EAE8"))
 

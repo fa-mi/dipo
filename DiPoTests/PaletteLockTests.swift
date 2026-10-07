@@ -49,6 +49,10 @@ final class PaletteLockTests: XCTestCase {
             ("slate",         AppTheme.slate,         "#94A3B8", "#6E829F"),
 
             ("accentTrack",   AppTheme.accentTrack,   "#2A3330", "#E4EAE8"),
+            // DiPo's Royal bubble.
+            ("royalGold",      AppTheme.royalGold,      "#C9A24D", "#C9A24D"),
+            ("royalGoldLight", AppTheme.royalGoldLight, "#F1DDA0", "#F1DDA0"),
+            ("royalGoldText",  AppTheme.royalGoldText,  "#E2C277", "#8E6A1F"),
             // DiPo talking, the same in both themes.
             ("bubbleFill",    AppTheme.bubbleFill,    "#FFFFFF", "#FFFFFF"),
             ("bubbleInk",     AppTheme.bubbleInk,     "#1A120C", "#1A120C"),

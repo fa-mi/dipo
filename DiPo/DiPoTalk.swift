@@ -156,17 +156,17 @@ struct DiPoHomeStrip: View {
                 } label: {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(loc("dipo.sfx.psst"))
-                            .font(.system(size: 18, weight: .black, design: .rounded).italic())
-                            .foregroundStyle(AppTheme.blue)
+                            .font(.system(.headline, design: .serif, weight: .semibold).italic())
+                            .foregroundStyle(AppTheme.royalGoldText)
                         Text(unread == 1 ? loc("dipo.unread_one")
                                          : String(format: loc("dipo.unread_many"), unread))
-                            .font(.system(.footnote, weight: .semibold))
-                            .foregroundStyle(AppTheme.bubbleInk)
+                            .font(.system(.footnote, weight: .medium))
+                            .foregroundStyle(AppTheme.textPrimary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.leading, BubbleShape.tail + 10).padding(.trailing, 12).padding(.vertical, 10)
-                    .comicBubble(tail: true)
+                    .dipoBubble(tail: true)
                 }
                 .buttonStyle(ScaleButtonStyle())
                 .transition(.scale(scale: 0.8, anchor: .leading).combined(with: .opacity))
@@ -194,23 +194,24 @@ struct DiPoHomeStrip: View {
     }
 }
 
-// MARK: - Comic bubble
+// MARK: - DiPo's bubble
 
 extension View {
-    /// White paper, an ink outline and a hard ink shadow, like a manga panel.
-    /// With `tail`, a point on the leading edge toward DiPo.
-    func comicBubble(tail: Bool = false) -> some View {
+    /// DiPo's speech bubble, in the Royal manner: frosted glass that follows
+    /// the theme, a hairline of gold, and a soft shadow. With `tail`, a point
+    /// on the leading edge toward DiPo.
+    func dipoBubble(tail: Bool = false) -> some View {
         let shape = BubbleShape(tail: tail)
         return self
             .background {
-                ZStack {
-                    shape.fill(AppTheme.bubbleInk).offset(x: 3, y: 4)
-                    shape.fill(AppTheme.bubbleFill)
-                }
+                shape.fill(.regularMaterial)
+                    .overlay { shape.fill(AppTheme.cardDark.opacity(0.55)) }
+                    .shadow(color: .black.opacity(0.10), radius: 14, x: 0, y: 6)
             }
-            .overlay { shape.stroke(AppTheme.bubbleInk, style: StrokeStyle(lineWidth: 2.5, lineJoin: .round)) }
-            .overlay(alignment: .topTrailing) {
-                Halftone().frame(width: 56, height: 36).padding(6).allowsHitTesting(false)
+            .overlay {
+                shape.stroke(LinearGradient(colors: [AppTheme.royalGold, AppTheme.royalGoldLight, AppTheme.royalGold],
+                                            startPoint: .topLeading, endPoint: .bottomTrailing),
+                             style: StrokeStyle(lineWidth: 1.2, lineJoin: .round))
             }
     }
 }
@@ -244,28 +245,5 @@ struct BubbleShape: Shape {
         p.addArc(center: CGPoint(x: minX + r, y: minY + r), radius: r, startAngle: .degrees(180), endAngle: .degrees(270), clockwise: false)
         p.closeSubpath()
         return p
-    }
-}
-
-/// Manga screentone in the bubble's corner.
-private struct Halftone: View {
-    var body: some View {
-        Canvas { ctx, size in
-            let step: CGFloat = 7
-            var y: CGFloat = 0
-            while y < size.height {
-                var x: CGFloat = 0
-                while x < size.width {
-                    // Denser toward the top right corner.
-                    let r = 1.6 * (x / size.width) * (1 - y / size.height)
-                    if r > 0.3 {
-                        ctx.fill(Path(ellipseIn: CGRect(x: x - r, y: y - r, width: r * 2, height: r * 2)),
-                                 with: .color(AppTheme.bubbleInk.opacity(0.18)))
-                    }
-                    x += step
-                }
-                y += step
-            }
-        }
     }
 }
