@@ -23,70 +23,104 @@ struct MonthFlowCard: View {
     /// anyone reading over a shoulder learns the same thing either way.
     var isHidden: Bool = false
 
+    /// Share of income already spent this cycle; nil without income.
+    private var spentShare: Double? { income > 0 ? expense / income : nil }
+    private var remaining: Double { income - expense }
+
+    /// Green while there is room, amber past 80 %, red once spending
+    /// passes income.
+    private var shareTint: Color {
+        guard let s = spentShare else { return AppTheme.accent }
+        return s > 1 ? AppTheme.red : (s >= 0.8 ? AppTheme.orange : AppTheme.accent)
+    }
+
     var body: some View {
-        HStack(spacing: 0) {
+        VStack(spacing: 12) {
+            // The window the figures cover, and how much of the income it has used.
+            HStack(spacing: 10) {
+                Image(systemName: "calendar")
+                    .font(.system(.subheadline, weight: .semibold))
+                    .foregroundStyle(AppTheme.accent)
+                    .frame(width: 34, height: 34)
+                    .background(AppTheme.accent.opacity(0.14), in: RoundedRectangle(cornerRadius: 10))
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(loc("home.this_period"))
+                        .font(.system(.subheadline, weight: .bold))
+                        .foregroundStyle(AppTheme.textPrimary)
+                    Text(periodLabel)
+                        .font(.system(.caption2))
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
+                Spacer(minLength: 8)
+                if let share = spentShare, !isHidden {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(loc("home.spent_of_income"))
+                            .font(.system(.caption2))
+                            .foregroundStyle(AppTheme.textSecondary)
+                        HStack(spacing: 6) {
+                            GeometryReader { g in
+                                ZStack(alignment: .leading) {
+                                    Capsule().fill(AppTheme.cardMid)
+                                    Capsule().fill(shareTint)
+                                        .frame(width: g.size.width * min(share, 1))
+                                }
+                            }
+                            .frame(height: 6)
+                            Text(verbatim: "\(Int((share * 100).rounded()))%")
+                                .font(.system(.caption, weight: .bold).monospacedDigit())
+                                .foregroundStyle(AppTheme.textPrimary)
+                        }
+                    }
+                    .frame(width: 128)
+                    .animation(.easeOut(duration: 0.4), value: share)
+                }
+            }
+
+            Rectangle().fill(AppTheme.cardMid).frame(height: 1)
+
             // Money coming IN points in, money going OUT points out — the
             // same directions the add-transaction form and Statistics use.
-            half(icon: "arrow.down.left",
-                 label: loc("home.income"),
-                 amount: income,
-                 tint: AppTheme.flowIn)
-
-            // Hairline, not a gap: the two halves are one comparison.
-            Rectangle()
-                .fill(AppTheme.cardMid)
-                .frame(width: 1, height: 46)
-
-            half(icon: "arrow.up.right",
-                 label: loc("home.expense"),
-                 amount: expense,
-                 tint: AppTheme.flowOut)
+            HStack(spacing: 6) {
+                column(icon: "arrow.down.left", label: loc("home.income"), amount: income, tint: AppTheme.flowIn)
+                column(icon: "arrow.up.right", label: loc("home.expense"), amount: expense, tint: AppTheme.flowOut)
+                column(icon: "wallet.bifold.fill", label: loc("home.remaining"), amount: remaining,
+                       tint: remaining < 0 ? AppTheme.red : AppTheme.blue)
+            }
         }
-        .padding(.vertical, 14)
+        .padding(14)
         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
     }
 
     @ViewBuilder
-    private func half(icon: String, label: String, amount: Double, tint: Color) -> some View {
-        HStack(spacing: 10) {
+    private func column(icon: String, label: String, amount: Double, tint: Color) -> some View {
+        HStack(spacing: 7) {
             // A SOLID badge: a pale tint of the green washes out to near-white
             // on a light card. The glyph takes `onVividFill`, like every label
             // on a solid semantic fill.
-            ZStack {
-                Circle()
-                    .fill(tint)
-                    .frame(width: 34, height: 34)
-                Image(systemName: icon)
-                    .font(.system(.subheadline, weight: .bold))
-                    .foregroundStyle(AppTheme.onVividFill)
-            }
-            VStack(alignment: .leading, spacing: 2) {
+            Image(systemName: icon)
+                .font(.system(.caption, weight: .bold))
+                .foregroundStyle(AppTheme.onVividFill)
+                .frame(width: 28, height: 28)
+                .background(tint, in: Circle())
+            VStack(alignment: .leading, spacing: 1) {
                 Text(label)
-                    .font(.system(.caption))
+                    .font(.system(.caption2))
                     .foregroundStyle(AppTheme.textSecondary)
-                Text(isHidden ? "••••••"
-                              : CurrencyManager.shared.formatted(amount, currency: currency))
-                    .font(.system(.callout, weight: .bold))
+                    .lineLimit(1)
+                Text(isHidden ? "••••" : CurrencyManager.shared.formatted(amount, currency: currency))
+                    .font(.system(.footnote, weight: .bold))
                     .foregroundStyle(tint)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.65)
+                    .minimumScaleFactor(0.55)
                     // Roll the digits when a new transaction moves them, so the
                     // entry the user just made is visibly connected to its effect.
                     .contentTransition(.numericText())
                     .animation(.easeOut(duration: 0.4), value: amount)
-                // Full textSecondary, not a faded one. At 75% it measures
-                // 3.40:1 in light mode and 3.39:1 in dark — under the 4.5 floor
-                // for text this small. Size already makes it subordinate;
-                // fading it as well only made it hard to read.
-                Text(periodLabel)
-                    .font(.system(.caption2))
-                    .foregroundStyle(AppTheme.textSecondary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
             }
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 14)
         .frame(maxWidth: .infinity)
     }
 }

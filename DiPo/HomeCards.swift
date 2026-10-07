@@ -22,6 +22,16 @@ struct HomeHeader: View {
 
     private var isRoyal: Bool { premium.plan == .royal }
 
+    /// "Good morning" to "Good night", by the hour.
+    private var greeting: String {
+        switch Calendar.current.component(.hour, from: .now) {
+        case 4..<11:  return loc("home.greeting_morning")
+        case 11..<15: return loc("home.greeting_afternoon")
+        case 15..<19: return loc("home.greeting_evening")
+        default:      return loc("home.greeting_night")
+        }
+    }
+
     /// Royal wears its colour as a ring — purple running into a warm gold, the
     /// crown's own pairing — with the crown tucked at the edge. Free keeps a
     /// quiet hairline, so the difference is a badge, not a demotion.
@@ -82,7 +92,7 @@ struct HomeHeader: View {
                     .frame(width: 54, height: 54)
 
                     VStack(alignment: .leading, spacing: 1) {
-                        Text(loc("home.greeting") + ",")
+                        Text(greeting + ",")
                             .font(.system(.caption))
                             .foregroundStyle(AppTheme.textSecondary)
                         HStack(spacing: 4) {

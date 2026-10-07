@@ -590,7 +590,8 @@ struct HomeView: View {
 
                         // Category filter — grid on iPad, scroll on iPhone
                         CategoryFilterBar(selectedFilter: $categoryFilter)
-                                                        .padding(.top, 22)
+                            .padding(.horizontal, 22)
+                            .padding(.top, 14)
                             .opacity(contentAppeared ? 1 : 0)
                             .offset(y: contentAppeared ? 0 : 20)
                             .animation(AppMotion.appear, value: contentAppeared)
@@ -609,7 +610,7 @@ struct HomeView: View {
                         // spent") and its edges should say so.
                         .padding(16)
                         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.xl))
-                        .padding(.top, 24)
+                        .padding(.top, 14)
                         .padding(.horizontal, 22)
                                                 .opacity(contentAppeared ? 1 : 0)
                         .offset(y: contentAppeared ? 0 : 24)
@@ -756,11 +757,21 @@ struct HomeView: View {
 
     /// The bill DiPo mentions, when one falls due within three days.
     private var dipoBill: DiPoNudge.Bill? {
-        upcomingDeclaredRecurring.map {
-            DiPoNudge.Bill(label: $0.label,
-                           amount: CurrencyManager.shared.formatted($0.amount, currency: $0.currency),
-                           daysLeft: RecurringDateEngine.daysUntil(dayOfMonth: $0.dayOfMonth),
-                           autoRecord: $0.autoRecord)
+        upcomingDeclaredRecurring.map { bill in
+            // What the paying card holds once the bill has gone out — the
+            // thing worth knowing before it does. Only in the card's own
+            // currency; a converted figure would be a guess.
+            let card = bill.cardID.flatMap { id in queriedCards.first { $0.id == id } } ?? selectedCard
+            let after: String? = card.flatMap { c in
+                guard c.resolvedCurrency == (bill.currency.isEmpty ? c.resolvedCurrency : bill.currency),
+                      !c.isCreditCard else { return nil }
+                return CurrencyManager.shared.formatted(c.computedBalance() - bill.amount, currency: c.resolvedCurrency)
+            }
+            return DiPoNudge.Bill(label: bill.label,
+                                  amount: CurrencyManager.shared.formatted(bill.amount, currency: bill.currency),
+                                  daysLeft: RecurringDateEngine.daysUntil(dayOfMonth: bill.dayOfMonth),
+                                  autoRecord: bill.autoRecord,
+                                  balanceAfter: after)
         }
     }
 

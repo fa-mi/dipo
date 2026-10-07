@@ -7,6 +7,7 @@ import SwiftData
 
 struct CategoryFilterBar: View {
     @Binding var selectedFilter: TxCategory?
+    @State private var expanded = false
 
     // Derive directly from TxCategory so labels auto-localize.
     // Only the subset relevant to expense/home-screen filtering.
@@ -14,30 +15,60 @@ struct CategoryFilterBar: View {
         .shopping, .food, .travel, .bills,
         .transport, .health, .commitment, .investment, .debtPayment, .salary, .other
     ]
+    /// Shown before "See all": the five most used, then a "More" tile.
+    private static let collapsedCount = 5
+
+    private let columns = Array(repeating: GridItem(.flexible(), spacing: 6), count: 6)
+
+    /// Collapsed, an active filter beyond the first five still shows, in
+    /// place of the fifth, so the selection is never hidden.
+    private var visible: [TxCategory] {
+        guard !expanded else { return filterCategories }
+        var first = Array(filterCategories.prefix(Self.collapsedCount))
+        if let f = selectedFilter, !first.contains(f) { first[first.count - 1] = f }
+        return first
+    }
 
     var body: some View {
-        // Spread the filters when they fit, scroll them when they do not.
-        // This replaced an `idiom == .pad` check, which reported `.phone` on
-        // both of the Duo's panels and so never took the spread branch on a
-        // 626 pt display that had ample room for it.
-        ViewThatFits(in: .horizontal) {
-            HStack(spacing: 0) {
-                ForEach(filterCategories, id: \.self) { cat in
-                    filterButton(cat).frame(maxWidth: .infinity)
-                }
-            }
-            .padding(.horizontal, 32)
-
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
-                    ForEach(filterCategories, id: \.self) { cat in
-                        filterButton(cat).frame(width: 64)
+        VStack(spacing: 12) {
+            HStack {
+                Text(loc("home.categories"))
+                    .font(.system(.subheadline, weight: .bold))
+                    .foregroundStyle(AppTheme.textPrimary)
+                Spacer()
+                Button {
+                    HapticManager.shared.tap()
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) { expanded.toggle() }
+                } label: {
+                    HStack(spacing: 3) {
+                        Text(loc(expanded ? "home.see_less" : "home.see_all"))
+                        Image(systemName: "chevron.right")
+                            .imageScale(.small)
+                            .rotationEffect(.degrees(expanded ? 90 : 0))
                     }
+                    .font(.system(.footnote, weight: .semibold))
+                    .foregroundStyle(AppTheme.accent)
                 }
-                .padding(.horizontal, 22)
-                .padding(.vertical, 4)
+                .buttonStyle(.plain)
+            }
+
+            LazyVGrid(columns: columns, spacing: 12) {
+                ForEach(visible, id: \.self) { cat in filterButton(cat) }
+                if !expanded { moreTile }
             }
         }
+        .padding(14)
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+    }
+
+    private var moreTile: some View {
+        Button {
+            HapticManager.shared.tap()
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) { expanded = true }
+        } label: {
+            tile(icon: "ellipsis", tint: AppTheme.textSecondary, label: loc("home.more"), active: false, neutral: true)
+        }
+        .buttonStyle(ScaleButtonStyle())
     }
 
     @ViewBuilder
@@ -49,26 +80,31 @@ struct CategoryFilterBar: View {
                 selectedFilter = isActive ? nil : cat
             }
         } label: {
-            VStack(spacing: 8) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: AppRadius.lg)
-                        .fill(isActive ? cat.color.opacity(0.18) : AppTheme.cardDark)
-                        .frame(width: 58, height: 58)
-                        .overlay(RoundedRectangle(cornerRadius: AppRadius.lg)
-                            .stroke(isActive ? cat.color.opacity(0.6) : Color.clear, lineWidth: 1.5))
-                    Image(systemName: cat.icon)
-                        .font(.system(.title2))
-                        .foregroundStyle(isActive ? cat.color : AppTheme.textPrimary)
-                        .scaleEffect(isActive ? 1.1 : 1)
-                }
-                Text(cat.shortLabel)
-                    .font(.system(size: 11, weight: isActive ? .semibold : .regular))
-                    .foregroundStyle(isActive ? cat.color : AppTheme.textSecondary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-            }
+            tile(icon: cat.icon, tint: cat.color, label: cat.shortLabel, active: isActive, neutral: false)
         }
         .buttonStyle(ScaleButtonStyle())
+        .accessibilityAddTraits(isActive ? .isSelected : [])
+    }
+
+    /// A tinted square with the category's own hue, its name under it.
+    private func tile(icon: String, tint: Color, label: String, active: Bool, neutral: Bool) -> some View {
+        VStack(spacing: 6) {
+            Image(systemName: icon)
+                .font(.system(.title3, weight: .semibold))
+                .foregroundStyle(tint)
+                .frame(width: 46, height: 46)
+                .background(neutral ? AppTheme.cardMid : tint.opacity(active ? 0.3 : 0.15),
+                            in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(active ? tint.opacity(0.8) : .clear, lineWidth: 1.5))
+                .scaleEffect(active ? 1.06 : 1)
+            Text(label)
+                .font(.system(size: 11, weight: active ? .semibold : .regular))
+                .foregroundStyle(active ? tint : AppTheme.textPrimary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+        }
+        .frame(maxWidth: .infinity)
     }
 }
 
@@ -88,6 +124,26 @@ struct TransactionSection: View {
     /// user reaches anything older.
     var onOpenSearch: (() -> Void)? = nil
     @State private var showAll        = false
+    /// Which way the money moved: everything, out, in, or between own cards.
+    @State private var kind: Kind = .all
+    enum Kind: CaseIterable { case all, outgoing, incoming, transfer
+        var label: String {
+            switch self {
+            case .all: return loc("home.kind_all")
+            case .outgoing: return loc("home.kind_out")
+            case .incoming: return loc("home.kind_in")
+            case .transfer: return loc("home.kind_transfer")
+            }
+        }
+        func matches(_ tx: TxRecord) -> Bool {
+            switch self {
+            case .all:      return true
+            case .outgoing: return tx.amount < 0 && tx.txSubtype != .transfer
+            case .incoming: return tx.amount > 0 && tx.txSubtype != .transfer
+            case .transfer: return tx.txSubtype == .transfer
+            }
+        }
+    }
     @State private var selectedTx: TxRecord? = nil
     @State private var pendingDelete: TxRecord? = nil
     @Environment(\.modelContext) private var context
@@ -132,7 +188,7 @@ struct TransactionSection: View {
         // state below says so rather than leaving a blank panel.
         let now = Date()
         let today = cal.startOfDay(for: now)
-        let sorted = transactions.sorted { $0.date > $1.date }
+        let sorted = transactions.filter(kind.matches).sorted { $0.date > $1.date }
 
         var out = Derived()
         var rows: [TxRecord]
@@ -183,6 +239,30 @@ struct TransactionSection: View {
         return out
     }
 
+    /// All · Out · In · Transfer, as one capsule control.
+    private var kindPicker: some View {
+        HStack(spacing: 2) {
+            ForEach(Kind.allCases, id: \.self) { k in
+                let on = kind == k
+                Button {
+                    HapticManager.shared.tap()
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { kind = k }
+                } label: {
+                    Text(k.label)
+                        .font(.system(.caption, weight: on ? .bold : .medium))
+                        .foregroundStyle(on ? AppTheme.onVividFill : AppTheme.textSecondary)
+                        .padding(.horizontal, 12).padding(.vertical, 6)
+                        .background { if on { Capsule().fill(AppTheme.accentFill) } }
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(on ? .isSelected : [])
+            }
+        }
+        .padding(3)
+        .background(AppTheme.cardMid, in: Capsule())
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             // Derived once per body pass and read from here down. Reading the
@@ -191,10 +271,23 @@ struct TransactionSection: View {
             let d = derived
 
             HStack {
-                Text(loc("home.transactions"))
-                    .font(.system(.body, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                Text(loc("home.recent_tx"))
+                    .font(.system(.body, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
                 Spacer()
-                HStack(spacing: 12) {
+                HStack(spacing: 10) {
+                    if let onOpenSearch {
+                        Button {
+                            onOpenSearch()
+                        } label: {
+                            Image(systemName: "magnifyingglass")
+                                .font(.system(.footnote, weight: .semibold))
+                                .foregroundStyle(AppTheme.textSecondary)
+                                .frame(width: 32, height: 32)
+                                .background(AppTheme.cardMid, in: Circle())
+                        }
+                        .buttonStyle(ScaleButtonStyle())
+                        .accessibilityLabel(loc("a11y.search"))
+                    }
                     // Names the window it switches to, rather than "See more"
                     // — the list is bounded by days now, so how far back it
                     // reaches is the thing worth stating. Hidden entirely when
@@ -211,7 +304,10 @@ struct TransactionSection: View {
                     }
                 }
             }
-            .padding(.bottom, 8)
+            .padding(.bottom, 10)
+
+            kindPicker
+                .padding(.bottom, 12)
 
             // Active filter chip with clear button
             if let filter = categoryFilter {

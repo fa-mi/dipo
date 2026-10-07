@@ -61,7 +61,7 @@ final class DiPoTalkTests: XCTestCase {
                     "dipo.sfx.payday_soon", "dipo.sfx.payday_today", "dipo.payday_today",
                     "dipo.payday_tomorrow", "dipo.payday_in", "dipo.sfx.bill", "dipo.bill_today",
                     "dipo.bill_tomorrow", "dipo.bill_in", "dipo.bill_auto", "dipo.bill_manual",
-                    "dipo.link.notifications", "dipo.link.bills", "dipo.link.salary", "dipo.link.checkin", "dipo.streak_title", "dipo.streak_keep", "dipo.streak_week", "dipo.streak_month", "dipo.streak_legend", "dipo.link.streak",
+                    "dipo.link.notifications", "dipo.link.bills", "dipo.link.salary", "dipo.link.checkin", "dipo.streak_title", "dipo.streak_keep", "dipo.streak_week", "dipo.streak_month", "dipo.streak_legend", "dipo.link.streak", "dipo.bill_balance_after",
                     "ai.credits_left", "ai.credits_out", "ai.credits_placeholder", "game.play"]
         keys += (0..<DiPoVoice.questionCount).map { "dipo.q.\($0)" }
         keys += (0..<DiPoScript.tipCount).map { "dipo.tip.\($0)" }
@@ -96,6 +96,24 @@ final class DiPoTalkTests: XCTestCase {
         let far = DiPoNudge.Bill(label: "kos", amount: "Rp 2.100.000", daysLeft: 9, autoRecord: true)
         XCTAssertTrue(DiPoNudge.all(unread: 0, bill: far, daysToPayday: 16, payDate: .now).isEmpty,
                       "nothing to say: DiPo just invites a question")
+    }
+
+    func testCloudBumpsStayInsideTheirFrame() {
+        let rect = CGRect(x: 0, y: 0, width: 200, height: 90)
+        let r: CGFloat = 10
+        let pts = CloudBubble.bumps(in: rect, radius: r)
+        XCTAssertGreaterThanOrEqual(pts.count, 8)
+        for p in pts {
+            XCTAssertTrue(rect.insetBy(dx: r, dy: r).insetBy(dx: -0.01, dy: -0.01).contains(p), "\(p)")
+        }
+        XCTAssertTrue(CloudBubble.bumps(in: CGRect(x: 0, y: 0, width: 10, height: 10), radius: r).isEmpty)
+    }
+
+    func testBillSaysTheBalanceAfterWhenKnown() {
+        let bill = DiPoNudge.Bill(label: "kos", amount: "Rp 2.100.000", daysLeft: 1, autoRecord: true,
+                                  balanceAfter: "Rp 4.036.015")
+        let text = DiPoNudge.all(unread: 0, bill: bill, daysToPayday: nil, payDate: nil).first?.text ?? ""
+        XCTAssertTrue(text.contains("Rp 4.036.015"))
     }
 
     func testStreakGreetsFirstFromTwoDays() {
