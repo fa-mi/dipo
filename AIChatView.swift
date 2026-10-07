@@ -714,6 +714,15 @@ struct AIChatView: View {
         .accessibilityLabel(loc(voice.isListening ? "voice.stop" : "voice.start"))
     }
 
+    /// The interests the user confirmed come first — "Coffee that's good
+    /// but easy on the wallet?" — then the money questions.
+    private var suggestionTexts: [String] {
+        let interests = isRoyal
+            ? DiPoInterest.allCases.filter(DiPoInterestStore.liked.contains).map(\.prompt)
+            : []
+        return interests + (0..<DiPoVoice.questionCount).map { loc("dipo.q.\($0)") }
+    }
+
     /// Questions to ask with one tap — kept in reach, not only before the
     /// first question; resting while DiPo answers or the credits are out.
     @ViewBuilder
@@ -721,13 +730,13 @@ struct AIChatView: View {
         Group {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
-                    ForEach(0..<DiPoVoice.questionCount, id: \.self) { i in
+                    ForEach(suggestionTexts, id: \.self) { text in
                         Button {
                             HapticManager.shared.tap()
-                            vm.input = loc("dipo.q.\(i)")
+                            vm.input = text
                             submit(byVoice: false)
                         } label: {
-                            Text(loc("dipo.q.\(i)"))
+                            Text(text)
                                 .font(.system(.footnote, weight: .semibold))
                                 .foregroundStyle(AppTheme.accent)
                                 .padding(.horizontal, 12).padding(.vertical, 8)
@@ -938,6 +947,10 @@ struct AIChatView: View {
             "Net saved: \(cm.formatted(net, currency: pref)) (savings rate \(savingsRate)%).",
             "Transactions this month: \(monthTx.count).",
         ]
+        // Early, so the server's length cap never cuts it.
+        if let interests = DiPoInterestStore.contextLine(DiPoInterestStore.liked) {
+            lines.append(interests)
+        }
         if !topCats.isEmpty { lines.append("Top expense categories: \(topCats).") }
         if !recent.isEmpty  { lines.append("Recent transactions: \(recent).") }
 

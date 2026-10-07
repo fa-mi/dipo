@@ -24,6 +24,7 @@ struct ProfileView: View {
     @State private var idCopied           = false
     @State private var emailText          = ""
     @State private var showBackTapGuide = false
+    @State private var showInterests = false
     @State private var showWebSync        = false
     @State private var showCleanup        = false
     @State private var showPaywall        = false
@@ -332,6 +333,11 @@ struct ProfileView: View {
                 .presentationDragIndicator(.visible)
                 .presentationBackground(AppTheme.bg)
                 .preferredColorScheme(appColorScheme())
+        }
+        .sheet(isPresented: $showInterests) {
+            DiPoInterestsView()
+                .presentationDetents([.medium, .large]).presentationDragIndicator(.visible)
+                .presentationBackground(AppTheme.bg).preferredColorScheme(appColorScheme())
         }
         .sheet(isPresented: $showBackTapGuide) {
             BackTapGuideView()
@@ -777,6 +783,16 @@ struct ProfileView: View {
                 iconOverride: "hand.tap.fill",
                 tintOverride: AppTheme.orange,
                 showPaywall: $showPaywall) { showBackTapGuide = true }
+
+            // What DiPo knows the user enjoys; he guesses, they decide.
+            PremiumLockedFeatureLink(
+                feature: .aiAdvisor, title: loc("interest.profile_title"),
+                subtitle: premiumMgr.canAccess(.aiAdvisor)
+                    ? loc("interest.profile_sub")
+                    : loc("profile.requires_royal"),
+                iconOverride: "heart.text.square.fill",
+                tintOverride: AppTheme.orange,
+                showPaywall: $showPaywall) { showInterests = true }
 
             // Tidy and the spending audit moved off Statistics: that screen
             // reports conclusions, and rewriting the rows behind them is a

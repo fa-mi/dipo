@@ -48,6 +48,8 @@ struct HomeView: View {
     @State private var showSearch           = false
     @State private var showNotifications    = false
     @State private var showAskDiPo          = false
+    /// A question to send as Ask DiPo opens — from one of DiPo's ideas.
+    @State private var askDiPoPrompt: String? = nil
     @State private var showAddCard          = false
     @State private var showAddSalary        = false
     @State private var categoryFilter: TxCategory? = nil
@@ -451,13 +453,17 @@ struct HomeView: View {
                                     daysToPayday: nearestSalary.map { SalaryDateEngine.daysUntilPay(dayOfMonth: $0.dayOfMonth) },
                                     payDate: nearestSalary.map { SalaryDateEngine.nextPayDate(dayOfMonth: $0.dayOfMonth) },
                                     animates: !showAskDiPo,
-                                    onAskDiPo: { showAskDiPo = true },
+                                    isRoyal: dipoIsRoyal,
+                                    onAskDiPo: { askDiPoPrompt = nil; showAskDiPo = true },
                                     onAction: { action in
                                         switch action {
                                         case .notifications: showNotifications = true
                                         case .bills:         vm.open(PlanRoute.bills)
                                         case .salary:        vm.open(PlanRoute.salary)
-                                        case .checkIn, .streak: break   // handled inside DiPo's section
+                                        case .checkIn, .streak, .interestGuess: break   // handled inside DiPo's section
+                                        case .interestTip(let interest):
+                                            askDiPoPrompt = interest.prompt
+                                            showAskDiPo = true
                                         }
                                     })
                         .padding(.horizontal, 22)
@@ -717,7 +723,7 @@ struct HomeView: View {
         .sheet(isPresented: $showAskDiPo) {
             // DiPo opens with the Smart Insights; Free hears the top one and
             // sees what Royal adds when it tries to chat.
-            AIChatView(insights: cachedInsights + cachedAnomalies, isRoyal: dipoIsRoyal)
+            AIChatView(initialMessage: askDiPoPrompt, insights: cachedInsights + cachedAnomalies, isRoyal: dipoIsRoyal)
                 .presentationDetents([.large]).presentationDragIndicator(.visible)
                 .presentationBackground(AppTheme.bg)
                 .preferredColorScheme(appColorScheme())

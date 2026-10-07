@@ -119,6 +119,8 @@ struct DiPoHomeSection: View {
     var onAskDiPo: () -> Void
     var onAction: (DiPoNudge.Action) -> Void
     var animates = true
+    /// Royal gets to know DiPo better: interest guesses and ideas.
+    var isRoyal = false
 
     /// Every account's recent rows, read here rather than handed in. A day
     /// counts as logged when anything was recorded, whichever card paid.
@@ -138,11 +140,17 @@ struct DiPoHomeSection: View {
     /// Bumped on return to the app, so "today", the evening question and the
     /// streak are worked out again — the day may have changed while it slept.
     @State private var refreshedAt = Date.now
+    /// Read through AppStorage so an answer here or a change in Profile shows
+    /// at once. Parsed by DiPoInterestStore's own rules.
+    @AppStorage("dipo_interests_yes") private var likedRaw = ""
+    @AppStorage("dipo_interests_no") private var declinedRaw = ""
+    @State private var askingInterest: DiPoInterest?
 
     init(unread: Int, bill: DiPoNudge.Bill?, daysToPayday: Int?, payDate: Date?,
-         animates: Bool = true,
+         animates: Bool = true, isRoyal: Bool = false,
          onAskDiPo: @escaping () -> Void, onAction: @escaping (DiPoNudge.Action) -> Void) {
         self.animates = animates
+        self.isRoyal = isRoyal
         self.unread = unread
         self.bill = bill
         self.daysToPayday = daysToPayday
@@ -176,13 +184,15 @@ struct DiPoHomeSection: View {
     var body: some View {
         DiPoHomeStrip(
             nudges: DiPoNudge.all(unread: unread, checkIn: asking, streak: greeting ? streak : 0,
-                                  bill: bill, daysToPayday: daysToPayday, payDate: payDate),
+                                  bill: bill, daysToPayday: daysToPayday, payDate: payDate,
+                                  interestGuess: interestGuess, interestTip: interestTip),
             status: status,
             onAskDiPo: onAskDiPo,
             onNudge: { action in
                 switch action {
                 case .checkIn: askingNow = true
                 case .streak:  withAnimation(.spring(response: 0.35)) { greeting = false }
+                case .interestGuess(let interest): askingInterest = interest
                 default:       onAction(action)
                 }
             },
@@ -197,6 +207,19 @@ struct DiPoHomeSection: View {
             Button(loc("ai.confirm.cancel"), role: .cancel) {}
         } message: {
             Text(loc("checkin.ask_body"))
+        }
+        .confirmationDialog(askingInterest?.question ?? "",
+                            isPresented: Binding(get: { askingInterest != nil },
+                                                 set: { if !$0 { askingInterest = nil } }),
+                            titleVisibility: .visible, presenting: askingInterest) { interest in
+            Button(loc("interest.yes")) {
+                HapticManager.shared.success()
+                DiPoInterestStore.set(interest, liked: true)
+            }
+            Button(loc("interest.no")) { DiPoInterestStore.set(interest, liked: false) }
+            Button(loc("ai.confirm.cancel"), role: .cancel) {}
+        } message: { _ in
+            Text(loc("interest.ask_body"))
         }
         // The evening reminder is the same question, so it answers to the same
         // state: no push on a day that is already accounted for.
@@ -221,6 +244,27 @@ struct DiPoHomeSection: View {
             try? await Task.sleep(for: .seconds(8))
             withAnimation(.spring(response: 0.35)) { greeting = false }
         }
+    }
+
+    private var likedInterests: Set<DiPoInterest> {
+        _ = likedRaw   // read so a change re-renders
+        return DiPoInterestStore.liked
+    }
+
+    /// A guess worth asking about, for Royal, from recent transactions.
+    private var interestGuess: DiPoInterest? {
+        _ = declinedRaw
+        guard isRoyal else { return nil }
+        return DiPoInterest.nextGuess(in: transactions, answered: DiPoInterestStore.answered)
+    }
+
+    /// One confirmed interest a day, in turn, for an idea from DiPo.
+    private var interestTip: DiPoInterest? {
+        guard isRoyal else { return nil }
+        let liked = DiPoInterest.allCases.filter(likedInterests.contains)
+        guard !liked.isEmpty else { return nil }
+        let day = Calendar.current.ordinality(of: .day, in: .era, for: refreshedAt) ?? 0
+        return liked[day % liked.count]
     }
 
     private func refreshReminder() {

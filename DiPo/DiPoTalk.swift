@@ -136,7 +136,13 @@ final class DiPoVoice {
 
 /// Something DiPo's bubble on Home reminds about.
 struct DiPoNudge: Equatable, Identifiable {
-    enum Action: Equatable { case notifications, checkIn, bills, salary, streak }
+    enum Action: Equatable {
+        case notifications, checkIn, bills, salary, streak
+        /// "You like your coffee, don't you?" — answered in a dialog.
+        case interestGuess(DiPoInterest)
+        /// A confirmed interest: opens Ask DiPo with its question.
+        case interestTip(DiPoInterest)
+    }
     let id: String
     let mood: DiPoMood
     let exclamation: String
@@ -160,7 +166,8 @@ struct DiPoNudge: Equatable, Identifiable {
     /// then a bill falling due within three days, then payday from three days
     /// out. Empty means DiPo just invites a question.
     static func all(unread: Int, checkIn: Bool = false, streak: Int = 0,
-                    bill: Bill?, daysToPayday: Int?, payDate: Date?) -> [DiPoNudge] {
+                    bill: Bill?, daysToPayday: Int?, payDate: Date?,
+                    interestGuess: DiPoInterest? = nil, interestTip: DiPoInterest? = nil) -> [DiPoNudge] {
         var out: [DiPoNudge] = []
         // The streak greets the user when they open the app; two days is the
         // shortest run worth a word.
@@ -209,6 +216,19 @@ struct DiPoNudge: Equatable, Identifiable {
             out.append(DiPoNudge(id: "payday-\(days)", mood: days == 0 ? .cheer : .happy,
                                  exclamation: loc(days == 0 ? "dipo.sfx.payday_today" : "dipo.sfx.payday_soon"),
                                  text: text, action: .salary, link: loc("dipo.link.salary")))
+        }
+        // Getting to know the user comes after anything with money or a date
+        // attached: first a guess to confirm, then ideas for what they enjoy.
+        if let guess = interestGuess {
+            out.append(DiPoNudge(id: "interest-ask-\(guess.rawValue)", mood: .happy,
+                                 exclamation: guess.question, text: loc("interest.ask_body"),
+                                 action: .interestGuess(guess), link: loc("interest.link_answer")))
+        }
+        if let tip = interestTip {
+            out.append(DiPoNudge(id: "interest-tip-\(tip.rawValue)", mood: .happy,
+                                 exclamation: String(format: loc("interest.tip_title"), tip.emoji),
+                                 text: loc("interest.\(tip.rawValue).tip"),
+                                 action: .interestTip(tip), link: loc("interest.link_ask")))
         }
         return out
     }
