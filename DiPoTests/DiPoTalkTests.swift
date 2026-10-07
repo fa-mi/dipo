@@ -56,13 +56,39 @@ final class DiPoTalkTests: XCTestCase {
     func testEveryTipAndLineExistsInBothLanguages() {
         var keys = ["dipo.sfx.happy", "dipo.sfx.worry", "dipo.sfx.cheer", "dipo.sfx.info", "dipo.sfx.psst",
                     "dipo.sfx.tip", "dipo.sfx.tomorrow", "dipo.unread_one", "dipo.unread_many",
-                    "dipo.locked", "dipo.next", "dipo.ask", "dipo.a11y_open"]
+                    "dipo.locked", "dipo.next", "dipo.ask", "dipo.a11y_open", "dipo.a11y_ask",
+                    "dipo.home_invite", "dipo.speak_on", "dipo.speak_off",
+                    "dipo.sfx.payday_soon", "dipo.sfx.payday_today", "dipo.payday_today",
+                    "dipo.payday_tomorrow", "dipo.payday_in"]
+        keys += (0..<DiPoVoice.questionCount).map { "dipo.q.\($0)" }
         keys += (0..<DiPoScript.tipCount).map { "dipo.tip.\($0)" }
         for lang in LanguageManager.Language.allCases {
             LanguageManager.shared.withLanguage(lang) {
                 for k in keys { XCTAssertNotEqual(loc(k), k, "\(k) in \(lang)") }
             }
         }
+    }
+
+    func testHomeNudgeUnreadBeatsPayday() {
+        let n = DiPoNudge.pick(unread: 2, daysToPayday: 1, payDate: .now)
+        XCTAssertEqual(n?.action, .notifications)
+    }
+
+    func testHomeNudgePaydayFromThreeDaysOut() {
+        let pay = Date(timeIntervalSince1970: 1_800_000_000)
+        XCTAssertEqual(DiPoNudge.pick(unread: 0, daysToPayday: 3, payDate: pay)?.action, .salary)
+        XCTAssertTrue(DiPoNudge.pick(unread: 0, daysToPayday: 3, payDate: pay)?.text.contains("3") ?? false)
+        XCTAssertNil(DiPoNudge.pick(unread: 0, daysToPayday: 4, payDate: pay), "not before H-3")
+        XCTAssertNil(DiPoNudge.pick(unread: 0, daysToPayday: nil, payDate: nil), "no salary schedule")
+        let today = DiPoNudge.pick(unread: 0, daysToPayday: 0, payDate: pay)
+        XCTAssertEqual(today?.mood, .cheer)
+        XCTAssertEqual(today?.action, .salary)
+    }
+
+    func testSpeakingTimeIsBounded() {
+        XCTAssertEqual(DiPoVoice.estimatedSeconds(""), 1)
+        XCTAssertEqual(DiPoVoice.estimatedSeconds(String(repeating: "a", count: 10_000)), 20)
+        XCTAssertGreaterThan(DiPoVoice.estimatedSeconds(String(repeating: "a", count: 100)), 1)
     }
 
     func testRigMoodsDoNotBreakIt() {

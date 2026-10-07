@@ -302,7 +302,25 @@ struct AIChatView: View {
     /// sent as soon as this view appears. The voice screen deliberately does
     /// no parsing of its own; this is where the sentence lands.
     var initialMessage: String? = nil
+    /// Smart Insights DiPo opens with, most urgent first. Home passes them.
+    var insights: [SmartInsight] = []
+    /// Free can open Ask DiPo and hear the top insight; chatting is Royal.
+    var isRoyal: Bool = true
     @State private var showVoiceCapture = false
+    @State private var showPaywall = false
+    @State private var showGame = false
+
+    // DiPo in 3D at the top, reacting to what he says.
+    @State private var dipoMood: DiPoMood = .idle
+    @State private var dipoLine = ""
+    @State private var dipoTalk: Double = 0
+    @State private var dipoVoice = DiPoVoice()
+    /// Speak every reply aloud. Off by default; a question asked by voice is
+    /// always answered by voice too.
+    @AppStorage("dipo_speaks_replies") private var speakAlways = false
+    @State private var askedByVoice = false
+    /// DiPo's opening lines; replies after these are what he reacts to.
+    @State private var openingCount = 0
 
     @State private var voice = VoiceDictation()
     @State private var voiceNotice: String? = nil
@@ -331,10 +349,19 @@ struct AIChatView: View {
         .task {
             await vm.loadCredits()
             if selectedCardID == nil { selectedCardID = cards.first?.id }
-            // Friendly opening message.
+            // Friendly opening message, then what DiPo has noticed.
             if vm.messages.isEmpty {
                 vm.messages.append(AIChatMessage(role: .assistant,
                     text: loc("ai.greeting")))
+                if !insights.isEmpty {
+                    for line in DiPoScript.lines(unread: 0, insights: insights, isRoyal: isRoyal) {
+                        let head = [line.exclamation, line.title].filter { !$0.isEmpty }.joined(separator: " ")
+                        vm.messages.append(AIChatMessage(role: .assistant, text: "\(head)\n\(line.text)"))
+                        dipoMood = line.mood
+                    }
+                }
+                dipoLine = vm.messages.last.map { $0.id.uuidString } ?? ""
+                openingCount = vm.messages.count
             }
             // Arriving from Back Tap / Siri: start listening immediately. The
             // whole point of the gesture is that nothing else needs pressing.
@@ -346,11 +373,11 @@ struct AIChatView: View {
                 guard !text.isEmpty else { return }
                 vm.input = text
                 inputFocused = false
-                let snapshot = buildFinancialContext()
-                Task { await vm.send(context: snapshot) }
+                submit(byVoice: true)
             }
             if let initialMessage, !initialMessage.isEmpty, vm.messages.isEmpty {
                 vm.input = initialMessage
+                askedByVoice = true
                 let snapshot = buildFinancialContext()
                 await vm.send(context: snapshot)
             } else if autoStartVoice {
@@ -373,14 +400,33 @@ struct AIChatView: View {
             case .idle, .listening:     break
             }
         }
-        .onDisappear { voice.cancel() }
+        .onDisappear { voice.cancel(); dipoVoice.stop() }
+        // Each new reply: DiPo reacts, and says it aloud when asked aloud.
+        .onChange(of: vm.messages.count) { _, _ in
+            guard vm.messages.count > openingCount,
+                  let last = vm.messages.last, last.role == .assistant else { return }
+            dipoMood = last.isError ? .worry : .happy
+            let spoken = askedByVoice || speakAlways
+            dipoTalk = spoken ? DiPoVoice.estimatedSeconds(last.text) : 1.2
+            dipoLine = last.id.uuidString
+            if spoken { dipoVoice.speak(last.text) }
+            askedByVoice = false
+        }
         .fullScreenCover(isPresented: $showVoiceCapture) {
             VoiceCaptureView { text in
                 vm.input = text
-                let snapshot = buildFinancialContext()
-                Task { await vm.send(context: snapshot) }
+                submit(byVoice: true)
             }
             .preferredColorScheme(appColorScheme())
+        }
+        .fullScreenCover(isPresented: $showGame) {
+            DiPoRunGameView(isRoyal: isRoyal)
+                .preferredColorScheme(appColorScheme())
+        }
+        .sheet(isPresented: $showPaywall) {
+            PaywallView()
+                .presentationDetents([.large]).presentationDragIndicator(.visible)
+                .presentationBackground(AppTheme.bg).preferredColorScheme(appColorScheme())
         }
         .sheet(isPresented: $showCardPicker) {
             cardPickerSheet
@@ -394,36 +440,63 @@ struct AIChatView: View {
 
     // MARK: Header
 
+    /// DiPo in 3D, with the title, the speak-aloud toggle and the credit chip.
     private var header: some View {
-        HStack(spacing: 12) {
-            HStack(spacing: 7) {
-                Image(systemName: "sparkles")
-                    .font(.system(.subheadline, weight: .semibold))
-                    .foregroundStyle(AppTheme.purple)
+        ZStack(alignment: .top) {
+            DiPoDragonView(mood: dipoMood, line: dipoLine, talkSeconds: dipoTalk, crowned: isRoyal)
+                .frame(width: 170, height: 150)
+                .frame(maxWidth: .infinity)
+                .padding(.top, 8)
+            HStack(spacing: 10) {
                 Text(loc("ai.title"))
                     .font(.system(.body, weight: .bold))
                     .foregroundStyle(AppTheme.textPrimary)
-            }
-            Spacer()
-            // Credit counter chip — shown ONLY when credits are running
-            // low (< 10). A paying user with a healthy balance never sees
-            // a depleting counter, so the feature feels unlimited; the
-            // chip surfaces just in time as a gentle "almost out" warning.
-            if let credits = vm.creditsLeft, credits < 10 {
-                HStack(spacing: 5) {
-                    Image(systemName: "bolt.fill").font(.system(.caption2)).imageScale(.small)
-                    Text("\(credits)")
-                        .font(.system(.footnote, weight: .bold))
-                        .contentTransition(.numericText())
+                Spacer()
+                // Credit counter chip — shown ONLY when credits are running
+                // low (< 10). A paying user with a healthy balance never sees
+                // a depleting counter, so the feature feels unlimited; the
+                // chip surfaces just in time as a gentle "almost out" warning.
+                if let credits = vm.creditsLeft, credits < 10 {
+                    HStack(spacing: 5) {
+                        Image(systemName: "bolt.fill").font(.system(.caption2)).imageScale(.small)
+                        Text("\(credits)")
+                            .font(.system(.footnote, weight: .bold))
+                            .contentTransition(.numericText())
+                    }
+                    .foregroundStyle(credits == 0 ? AppTheme.red : AppTheme.orange)
+                    .padding(.horizontal, 10).padding(.vertical, 6)
+                    .background((credits == 0 ? AppTheme.red : AppTheme.orange).opacity(0.12),
+                                in: Capsule())
                 }
-                .foregroundStyle(credits == 0 ? AppTheme.red : AppTheme.orange)
-                .padding(.horizontal, 10).padding(.vertical, 6)
-                .background((credits == 0 ? AppTheme.red : AppTheme.orange).opacity(0.12),
-                            in: Capsule())
+                Button {
+                    HapticManager.shared.tap()
+                    showGame = true
+                } label: {
+                    Image(systemName: "gamecontroller.fill")
+                        .font(.system(.subheadline, weight: .semibold))
+                        .foregroundStyle(AppTheme.royalGoldText)
+                        .frame(width: 36, height: 36)
+                        .background(AppTheme.cardDark, in: Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(loc("game.title"))
+                Button {
+                    HapticManager.shared.tap()
+                    speakAlways.toggle()
+                    if !speakAlways { dipoVoice.stop() }
+                } label: {
+                    Image(systemName: speakAlways ? "speaker.wave.2.fill" : "speaker.slash.fill")
+                        .font(.system(.subheadline, weight: .semibold))
+                        .foregroundStyle(speakAlways ? AppTheme.accent : AppTheme.textSecondary)
+                        .frame(width: 36, height: 36)
+                        .background(AppTheme.cardDark, in: Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(loc(speakAlways ? "dipo.speak_on" : "dipo.speak_off"))
             }
+            .padding(.horizontal, 18)
+            .padding(.top, 14)
         }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 14)
     }
 
     // MARK: Card picker
@@ -574,11 +647,14 @@ struct AIChatView: View {
             .padding(.horizontal, 18)
         } else {
             VStack(alignment: .leading, spacing: 10) {
+                // DiPo speaks in his own bubble, like on Home.
                 Text(msg.text)
                     .font(.system(.subheadline))
+                    .lineSpacing(2)
                     .foregroundStyle(msg.isError ? AppTheme.red : AppTheme.textPrimary)
-                    .padding(.horizontal, 14).padding(.vertical, 10)
-                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+                    .padding(.horizontal, 16).padding(.vertical, 12)
+                    .dipoBubble()
+                    .padding(.trailing, 30)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 ForEach(msg.transactions) { tx in
                     txCard(tx, in: msg.id)
@@ -651,6 +727,8 @@ struct AIChatView: View {
             if voice.isListening {
                 // Only reachable from the legacy auto-start path.
                 voice.stop()
+            } else if !isRoyal {
+                showPaywall = true
             } else {
                 inputFocused = false
                 showVoiceCapture = true
@@ -678,9 +756,45 @@ struct AIChatView: View {
         .accessibilityLabel(loc(voice.isListening ? "voice.stop" : "voice.start"))
     }
 
+    /// Questions to start with, until the user has asked something.
+    @ViewBuilder
+    private var suggestions: some View {
+        if !vm.messages.contains(where: { $0.role == .user }) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(0..<DiPoVoice.questionCount, id: \.self) { i in
+                        Button {
+                            HapticManager.shared.tap()
+                            vm.input = loc("dipo.q.\(i)")
+                            submit(byVoice: false)
+                        } label: {
+                            Text(loc("dipo.q.\(i)"))
+                                .font(.system(.footnote, weight: .semibold))
+                                .foregroundStyle(AppTheme.accent)
+                                .padding(.horizontal, 12).padding(.vertical, 8)
+                                .overlay(Capsule().stroke(AppTheme.accent, lineWidth: 1.5))
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(vm.isLoading)
+                    }
+                }
+                .padding(.horizontal, 16).padding(.vertical, 8)
+            }
+        }
+    }
+
+    /// Sends what is in the field. Free sees what Royal adds instead.
+    private func submit(byVoice: Bool) {
+        guard isRoyal else { showPaywall = true; return }
+        askedByVoice = byVoice
+        let snapshot = buildFinancialContext()
+        Task { await vm.send(context: snapshot) }
+    }
+
     private var inputBar: some View {
         VStack(spacing: 0) {
             Divider().overlay(AppTheme.cardMid)
+            suggestions
             // Permission refusals and "no recogniser for this language" have to
             // be said out loud. A mic button that silently does nothing is the
             // most common way voice input reads as broken.
@@ -707,8 +821,7 @@ struct AIChatView: View {
                     .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
                 Button {
                     inputFocused = false
-                    let snapshot = buildFinancialContext()
-                    Task { await vm.send(context: snapshot) }
+                    submit(byVoice: false)
                 } label: {
                     Image(systemName: "arrow.up")
                         .font(.system(.callout, weight: .bold))
