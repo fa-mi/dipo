@@ -322,6 +322,9 @@ struct AIChatView: View {
     @State private var dipoMood: DiPoMood = .idle
     @State private var dipoLine = ""
     @State private var dipoTalk: Double = 0
+    /// What DiPo says in the bubble beside him in the header: the greeting,
+    /// then a short word after each turn. The chat below keeps the answers.
+    @State private var dipoSays = loc("ai.greeting")
     @State private var dipoVoice = DiPoVoice()
     /// Speak every reply aloud. Off by default; a question asked by voice is
     /// always answered by voice too.
@@ -354,12 +357,12 @@ struct AIChatView: View {
         }
         .background(AppTheme.bg)
         .task {
+            let fresh = vm.messages.isEmpty
             await vm.loadCredits()
             if selectedCardID == nil { selectedCardID = cards.first?.id }
-            // Friendly opening message, then what DiPo has noticed.
+            // The greeting is DiPo's own bubble in the header now; the chat
+            // opens with what he has noticed.
             if vm.messages.isEmpty {
-                vm.messages.append(AIChatMessage(role: .assistant,
-                    text: loc("ai.greeting")))
                 if !insights.isEmpty {
                     for line in DiPoScript.lines(unread: 0, insights: insights, isRoyal: isRoyal) {
                         let head = [line.exclamation, line.title].filter { !$0.isEmpty }.joined(separator: " ")
@@ -382,7 +385,7 @@ struct AIChatView: View {
                 inputFocused = false
                 submit(byVoice: true)
             }
-            if let initialMessage, !initialMessage.isEmpty, vm.messages.isEmpty {
+            if let initialMessage, !initialMessage.isEmpty, fresh {
                 vm.input = initialMessage
                 askedByVoice = true
                 let snapshot = buildFinancialContext()
@@ -413,6 +416,9 @@ struct AIChatView: View {
             guard vm.messages.count > openingCount,
                   let last = vm.messages.last, last.role == .assistant else { return }
             dipoMood = last.isError ? .worry : .happy
+            dipoSays = last.isError ? loc("ai.bubble.oops")
+                : last.transactions.isEmpty ? loc("ai.bubble.more")
+                : loc("ai.bubble.check")
             let spoken = askedByVoice || speakAlways
             dipoTalk = spoken ? DiPoVoice.estimatedSeconds(last.text) : 1.2
             dipoLine = last.id.uuidString
@@ -481,8 +487,13 @@ struct AIChatView: View {
             .padding(.top, 16)
 
             DiPoFrame(size: nil, cornerRadius: 28) {
-                DiPoDragonView(mood: dipoMood, line: dipoLine, talkSeconds: dipoTalk)
-                    .frame(width: 150, height: 150)
+                HStack(spacing: 2) {
+                    DiPoDragonView(mood: dipoMood, line: dipoLine, talkSeconds: dipoTalk)
+                        .frame(width: 140, height: 140)
+                    headerBubble
+                        .padding(.trailing, 14)
+                        .padding(.bottom, 12)   // clear of the game button on the edge
+                }
             }
             .frame(height: 168)
             .padding(.horizontal, 18)
@@ -515,6 +526,33 @@ struct AIChatView: View {
             }
             .padding(.bottom, 26)
         }
+    }
+
+    /// DiPo talking to the user, manga-style: a bubble whose tail points at
+    /// him. It changes as the chat goes — thinking while a reply is on its
+    /// way, a word after it, and the credit news when there is nothing left.
+    private var bubbleText: String {
+        if vm.isLoading { return loc("ai.thinking") }
+        if planNotRecognized { return loc("ai.credits_plan_unread") }
+        if outOfCredits { return String(format: loc("ai.credits_out"), creditsReturn) }
+        return dipoSays
+    }
+
+    private var headerBubble: some View {
+        Text(bubbleText)
+            .font(.system(.subheadline))
+            .lineSpacing(1)
+            .foregroundStyle(AppTheme.textPrimary)
+            .lineLimit(6)
+            .minimumScaleFactor(0.8)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.leading, 13 + BubbleShape.tail).padding(.trailing, 13).padding(.vertical, 10)
+            .dipoBubble(tail: .leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .id(bubbleText)
+            .transition(.scale(scale: 0.92, anchor: .leading).combined(with: .opacity))
+            .animation(.spring(response: 0.35, dampingFraction: 0.8), value: bubbleText)
+            .accessibilityLabel(bubbleText)
     }
 
     // MARK: Chat scroll
@@ -724,11 +762,11 @@ struct AIChatView: View {
     /// granted 0. That is not "used up", and restoring purchases fixes it.
     private var planNotRecognized: Bool { isRoyal && vm.serverPlan == "free" }
 
-    /// Under the input: how many credits are left, and what happens at zero.
-    private var creditLine: String {
-        if planNotRecognized { return loc("ai.credits_plan_unread") }
+    /// Under the input: how many credits are left. Nothing when they are
+    /// gone or the plan was not read — DiPo says that in his bubble.
+    private var creditLine: String? {
+        if planNotRecognized || outOfCredits { return nil }
         guard let left = vm.creditsLeft else { return loc("ai.credit_hint") }
-        if left == 0 { return String(format: loc("ai.credits_out"), creditsReturn) }
         if left < 10 { return String(format: loc("ai.credits_left"), left) + " · " + loc("ai.credit_hint") }
         return loc("ai.credit_hint")
     }
@@ -792,12 +830,14 @@ struct AIChatView: View {
             // Credits: how many are left once they run low, and when they
             // come back once they are gone — in place of the red chip that
             // used to sit up by DiPo.
-            Text(creditLine)
-                .font(.system(.caption2, weight: outOfCredits ? .semibold : .regular))
-                .foregroundStyle(outOfCredits || (vm.creditsLeft ?? 99) < 10 ? AppTheme.orange : AppTheme.textSecondary.opacity(0.7))
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 16)
-                .padding(.bottom, 8)
+            if let creditLine {
+                Text(creditLine)
+                    .font(.system(.caption2))
+                    .foregroundStyle((vm.creditsLeft ?? 99) < 10 ? AppTheme.orange : AppTheme.textSecondary.opacity(0.7))
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 8)
+            }
         }
         .background(AppTheme.bg)
     }
@@ -843,6 +883,10 @@ struct AIChatView: View {
            let ti = vm.messages[mi].transactions.firstIndex(where: { $0.id == originalID }) {
             vm.messages[mi].transactions[ti].added = true
         }
+        dipoMood = .cheer
+        dipoSays = loc("ai.bubble.saved")
+        dipoTalk = 1.2
+        dipoLine = UUID().uuidString
     }
 
     // MARK: - Financial snapshot for analysis
