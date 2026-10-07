@@ -441,27 +441,14 @@ struct HomeView: View {
                         .offset(y: headerAppeared ? 0 : -16)
                         .animation(AppMotion.appear, value: headerAppeared)
 
-                    // DiPo at the top, in his own frame: reminds about unread
-                    // notifications, a bill falling due and payday, and opens
-                    // Ask DiPo when tapped.
-                    DiPoHomeSection(unread: NotificationManager.shared.unreadCount,
-                                    bill: dipoBill,
-                                    daysToPayday: nearestSalary.map { SalaryDateEngine.daysUntilPay(dayOfMonth: $0.dayOfMonth) },
-                                    payDate: nearestSalary.map { SalaryDateEngine.nextPayDate(dayOfMonth: $0.dayOfMonth) },
-                                    animates: !showAskDiPo,
-                                    onAskDiPo: { showAskDiPo = true },
-                                    onAction: { action in
-                                        switch action {
-                                        case .notifications: showNotifications = true
-                                        case .bills:         vm.open(PlanRoute.bills)
-                                        case .salary:        vm.open(PlanRoute.salary)
-                                        case .checkIn:       break   // answered inside DiPo's section
-                                        }
-                                    })
-                        .padding(.horizontal, 22)
-                        .padding(.top, 12)
-                        .opacity(headerAppeared ? 1 : 0)
-                        .animation(AppMotion.appear, value: headerAppeared)
+                    // Without a card yet, DiPo stays up top to help set things up.
+                    if !hasCards {
+                        dipoSection
+                            .padding(.horizontal, 22)
+                            .padding(.top, 12)
+                            .opacity(headerAppeared ? 1 : 0)
+                            .animation(AppMotion.appear, value: headerAppeared)
+                    }
 
                     if !hasCards {
                         NoCardState(showAddCard: $showAddCard, showAddSalary: $showAddSalary)
@@ -471,6 +458,38 @@ struct HomeView: View {
                             .animation(AppMotion.appear, value: contentAppeared)
 
                     } else {
+                        // Card Carousel — capped width on iPad
+                        CardCarousel(vm: vm)
+                                                        .padding(.top, 18)
+                            .opacity(contentAppeared ? 1 : 0)
+                            .scaleEffect(contentAppeared ? 1 : 0.94)
+                            .animation(AppMotion.appear, value: contentAppeared)
+
+                        // What came in and what went out this pay cycle. The card
+                        // above says where the money stands; this says which
+                        // direction it has been moving to get there.
+                        MonthFlowCard(income: monthIncome,
+                                      expense: monthExpense,
+                                      currency: selectedCard?.resolvedCurrency
+                                                ?? CurrencyManager.shared.preferredCurrency,
+                                      periodLabel: flowPeriodLabel,
+                                      isHidden: selectedCard?.isHidden ?? false)
+                            .padding(.horizontal, 22)
+                            .padding(.top, 14)
+                            .opacity(contentAppeared ? 1 : 0)
+                            .offset(y: contentAppeared ? 0 : 18)
+                            .animation(AppMotion.appear, value: contentAppeared)
+
+                        // Money first, then DiPo: the balance and this cycle's
+                        // flow are what people open Home for. DiPo's reminder
+                        // follows, short, and then anything needing attention.
+                        dipoSection
+                            .padding(.horizontal, 22)
+                            .padding(.top, 14)
+                            .opacity(contentAppeared ? 1 : 0)
+                            .offset(y: contentAppeared ? 0 : 18)
+                            .animation(AppMotion.appear, value: contentAppeared)
+
                         // One attention slot. Candidates are ranked by how
                         // urgent and how actionable they are; only the winner
                         // gets a card. The rest sit behind a single row so
@@ -479,7 +498,7 @@ struct HomeView: View {
                         if let top = attention.first {
                             top.view
                                 .padding(.horizontal, 22)
-                                .padding(.top, 14)
+                                .padding(.top, 12)
                                 .transition(.move(edge: .top).combined(with: .opacity))
 
                             if showAllAttention {
@@ -504,28 +523,6 @@ struct HomeView: View {
                                 .padding(.top, 8)
                             }
                         }
-
-                        // Card Carousel — capped width on iPad
-                        CardCarousel(vm: vm)
-                                                        .padding(.top, 18)
-                            .opacity(contentAppeared ? 1 : 0)
-                            .scaleEffect(contentAppeared ? 1 : 0.94)
-                            .animation(AppMotion.appear, value: contentAppeared)
-
-                        // What came in and what went out this pay cycle. The card
-                        // above says where the money stands; this says which
-                        // direction it has been moving to get there.
-                        MonthFlowCard(income: monthIncome,
-                                      expense: monthExpense,
-                                      currency: selectedCard?.resolvedCurrency
-                                                ?? CurrencyManager.shared.preferredCurrency,
-                                      periodLabel: flowPeriodLabel,
-                                      isHidden: selectedCard?.isHidden ?? false)
-                            .padding(.horizontal, 22)
-                            .padding(.top, 14)
-                            .opacity(contentAppeared ? 1 : 0)
-                            .offset(y: contentAppeared ? 0 : 18)
-                            .animation(AppMotion.appear, value: contentAppeared)
 
                         // Net Worth — cash minus liabilities. Only shown when the
                         // user actually has liabilities (credit cards / debts),
@@ -728,6 +725,25 @@ struct HomeView: View {
 
     /// Royal can chat with DiPo; Free hears his top insight.
     private var dipoIsRoyal: Bool { premiumMgr.canAccess(.aiAdvisor) }
+
+    /// DiPo with his reminders: unread notifications, the evening check-in,
+    /// a bill falling due and payday. Tapping him opens Ask DiPo.
+    private var dipoSection: some View {
+        DiPoHomeSection(unread: NotificationManager.shared.unreadCount,
+                        bill: dipoBill,
+                        daysToPayday: nearestSalary.map { SalaryDateEngine.daysUntilPay(dayOfMonth: $0.dayOfMonth) },
+                        payDate: nearestSalary.map { SalaryDateEngine.nextPayDate(dayOfMonth: $0.dayOfMonth) },
+                        animates: !showAskDiPo,
+                        onAskDiPo: { showAskDiPo = true },
+                        onAction: { action in
+                            switch action {
+                            case .notifications: showNotifications = true
+                            case .bills:         vm.open(PlanRoute.bills)
+                            case .salary:        vm.open(PlanRoute.salary)
+                            case .checkIn:       break   // answered inside DiPo's section
+                            }
+                        })
+    }
 
     /// The bill DiPo mentions, when one falls due within three days.
     private var dipoBill: DiPoNudge.Bill? {

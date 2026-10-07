@@ -82,9 +82,12 @@ struct HomeHeader: View {
                     .frame(width: 54, height: 54)
 
                     VStack(alignment: .leading, spacing: 1) {
-                        Text(loc("home.greeting") + ",")
-                            .font(.system(.caption))
-                            .foregroundStyle(AppTheme.textSecondary)
+                        HStack(spacing: 6) {
+                            Text(loc("home.greeting") + ",")
+                                .font(.system(.caption))
+                                .foregroundStyle(AppTheme.textSecondary)
+                            CheckInStreakBadge()
+                        }
                         HStack(spacing: 4) {
                             Text(name)
                                 .font(.system(.callout, weight: .bold))
@@ -183,12 +186,24 @@ struct CardCarousel: View {
             .tabViewStyle(.page(indexDisplayMode: .never))
             .frame(height: 216)
 
-            HStack(spacing: 5) {
-                ForEach(0..<max(vm.cards.count, 1), id: \.self) { i in
-                    Capsule()
-                        .fill(i == vm.selectedCardIndex ? AppTheme.accent : AppTheme.textSecondary.opacity(0.35))
-                        .frame(width: i == vm.selectedCardIndex ? 22 : 6, height: 6)
-                        .animation(.spring(response: 0.35, dampingFraction: 0.7), value: vm.selectedCardIndex)
+            // Dots up to five cards; past that a row of nine dots is
+            // uncountable, so it says which card of how many instead.
+            if vm.cards.count > 5 {
+                Text(verbatim: "\(vm.selectedCardIndex + 1) / \(vm.cards.count)")
+                    .font(.system(.caption2, weight: .bold).monospacedDigit())
+                    .foregroundStyle(AppTheme.textSecondary)
+                    .padding(.horizontal, 9).padding(.vertical, 3)
+                    .background(AppTheme.cardMid, in: Capsule())
+                    .contentTransition(.numericText())
+                    .animation(.spring(response: 0.3), value: vm.selectedCardIndex)
+            } else if vm.cards.count > 1 {
+                HStack(spacing: 5) {
+                    ForEach(0..<vm.cards.count, id: \.self) { i in
+                        Capsule()
+                            .fill(i == vm.selectedCardIndex ? AppTheme.accent : AppTheme.textSecondary.opacity(0.35))
+                            .frame(width: i == vm.selectedCardIndex ? 22 : 6, height: 6)
+                            .animation(.spring(response: 0.35, dampingFraction: 0.7), value: vm.selectedCardIndex)
+                    }
                 }
             }
         }

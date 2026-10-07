@@ -220,8 +220,6 @@ struct DiPoHomeStrip: View {
     let nudges: [DiPoNudge]
     /// Today in a few words ("Today is logged"), when there is no reminder.
     var status: String? = nil
-    /// Days in a row accounted for; shown from two.
-    var streak: Int = 0
     var onAskDiPo: () -> Void
     var onNudge: (DiPoNudge.Action) -> Void
     /// False while Ask DiPo covers Home, so this DiPo stops drawing.
@@ -233,7 +231,7 @@ struct DiPoHomeStrip: View {
     var body: some View {
         HStack(alignment: .center, spacing: 10) {
             bubble
-            DiPoFrame(size: 92) {
+            DiPoFrame(size: 76) {
                 DiPoDragonView(mood: current?.mood ?? .idle, line: current?.id ?? "home", onTap: onAskDiPo,
                                animates: animates)
             }
@@ -254,17 +252,20 @@ struct DiPoHomeStrip: View {
         } label: {
             VStack(alignment: .leading, spacing: 3) {
                 if let current {
+                    // Gold, in the app's own type: the serif italic stood
+                    // apart from every other heading in DiPo.
                     Text(current.exclamation)
-                        .font(.system(.headline, design: .serif, weight: .semibold).italic())
+                        .font(.system(.subheadline, weight: .bold))
                         .foregroundStyle(AppTheme.royalGoldText)
                     Text(current.text)
                         .font(.system(.footnote))
                         .foregroundStyle(AppTheme.textPrimary)
+                        .lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)
                     Text(current.link + " \u{203A}")
                         .font(.system(.caption, weight: .semibold))
                         .foregroundStyle(AppTheme.accent)
-                        .padding(.top, 3)
+                        .padding(.top, 2)
                         .padding(.trailing, nudges.count > 1 ? 44 : 0)
                 } else {
                     Text(status ?? loc("dipo.ask"))
@@ -275,18 +276,8 @@ struct DiPoHomeStrip: View {
                         .foregroundStyle(AppTheme.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                // Two days is the shortest run that means anything.
-                if streak >= 2 {
-                    Label(String(format: loc("checkin.streak"), streak), systemImage: "flame.fill")
-                        .font(.system(.caption2, weight: .bold))
-                        .foregroundStyle(AppTheme.orange)
-                        .padding(.horizontal, 8).padding(.vertical, 3)
-                        .background(AppTheme.orange.opacity(0.13), in: Capsule())
-                        .padding(.top, 5)
-                }
-            }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.leading, 16).padding(.trailing, 16 + BubbleShape.tail).padding(.vertical, 12)
+            .padding(.leading, 14).padding(.trailing, 14 + BubbleShape.tail).padding(.vertical, 10)
             .dipoBubble(tail: .trailing)
             .id(current?.id ?? "invite")
             .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .trailing)))

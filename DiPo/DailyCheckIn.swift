@@ -148,7 +148,6 @@ struct DiPoHomeSection: View {
     private var logged: Set<String> { DailyCheckIn.loggedDays(transactions) }
     private var answered: Set<String> { Set(checkIns.map(\.dayKey)) }
     private var today: DayKnowledge { DailyCheckIn.knowledge(of: .now, logged: logged, answered: answered) }
-    private var streak: Int { DailyCheckIn.streak(logged: logged, answered: answered) }
     private var asking: Bool {
         today == .unknown
             && Calendar.current.component(.hour, from: .now) >= DailyCheckIn.askAfterHour
@@ -169,7 +168,6 @@ struct DiPoHomeSection: View {
             nudges: DiPoNudge.all(unread: unread, checkIn: asking, bill: bill,
                                   daysToPayday: daysToPayday, payDate: payDate),
             status: status,
-            streak: streak,
             onAskDiPo: onAskDiPo,
             onNudge: { action in
                 if action == .checkIn { askingNow = true } else { onAction(action) }
@@ -194,5 +192,39 @@ struct DiPoHomeSection: View {
 
     private func refreshReminder() {
         NotificationManager.refreshCheckInReminders(accountedToday: today != .unknown)
+    }
+}
+
+/// The check-in streak, small, beside the greeting in Home's header — a
+/// flame and a number. It used to ride in DiPo's bubble, mixed in with
+/// whatever he was reminding about.
+struct CheckInStreakBadge: View {
+    @Query private var transactions: [TxRecord]
+    @Query private var checkIns: [DayCheckIn]
+
+    init() {
+        let floor = Calendar.current.date(byAdding: .day, value: -DailyCheckIn.historyDays, to: .now) ?? .distantPast
+        _transactions = Query(filter: #Predicate<TxRecord> { $0.date >= floor })
+    }
+
+    private var streak: Int {
+        DailyCheckIn.streak(logged: DailyCheckIn.loggedDays(transactions),
+                            answered: Set(checkIns.map(\.dayKey)))
+    }
+
+    var body: some View {
+        // Two days is the shortest run that means anything.
+        if streak >= 2 {
+            HStack(spacing: 2) {
+                Image(systemName: "flame.fill")
+                Text(verbatim: "\(streak)").monospacedDigit()
+            }
+            .font(.system(.caption2, weight: .bold))
+            .foregroundStyle(AppTheme.orange)
+            .padding(.horizontal, 6).padding(.vertical, 2)
+            .background(AppTheme.orange.opacity(0.13), in: Capsule())
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(String(format: loc("checkin.streak"), streak))
+        }
     }
 }

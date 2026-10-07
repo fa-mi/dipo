@@ -515,7 +515,6 @@ struct PinnedGoalBanner: View {
     @State private var appeared = false
 
     private var progress: Double { goal.targetAmount > 0 ? min(goal.savedAmount / goal.targetAmount, 1.0) : 0 }
-    private var remaining: Double { max(goal.targetAmount - goal.savedAmount, 0) }
 
     var body: some View {
         VStack(spacing: 10) {
@@ -543,18 +542,23 @@ struct PinnedGoalBanner: View {
                             .font(.system(.caption2)).imageScale(.small)
                             .foregroundStyle(AppTheme.accent.opacity(0.7))
                     }
-                    Text(String(format: loc("home.progress_to_go"),
-                                Int(progress * 100),
-                                CurrencyManager.shared.formatted(remaining, currency: goal.currency)))
+                    // Saved of target, on one line. It used to read "20% — Rp
+                    // 119.500.000 to go" beside a second, unlabelled amount
+                    // (the saved one): two figures, neither named.
+                    Text(String(format: loc("home.goal_saved_of"),
+                                CurrencyManager.shared.formatted(goal.savedAmount, currency: goal.currency),
+                                CurrencyManager.shared.formatted(goal.targetAmount, currency: goal.currency)))
                         .font(.system(.caption))
                         .foregroundStyle(AppTheme.textSecondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
                 }
 
-                Spacer()
+                Spacer(minLength: 8)
 
                 HStack(spacing: 6) {
-                    Text("\(CurrencyManager.shared.formatted(goal.savedAmount, currency: goal.currency))")
-                        .font(.system(.footnote, weight: .bold))
+                    Text(verbatim: "\(Int(progress * 100))%")
+                        .font(.system(.subheadline, weight: .bold).monospacedDigit())
                         .foregroundStyle(AppTheme.accent)
                     if tappable {
                         Image(systemName: "chevron.right").font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
