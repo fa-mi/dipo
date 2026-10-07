@@ -116,7 +116,11 @@ struct DailyCheckInCard: View {
     /// purchase on another card.
     @Query private var transactions: [TxRecord]
 
-    init() {
+    /// Inside DiPo's card: no mascot and no card of its own.
+    let embedded: Bool
+
+    init(embedded: Bool = false) {
+        self.embedded = embedded
         let floor = Calendar.current.date(byAdding: .day, value: -DailyCheckIn.historyDays, to: .now) ?? .distantPast
         _transactions = Query(filter: #Predicate<TxRecord> { $0.date >= floor })
     }
@@ -148,10 +152,13 @@ struct DailyCheckInCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 10) {
-                // DiPo himself, in 3D — tap him and he hops
-                DiPoDragonView()
-                    .frame(width: 62, height: 62)
-                    .padding(-8)
+                // On Home, DiPo stands above this row in his own talking card;
+                // the row then needs no mascot of its own.
+                if !embedded {
+                    DiPoDragonView()
+                        .frame(width: 62, height: 62)
+                        .padding(-8)
+                }
                 VStack(alignment: .leading, spacing: 2) {
                     Text(headline)
                         .font(.system(.subheadline, weight: .semibold))
@@ -209,8 +216,8 @@ struct DailyCheckInCard: View {
                 }
             }
         }
-        .padding(14)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+        .padding(embedded ? 0 : 14)
+        .background(embedded ? Color.clear : AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
         // The evening reminder is the same question as this card, so it has to
         // answer to the same state: no push on a day that is already accounted
         // for. Rescheduled whenever that state changes rather than on a timer.

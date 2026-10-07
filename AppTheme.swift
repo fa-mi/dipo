@@ -84,6 +84,14 @@ struct AppTheme {
     /// and a deep green glow reads as a smudge. Never text, icon or fill.
     static let voiceGlow = Color(uiColor: .systemGreen)
 
+    // DiPo talking (DiPoTalk.swift, DiPoDragon.swift). The same in both themes:
+    // a comic bubble is white paper and black ink whatever the theme, and
+    // gold is gold.
+    static let bubbleFill = Color(hex: "#FFFFFF")   // the speech bubble
+    static let bubbleInk  = Color(hex: "#1A120C")   // its outline, drop shadow and text
+    static let dipoCrown  = Color(hex: "#F2B51E")   // the Royal crown and his coins
+    static let dipoSweat  = Color(hex: "#7CC8FF")   // the worried sweat drop
+
     /// The track behind a green progress bar: a quiet surface in both modes.
     static let accentTrack = Color(UIColor.adaptive(dark: "#2A3330", light: "#E4EAE8"))
 
