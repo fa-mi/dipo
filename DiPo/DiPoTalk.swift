@@ -134,32 +134,73 @@ final class DiPoVoice {
 
 // MARK: - Home: DiPo at the top
 
-/// DiPo under Home's header. A speech bubble reminds about unread
-/// notifications; otherwise a quiet invitation. Tapping DiPo opens Ask DiPo.
+/// What DiPo's bubble on Home says, when it says anything.
+struct DiPoNudge: Equatable {
+    enum Action: Equatable { case notifications, salary }
+    let id: String
+    let mood: DiPoMood
+    let exclamation: String
+    let text: String
+    let action: Action
+
+    /// Payday warnings start this many days out.
+    static let paydayWindow = 3
+
+    /// Unread notifications first; with none, payday from three days out;
+    /// otherwise nothing, and DiPo just invites a question.
+    static func pick(unread: Int, daysToPayday: Int?, payDate: Date?) -> DiPoNudge? {
+        if unread > 0 {
+            return DiPoNudge(id: "unread-\(unread)", mood: .info, exclamation: loc("dipo.sfx.psst"),
+                             text: unread == 1 ? loc("dipo.unread_one") : String(format: loc("dipo.unread_many"), unread),
+                             action: .notifications)
+        }
+        guard let days = daysToPayday, days >= 0, days <= paydayWindow else { return nil }
+        let date = payDate.map(Self.day) ?? ""
+        let text: String
+        switch days {
+        case 0:  text = loc("dipo.payday_today")
+        case 1:  text = String(format: loc("dipo.payday_tomorrow"), date)
+        default: text = String(format: loc("dipo.payday_in"), days, date)
+        }
+        return DiPoNudge(id: "payday-\(days)", mood: days == 0 ? .cheer : .happy,
+                         exclamation: loc(days == 0 ? "dipo.sfx.payday_today" : "dipo.sfx.payday_soon"),
+                         text: text, action: .salary)
+    }
+
+    private static func day(_ d: Date) -> String {
+        let f = DateFormatter()
+        f.locale = LanguageManager.shared.currentLocale
+        f.setLocalizedDateFormatFromTemplate("EEE d MMM")
+        return f.string(from: d)
+    }
+}
+
+/// DiPo under Home's header. His bubble reminds about unread notifications,
+/// or about payday from three days out; otherwise a quiet invitation.
+/// Tapping DiPo opens Ask DiPo.
 struct DiPoHomeStrip: View {
-    let unread: Int
+    let nudge: DiPoNudge?
     let isRoyal: Bool
     var onAskDiPo: () -> Void
-    var onNotifications: () -> Void
+    var onNudge: (DiPoNudge.Action) -> Void
 
     var body: some View {
         HStack(alignment: .center, spacing: 0) {
-            DiPoDragonView(mood: unread > 0 ? .info : .idle, line: "home-\(unread)",
+            DiPoDragonView(mood: nudge?.mood ?? .idle, line: nudge?.id ?? "home",
                            crowned: isRoyal, onTap: onAskDiPo)
                 .frame(width: 96, height: 96)
                 .accessibilityAddTraits(.isButton)
                 .accessibilityHint(loc("dipo.a11y_ask"))
-            if unread > 0 {
+            if let nudge {
                 Button {
                     HapticManager.shared.tap()
-                    onNotifications()
+                    onNudge(nudge.action)
                 } label: {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(loc("dipo.sfx.psst"))
+                        Text(nudge.exclamation)
                             .font(.system(.headline, design: .serif, weight: .semibold).italic())
                             .foregroundStyle(AppTheme.royalGoldText)
-                        Text(unread == 1 ? loc("dipo.unread_one")
-                                         : String(format: loc("dipo.unread_many"), unread))
+                        Text(nudge.text)
                             .font(.system(.footnote, weight: .medium))
                             .foregroundStyle(AppTheme.textPrimary)
                             .fixedSize(horizontal: false, vertical: true)
@@ -169,6 +210,7 @@ struct DiPoHomeStrip: View {
                     .dipoBubble(tail: true)
                 }
                 .buttonStyle(ScaleButtonStyle())
+                .accessibilityHint(loc("dipo.a11y_open"))
                 .transition(.scale(scale: 0.8, anchor: .leading).combined(with: .opacity))
             } else {
                 Button {
@@ -190,7 +232,7 @@ struct DiPoHomeStrip: View {
                 .buttonStyle(.plain)
             }
         }
-        .animation(.spring(response: 0.35), value: unread)
+        .animation(.spring(response: 0.35), value: nudge?.id)
     }
 }
 

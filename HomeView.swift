@@ -451,12 +451,17 @@ struct HomeView: View {
                         .offset(y: headerAppeared ? 0 : -16)
                         .animation(AppMotion.appear, value: headerAppeared)
 
-                    // DiPo at the top: reminds about unread notifications, and
-                    // opens Ask DiPo when tapped.
-                    DiPoHomeStrip(unread: NotificationManager.shared.unreadCount,
+                    // DiPo at the top: reminds about unread notifications, or
+                    // payday from three days out, and opens Ask DiPo when tapped.
+                    DiPoHomeStrip(nudge: dipoNudge,
                                   isRoyal: dipoIsRoyal,
                                   onAskDiPo: { showAskDiPo = true },
-                                  onNotifications: { showNotifications = true })
+                                  onNudge: { action in
+                                      switch action {
+                                      case .notifications: showNotifications = true
+                                      case .salary:        vm.open(PlanRoute.salary)
+                                      }
+                                  })
                         .padding(.horizontal, 18)
                         .padding(.top, 6)
                         .opacity(headerAppeared ? 1 : 0)
@@ -732,6 +737,14 @@ struct HomeView: View {
 
     /// Royal can chat with DiPo; Free hears his top insight.
     private var dipoIsRoyal: Bool { premiumMgr.canAccess(.aiAdvisor) }
+
+    private var dipoNudge: DiPoNudge? {
+        let salary = nearestSalary
+        return DiPoNudge.pick(
+            unread: NotificationManager.shared.unreadCount,
+            daysToPayday: salary.map { SalaryDateEngine.daysUntilPay(dayOfMonth: $0.dayOfMonth) },
+            payDate: salary.map { SalaryDateEngine.nextPayDate(dayOfMonth: $0.dayOfMonth) })
+    }
 
     /// Route handler for `SmartInsight.action`. Each kind opens the matching
     /// feature in its own tab — this lives on HomeView (not the engine) because
