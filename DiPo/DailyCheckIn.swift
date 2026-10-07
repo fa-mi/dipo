@@ -129,6 +129,15 @@ struct DiPoHomeSection: View {
     /// the day, so it must not travel to another device or into a backup.
     @AppStorage("checkin_snoozed_day") private var snoozedDay: String = ""
     @State private var askingNow = false
+    @Environment(\.scenePhase) private var scenePhase
+    /// DiPo greets with the streak when the app is opened — at launch and on
+    /// every return from the background or a locked phone — then, after a
+    /// few seconds, moves on to whatever he has to remind about.
+    @State private var greeting = true
+    @State private var wasAway = false
+    /// Bumped on return to the app, so "today", the evening question and the
+    /// streak are worked out again — the day may have changed while it slept.
+    @State private var refreshedAt = Date.now
 
     init(unread: Int, bill: DiPoNudge.Bill?, daysToPayday: Int?, payDate: Date?,
          animates: Bool = true,
@@ -166,13 +175,16 @@ struct DiPoHomeSection: View {
 
     var body: some View {
         DiPoHomeStrip(
-            nudges: DiPoNudge.all(unread: unread, checkIn: asking, bill: bill,
-                                  daysToPayday: daysToPayday, payDate: payDate),
+            nudges: DiPoNudge.all(unread: unread, checkIn: asking, streak: greeting ? streak : 0,
+                                  bill: bill, daysToPayday: daysToPayday, payDate: payDate),
             status: status,
-            streak: streak,
             onAskDiPo: onAskDiPo,
             onNudge: { action in
-                if action == .checkIn { askingNow = true } else { onAction(action) }
+                switch action {
+                case .checkIn: askingNow = true
+                case .streak:  withAnimation(.spring(response: 0.35)) { greeting = false }
+                default:       onAction(action)
+                }
             },
             animates: animates)
         .confirmationDialog(loc("checkin.ask_title"), isPresented: $askingNow, titleVisibility: .visible) {
@@ -190,6 +202,25 @@ struct DiPoHomeSection: View {
         // state: no push on a day that is already accounted for.
         .onAppear { refreshReminder() }
         .onChange(of: today) { _, _ in refreshReminder() }
+        .onChange(of: scenePhase) { _, phase in
+            switch phase {
+            case .background:
+                wasAway = true
+            case .active where wasAway:
+                wasAway = false
+                refreshedAt = .now
+                greeting = true
+                refreshReminder()
+            default:
+                break
+            }
+        }
+        // The greeting steps aside on its own after a few seconds.
+        .task(id: refreshedAt) {
+            guard greeting, streak >= 2 else { return }
+            try? await Task.sleep(for: .seconds(8))
+            withAnimation(.spring(response: 0.35)) { greeting = false }
+        }
     }
 
     private func refreshReminder() {

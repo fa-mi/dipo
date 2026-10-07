@@ -136,7 +136,7 @@ final class DiPoVoice {
 
 /// Something DiPo's bubble on Home reminds about.
 struct DiPoNudge: Equatable, Identifiable {
-    enum Action: Equatable { case notifications, checkIn, bills, salary }
+    enum Action: Equatable { case notifications, checkIn, bills, salary, streak }
     let id: String
     let mood: DiPoMood
     let exclamation: String
@@ -159,8 +159,23 @@ struct DiPoNudge: Equatable, Identifiable {
     /// Everything worth a reminder, most pressing first: unread notifications,
     /// then a bill falling due within three days, then payday from three days
     /// out. Empty means DiPo just invites a question.
-    static func all(unread: Int, checkIn: Bool = false, bill: Bill?, daysToPayday: Int?, payDate: Date?) -> [DiPoNudge] {
+    static func all(unread: Int, checkIn: Bool = false, streak: Int = 0,
+                    bill: Bill?, daysToPayday: Int?, payDate: Date?) -> [DiPoNudge] {
         var out: [DiPoNudge] = []
+        // The streak greets the user when they open the app; two days is the
+        // shortest run worth a word.
+        if streak >= 2 {
+            let body: String
+            switch streak {
+            case 100...: body = loc("dipo.streak_legend")
+            case 30...:  body = loc("dipo.streak_month")
+            case 7...:   body = loc("dipo.streak_week")
+            default:     body = loc("dipo.streak_keep")
+            }
+            out.append(DiPoNudge(id: "streak-\(streak)", mood: .cheer,
+                                 exclamation: String(format: loc("dipo.streak_title"), streak),
+                                 text: body, action: .streak, link: loc("dipo.link.streak")))
+        }
         if unread > 0 {
             out.append(DiPoNudge(id: "unread-\(unread)", mood: .info, exclamation: loc("dipo.sfx.psst"),
                                  text: unread == 1 ? loc("dipo.unread_one") : String(format: loc("dipo.unread_many"), unread),
@@ -220,8 +235,6 @@ struct DiPoHomeStrip: View {
     let nudges: [DiPoNudge]
     /// Today in a few words ("Today is logged"), when there is no reminder.
     var status: String? = nil
-    /// Days in a row accounted for; shown from two.
-    var streak: Int = 0
     var onAskDiPo: () -> Void
     var onNudge: (DiPoNudge.Action) -> Void
     /// False while Ask DiPo covers Home, so this DiPo stops drawing.
@@ -274,15 +287,6 @@ struct DiPoHomeStrip: View {
                         .font(.system(.caption))
                         .foregroundStyle(AppTheme.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
-                }
-                // Two days is the shortest run that means anything.
-                if streak >= 2 {
-                    Label(String(format: loc("checkin.streak"), streak), systemImage: "flame.fill")
-                        .font(.system(.caption2, weight: .bold))
-                        .foregroundStyle(AppTheme.orange)
-                        .padding(.horizontal, 8).padding(.vertical, 3)
-                        .background(AppTheme.orange.opacity(0.13), in: Capsule())
-                        .padding(.top, 5)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)

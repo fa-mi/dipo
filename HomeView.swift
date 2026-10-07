@@ -6,6 +6,8 @@ import SwiftData
 struct HomeView: View {
     @Bindable var vm: AppViewModel
     @Environment(\.modelContext) private var context
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var wasInBackground = false
     @Query(sort: \SalarySchedule.createdAt) private var salarySchedules: [SalarySchedule]
     @Query(sort: \BankCard.sortOrder) private var queriedCards: [BankCard]
     @Query(filter: #Predicate<SavingsGoal> { $0.isPinned && !$0.isCompleted }) private var pinnedGoals: [SavingsGoal]
@@ -455,7 +457,7 @@ struct HomeView: View {
                                         case .notifications: showNotifications = true
                                         case .bills:         vm.open(PlanRoute.bills)
                                         case .salary:        vm.open(PlanRoute.salary)
-                                        case .checkIn:       break   // answered inside DiPo's section
+                                        case .checkIn, .streak: break   // handled inside DiPo's section
                                         }
                                     })
                         .padding(.horizontal, 22)
@@ -632,6 +634,23 @@ struct HomeView: View {
             // Receipt scan moved into AddTransactionSheet as an entry button at
             // the top of the form — discoverable in the same place users go to
             // record any expense, instead of a separate floating button.
+        }
+        // Back from the background or a locked phone: work Home out again —
+        // the pay cycle, today's figures and DiPo's insights may all have
+        // moved on while the app slept.
+        // (From the background the phase passes through .inactive, so the
+        // trip away is remembered rather than read off the previous phase.)
+        .onChange(of: scenePhase) { _, phase in
+            switch phase {
+            case .background:
+                wasInBackground = true
+            case .active where wasInBackground:
+                wasInBackground = false
+                recomputeHomeInsights()
+                recomputeMonthFlow()
+            default:
+                break
+            }
         }
         .onChange(of: vm.selectedCardIndex) { _, _ in
             withAnimation(.spring(response: 0.3)) { categoryFilter = nil }

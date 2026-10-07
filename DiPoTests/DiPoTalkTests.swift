@@ -61,7 +61,7 @@ final class DiPoTalkTests: XCTestCase {
                     "dipo.sfx.payday_soon", "dipo.sfx.payday_today", "dipo.payday_today",
                     "dipo.payday_tomorrow", "dipo.payday_in", "dipo.sfx.bill", "dipo.bill_today",
                     "dipo.bill_tomorrow", "dipo.bill_in", "dipo.bill_auto", "dipo.bill_manual",
-                    "dipo.link.notifications", "dipo.link.bills", "dipo.link.salary", "dipo.link.checkin",
+                    "dipo.link.notifications", "dipo.link.bills", "dipo.link.salary", "dipo.link.checkin", "dipo.streak_title", "dipo.streak_keep", "dipo.streak_week", "dipo.streak_month", "dipo.streak_legend", "dipo.link.streak",
                     "ai.credits_left", "ai.credits_out", "ai.credits_placeholder", "game.play"]
         keys += (0..<DiPoVoice.questionCount).map { "dipo.q.\($0)" }
         keys += (0..<DiPoScript.tipCount).map { "dipo.tip.\($0)" }
@@ -96,6 +96,14 @@ final class DiPoTalkTests: XCTestCase {
         let far = DiPoNudge.Bill(label: "kos", amount: "Rp 2.100.000", daysLeft: 9, autoRecord: true)
         XCTAssertTrue(DiPoNudge.all(unread: 0, bill: far, daysToPayday: 16, payDate: .now).isEmpty,
                       "nothing to say: DiPo just invites a question")
+    }
+
+    func testStreakGreetsFirstFromTwoDays() {
+        let all = DiPoNudge.all(unread: 1, streak: 51, bill: nil, daysToPayday: nil, payDate: nil)
+        XCTAssertEqual(all.map(\.action), [.streak, .notifications])
+        XCTAssertTrue(all[0].exclamation.contains("51"))
+        XCTAssertTrue(DiPoNudge.all(unread: 0, streak: 1, bill: nil, daysToPayday: nil, payDate: nil).isEmpty,
+                      "one day is not a streak")
     }
 
     func testCheckInRanksAfterUnreadBeforeBills() {
