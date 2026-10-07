@@ -110,9 +110,16 @@ enum DailyCheckIn {
 /// it is not. Deliberately small — it sits above a list the user came to read,
 /// and it has nothing to say on most days beyond one line.
 struct DailyCheckInCard: View {
-    /// The selected card's rows. Home already has them; recomputing here would
-    /// mean a second scan of the ledger on every render.
-    let transactions: [TxRecord]
+    /// Every account's recent rows, read here rather than handed in. A day
+    /// counts as logged when anything was recorded, whichever card paid —
+    /// judging by the card on show said "nothing logged today" after a
+    /// purchase on another card.
+    @Query private var transactions: [TxRecord]
+
+    init() {
+        let floor = Calendar.current.date(byAdding: .day, value: -DailyCheckIn.historyDays, to: .now) ?? .distantPast
+        _transactions = Query(filter: #Predicate<TxRecord> { $0.date >= floor })
+    }
 
     @Environment(\.modelContext) private var context
     @Query private var checkIns: [DayCheckIn]

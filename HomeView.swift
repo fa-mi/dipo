@@ -591,7 +591,9 @@ struct HomeView: View {
 
                         // Above the list it is about, and only ever one line
                         // unless it has a question to ask.
-                        DailyCheckInCard(transactions: selectedCardTransactions)
+                        // Every account, not just the card on show: a day is logged
+                        // when anything was recorded, whichever card paid.
+                        DailyCheckInCard()
                             .padding(.horizontal, 22).padding(.top, 18)
 
                         TransactionSection(
