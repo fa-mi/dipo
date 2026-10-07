@@ -104,127 +104,88 @@ enum DailyCheckIn {
     }
 }
 
-// MARK: - The card on Home
+// MARK: - DiPo on Home
 
-/// DiPo's one line a day: whether today is accounted for, and the question when
-/// it is not. Deliberately small — it sits above a list the user came to read,
-/// and it has nothing to say on most days beyond one line.
-struct DailyCheckInCard: View {
+/// DiPo at the top of Home, with the daily check-in folded into him: the
+/// "Today is logged" card is gone. Whether today is accounted for and the
+/// streak sit beside him; the evening question ("nothing logged today —
+/// nothing spent, or not written down yet?") is one of his reminders, after
+/// unread notifications and before bills and payday.
+struct DiPoHomeSection: View {
+    let unread: Int
+    let bill: DiPoNudge.Bill?
+    let daysToPayday: Int?
+    let payDate: Date?
+    var onAskDiPo: () -> Void
+    var onAction: (DiPoNudge.Action) -> Void
+
     /// Every account's recent rows, read here rather than handed in. A day
-    /// counts as logged when anything was recorded, whichever card paid —
-    /// judging by the card on show said "nothing logged today" after a
-    /// purchase on another card.
+    /// counts as logged when anything was recorded, whichever card paid.
     @Query private var transactions: [TxRecord]
+    @Query private var checkIns: [DayCheckIn]
+    @Environment(\.modelContext) private var context
+    /// Per-device and per-day: dismissing the question is not an answer about
+    /// the day, so it must not travel to another device or into a backup.
+    @AppStorage("checkin_snoozed_day") private var snoozedDay: String = ""
+    @State private var askingNow = false
 
-    init() {
+    init(unread: Int, bill: DiPoNudge.Bill?, daysToPayday: Int?, payDate: Date?,
+         onAskDiPo: @escaping () -> Void, onAction: @escaping (DiPoNudge.Action) -> Void) {
+        self.unread = unread
+        self.bill = bill
+        self.daysToPayday = daysToPayday
+        self.payDate = payDate
+        self.onAskDiPo = onAskDiPo
+        self.onAction = onAction
         let floor = Calendar.current.date(byAdding: .day, value: -DailyCheckIn.historyDays, to: .now) ?? .distantPast
         _transactions = Query(filter: #Predicate<TxRecord> { $0.date >= floor })
     }
 
-    @Environment(\.modelContext) private var context
-    @Query private var checkIns: [DayCheckIn]
-    /// Per-device and per-day: dismissing the question is not an answer about
-    /// the day, so it must not travel to another device or into a backup.
-    @AppStorage("checkin_snoozed_day") private var snoozedDay: String = ""
-
     private var todayKey: String { DailyCheckIn.key(.now) }
     private var logged: Set<String> { DailyCheckIn.loggedDays(transactions) }
     private var answered: Set<String> { Set(checkIns.map(\.dayKey)) }
-
-    private var today: DayKnowledge {
-        DailyCheckIn.knowledge(of: .now, logged: logged, answered: answered)
-    }
-
-    private var streak: Int {
-        DailyCheckIn.streak(logged: logged, answered: answered)
-    }
-
+    private var today: DayKnowledge { DailyCheckIn.knowledge(of: .now, logged: logged, answered: answered) }
+    private var streak: Int { DailyCheckIn.streak(logged: logged, answered: answered) }
     private var asking: Bool {
         today == .unknown
             && Calendar.current.component(.hour, from: .now) >= DailyCheckIn.askAfterHour
             && snoozedDay != todayKey
     }
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 10) {
-                // DiPo in 3D stands at the top of Home; here, the picture.
-                Image("DiPoMascot")
-                    .resizable().scaledToFill()
-                    .frame(width: 34, height: 34)
-                    .clipShape(Circle())
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(headline)
-                        .font(.system(.subheadline, weight: .semibold))
-                        .foregroundStyle(AppTheme.textPrimary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    if asking {
-                        Text(loc("checkin.ask_body"))
-                            .font(.system(.caption))
-                            .foregroundStyle(AppTheme.textSecondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-                Spacer(minLength: 8)
-                // Two days is the shortest run that means anything; one day is
-                // just "today", which the line already says.
-                if streak >= 2 {
-                    HStack(spacing: 3) {
-                        Image(systemName: "flame.fill").font(.system(.caption2, weight: .bold))
-                        Text(String(format: loc("checkin.streak"), streak))
-                            .font(.system(.caption2, weight: .bold))
-                            .lineLimit(1)
-                    }
-                    .foregroundStyle(AppTheme.orange)
-                    .padding(.horizontal, 7).padding(.vertical, 3)
-                    .background(AppTheme.orange.opacity(0.13), in: Capsule())
-                    .fixedSize()
-                }
-            }
-
-            if asking {
-                HStack(spacing: 8) {
-                    Button {
-                        HapticManager.shared.success()
-                        context.insert(DayCheckIn(dayKey: todayKey))
-                        try? context.save()
-                    } label: {
-                        Text(loc("checkin.none"))
-                            .font(.system(.caption, weight: .bold))
-                            .foregroundStyle(AppTheme.onVividFill)
-                            .frame(maxWidth: .infinity).padding(.vertical, 9)
-                            .background(AppTheme.accentFill, in: Capsule())
-                    }
-                    .buttonStyle(ScaleButtonStyle())
-                    Button {
-                        HapticManager.shared.tap()
-                        snoozedDay = todayKey
-                    } label: {
-                        Text(loc("checkin.later"))
-                            .font(.system(.caption, weight: .semibold))
-                            .foregroundStyle(AppTheme.textSecondary)
-                            .frame(maxWidth: .infinity).padding(.vertical, 9)
-                            .background(AppTheme.cardMid, in: Capsule())
-                    }
-                    .buttonStyle(ScaleButtonStyle())
-                }
-            }
-        }
-        .padding(14)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
-        // The evening reminder is the same question as this card, so it has to
-        // answer to the same state: no push on a day that is already accounted
-        // for. Rescheduled whenever that state changes rather than on a timer.
-        .onAppear { refreshReminder() }
-        .onChange(of: today) { _, _ in refreshReminder() }
-    }
-
-    private var headline: String {
+    /// Today in a few words, for beside DiPo when he has nothing to remind.
+    private var status: String? {
         switch today {
         case .logged:         return loc("checkin.logged")
         case .confirmedEmpty: return loc("checkin.confirmed")
-        case .unknown:        return asking ? loc("checkin.ask_title") : loc("checkin.pending")
+        case .unknown:        return nil
         }
+    }
+
+    var body: some View {
+        DiPoHomeStrip(
+            nudges: DiPoNudge.all(unread: unread, checkIn: asking, bill: bill,
+                                  daysToPayday: daysToPayday, payDate: payDate),
+            status: status,
+            streak: streak,
+            onAskDiPo: onAskDiPo,
+            onNudge: { action in
+                if action == .checkIn { askingNow = true } else { onAction(action) }
+            })
+        .confirmationDialog(loc("checkin.ask_title"), isPresented: $askingNow, titleVisibility: .visible) {
+            Button(loc("checkin.none")) {
+                HapticManager.shared.success()
+                context.insert(DayCheckIn(dayKey: todayKey))
+                try? context.save()
+            }
+            Button(loc("checkin.later")) { snoozedDay = todayKey }
+            Button(loc("ai.confirm.cancel"), role: .cancel) {}
+        } message: {
+            Text(loc("checkin.ask_body"))
+        }
+        // The evening reminder is the same question, so it answers to the same
+        // state: no push on a day that is already accounted for.
+        .onAppear { refreshReminder() }
+        .onChange(of: today) { _, _ in refreshReminder() }
     }
 
     private func refreshReminder() {

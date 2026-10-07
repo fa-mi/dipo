@@ -42,6 +42,16 @@ final class DiPoRunGameTests: XCTestCase {
         XCTAssertGreaterThan(g.shake, 0, "and shakes")
     }
 
+    func testTickStepsFromTheLastFrame() {
+        let g = RunGame(bonusLife: false, seed: 1)
+        g.start()
+        let t0 = Date(timeIntervalSinceReferenceDate: 1000)
+        g.tick(t0)
+        XCTAssertEqual(g.elapsed, 0, "the first frame only sets the clock")
+        g.tick(t0.addingTimeInterval(1.0 / 60))
+        XCTAssertEqual(g.elapsed, 1.0 / 60, accuracy: 1e-9)
+    }
+
     func testHintOnlyAtTheStart() {
         let g = RunGame(bonusLife: false, seed: 1)
         g.start()
