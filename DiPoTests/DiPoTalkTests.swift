@@ -59,7 +59,10 @@ final class DiPoTalkTests: XCTestCase {
                     "dipo.locked", "dipo.next", "dipo.ask", "dipo.a11y_open", "dipo.a11y_ask",
                     "dipo.home_invite", "dipo.speak_on", "dipo.speak_off",
                     "dipo.sfx.payday_soon", "dipo.sfx.payday_today", "dipo.payday_today",
-                    "dipo.payday_tomorrow", "dipo.payday_in"]
+                    "dipo.payday_tomorrow", "dipo.payday_in", "dipo.sfx.bill", "dipo.bill_today",
+                    "dipo.bill_tomorrow", "dipo.bill_in", "dipo.bill_auto", "dipo.bill_manual",
+                    "dipo.link.notifications", "dipo.link.bills", "dipo.link.salary",
+                    "ai.credits_left", "ai.credits_out", "ai.credits_placeholder", "game.play"]
         keys += (0..<DiPoVoice.questionCount).map { "dipo.q.\($0)" }
         keys += (0..<DiPoScript.tipCount).map { "dipo.tip.\($0)" }
         for lang in LanguageManager.Language.allCases {
@@ -85,6 +88,16 @@ final class DiPoTalkTests: XCTestCase {
         XCTAssertEqual(today?.action, .salary)
     }
 
+    func testHomeRemindersInOrderAndOnlyInsideTheWindow() {
+        let bill = DiPoNudge.Bill(label: "kos", amount: "Rp 2.100.000", daysLeft: 1, autoRecord: true)
+        let all = DiPoNudge.all(unread: 2, bill: bill, daysToPayday: 2, payDate: .now)
+        XCTAssertEqual(all.map(\.action), [.notifications, .bills, .salary])
+        XCTAssertTrue(all[1].text.contains("kos") && all[1].text.contains("Rp 2.100.000"))
+        let far = DiPoNudge.Bill(label: "kos", amount: "Rp 2.100.000", daysLeft: 9, autoRecord: true)
+        XCTAssertTrue(DiPoNudge.all(unread: 0, bill: far, daysToPayday: 16, payDate: .now).isEmpty,
+                      "nothing to say: DiPo just invites a question")
+    }
+
     func testSpeakingTimeIsBounded() {
         XCTAssertEqual(DiPoVoice.estimatedSeconds(""), 1)
         XCTAssertEqual(DiPoVoice.estimatedSeconds(String(repeating: "a", count: 10_000)), 20)
@@ -98,6 +111,5 @@ final class DiPoTalkTests: XCTestCase {
             XCTAssertEqual(rig.mood, mood)
         }
         rig.talk(for: 1.5)
-        rig.setCrowned(true)
     }
 }

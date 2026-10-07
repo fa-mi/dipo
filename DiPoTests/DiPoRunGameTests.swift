@@ -23,10 +23,11 @@ final class DiPoRunGameTests: XCTestCase {
     func testCoinIsSavings() {
         let g = RunGame(bonusLife: false, seed: 1)
         g.start()
-        g.place(.coin, x: RunGame.dipoX + 10, y: 10, size: 30)
+        g.place(.coin, x: RunGame.dipoX + 10, y: 10)
         g.step(1.0 / 60)
         XCTAssertEqual(g.coins, 1)
         XCTAssertEqual(g.saved, RunGame.coinValue)
+        XCTAssertEqual(g.popups.count, 1, "a +Rp word floats up")
     }
 
     func testTrapCostsALifeAndIsRemembered() {
@@ -37,12 +38,22 @@ final class DiPoRunGameTests: XCTestCase {
         XCTAssertEqual(g.lives, 2)
         XCTAssertEqual(g.lastTrap, .quickLoan)
         XCTAssertGreaterThan(g.invulnerable, 0)
+        XCTAssertGreaterThan(g.flash, 0, "the screen flashes")
+        XCTAssertGreaterThan(g.shake, 0, "and shakes")
+    }
+
+    func testHintOnlyAtTheStart() {
+        let g = RunGame(bonusLife: false, seed: 1)
+        g.start()
+        XCTAssertTrue(g.showsHint)
+        run(g, seconds: RunGame.hintSeconds + 0.2)
+        XCTAssertFalse(g.showsHint)
     }
 
     func testShieldTakesTheHit() {
         let g = RunGame(bonusLife: false, seed: 1)
         g.start()
-        g.place(.shield, x: RunGame.dipoX + 10, y: 10, size: 30)
+        g.place(.shield, x: RunGame.dipoX + 10, y: 10)
         g.step(1.0 / 60)
         XCTAssertTrue(g.shielded)
         g.place(.trap(.fakeSale), x: RunGame.dipoX + 10)
@@ -94,6 +105,8 @@ final class DiPoRunGameTests: XCTestCase {
 
     func testEveryTrapHasLabelAndLessonInBothLanguages() {
         var keys = ["game.title", "game.tap_hint", "game.how", "game.start", "game.again", "game.close",
+                    "game.hint", "game.rule.jump", "game.rule.coin", "game.rule.shield", "game.you_saved",
+                    "game.new_best", "game.popup.shield", "game.popup.saved", "game.popup.life",
                     "game.royal", "game.saved", "game.best", "game.caught_by", "game.lives",
                     "game.bonus_life", "game.plays_left", "game.no_plays"]
         for t in RunTrap.allCases { keys += ["game.trap.\(t.rawValue)", "game.lesson.\(t.rawValue)"] }

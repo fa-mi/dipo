@@ -3,14 +3,14 @@ import AVFoundation
 
 // MARK: - DiPo talks
 //
-// On Home, DiPo stands at the top. His comic speech bubble appears only to
-// remind about unread notifications; tapping DiPo opens Ask DiPo.
+// On Home, DiPo stands at the top in his own frame. His speech bubble
+// reminds about unread notifications, a bill falling due and payday — and
+// replaces the banners that used to say the same; tapping DiPo opens Ask DiPo.
 //
 // In Ask DiPo he opens the conversation with the Smart Insights, most urgent
 // first, in place of the flat banners Home used to show. Free hears the top
-// insight; the rest wait behind Royal, which can also chat by text or voice
-// and wears the crown. With no insight to give, he passes on a money tip of
-// the day.
+// insight; the rest wait behind Royal, which can also chat by text or voice.
+// With no insight to give, he passes on a money tip of the day.
 //
 // The figures are the Smart Budget engine's own: DiPo only says them.
 
@@ -134,37 +134,68 @@ final class DiPoVoice {
 
 // MARK: - Home: DiPo at the top
 
-/// What DiPo's bubble on Home says, when it says anything.
-struct DiPoNudge: Equatable {
-    enum Action: Equatable { case notifications, salary }
+/// Something DiPo's bubble on Home reminds about.
+struct DiPoNudge: Equatable, Identifiable {
+    enum Action: Equatable { case notifications, bills, salary }
     let id: String
     let mood: DiPoMood
     let exclamation: String
     let text: String
     let action: Action
+    /// The tap-through under the text: "Tap to read ›".
+    let link: String
 
-    /// Payday warnings start this many days out.
-    static let paydayWindow = 3
+    /// Bills and payday are mentioned from this many days out.
+    static let window = 3
 
-    /// Unread notifications first; with none, payday from three days out;
-    /// otherwise nothing, and DiPo just invites a question.
-    static func pick(unread: Int, daysToPayday: Int?, payDate: Date?) -> DiPoNudge? {
+    /// A bill DiPo can mention, without tying this to the model type.
+    struct Bill: Equatable {
+        let label: String
+        let amount: String
+        let daysLeft: Int
+        let autoRecord: Bool
+    }
+
+    /// Everything worth a reminder, most pressing first: unread notifications,
+    /// then a bill falling due within three days, then payday from three days
+    /// out. Empty means DiPo just invites a question.
+    static func all(unread: Int, bill: Bill?, daysToPayday: Int?, payDate: Date?) -> [DiPoNudge] {
+        var out: [DiPoNudge] = []
         if unread > 0 {
-            return DiPoNudge(id: "unread-\(unread)", mood: .info, exclamation: loc("dipo.sfx.psst"),
-                             text: unread == 1 ? loc("dipo.unread_one") : String(format: loc("dipo.unread_many"), unread),
-                             action: .notifications)
+            out.append(DiPoNudge(id: "unread-\(unread)", mood: .info, exclamation: loc("dipo.sfx.psst"),
+                                 text: unread == 1 ? loc("dipo.unread_one") : String(format: loc("dipo.unread_many"), unread),
+                                 action: .notifications, link: loc("dipo.link.notifications")))
         }
-        guard let days = daysToPayday, days >= 0, days <= paydayWindow else { return nil }
-        let date = payDate.map(Self.day) ?? ""
-        let text: String
-        switch days {
-        case 0:  text = loc("dipo.payday_today")
-        case 1:  text = String(format: loc("dipo.payday_tomorrow"), date)
-        default: text = String(format: loc("dipo.payday_in"), days, date)
+        if let bill, bill.daysLeft >= 0, bill.daysLeft <= window {
+            let when: String
+            switch bill.daysLeft {
+            case 0:  when = String(format: loc("dipo.bill_today"), bill.label, bill.amount)
+            case 1:  when = String(format: loc("dipo.bill_tomorrow"), bill.label, bill.amount)
+            default: when = String(format: loc("dipo.bill_in"), bill.label, bill.amount, bill.daysLeft)
+            }
+            let then = loc(bill.autoRecord ? "dipo.bill_auto" : "dipo.bill_manual")
+            out.append(DiPoNudge(id: "bill-\(bill.label)-\(bill.daysLeft)", mood: bill.daysLeft == 0 ? .worry : .info,
+                                 exclamation: loc("dipo.sfx.bill"), text: when + " " + then,
+                                 action: .bills, link: loc("dipo.link.bills")))
         }
-        return DiPoNudge(id: "payday-\(days)", mood: days == 0 ? .cheer : .happy,
-                         exclamation: loc(days == 0 ? "dipo.sfx.payday_today" : "dipo.sfx.payday_soon"),
-                         text: text, action: .salary)
+        if let days = daysToPayday, days >= 0, days <= window {
+            let date = payDate.map(Self.day) ?? ""
+            let text: String
+            switch days {
+            case 0:  text = loc("dipo.payday_today")
+            case 1:  text = String(format: loc("dipo.payday_tomorrow"), date)
+            default: text = String(format: loc("dipo.payday_in"), days, date)
+            }
+            out.append(DiPoNudge(id: "payday-\(days)", mood: days == 0 ? .cheer : .happy,
+                                 exclamation: loc(days == 0 ? "dipo.sfx.payday_today" : "dipo.sfx.payday_soon"),
+                                 text: text, action: .salary, link: loc("dipo.link.salary")))
+        }
+        return out
+    }
+
+    /// The first of `all` — what the bubble shows before any paging.
+    static func pick(unread: Int, daysToPayday: Int?, payDate: Date?) -> DiPoNudge? {
+        all(unread: unread, bill: nil, daysToPayday: daysToPayday, payDate: payDate).first
     }
 
     private static func day(_ d: Date) -> String {
@@ -175,113 +206,170 @@ struct DiPoNudge: Equatable {
     }
 }
 
-/// DiPo under Home's header. His bubble reminds about unread notifications,
-/// or about payday from three days out; otherwise a quiet invitation.
-/// Tapping DiPo opens Ask DiPo.
+/// DiPo under Home's header: his speech bubble on the left, pointing at him
+/// in his own frame on the right — across from the profile picture, so the
+/// two never stack. The bubble reminds (one thing at a time, with a pager when
+/// there are more); with nothing to remind, it invites a question. Tapping
+/// DiPo opens Ask DiPo.
 struct DiPoHomeStrip: View {
-    let nudge: DiPoNudge?
-    let isRoyal: Bool
+    let nudges: [DiPoNudge]
     var onAskDiPo: () -> Void
     var onNudge: (DiPoNudge.Action) -> Void
 
+    @State private var page = 0
+    private var current: DiPoNudge? { nudges.isEmpty ? nil : nudges[min(page, nudges.count - 1)] }
+
     var body: some View {
-        HStack(alignment: .center, spacing: 0) {
-            DiPoDragonView(mood: nudge?.mood ?? .idle, line: nudge?.id ?? "home",
-                           crowned: isRoyal, onTap: onAskDiPo)
-                .frame(width: 96, height: 96)
-                .accessibilityAddTraits(.isButton)
-                .accessibilityHint(loc("dipo.a11y_ask"))
-            if let nudge {
-                Button {
-                    HapticManager.shared.tap()
-                    onNudge(nudge.action)
-                } label: {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(nudge.exclamation)
-                            .font(.system(.headline, design: .serif, weight: .semibold).italic())
-                            .foregroundStyle(AppTheme.royalGoldText)
-                        Text(nudge.text)
-                            .font(.system(.footnote, weight: .medium))
-                            .foregroundStyle(AppTheme.textPrimary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.leading, BubbleShape.tail + 10).padding(.trailing, 12).padding(.vertical, 10)
-                    .dipoBubble(tail: true)
+        HStack(alignment: .center, spacing: 10) {
+            bubble
+            DiPoFrame(size: 92) {
+                DiPoDragonView(mood: current?.mood ?? .idle, line: current?.id ?? "home", onTap: onAskDiPo)
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(loc("mascot.a11y"))
+            .accessibilityAddTraits(.isButton)
+            .accessibilityHint(loc("dipo.a11y_ask"))
+            .accessibilityAction { onAskDiPo() }
+        }
+        .onChange(of: nudges.map(\.id)) { _, _ in page = 0 }
+        .animation(.spring(response: 0.35), value: current?.id)
+    }
+
+    private var bubble: some View {
+        Button {
+            HapticManager.shared.tap()
+            if let current { onNudge(current.action) } else { onAskDiPo() }
+        } label: {
+            VStack(alignment: .leading, spacing: 3) {
+                if let current {
+                    Text(current.exclamation)
+                        .font(.system(.headline, design: .serif, weight: .semibold).italic())
+                        .foregroundStyle(AppTheme.royalGoldText)
+                    Text(current.text)
+                        .font(.system(.footnote))
+                        .foregroundStyle(AppTheme.textPrimary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text(current.link + " \u{203A}")
+                        .font(.system(.caption, weight: .semibold))
+                        .foregroundStyle(AppTheme.accent)
+                        .padding(.top, 3)
+                        .padding(.trailing, nudges.count > 1 ? 44 : 0)
+                } else {
+                    Text(loc("dipo.ask"))
+                        .font(.system(.subheadline, weight: .bold))
+                        .foregroundStyle(AppTheme.textPrimary)
+                    Text(loc("dipo.home_invite"))
+                        .font(.system(.caption))
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                .buttonStyle(ScaleButtonStyle())
-                .accessibilityHint(loc("dipo.a11y_open"))
-                .transition(.scale(scale: 0.8, anchor: .leading).combined(with: .opacity))
-            } else {
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.leading, 16).padding(.trailing, 16 + BubbleShape.tail).padding(.vertical, 12)
+            .dipoBubble(tail: .trailing)
+            .id(current?.id ?? "invite")
+            .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .trailing)))
+        }
+        .buttonStyle(ScaleButtonStyle())
+        .accessibilityHint(current == nil ? loc("dipo.a11y_ask") : loc("dipo.a11y_open"))
+        // A pager for the other reminders — outside the bubble's own button,
+        // so each tap goes where it looks like it goes.
+        .overlay(alignment: .bottomTrailing) {
+            if nudges.count > 1 {
                 Button {
                     HapticManager.shared.tap()
-                    onAskDiPo()
+                    withAnimation(.spring(response: 0.3)) { page = (page + 1) % nudges.count }
                 } label: {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(loc("dipo.ask"))
-                            .font(.system(.subheadline, weight: .bold))
-                            .foregroundStyle(AppTheme.textPrimary)
-                        Text(loc("dipo.home_invite"))
-                            .font(.system(.caption))
-                            .foregroundStyle(AppTheme.textSecondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.leading, 4)
+                    Text(verbatim: "\(min(page, nudges.count - 1) + 1)/\(nudges.count) \u{203A}")
+                        .font(.system(.caption2, weight: .bold).monospacedDigit())
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .padding(.horizontal, 8).padding(.vertical, 4)
+                        .background(AppTheme.cardMid, in: Capsule())
                 }
                 .buttonStyle(.plain)
+                .padding(.trailing, 14 + BubbleShape.tail).padding(.bottom, 10)
+                .accessibilityLabel(loc("dipo.next"))
             }
         }
-        .animation(.spring(response: 0.35), value: nudge?.id)
+    }
+}
+
+/// DiPo's own little stage: a rounded frame with a soft green glow and a
+/// gold hairline, so he has room around him instead of floating on the page.
+struct DiPoFrame<Content: View>: View {
+    let size: CGFloat?
+    var cornerRadius: CGFloat = 26
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        ZStack(alignment: .bottom) {
+            shape.fill(RadialGradient(colors: [AppTheme.accent.opacity(0.22), AppTheme.cardDark],
+                                      center: UnitPoint(x: 0.5, y: 0.38), startRadius: 0,
+                                      endRadius: (size ?? 220) * 0.72))
+            // A soft floor under him.
+            Ellipse()
+                .fill(RadialGradient(colors: [.black.opacity(0.18), .clear], center: .center, startRadius: 0, endRadius: 24))
+                .frame(width: 48, height: 9)
+                .padding(.bottom, 9)
+            content.padding(8)
+        }
+        .frame(width: size, height: size)
+        .background(shape.fill(AppTheme.cardDark))
+        .clipShape(shape)
+        .overlay(shape.stroke(AppTheme.royalGold.opacity(0.45), lineWidth: 1))
+        .shadow(color: .black.opacity(0.07), radius: 10, y: 5)
     }
 }
 
 // MARK: - DiPo's bubble
 
 extension View {
-    /// DiPo's speech bubble, in the Royal manner: frosted glass that follows
-    /// the theme, a hairline of gold, and a soft shadow. With `tail`, a point
-    /// on the leading edge toward DiPo.
-    func dipoBubble(tail: Bool = false) -> some View {
+    /// DiPo's speech bubble: the card colour, a gold hairline and a soft
+    /// shadow, so it sits with the rest of the app. `tail` points it at DiPo.
+    func dipoBubble(tail: BubbleShape.Tail = .none, hairline: Color = AppTheme.royalGold) -> some View {
         let shape = BubbleShape(tail: tail)
         return self
             .background {
-                shape.fill(.regularMaterial)
-                    .overlay { shape.fill(AppTheme.cardDark.opacity(0.55)) }
-                    .shadow(color: .black.opacity(0.10), radius: 14, x: 0, y: 6)
+                shape.fill(AppTheme.cardDark)
+                    .shadow(color: .black.opacity(0.07), radius: 10, x: 0, y: 5)
             }
             .overlay {
-                shape.stroke(LinearGradient(colors: [AppTheme.royalGold, AppTheme.royalGoldLight, AppTheme.royalGold],
-                                            startPoint: .topLeading, endPoint: .bottomTrailing),
-                             style: StrokeStyle(lineWidth: 1.2, lineJoin: .round))
+                shape.stroke(hairline.opacity(0.45), style: StrokeStyle(lineWidth: 1, lineJoin: .round))
             }
     }
 }
 
 /// A rounded bubble drawn as one outline, so the tail joins the body without
-/// a seam. The tail, when there is one, takes the first `tail` points of the
-/// width on the leading edge.
+/// a seam. The tail, when there is one, takes the last (or first) `tail`
+/// points of the width, at the middle of that edge.
 struct BubbleShape: Shape {
-    static let tail: CGFloat = 14
-    var tail = false
+    enum Tail { case none, leading, trailing }
+    static let tail: CGFloat = 10
+    var tail: Tail = .none
 
     func path(in rect: CGRect) -> Path {
-        let inset: CGFloat = tail ? Self.tail : 0
-        let r = min(20, (rect.height) / 2)
-        let minX = rect.minX + inset, maxX = rect.maxX, minY = rect.minY, maxY = rect.maxY
+        let minX = rect.minX + (tail == .leading ? Self.tail : 0)
+        let maxX = rect.maxX - (tail == .trailing ? Self.tail : 0)
+        let minY = rect.minY, maxY = rect.maxY, mid = rect.midY
+        let r = min(20, rect.height / 2)
         var p = Path()
         p.move(to: CGPoint(x: minX + r, y: minY))
         p.addLine(to: CGPoint(x: maxX - r, y: minY))
         p.addArc(center: CGPoint(x: maxX - r, y: minY + r), radius: r, startAngle: .degrees(-90), endAngle: .degrees(0), clockwise: false)
+        if tail == .trailing {
+            p.addLine(to: CGPoint(x: maxX, y: mid - 8))
+            p.addQuadCurve(to: CGPoint(x: rect.maxX, y: mid), control: CGPoint(x: maxX + 2, y: mid - 3))
+            p.addQuadCurve(to: CGPoint(x: maxX, y: mid + 8), control: CGPoint(x: maxX + 2, y: mid + 3))
+        }
         p.addLine(to: CGPoint(x: maxX, y: maxY - r))
         p.addArc(center: CGPoint(x: maxX - r, y: maxY - r), radius: r, startAngle: .degrees(0), endAngle: .degrees(90), clockwise: false)
         p.addLine(to: CGPoint(x: minX + r, y: maxY))
         p.addArc(center: CGPoint(x: minX + r, y: maxY - r), radius: r, startAngle: .degrees(90), endAngle: .degrees(180), clockwise: false)
-        if tail {
-            let mid = rect.midY
-            p.addLine(to: CGPoint(x: minX, y: mid + 9))
-            p.addQuadCurve(to: CGPoint(x: rect.minX, y: mid + 4), control: CGPoint(x: minX - 4, y: mid + 8))
-            p.addQuadCurve(to: CGPoint(x: minX, y: mid - 7), control: CGPoint(x: minX - 6, y: mid - 2))
+        if tail == .leading {
+            p.addLine(to: CGPoint(x: minX, y: mid + 8))
+            p.addQuadCurve(to: CGPoint(x: rect.minX, y: mid), control: CGPoint(x: minX - 2, y: mid + 3))
+            p.addQuadCurve(to: CGPoint(x: minX, y: mid - 8), control: CGPoint(x: minX - 2, y: mid - 3))
         }
         p.addLine(to: CGPoint(x: minX, y: minY + r))
         p.addArc(center: CGPoint(x: minX + r, y: minY + r), radius: r, startAngle: .degrees(180), endAngle: .degrees(270), clockwise: false)

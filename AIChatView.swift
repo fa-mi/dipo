@@ -440,62 +440,68 @@ struct AIChatView: View {
 
     // MARK: Header
 
-    /// DiPo in 3D, with the title, the speak-aloud toggle and the credit chip.
+    /// The title and the speak-aloud toggle; under them DiPo in his frame,
+    /// with the game's button resting on the frame's lower edge. The credit
+    /// count lives by the input now, where it matters.
     private var header: some View {
-        ZStack(alignment: .top) {
-            DiPoDragonView(mood: dipoMood, line: dipoLine, talkSeconds: dipoTalk, crowned: isRoyal)
-                .frame(width: 170, height: 150)
-                .frame(maxWidth: .infinity)
-                .padding(.top, 8)
+        VStack(spacing: 0) {
             HStack(spacing: 10) {
                 Text(loc("ai.title"))
-                    .font(.system(.body, weight: .bold))
+                    .font(.system(.title3, weight: .bold))
                     .foregroundStyle(AppTheme.textPrimary)
                 Spacer()
-                // Credit counter chip — shown ONLY when credits are running
-                // low (< 10). A paying user with a healthy balance never sees
-                // a depleting counter, so the feature feels unlimited; the
-                // chip surfaces just in time as a gentle "almost out" warning.
-                if let credits = vm.creditsLeft, credits < 10 {
-                    HStack(spacing: 5) {
-                        Image(systemName: "bolt.fill").font(.system(.caption2)).imageScale(.small)
-                        Text("\(credits)")
-                            .font(.system(.footnote, weight: .bold))
-                            .contentTransition(.numericText())
-                    }
-                    .foregroundStyle(credits == 0 ? AppTheme.red : AppTheme.orange)
-                    .padding(.horizontal, 10).padding(.vertical, 6)
-                    .background((credits == 0 ? AppTheme.red : AppTheme.orange).opacity(0.12),
-                                in: Capsule())
-                }
-                Button {
-                    HapticManager.shared.tap()
-                    showGame = true
-                } label: {
-                    Image(systemName: "gamecontroller.fill")
-                        .font(.system(.subheadline, weight: .semibold))
-                        .foregroundStyle(AppTheme.royalGoldText)
-                        .frame(width: 36, height: 36)
-                        .background(AppTheme.cardDark, in: Circle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(loc("game.title"))
                 Button {
                     HapticManager.shared.tap()
                     speakAlways.toggle()
                     if !speakAlways { dipoVoice.stop() }
                 } label: {
                     Image(systemName: speakAlways ? "speaker.wave.2.fill" : "speaker.slash.fill")
-                        .font(.system(.subheadline, weight: .semibold))
+                        .font(.system(.footnote, weight: .semibold))
                         .foregroundStyle(speakAlways ? AppTheme.accent : AppTheme.textSecondary)
                         .frame(width: 36, height: 36)
-                        .background(AppTheme.cardDark, in: Circle())
+                        .background(speakAlways ? AppTheme.accent.opacity(0.14) : AppTheme.cardDark, in: Circle())
+                        .overlay(Circle().stroke(speakAlways ? AppTheme.accent.opacity(0.35) : AppTheme.cardMid, lineWidth: 1))
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(loc(speakAlways ? "dipo.speak_on" : "dipo.speak_off"))
             }
             .padding(.horizontal, 18)
-            .padding(.top, 14)
+            .padding(.top, 16)
+
+            DiPoFrame(size: nil, cornerRadius: 28) {
+                DiPoDragonView(mood: dipoMood, line: dipoLine, talkSeconds: dipoTalk)
+                    .frame(width: 150, height: 150)
+            }
+            .frame(height: 168)
+            .padding(.horizontal, 18)
+            .padding(.top, 10)
+            .overlay(alignment: .bottom) {
+                Button {
+                    HapticManager.shared.tap()
+                    showGame = true
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "figure.run")
+                            .font(.system(.caption, weight: .bold))
+                            .foregroundStyle(AppTheme.royalGoldText)
+                            .frame(width: 26, height: 26)
+                            .background(AppTheme.royalGold.opacity(0.2), in: Circle())
+                        Text(loc("game.play"))
+                            .font(.system(.footnote, weight: .semibold))
+                            .foregroundStyle(AppTheme.textPrimary)
+                        Image(systemName: "chevron.right")
+                            .font(.system(.caption2, weight: .bold))
+                            .foregroundStyle(AppTheme.textSecondary)
+                    }
+                    .padding(.leading, 6).padding(.trailing, 14).padding(.vertical, 6)
+                    .background(AppTheme.cardDark, in: Capsule())
+                    .overlay(Capsule().stroke(AppTheme.royalGold.opacity(0.55), lineWidth: 1))
+                    .shadow(color: .black.opacity(0.08), radius: 8, y: 4)
+                }
+                .buttonStyle(ScaleButtonStyle())
+                .offset(y: 18)
+            }
+            .padding(.bottom, 26)
         }
     }
 
@@ -647,13 +653,14 @@ struct AIChatView: View {
             .padding(.horizontal, 18)
         } else {
             VStack(alignment: .leading, spacing: 10) {
-                // DiPo speaks in his own bubble, like on Home.
+                // DiPo speaks in his own bubble, like on Home; trouble gets an
+                // amber edge instead of gold.
                 Text(msg.text)
                     .font(.system(.subheadline))
                     .lineSpacing(2)
-                    .foregroundStyle(msg.isError ? AppTheme.red : AppTheme.textPrimary)
+                    .foregroundStyle(AppTheme.textPrimary)
                     .padding(.horizontal, 16).padding(.vertical, 12)
-                    .dipoBubble()
+                    .dipoBubble(hairline: msg.isError ? AppTheme.orange : AppTheme.royalGold)
                     .padding(.trailing, 30)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 ForEach(msg.transactions) { tx in
@@ -751,15 +758,16 @@ struct AIChatView: View {
             }
         }
         .buttonStyle(.plain)
-        .disabled(vm.isLoading)
-        .opacity(vm.isLoading ? 0.5 : 1)
+        .disabled(vm.isLoading || outOfCredits)
+        .opacity(vm.isLoading || outOfCredits ? 0.5 : 1)
         .accessibilityLabel(loc(voice.isListening ? "voice.stop" : "voice.start"))
     }
 
-    /// Questions to start with, until the user has asked something.
+    /// Questions to ask with one tap — kept in reach, not only before the
+    /// first question; resting while DiPo answers or the credits are out.
     @ViewBuilder
     private var suggestions: some View {
-        if !vm.messages.contains(where: { $0.role == .user }) {
+        Group {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     ForEach(0..<DiPoVoice.questionCount, id: \.self) { i in
@@ -772,10 +780,12 @@ struct AIChatView: View {
                                 .font(.system(.footnote, weight: .semibold))
                                 .foregroundStyle(AppTheme.accent)
                                 .padding(.horizontal, 12).padding(.vertical, 8)
-                                .overlay(Capsule().stroke(AppTheme.accent, lineWidth: 1.5))
+                                .background(AppTheme.accent.opacity(0.06), in: Capsule())
+                                .overlay(Capsule().stroke(AppTheme.accent.opacity(0.45), lineWidth: 1))
                         }
                         .buttonStyle(.plain)
-                        .disabled(vm.isLoading)
+                        .disabled(vm.isLoading || outOfCredits)
+                        .opacity(vm.isLoading || outOfCredits ? 0.45 : 1)
                     }
                 }
                 .padding(.horizontal, 16).padding(.vertical, 8)
@@ -783,9 +793,32 @@ struct AIChatView: View {
         }
     }
 
+    /// Out of AI credits for the month: asking would only fail, so the field,
+    /// the mic and the suggestions rest until the credits come back.
+    private var outOfCredits: Bool { isRoyal && vm.creditsLeft == 0 }
+
+    /// When the credits come back: the first of next month.
+    private var creditsReturn: String {
+        let cal = Calendar.current
+        let next = cal.date(byAdding: .month, value: 1, to: cal.safeDate(from: cal.dateComponents([.year, .month], from: .now))) ?? .now
+        let f = DateFormatter()
+        f.locale = LanguageManager.shared.currentLocale
+        f.setLocalizedDateFormatFromTemplate("d MMMM")
+        return f.string(from: next)
+    }
+
+    /// Under the input: how many credits are left, and what happens at zero.
+    private var creditLine: String {
+        guard let left = vm.creditsLeft else { return loc("ai.credit_hint") }
+        if left == 0 { return String(format: loc("ai.credits_out"), creditsReturn) }
+        if left < 10 { return String(format: loc("ai.credits_left"), left) + " · " + loc("ai.credit_hint") }
+        return loc("ai.credit_hint")
+    }
+
     /// Sends what is in the field. Free sees what Royal adds instead.
     private func submit(byVoice: Bool) {
         guard isRoyal else { showPaywall = true; return }
+        guard !outOfCredits else { return }
         askedByVoice = byVoice
         let snapshot = buildFinancialContext()
         Task { await vm.send(context: snapshot) }
@@ -812,11 +845,14 @@ struct AIChatView: View {
             HStack(spacing: 10) {
                 micButton
 
-                TextField(voice.isListening ? loc("voice.listening") : loc("ai.input_placeholder"),
+                TextField(voice.isListening ? loc("voice.listening")
+                          : outOfCredits ? String(format: loc("ai.credits_placeholder"), creditsReturn)
+                          : loc("ai.input_placeholder"),
                           text: $vm.input, axis: .vertical)
                     .font(.system(.subheadline))
                     .lineLimit(1...4)
                     .focused($inputFocused)
+                    .disabled(outOfCredits)
                     .padding(.horizontal, 14).padding(.vertical, 10)
                     .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
                 Button {
@@ -834,10 +870,14 @@ struct AIChatView: View {
                 .opacity(vm.input.trimmingCharacters(in: .whitespaces).isEmpty ? 0.5 : 1)
             }
             .padding(.horizontal, 16).padding(.vertical, 12)
-            // 1 credit/message hint.
-            Text(loc("ai.credit_hint"))
-                .font(.system(.caption2))
-                .foregroundStyle(AppTheme.textSecondary.opacity(0.7))
+            // Credits: how many are left once they run low, and when they
+            // come back once they are gone — in place of the red chip that
+            // used to sit up by DiPo.
+            Text(creditLine)
+                .font(.system(.caption2, weight: outOfCredits ? .semibold : .regular))
+                .foregroundStyle(outOfCredits || (vm.creditsLeft ?? 99) < 10 ? AppTheme.orange : AppTheme.textSecondary.opacity(0.7))
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 16)
                 .padding(.bottom, 8)
         }
         .background(AppTheme.bg)

@@ -49,6 +49,18 @@ final class PaletteLockTests: XCTestCase {
             ("slate",         AppTheme.slate,         "#94A3B8", "#6E829F"),
 
             ("accentTrack",   AppTheme.accentTrack,   "#2A3330", "#E4EAE8"),
+            // DiPo Lari Hemat scenery.
+            ("gameSkyTop",     AppTheme.gameSkyTop,    "#0B1622", "#A8DCEB"),
+            ("gameSkyLow",     AppTheme.gameSkyLow,    "#18302C", "#E6F5EC"),
+            ("gameHillFar",    AppTheme.gameHillFar,   "#1C3A32", "#A9D9B9"),
+            ("gameHillNear",   AppTheme.gameHillNear,  "#24493D", "#7CC79A"),
+            ("gameTree",       AppTheme.gameTree,      "#1F4237", "#4FA977"),
+            ("gameSoil",       AppTheme.gameSoil,      "#3A3022", "#E7D3A8"),
+            ("gameSoilDeep",   AppTheme.gameSoilDeep,  "#2A2318", "#D6BC87"),
+            ("gameSun",        AppTheme.gameSun,       "#F1E7C6", "#FFD66B"),
+            ("gameCloud",      AppTheme.gameCloud,     "#3C525C", "#FFFFFF"),
+            ("gamePost",       AppTheme.gamePost,      "#5A4630", "#9B7A4E"),
+            ("gameGrassDeep",  AppTheme.gameGrassDeep, "#159462", "#17A36B"),
             // DiPo's Royal bubble.
             ("royalGold",      AppTheme.royalGold,      "#C9A24D", "#C9A24D"),
             ("royalGoldLight", AppTheme.royalGoldLight, "#F1DDA0", "#F1DDA0"),
