@@ -49,6 +49,11 @@ final class PaletteLockTests: XCTestCase {
             ("slate",         AppTheme.slate,         "#94A3B8", "#6E829F"),
 
             ("accentTrack",   AppTheme.accentTrack,   "#2A3330", "#E4EAE8"),
+            // DiPo talking, the same in both themes.
+            ("bubbleFill",    AppTheme.bubbleFill,    "#FFFFFF", "#FFFFFF"),
+            ("bubbleInk",     AppTheme.bubbleInk,     "#1A120C", "#1A120C"),
+            ("dipoCrown",     AppTheme.dipoCrown,     "#F2B51E", "#F2B51E"),
+            ("dipoSweat",     AppTheme.dipoSweat,     "#7CC8FF", "#7CC8FF"),
             ("onVividFill",   AppTheme.onVividFill,   "#0D1514", "#FFFFFF"),
         ]
 

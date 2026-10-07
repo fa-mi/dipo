@@ -45,6 +45,8 @@ struct HomeView: View {
 
     @State private var showSearch           = false
     @State private var showNotifications    = false
+    @State private var showAskDiPo          = false
+    @State private var showDiPoPaywall      = false
     @State private var showAddCard          = false
     @State private var showAddSalary        = false
     @State private var categoryFilter: TxCategory? = nil
@@ -399,23 +401,8 @@ struct HomeView: View {
             items.append(.init(id: "setup-salary", rank: 1, view: AnyView(
                 SetupSalaryBanner(showAddSalary: $showAddSalary))))
         }
-        for (idx, insight) in cachedInsights.prefix(2).enumerated() {
-            // The second insight drops to the bottom of the queue: it is
-            // context for the first, not a second emergency.
-            items.append(.init(id: "insight-\(budgetCard?.id.uuidString ?? "none")-\(idx)",
-                               rank: idx == 0 ? 2 : 7,
-                               view: AnyView(
-                Button { HapticManager.shared.tap(); vm.open(PlanRoute.budget) } label: {
-                    SmartInsightBanner(insight: insight,
-                                       tappable: idx == 0,
-                                       onAction: { kind in routeInsightAction(kind) })
-                }
-                .buttonStyle(ScaleButtonStyle()))))
-        }
-        for anomaly in cachedAnomalies.prefix(1) {
-            items.append(.init(id: "anomaly-\(anomaly.id)", rank: 3, view: AnyView(
-                SmartInsightBanner(insight: anomaly))))
-        }
+        // Smart Insights and anomalies are no longer banners here: DiPo says
+        // them in his card above the transaction list (DiPoTalk.swift).
         // A declared schedule is a certainty; the detected pattern below is a
         // guess. Certainty outranks guess.
         if let due = upcomingDeclaredRecurring {
@@ -591,10 +578,17 @@ struct HomeView: View {
 
                         // Above the list it is about, and only ever one line
                         // unless it has a question to ask.
-                        // Every account, not just the card on show: a day is logged
-                        // when anything was recorded, whichever card paid.
-                        DailyCheckInCard()
-                            .padding(.horizontal, 22).padding(.top, 18)
+                        // DiPo, talking: unread notifications, then the Smart
+                        // Insights, then today's check-in underneath.
+                        VStack(alignment: .leading, spacing: 4) {
+                            DiPoTalkCard(lines: dipoLines, isRoyal: dipoIsRoyal,
+                                         onAction: handleDiPo,
+                                         onAsk: { showAskDiPo = true })
+                            DailyCheckInCard(embedded: true)
+                        }
+                        .padding(14)
+                        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+                        .padding(.horizontal, 22).padding(.top, 18)
 
                         TransactionSection(
                             transactions: selectedCardTransactions,
@@ -704,6 +698,16 @@ struct HomeView: View {
                 .presentationBackground(AppTheme.bg)
                 .preferredColorScheme(appColorScheme())
         }
+        .sheet(isPresented: $showAskDiPo) {
+            AIChatView()
+                .presentationDetents([.large]).presentationDragIndicator(.visible)
+                .presentationBackground(AppTheme.bg)
+                .preferredColorScheme(appColorScheme())
+        }
+        .sheet(isPresented: $showDiPoPaywall) {
+            PaywallView()
+                .preferredColorScheme(appColorScheme())
+        }
         .sheet(isPresented: $showNotifications) {
             NotificationCenterView()
                 .presentationDetents([.large])
@@ -730,6 +734,26 @@ struct HomeView: View {
     /// Route handler for `SmartInsight.action`. Each kind opens the matching
     /// feature in its own tab — this lives on HomeView (not the engine) because
     /// the engine is intentionally UI-agnostic.
+    // MARK: DiPo
+
+    private var dipoIsRoyal: Bool { premiumMgr.canAccess(.aiAdvisor) }
+
+    private var dipoLines: [DiPoLine] {
+        DiPoScript.lines(unread: NotificationManager.shared.unreadCount,
+                         insights: cachedInsights + cachedAnomalies,
+                         isRoyal: dipoIsRoyal)
+    }
+
+    private func handleDiPo(_ action: DiPoLine.Action) {
+        switch action {
+        case .notifications:       showNotifications = true
+        case .insight(let kind?):  routeInsightAction(kind)
+        case .insight(nil):        vm.open(PlanRoute.budget)
+        case .royal:               showDiPoPaywall = true
+        case .none:                break
+        }
+    }
+
     private func routeInsightAction(_ kind: SmartInsightAction.Kind) {
         switch kind {
         case .openBudgetSettings: vm.open(PlanRoute.budget)

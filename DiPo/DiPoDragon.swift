@@ -13,6 +13,11 @@ import UIKit
 // SCNActions: a slow look left and right, breathing, a hop when tapped, and a
 // turn when dragged. 30 fps; Reduce Motion keeps only the slow look.
 
+/// What DiPo is feeling about what he is saying.
+enum DiPoMood: Equatable {
+    case idle, happy, worry, cheer, info
+}
+
 @MainActor
 final class DiPoDragonRig {
     let scene = SCNScene()
@@ -23,6 +28,11 @@ final class DiPoDragonRig {
     private static let restingTurn: Float = 0.3
     /// False when the model file is missing — the view then shows the picture.
     let hasModel: Bool
+    /// Top of his head in `body` space, so the crown and the sweat drop sit on it.
+    private var headTop: Float = 0.7
+    private let crown = SCNNode()
+    private let drop = SCNNode()
+    private(set) var mood: DiPoMood = .idle
 
     init() {
         let loaded = Bundle.main.url(forResource: "DiPoDragon", withExtension: "usdz")
@@ -42,7 +52,10 @@ final class DiPoDragonRig {
             model.scale = SCNVector3(k, k, k)
             model.position = SCNVector3(-centre.x * k, -centre.y * k, -centre.z * k)
             body.addChildNode(model)
+            headTop = model.boundingBox.max.y * k + model.position.y
         }
+        buildCrown()
+        buildDrop()
 
         scene.lightingEnvironment.contents = Self.environment()
         scene.lightingEnvironment.intensity = 1.0
@@ -122,6 +135,106 @@ final class DiPoDragonRig {
         }
     }
 
+    // MARK: Moods
+
+    /// React to what he is saying: a happy hop, a worried shiver with a sweat
+    /// drop, a cheering spin with coins, or a nod for plain news.
+    func react(_ mood: DiPoMood) {
+        self.mood = mood
+        drop.isHidden = mood != .worry
+        drop.removeAllActions()
+        guard !calm else { return }
+        switch mood {
+        case .idle, .info:
+            nod()
+        case .happy:
+            bounce()
+        case .worry:
+            let l = SCNAction.moveBy(x: -0.03, y: 0, z: 0, duration: 0.05)
+            let r = SCNAction.moveBy(x: 0.03, y: 0, z: 0, duration: 0.05)
+            turntable.runAction(.sequence([.repeat(.sequence([l, r, r, l]), count: 5)]), forKey: "shiver")
+            let fall = SCNAction.moveBy(x: 0, y: -0.3, z: 0, duration: 1.2)
+            let back = SCNAction.moveBy(x: 0, y: 0.3, z: 0, duration: 0)
+            drop.runAction(.repeatForever(.sequence([.fadeIn(duration: 0.1), .group([fall, .fadeOut(duration: 1.2)]), back])))
+        case .cheer:
+            bounce()
+            burstCoins()
+        }
+    }
+
+    /// Nods while the bubble is typing, so he looks like the one talking.
+    func talk(for seconds: Double) {
+        guard !calm, seconds > 0 else { return }
+        let down = SCNAction.rotateBy(x: 0.06, y: 0, z: 0, duration: 0.14)
+        let up = down.reversed()
+        let times = max(1, Int(seconds / 0.28))
+        body.runAction(.repeat(.sequence([down, up]), count: times), forKey: "talk")
+    }
+
+    func setCrowned(_ on: Bool) { crown.isHidden = !on }
+
+    private func nod() {
+        let down = SCNAction.rotateBy(x: 0.12, y: 0, z: 0, duration: 0.18)
+        down.timingMode = .easeInEaseOut
+        body.runAction(.sequence([down, down.reversed()]), forKey: "nod")
+    }
+
+    private func buildCrown() {
+        let gold = Self.metal(UIColor(AppTheme.dipoCrown))
+        let band = SCNTube(innerRadius: 0.13, outerRadius: 0.15, height: 0.09)
+        band.firstMaterial = gold
+        crown.addChildNode(SCNNode(geometry: band))
+        for i in 0..<5 {
+            let a = Float(i) / 5 * .pi * 2
+            let point = SCNNode(geometry: SCNCone(topRadius: 0, bottomRadius: 0.035, height: 0.1))
+            point.geometry?.firstMaterial = gold
+            point.position = SCNVector3(sin(a) * 0.14, 0.09, cos(a) * 0.14)
+            crown.addChildNode(point)
+        }
+        crown.position = SCNVector3(-0.04, headTop - 0.04, 0)
+        crown.eulerAngles.z = -0.18
+        crown.isHidden = true
+        body.addChildNode(crown)
+    }
+
+    private func buildDrop() {
+        let sphere = SCNSphere(radius: 0.045)
+        sphere.firstMaterial = Self.metal(UIColor(AppTheme.dipoSweat), metalness: 0)
+        drop.geometry = sphere
+        drop.scale = SCNVector3(0.8, 1.25, 0.8)
+        drop.position = SCNVector3(0.3, headTop - 0.2, 0.3)
+        drop.isHidden = true
+        body.addChildNode(drop)
+    }
+
+    private func burstCoins() {
+        let gold = Self.metal(UIColor(AppTheme.dipoCrown))
+        for _ in 0..<8 {
+            let coin = SCNNode(geometry: SCNCylinder(radius: 0.06, height: 0.015))
+            coin.geometry?.firstMaterial = gold
+            coin.eulerAngles.x = .pi / 2
+            coin.position = SCNVector3(0, headTop, 0.2)
+            turntable.addChildNode(coin)
+            let dx = CGFloat.random(in: -0.8...0.8), up = CGFloat.random(in: 0.4...0.7)
+            let rise = SCNAction.moveBy(x: dx * 0.5, y: up, z: 0.2, duration: 0.35)
+            rise.timingMode = .easeOut
+            let fall = SCNAction.moveBy(x: dx * 0.5, y: -1.6, z: 0, duration: 0.7)
+            fall.timingMode = .easeIn
+            let spin = SCNAction.rotateBy(x: 0, y: 0, z: .pi * 4, duration: 1.05)
+            coin.runAction(.sequence([.group([.sequence([rise, fall]), spin, .sequence([.wait(duration: 0.7), .fadeOut(duration: 0.35)])]),
+                                      .removeFromParentNode()]))
+        }
+    }
+
+    private static func metal(_ color: UIColor, metalness: CGFloat = 0.9) -> SCNMaterial {
+        let m = SCNMaterial()
+        m.lightingModel = .physicallyBased
+        m.diffuse.contents = color
+        m.metalness.contents = metalness
+        m.roughness.contents = 0.25
+        return m
+    }
+
     /// Warm studio light for him to reflect: bright above, two soft windows,
     /// dim below.
     private static func environment() -> UIImage {
@@ -148,14 +261,27 @@ final class DiPoDragonRig {
 /// Falls back to the mascot picture if the model cannot be loaded.
 struct DiPoDragonView: View {
     var interactive = false
+    /// How he feels about the current line. He reacts each time `line` changes.
+    var mood: DiPoMood = .idle
+    /// Identifies what he is saying now; a new value makes him react and nod.
+    var line: String = ""
+    /// How long the bubble takes to type the line, so he nods for that long.
+    var talkSeconds: Double = 0
+    /// The Royal crown.
+    var crowned = false
 
     var body: some View {
-        DiPoDragonScene(interactive: interactive)
+        DiPoDragonScene(interactive: interactive, mood: mood, line: line,
+                        talkSeconds: talkSeconds, crowned: crowned)
     }
 }
 
 private struct DiPoDragonScene: UIViewRepresentable {
     var interactive: Bool
+    var mood: DiPoMood
+    var line: String
+    var talkSeconds: Double
+    var crowned: Bool
 
     func makeCoordinator() -> Coordinator { Coordinator(rig: DiPoDragonRig()) }
 
@@ -182,11 +308,19 @@ private struct DiPoDragonScene: UIViewRepresentable {
         return view
     }
 
-    func updateUIView(_ view: UIView, context: Context) {}
+    func updateUIView(_ view: UIView, context: Context) {
+        let c = context.coordinator
+        c.rig.setCrowned(crowned)
+        guard line != c.lastLine else { return }
+        c.lastLine = line
+        c.rig.react(mood)
+        c.rig.talk(for: talkSeconds)
+    }
 
     @MainActor
     final class Coordinator: NSObject {
         let rig: DiPoDragonRig
+        var lastLine = ""
         private var lastX: CGFloat = 0
         init(rig: DiPoDragonRig) { self.rig = rig }
 
