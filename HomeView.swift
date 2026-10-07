@@ -6,6 +6,8 @@ import SwiftData
 struct HomeView: View {
     @Bindable var vm: AppViewModel
     @Environment(\.modelContext) private var context
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var wasInBackground = false
     @Query(sort: \SalarySchedule.createdAt) private var salarySchedules: [SalarySchedule]
     @Query(sort: \BankCard.sortOrder) private var queriedCards: [BankCard]
     @Query(filter: #Predicate<SavingsGoal> { $0.isPinned && !$0.isCompleted }) private var pinnedGoals: [SavingsGoal]
@@ -46,6 +48,8 @@ struct HomeView: View {
     @State private var showSearch           = false
     @State private var showNotifications    = false
     @State private var showAskDiPo          = false
+    /// A question to send as Ask DiPo opens — from one of DiPo's ideas.
+    @State private var askDiPoPrompt: String? = nil
     @State private var showAddCard          = false
     @State private var showAddSalary        = false
     @State private var categoryFilter: TxCategory? = nil
@@ -449,13 +453,17 @@ struct HomeView: View {
                                     daysToPayday: nearestSalary.map { SalaryDateEngine.daysUntilPay(dayOfMonth: $0.dayOfMonth) },
                                     payDate: nearestSalary.map { SalaryDateEngine.nextPayDate(dayOfMonth: $0.dayOfMonth) },
                                     animates: !showAskDiPo,
-                                    onAskDiPo: { showAskDiPo = true },
+                                    isRoyal: dipoIsRoyal,
+                                    onAskDiPo: { askDiPoPrompt = nil; showAskDiPo = true },
                                     onAction: { action in
                                         switch action {
                                         case .notifications: showNotifications = true
                                         case .bills:         vm.open(PlanRoute.bills)
                                         case .salary:        vm.open(PlanRoute.salary)
-                                        case .checkIn:       break   // answered inside DiPo's section
+                                        case .checkIn, .streak, .interestGuess: break   // handled inside DiPo's section
+                                        case .interestTip(let interest):
+                                            askDiPoPrompt = interest.prompt
+                                            showAskDiPo = true
                                         }
                                     })
                         .padding(.horizontal, 22)
@@ -582,7 +590,8 @@ struct HomeView: View {
 
                         // Category filter — grid on iPad, scroll on iPhone
                         CategoryFilterBar(selectedFilter: $categoryFilter)
-                                                        .padding(.top, 22)
+                            .padding(.horizontal, 22)
+                            .padding(.top, 14)
                             .opacity(contentAppeared ? 1 : 0)
                             .offset(y: contentAppeared ? 0 : 20)
                             .animation(AppMotion.appear, value: contentAppeared)
@@ -601,7 +610,7 @@ struct HomeView: View {
                         // spent") and its edges should say so.
                         .padding(16)
                         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.xl))
-                        .padding(.top, 24)
+                        .padding(.top, 14)
                         .padding(.horizontal, 22)
                                                 .opacity(contentAppeared ? 1 : 0)
                         .offset(y: contentAppeared ? 0 : 24)
@@ -632,6 +641,23 @@ struct HomeView: View {
             // Receipt scan moved into AddTransactionSheet as an entry button at
             // the top of the form — discoverable in the same place users go to
             // record any expense, instead of a separate floating button.
+        }
+        // Back from the background or a locked phone: work Home out again —
+        // the pay cycle, today's figures and DiPo's insights may all have
+        // moved on while the app slept.
+        // (From the background the phase passes through .inactive, so the
+        // trip away is remembered rather than read off the previous phase.)
+        .onChange(of: scenePhase) { _, phase in
+            switch phase {
+            case .background:
+                wasInBackground = true
+            case .active where wasInBackground:
+                wasInBackground = false
+                recomputeHomeInsights()
+                recomputeMonthFlow()
+            default:
+                break
+            }
         }
         .onChange(of: vm.selectedCardIndex) { _, _ in
             withAnimation(.spring(response: 0.3)) { categoryFilter = nil }
@@ -698,7 +724,7 @@ struct HomeView: View {
         .sheet(isPresented: $showAskDiPo) {
             // DiPo opens with the Smart Insights; Free hears the top one and
             // sees what Royal adds when it tries to chat.
-            AIChatView(insights: cachedInsights + cachedAnomalies, isRoyal: dipoIsRoyal)
+            AIChatView(initialMessage: askDiPoPrompt, insights: cachedInsights + cachedAnomalies, isRoyal: dipoIsRoyal)
                 .presentationDetents([.large]).presentationDragIndicator(.visible)
                 .presentationBackground(AppTheme.bg)
                 .preferredColorScheme(appColorScheme())
@@ -731,11 +757,21 @@ struct HomeView: View {
 
     /// The bill DiPo mentions, when one falls due within three days.
     private var dipoBill: DiPoNudge.Bill? {
-        upcomingDeclaredRecurring.map {
-            DiPoNudge.Bill(label: $0.label,
-                           amount: CurrencyManager.shared.formatted($0.amount, currency: $0.currency),
-                           daysLeft: RecurringDateEngine.daysUntil(dayOfMonth: $0.dayOfMonth),
-                           autoRecord: $0.autoRecord)
+        upcomingDeclaredRecurring.map { bill in
+            // What the paying card holds once the bill has gone out — the
+            // thing worth knowing before it does. Only in the card's own
+            // currency; a converted figure would be a guess.
+            let card = bill.cardID.flatMap { id in queriedCards.first { $0.id == id } } ?? selectedCard
+            let after: String? = card.flatMap { c in
+                guard c.resolvedCurrency == (bill.currency.isEmpty ? c.resolvedCurrency : bill.currency),
+                      !c.isCreditCard else { return nil }
+                return CurrencyManager.shared.formatted(c.computedBalance() - bill.amount, currency: c.resolvedCurrency)
+            }
+            return DiPoNudge.Bill(label: bill.label,
+                                  amount: CurrencyManager.shared.formatted(bill.amount, currency: bill.currency),
+                                  daysLeft: RecurringDateEngine.daysUntil(dayOfMonth: bill.dayOfMonth),
+                                  autoRecord: bill.autoRecord,
+                                  balanceAfter: after)
         }
     }
 

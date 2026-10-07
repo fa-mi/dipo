@@ -136,7 +136,13 @@ final class DiPoVoice {
 
 /// Something DiPo's bubble on Home reminds about.
 struct DiPoNudge: Equatable, Identifiable {
-    enum Action: Equatable { case notifications, checkIn, bills, salary }
+    enum Action: Equatable {
+        case notifications, checkIn, bills, salary, streak
+        /// "You like your coffee, don't you?" — answered in a dialog.
+        case interestGuess(DiPoInterest)
+        /// A confirmed interest: opens Ask DiPo with its question.
+        case interestTip(DiPoInterest)
+    }
     let id: String
     let mood: DiPoMood
     let exclamation: String
@@ -154,13 +160,31 @@ struct DiPoNudge: Equatable, Identifiable {
         let amount: String
         let daysLeft: Int
         let autoRecord: Bool
+        /// The paying card's balance once the bill is out, formatted.
+        var balanceAfter: String? = nil
     }
 
     /// Everything worth a reminder, most pressing first: unread notifications,
     /// then a bill falling due within three days, then payday from three days
     /// out. Empty means DiPo just invites a question.
-    static func all(unread: Int, checkIn: Bool = false, bill: Bill?, daysToPayday: Int?, payDate: Date?) -> [DiPoNudge] {
+    static func all(unread: Int, checkIn: Bool = false, streak: Int = 0,
+                    bill: Bill?, daysToPayday: Int?, payDate: Date?,
+                    interestGuess: DiPoInterest? = nil, interestTip: DiPoInterest? = nil) -> [DiPoNudge] {
         var out: [DiPoNudge] = []
+        // The streak greets the user when they open the app; two days is the
+        // shortest run worth a word.
+        if streak >= 2 {
+            let body: String
+            switch streak {
+            case 100...: body = loc("dipo.streak_legend")
+            case 30...:  body = loc("dipo.streak_month")
+            case 7...:   body = loc("dipo.streak_week")
+            default:     body = loc("dipo.streak_keep")
+            }
+            out.append(DiPoNudge(id: "streak-\(streak)", mood: .cheer,
+                                 exclamation: String(format: loc("dipo.streak_title"), streak),
+                                 text: body, action: .streak, link: loc("dipo.link.streak")))
+        }
         if unread > 0 {
             out.append(DiPoNudge(id: "unread-\(unread)", mood: .info, exclamation: loc("dipo.sfx.psst"),
                                  text: unread == 1 ? loc("dipo.unread_one") : String(format: loc("dipo.unread_many"), unread),
@@ -178,7 +202,9 @@ struct DiPoNudge: Equatable, Identifiable {
             case 1:  when = String(format: loc("dipo.bill_tomorrow"), bill.label, bill.amount)
             default: when = String(format: loc("dipo.bill_in"), bill.label, bill.amount, bill.daysLeft)
             }
-            let then = loc(bill.autoRecord ? "dipo.bill_auto" : "dipo.bill_manual")
+            // The balance afterwards says more than "make sure it covers it".
+            let then = bill.balanceAfter.map { String(format: loc("dipo.bill_balance_after"), $0) }
+                ?? loc(bill.autoRecord ? "dipo.bill_auto" : "dipo.bill_manual")
             out.append(DiPoNudge(id: "bill-\(bill.label)-\(bill.daysLeft)", mood: bill.daysLeft == 0 ? .worry : .info,
                                  exclamation: loc("dipo.sfx.bill"), text: when + " " + then,
                                  action: .bills, link: loc("dipo.link.bills")))
@@ -194,6 +220,19 @@ struct DiPoNudge: Equatable, Identifiable {
             out.append(DiPoNudge(id: "payday-\(days)", mood: days == 0 ? .cheer : .happy,
                                  exclamation: loc(days == 0 ? "dipo.sfx.payday_today" : "dipo.sfx.payday_soon"),
                                  text: text, action: .salary, link: loc("dipo.link.salary")))
+        }
+        // Getting to know the user comes after anything with money or a date
+        // attached: first a guess to confirm, then ideas for what they enjoy.
+        if let guess = interestGuess {
+            out.append(DiPoNudge(id: "interest-ask-\(guess.rawValue)", mood: .happy,
+                                 exclamation: guess.question, text: loc("interest.ask_body"),
+                                 action: .interestGuess(guess), link: loc("interest.link_answer")))
+        }
+        if let tip = interestTip {
+            out.append(DiPoNudge(id: "interest-tip-\(tip.rawValue)", mood: .happy,
+                                 exclamation: String(format: loc("interest.tip_title"), tip.emoji),
+                                 text: loc("interest.\(tip.rawValue).tip"),
+                                 action: .interestTip(tip), link: loc("interest.link_ask")))
         }
         return out
     }
@@ -220,8 +259,6 @@ struct DiPoHomeStrip: View {
     let nudges: [DiPoNudge]
     /// Today in a few words ("Today is logged"), when there is no reminder.
     var status: String? = nil
-    /// Days in a row accounted for; shown from two.
-    var streak: Int = 0
     var onAskDiPo: () -> Void
     var onNudge: (DiPoNudge.Action) -> Void
     /// False while Ask DiPo covers Home, so this DiPo stops drawing.
@@ -231,18 +268,27 @@ struct DiPoHomeStrip: View {
     private var current: DiPoNudge? { nudges.isEmpty ? nil : nudges[min(page, nudges.count - 1)] }
 
     var body: some View {
-        HStack(alignment: .center, spacing: 10) {
+        let card = RoundedRectangle(cornerRadius: 22, style: .continuous)
+        HStack(alignment: .center, spacing: 0) {
             bubble
-            DiPoFrame(size: 92) {
-                DiPoDragonView(mood: current?.mood ?? .idle, line: current?.id ?? "home", onTap: onAskDiPo,
-                               animates: animates)
-            }
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(loc("mascot.a11y"))
-            .accessibilityAddTraits(.isButton)
-            .accessibilityHint(loc("dipo.a11y_ask"))
-            .accessibilityAction { onAskDiPo() }
+            DiPoDragonView(mood: current?.mood ?? .idle, line: current?.id ?? "home", onTap: onAskDiPo,
+                           animates: animates)
+                .frame(width: 112, height: 120)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(loc("mascot.a11y"))
+                .accessibilityAddTraits(.isButton)
+                .accessibilityHint(loc("dipo.a11y_ask"))
+                .accessibilityAction { onAskDiPo() }
         }
+        .padding(.leading, 10).padding(.vertical, 8)
+        // His own card: a green wash and hairline, so he and what he says
+        // read as one thing on the page.
+        .background {
+            card.fill(AppTheme.bg)
+                .overlay(card.fill(LinearGradient(colors: [AppTheme.accent.opacity(0.18), AppTheme.accent.opacity(0.03)],
+                                                  startPoint: .topLeading, endPoint: .bottomTrailing)))
+        }
+        .overlay(card.stroke(AppTheme.accent.opacity(0.35), lineWidth: 1))
         .onChange(of: nudges.map(\.id)) { _, _ in page = 0 }
         .animation(.spring(response: 0.35), value: current?.id)
     }
@@ -252,44 +298,39 @@ struct DiPoHomeStrip: View {
             HapticManager.shared.tap()
             if let current { onNudge(current.action) } else { onAskDiPo() }
         } label: {
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: 2) {
                 if let current {
                     Text(current.exclamation)
-                        .font(.system(.headline, design: .serif, weight: .semibold).italic())
+                        .font(.system(.footnote, weight: .bold))
                         .foregroundStyle(AppTheme.royalGoldText)
+                        .lineLimit(2)
                     Text(current.text)
-                        .font(.system(.footnote))
+                        .font(.system(.caption))
                         .foregroundStyle(AppTheme.textPrimary)
+                        .lineLimit(3)
                         .fixedSize(horizontal: false, vertical: true)
                     Text(current.link + " \u{203A}")
                         .font(.system(.caption, weight: .semibold))
                         .foregroundStyle(AppTheme.accent)
-                        .padding(.top, 3)
-                        .padding(.trailing, nudges.count > 1 ? 44 : 0)
+                        .padding(.top, 2)
+                        .padding(.trailing, nudges.count > 1 ? 40 : 0)
                 } else {
                     Text(status ?? loc("dipo.ask"))
-                        .font(.system(.subheadline, weight: .bold))
+                        .font(.system(.footnote, weight: .bold))
                         .foregroundStyle(AppTheme.textPrimary)
                     Text(loc("dipo.home_invite"))
                         .font(.system(.caption))
                         .foregroundStyle(AppTheme.textSecondary)
+                        .lineLimit(3)
                         .fixedSize(horizontal: false, vertical: true)
-                }
-                // Two days is the shortest run that means anything.
-                if streak >= 2 {
-                    Label(String(format: loc("checkin.streak"), streak), systemImage: "flame.fill")
-                        .font(.system(.caption2, weight: .bold))
-                        .foregroundStyle(AppTheme.orange)
-                        .padding(.horizontal, 8).padding(.vertical, 3)
-                        .background(AppTheme.orange.opacity(0.13), in: Capsule())
-                        .padding(.top, 5)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.leading, 16).padding(.trailing, 16 + BubbleShape.tail).padding(.vertical, 12)
-            .dipoBubble(tail: .trailing)
+            .padding(.leading, 18).padding(.vertical, 16)
+            .padding(.trailing, 16 + CloudBubble.tailRoom)
+            .background(CloudBubble())
             .id(current?.id ?? "invite")
-            .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .trailing)))
+            .transition(.opacity.combined(with: .scale(scale: 0.94, anchor: .trailing)))
         }
         .buttonStyle(ScaleButtonStyle())
         .accessibilityHint(current == nil ? loc("dipo.a11y_ask") : loc("dipo.a11y_open"))
@@ -304,13 +345,72 @@ struct DiPoHomeStrip: View {
                     Text(verbatim: "\(min(page, nudges.count - 1) + 1)/\(nudges.count) \u{203A}")
                         .font(.system(.caption2, weight: .bold).monospacedDigit())
                         .foregroundStyle(AppTheme.textSecondary)
-                        .padding(.horizontal, 8).padding(.vertical, 4)
+                        .padding(.horizontal, 7).padding(.vertical, 3)
                         .background(AppTheme.cardMid, in: Capsule())
                 }
                 .buttonStyle(.plain)
-                .padding(.trailing, 14 + BubbleShape.tail).padding(.bottom, 10)
+                .padding(.trailing, 14 + CloudBubble.tailRoom).padding(.bottom, 14)
                 .accessibilityLabel(loc("dipo.next"))
             }
+        }
+    }
+}
+
+/// A manga thought cloud: a soft body ringed with bumps, and two little
+/// puffs trailing off towards DiPo on the right. Drawn as circles — each
+/// bump stroked, then the whole cloud filled over them — so only the outer
+/// edge of the outline shows and the bumps join without seams.
+struct CloudBubble: View {
+    /// Width kept on the trailing side for the puffs.
+    static let tailRoom: CGFloat = 18
+    var bump: CGFloat = 10
+    var fill: Color = AppTheme.cardDark
+    var line: Color = AppTheme.royalGold.opacity(0.6)
+
+    var body: some View {
+        Canvas { ctx, size in
+            let body = CGRect(x: 0, y: 0, width: size.width - Self.tailRoom, height: size.height)
+            let bumps = Self.bumps(in: body, radius: bump)
+            let puffs: [(CGPoint, CGFloat)] = [
+                (CGPoint(x: body.maxX + 3, y: body.midY + body.height * 0.18), 5.5),
+                (CGPoint(x: body.maxX + 12, y: body.midY + body.height * 0.3), 3.5),
+            ]
+            var outline = Path()
+            var cloud = Path()
+            for p in bumps {
+                let r = CGRect(x: p.x - bump, y: p.y - bump, width: bump * 2, height: bump * 2)
+                outline.addEllipse(in: r)
+                cloud.addEllipse(in: r)
+            }
+            cloud.addRect(body.insetBy(dx: bump * 0.6, dy: bump * 0.6))
+            ctx.stroke(outline, with: .color(line), lineWidth: 2.4)
+            ctx.fill(cloud, with: .color(fill))
+            for (c, r) in puffs {
+                let e = Path(ellipseIn: CGRect(x: c.x - r, y: c.y - r, width: r * 2, height: r * 2))
+                ctx.stroke(e, with: .color(line), lineWidth: 1.4)
+                ctx.fill(e, with: .color(fill))
+            }
+        }
+        .accessibilityHidden(true)
+    }
+
+    /// Bump centres, evenly spaced around the body inset by a bump's radius,
+    /// so the bumps form the edge and stay inside the frame.
+    static func bumps(in rect: CGRect, radius r: CGFloat) -> [CGPoint] {
+        // r + 1.5 keeps the outline's outer half inside the canvas.
+        let inner = rect.insetBy(dx: r + 1.5, dy: r + 1.5)
+        guard inner.width > 0, inner.height > 0 else { return [] }
+        let perimeter = 2 * (inner.width + inner.height)
+        let count = max(8, Int((perimeter / (r * 1.4)).rounded()))
+        return (0..<count).map { i in
+            var d = CGFloat(i) * perimeter / CGFloat(count)
+            if d < inner.width { return CGPoint(x: inner.minX + d, y: inner.minY) }
+            d -= inner.width
+            if d < inner.height { return CGPoint(x: inner.maxX, y: inner.minY + d) }
+            d -= inner.height
+            if d < inner.width { return CGPoint(x: inner.maxX - d, y: inner.maxY) }
+            d -= inner.width
+            return CGPoint(x: inner.minX, y: inner.maxY - d)
         }
     }
 }
