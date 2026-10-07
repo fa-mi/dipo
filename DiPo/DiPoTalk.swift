@@ -224,6 +224,8 @@ struct DiPoHomeStrip: View {
     var streak: Int = 0
     var onAskDiPo: () -> Void
     var onNudge: (DiPoNudge.Action) -> Void
+    /// False while Ask DiPo covers Home, so this DiPo stops drawing.
+    var animates = true
 
     @State private var page = 0
     private var current: DiPoNudge? { nudges.isEmpty ? nil : nudges[min(page, nudges.count - 1)] }
@@ -232,7 +234,8 @@ struct DiPoHomeStrip: View {
         HStack(alignment: .center, spacing: 10) {
             bubble
             DiPoFrame(size: 92) {
-                DiPoDragonView(mood: current?.mood ?? .idle, line: current?.id ?? "home", onTap: onAskDiPo)
+                DiPoDragonView(mood: current?.mood ?? .idle, line: current?.id ?? "home", onTap: onAskDiPo,
+                               animates: animates)
             }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(loc("mascot.a11y"))

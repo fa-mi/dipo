@@ -448,6 +448,7 @@ struct HomeView: View {
                                     bill: dipoBill,
                                     daysToPayday: nearestSalary.map { SalaryDateEngine.daysUntilPay(dayOfMonth: $0.dayOfMonth) },
                                     payDate: nearestSalary.map { SalaryDateEngine.nextPayDate(dayOfMonth: $0.dayOfMonth) },
+                                    animates: !showAskDiPo,
                                     onAskDiPo: { showAskDiPo = true },
                                     onAction: { action in
                                         switch action {

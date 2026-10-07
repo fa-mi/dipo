@@ -118,6 +118,7 @@ struct DiPoHomeSection: View {
     let payDate: Date?
     var onAskDiPo: () -> Void
     var onAction: (DiPoNudge.Action) -> Void
+    var animates = true
 
     /// Every account's recent rows, read here rather than handed in. A day
     /// counts as logged when anything was recorded, whichever card paid.
@@ -130,7 +131,9 @@ struct DiPoHomeSection: View {
     @State private var askingNow = false
 
     init(unread: Int, bill: DiPoNudge.Bill?, daysToPayday: Int?, payDate: Date?,
+         animates: Bool = true,
          onAskDiPo: @escaping () -> Void, onAction: @escaping (DiPoNudge.Action) -> Void) {
+        self.animates = animates
         self.unread = unread
         self.bill = bill
         self.daysToPayday = daysToPayday
@@ -170,7 +173,8 @@ struct DiPoHomeSection: View {
             onAskDiPo: onAskDiPo,
             onNudge: { action in
                 if action == .checkIn { askingNow = true } else { onAction(action) }
-            })
+            },
+            animates: animates)
         .confirmationDialog(loc("checkin.ask_title"), isPresented: $askingNow, titleVisibility: .visible) {
             Button(loc("checkin.none")) {
                 HapticManager.shared.success()

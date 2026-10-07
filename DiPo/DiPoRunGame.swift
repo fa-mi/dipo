@@ -140,6 +140,16 @@ final class RunGame {
     /// The frame time last stepped from; kept here, not in the view's state,
     /// so a new frame does not invalidate the view.
     @ObservationIgnored private var lastTick: Date? = nil
+    /// A finger is down; one press is one jump, however long it is held.
+    @ObservationIgnored private var pressed = false
+
+    /// True on the touch that starts a press.
+    func press() -> Bool {
+        guard !pressed else { return false }
+        pressed = true
+        return true
+    }
+    func release() { pressed = false }
     let startingLives: Int
 
     init(bonusLife: Bool, seed: UInt64 = UInt64.random(in: 1...UInt64.max)) {
@@ -372,7 +382,11 @@ struct DiPoRunGameView: View {
             AppTheme.gameSkyTop.ignoresSafeArea()
             GeometryReader { geo in
                 // Paused between runs: the start and finish cards sit on a still frame.
-                TimelineView(.animation(minimumInterval: nil, paused: !game.running)) { timeline in
+                // Capped near 60 fps: on a 120 Hz screen the scene was drawn
+                // twice as often for no visible gain, and a missed 8 ms frame
+                // is a stutter. 1/80 keeps every frame on a 60 Hz screen and
+                // every other one on 120 Hz, evenly.
+                TimelineView(.animation(minimumInterval: 1.0 / 80, paused: !game.running)) { timeline in
                     Canvas { ctx, size in
                         RunScene(game: game, dark: scheme == .dark,
                                  time: timeline.date.timeIntervalSinceReferenceDate)
@@ -385,7 +399,12 @@ struct DiPoRunGameView: View {
             }
             .ignoresSafeArea()
             .contentShape(Rectangle())
-            .onTapGesture { tap() }
+            // Jump when the finger lands, not when it lifts: a tap gesture
+            // fires on release, a tenth of a second after the press, which
+            // read as lag on every jump.
+            .gesture(DragGesture(minimumDistance: 0)
+                .onChanged { _ in if game.press() { tap() } }
+                .onEnded { _ in game.release() })
             .accessibilityElement()
             .accessibilityLabel(loc("game.title"))
             .accessibilityHint(loc("game.tap_hint"))
@@ -426,8 +445,8 @@ struct DiPoRunGameView: View {
 
     private func tap() {
         if game.running {
+            game.jump()   // first, so the haptic never delays the jump
             HapticManager.shared.tap()
-            game.jump()
         }
     }
 
@@ -798,7 +817,7 @@ private struct RunScene {
             let a = 1 - p.age / RunPopup.lifetime
             let (text, color): (String, Color) = {
                 switch p.kind {
-                case .coin:   return ("+" + CurrencyManager.shared.formatted(Double(RunGame.coinValue), currency: "IDR"), AppTheme.royalGoldText)
+                case .coin:   return (Self.coinText, AppTheme.royalGoldText)
                 case .shield: return (loc("game.popup.shield"), AppTheme.accent)
                 case .saved:  return (loc("game.popup.saved"), AppTheme.accent)
                 case .life:   return (loc("game.popup.life"), AppTheme.red)
@@ -893,6 +912,9 @@ private struct RunScene {
         symbol.shading = .color(.white)
         c.draw(symbol, in: CGRect(x: centre.x - 9, y: centre.y - 10, width: 18, height: 20))
     }
+
+    /// "+Rp1.000", formatted once rather than for every popup every frame.
+    private static let coinText = "+" + CurrencyManager.shared.formatted(Double(RunGame.coinValue), currency: "IDR")
 
     /// Label sizes, measured once per trap rather than every frame.
     private static var labelSizes: [String: CGSize] = [:]

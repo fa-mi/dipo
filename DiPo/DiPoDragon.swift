@@ -13,6 +13,37 @@ import UIKit
 // SCNActions: a slow look left and right, breathing, a hop when tapped, and a
 // turn when dragged. 30 fps; Reduce Motion keeps only the slow look.
 
+/// The model, read from the bundle once and cloned for each view. Reading
+/// the 1.2 MB file every time a DiPo appeared — on the main thread, as Ask
+/// DiPo's sheet slid up — was a visible stall on every open. A clone shares
+/// the geometry and textures, so a second DiPo costs almost nothing.
+enum DiPoModel {
+    nonisolated(unsafe) static let template: SCNNode? = {
+        guard let url = Bundle.main.url(forResource: "DiPoDragon", withExtension: "usdz"),
+              let scene = try? SCNScene(url: url) else { return nil }
+        let node = SCNNode()
+        for child in scene.rootNode.childNodes { node.addChildNode(child) }
+        return node
+    }()
+
+    /// Reads the file off the main thread at launch, so the first DiPo on
+    /// Home does not pay for it either.
+    nonisolated static func preload() {
+        Task.detached(priority: .utility) { _ = DiPoModel.template != nil }
+    }
+}
+
+private struct DiPoAnimatesKey: EnvironmentKey { static let defaultValue = true }
+
+extension EnvironmentValues {
+    /// False where DiPo cannot be seen — his tab is not the one showing — so
+    /// he stops drawing instead of rendering behind another screen.
+    var dipoAnimates: Bool {
+        get { self[DiPoAnimatesKey.self] }
+        set { self[DiPoAnimatesKey.self] = newValue }
+    }
+}
+
 /// What DiPo is feeling about what he is saying.
 enum DiPoMood: Equatable {
     case idle, happy, worry, cheer, info
@@ -34,8 +65,7 @@ final class DiPoDragonRig {
     private(set) var mood: DiPoMood = .idle
 
     init() {
-        let loaded = Bundle.main.url(forResource: "DiPoDragon", withExtension: "usdz")
-            .flatMap { try? SCNScene(url: $0) }
+        let loaded = DiPoModel.template
         hasModel = loaded != nil
 
         scene.rootNode.addChildNode(turntable)
@@ -43,8 +73,7 @@ final class DiPoDragonRig {
         turntable.eulerAngles.y = Self.restingTurn
 
         if let loaded {
-            let model = SCNNode()
-            for child in loaded.rootNode.childNodes { model.addChildNode(child) }
+            let model = loaded.clone()
             // Centre him and fit him in a unit sphere, whatever units the file uses.
             let (centre, radius) = model.boundingSphere
             let k = radius > 0 ? 1 / radius : 1
@@ -247,10 +276,14 @@ struct DiPoDragonView: View {
     var talkSeconds: Double = 0
     /// Called after his hop when he is tapped, e.g. to open Ask DiPo.
     var onTap: (() -> Void)? = nil
+    /// False while something covers him (the game over Ask DiPo, Ask DiPo
+    /// over Home): he holds still and stops drawing, leaving the GPU to the
+    /// screen in front.
+    var animates = true
 
     var body: some View {
         DiPoDragonScene(interactive: interactive, mood: mood, line: line,
-                        talkSeconds: talkSeconds, onTap: onTap)
+                        talkSeconds: talkSeconds, animates: animates, onTap: onTap)
     }
 }
 
@@ -259,7 +292,11 @@ private struct DiPoDragonScene: UIViewRepresentable {
     var mood: DiPoMood
     var line: String
     var talkSeconds: Double
+    var animates: Bool
     var onTap: (() -> Void)?
+
+    /// Drawing only while he can be seen: not covered, and on the tab showing.
+    private func active(_ context: Context) -> Bool { animates && context.environment.dipoAnimates }
 
     func makeCoordinator() -> Coordinator { Coordinator(rig: DiPoDragonRig()) }
 
@@ -278,7 +315,8 @@ private struct DiPoDragonScene: UIViewRepresentable {
         view.backgroundColor = .clear
         view.antialiasingMode = .multisampling4X
         view.preferredFramesPerSecond = 30
-        view.isPlaying = true
+        view.isPlaying = active(context)
+        rig.scene.isPaused = !active(context)
         view.isAccessibilityElement = true
         view.accessibilityLabel = loc("mascot.a11y")
         view.accessibilityTraits = .image
@@ -292,6 +330,11 @@ private struct DiPoDragonScene: UIViewRepresentable {
     func updateUIView(_ view: UIView, context: Context) {
         let c = context.coordinator
         c.onTap = onTap
+        let active = active(context)
+        if let scn = view as? SCNView, scn.isPlaying != active {
+            scn.isPlaying = active
+            c.rig.scene.isPaused = !active
+        }
         guard line != c.lastLine else { return }
         c.lastLine = line
         c.rig.react(mood)

@@ -52,6 +52,14 @@ final class DiPoRunGameTests: XCTestCase {
         XCTAssertEqual(g.elapsed, 1.0 / 60, accuracy: 1e-9)
     }
 
+    func testOnePressIsOneJump() {
+        let g = RunGame(bonusLife: false, seed: 1)
+        XCTAssertTrue(g.press())
+        XCTAssertFalse(g.press(), "a held finger does not jump again")
+        g.release()
+        XCTAssertTrue(g.press())
+    }
+
     func testHintOnlyAtTheStart() {
         let g = RunGame(bonusLife: false, seed: 1)
         g.start()

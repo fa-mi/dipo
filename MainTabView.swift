@@ -101,9 +101,14 @@ struct MainTabView: View {
                             case .plan:  PlanView(vm: vm)
                             }
                         }
+                        // Only the tab coming in fades, and quickly; the one
+                        // leaving goes at once. Fading and scaling two whole
+                        // screens together meant compositing both offscreen
+                        // for 0.4 s, which is where the switch stuttered.
                         .opacity(vm.activeTab == tab ? 1 : 0)
-                        .scaleEffect(vm.activeTab == tab ? 1 : 0.97)
-                        .animation(.spring(response: 0.4, dampingFraction: 0.85), value: vm.activeTab)
+                        .animation(vm.activeTab == tab ? .easeOut(duration: 0.18) : nil, value: vm.activeTab)
+                        // DiPo on a hidden tab holds still instead of rendering.
+                        .environment(\.dipoAnimates, vm.activeTab == tab)
                         // A tab at opacity 0 is still in the tree; without this,
                         // VoiceOver could land on buttons of a screen nobody can see.
                         .accessibilityHidden(vm.activeTab != tab)
