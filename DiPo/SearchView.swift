@@ -219,6 +219,14 @@ struct SearchView: View {
 
     private var pref: String { CurrencyManager.shared.preferredCurrency }
 
+    /// True once the user has narrowed the list: typed something, or picked
+    /// a period or a category.
+    private var isNarrowed: Bool {
+        !query.trimmingCharacters(in: .whitespaces).isEmpty
+            || selectedFilter != nil
+            || selectedPeriod != .all_period
+    }
+
     /// A day's money out and in, by the same rules as the summary.
     private func dayFigures(_ txs: [TxRecord]) -> (spent: Double, received: Double) {
         (max(StatisticsView.expenses(txs, convert: convertedForSort), 0),
@@ -406,7 +414,10 @@ struct SearchView: View {
 
                                 // Money out and in, each on its own — never one
                                 // signed sum of spending, salary and transfers.
-                                if results.spent >= 1 || results.received >= 1 {
+                                // Only once the list is narrowed (words, a period
+                                // or a category): over everything ever recorded the
+                                // totals answer nothing and just sit in the way.
+                                if isNarrowed, results.spent >= 1 || results.received >= 1 {
                                     VStack(alignment: .leading, spacing: 4) {
                                         HStack(spacing: 16) {
                                             if results.spent >= 1 {
