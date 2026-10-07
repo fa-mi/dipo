@@ -404,13 +404,12 @@ struct HomeView: View {
         // them when Ask DiPo opens (DiPoTalk.swift, AIChatView).
         // A declared schedule is a certainty; the detected pattern below is a
         // guess. Certainty outranks guess.
-        if let due = upcomingDeclaredRecurring {
-            items.append(.init(id: "declared-recurring", rank: 4, view: AnyView(
-                DeclaredRecurringBanner(expense: due))))
-        }
+        // A bill falling due is no longer a banner: DiPo says it in his bubble
+        // at the top (DiPoNudge), and two cards saying the same was noise.
         // Payday is status, not a task — it ranks below anything asking for a
-        // decision.
-        if let salary = nearestSalary {
+        // decision. Inside the last three days DiPo says it instead.
+        if let salary = nearestSalary,
+           SalaryDateEngine.daysUntilPay(dayOfMonth: salary.dayOfMonth) > DiPoNudge.window {
             items.append(.init(id: "payday", rank: 5, view: AnyView(
                 Button { HapticManager.shared.tap(); vm.open(PlanRoute.salary) } label: {
                     SalaryReminderBanner(schedule: salary, tappable: true)
@@ -451,19 +450,20 @@ struct HomeView: View {
                         .offset(y: headerAppeared ? 0 : -16)
                         .animation(AppMotion.appear, value: headerAppeared)
 
-                    // DiPo at the top: reminds about unread notifications, or
-                    // payday from three days out, and opens Ask DiPo when tapped.
-                    DiPoHomeStrip(nudge: dipoNudge,
-                                  isRoyal: dipoIsRoyal,
+                    // DiPo at the top, in his own frame: reminds about unread
+                    // notifications, a bill falling due and payday, and opens
+                    // Ask DiPo when tapped.
+                    DiPoHomeStrip(nudges: dipoNudges,
                                   onAskDiPo: { showAskDiPo = true },
                                   onNudge: { action in
                                       switch action {
                                       case .notifications: showNotifications = true
+                                      case .bills:         vm.open(PlanRoute.bills)
                                       case .salary:        vm.open(PlanRoute.salary)
                                       }
                                   })
-                        .padding(.horizontal, 18)
-                        .padding(.top, 6)
+                        .padding(.horizontal, 22)
+                        .padding(.top, 12)
                         .opacity(headerAppeared ? 1 : 0)
                         .animation(AppMotion.appear, value: headerAppeared)
 
@@ -738,10 +738,17 @@ struct HomeView: View {
     /// Royal can chat with DiPo; Free hears his top insight.
     private var dipoIsRoyal: Bool { premiumMgr.canAccess(.aiAdvisor) }
 
-    private var dipoNudge: DiPoNudge? {
+    private var dipoNudges: [DiPoNudge] {
         let salary = nearestSalary
-        return DiPoNudge.pick(
+        let bill = upcomingDeclaredRecurring.map {
+            DiPoNudge.Bill(label: $0.label,
+                           amount: CurrencyManager.shared.formatted($0.amount, currency: $0.currency),
+                           daysLeft: RecurringDateEngine.daysUntil(dayOfMonth: $0.dayOfMonth),
+                           autoRecord: $0.autoRecord)
+        }
+        return DiPoNudge.all(
             unread: NotificationManager.shared.unreadCount,
+            bill: bill,
             daysToPayday: salary.map { SalaryDateEngine.daysUntilPay(dayOfMonth: $0.dayOfMonth) },
             payDate: salary.map { SalaryDateEngine.nextPayDate(dayOfMonth: $0.dayOfMonth) })
     }

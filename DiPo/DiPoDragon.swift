@@ -28,9 +28,8 @@ final class DiPoDragonRig {
     private static let restingTurn: Float = 0.3
     /// False when the model file is missing — the view then shows the picture.
     let hasModel: Bool
-    /// Top of his head in `body` space, so the crown and the sweat drop sit on it.
+    /// Top of his head in `body` space, so the sweat drop and coins start there.
     private var headTop: Float = 0.7
-    private let crown = SCNNode()
     private let drop = SCNNode()
     private(set) var mood: DiPoMood = .idle
 
@@ -54,7 +53,6 @@ final class DiPoDragonRig {
             body.addChildNode(model)
             headTop = model.boundingBox.max.y * k + model.position.y
         }
-        buildCrown()
         buildDrop()
 
         scene.lightingEnvironment.contents = Self.environment()
@@ -63,7 +61,7 @@ final class DiPoDragonRig {
         let camera = SCNNode()
         camera.camera = SCNCamera()
         camera.camera?.fieldOfView = 30
-        camera.position = SCNVector3(0, 0, 3.75)
+        camera.position = SCNVector3(0, -0.04, 3.95)
         scene.rootNode.addChildNode(camera)
 
         let ambient = SCNNode()
@@ -171,30 +169,10 @@ final class DiPoDragonRig {
         body.runAction(.repeat(.sequence([down, up]), count: times), forKey: "talk")
     }
 
-    func setCrowned(_ on: Bool) { crown.isHidden = !on }
-
     private func nod() {
         let down = SCNAction.rotateBy(x: 0.12, y: 0, z: 0, duration: 0.18)
         down.timingMode = .easeInEaseOut
         body.runAction(.sequence([down, down.reversed()]), forKey: "nod")
-    }
-
-    private func buildCrown() {
-        let gold = Self.metal(UIColor(AppTheme.dipoCrown))
-        let band = SCNTube(innerRadius: 0.13, outerRadius: 0.15, height: 0.09)
-        band.firstMaterial = gold
-        crown.addChildNode(SCNNode(geometry: band))
-        for i in 0..<5 {
-            let a = Float(i) / 5 * .pi * 2
-            let point = SCNNode(geometry: SCNCone(topRadius: 0, bottomRadius: 0.035, height: 0.1))
-            point.geometry?.firstMaterial = gold
-            point.position = SCNVector3(sin(a) * 0.14, 0.09, cos(a) * 0.14)
-            crown.addChildNode(point)
-        }
-        crown.position = SCNVector3(-0.04, headTop - 0.04, 0)
-        crown.eulerAngles.z = -0.18
-        crown.isHidden = true
-        body.addChildNode(crown)
     }
 
     private func buildDrop() {
@@ -267,14 +245,12 @@ struct DiPoDragonView: View {
     var line: String = ""
     /// How long the bubble takes to type the line, so he nods for that long.
     var talkSeconds: Double = 0
-    /// The Royal crown.
-    var crowned = false
     /// Called after his hop when he is tapped, e.g. to open Ask DiPo.
     var onTap: (() -> Void)? = nil
 
     var body: some View {
         DiPoDragonScene(interactive: interactive, mood: mood, line: line,
-                        talkSeconds: talkSeconds, crowned: crowned, onTap: onTap)
+                        talkSeconds: talkSeconds, onTap: onTap)
     }
 }
 
@@ -283,7 +259,6 @@ private struct DiPoDragonScene: UIViewRepresentable {
     var mood: DiPoMood
     var line: String
     var talkSeconds: Double
-    var crowned: Bool
     var onTap: (() -> Void)?
 
     func makeCoordinator() -> Coordinator { Coordinator(rig: DiPoDragonRig()) }
@@ -317,7 +292,6 @@ private struct DiPoDragonScene: UIViewRepresentable {
     func updateUIView(_ view: UIView, context: Context) {
         let c = context.coordinator
         c.onTap = onTap
-        c.rig.setCrowned(crowned)
         guard line != c.lastLine else { return }
         c.lastLine = line
         c.rig.react(mood)

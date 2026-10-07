@@ -99,6 +99,20 @@ struct AppTheme {
     static let royalGoldLight = Color(hex: "#F1DDA0")   // hairline, highlight
     static let royalGoldText  = Color(UIColor.adaptive(dark: "#E2C277", light: "#8E6A1F"))
 
+    // DiPo Lari Hemat's scenery (DiPoRunGame.swift): rice fields by day in
+    // light mode, the same fields at night in dark mode.
+    static let gameSkyTop    = Color(UIColor.adaptive(dark: "#0B1622", light: "#A8DCEB"))   // sky, top
+    static let gameSkyLow    = Color(UIColor.adaptive(dark: "#18302C", light: "#E6F5EC"))   // sky, at the horizon
+    static let gameHillFar   = Color(UIColor.adaptive(dark: "#1C3A32", light: "#A9D9B9"))   // far hills
+    static let gameHillNear  = Color(UIColor.adaptive(dark: "#24493D", light: "#7CC79A"))   // near hills and terraces
+    static let gameTree      = Color(UIColor.adaptive(dark: "#1F4237", light: "#4FA977"))   // palms
+    static let gameSoil      = Color(UIColor.adaptive(dark: "#3A3022", light: "#E7D3A8"))   // the path, top
+    static let gameSoilDeep  = Color(UIColor.adaptive(dark: "#2A2318", light: "#D6BC87"))   // the path, bottom
+    static let gameSun       = Color(UIColor.adaptive(dark: "#F1E7C6", light: "#FFD66B"))   // sun by day, moon by night
+    static let gameCloud     = Color(UIColor.adaptive(dark: "#3C525C", light: "#FFFFFF"))   // clouds
+    static let gamePost      = Color(UIColor.adaptive(dark: "#5A4630", light: "#9B7A4E"))   // signposts, pebbles, dust
+    static let gameGrassDeep = Color(UIColor.adaptive(dark: "#159462", light: "#17A36B"))   // the grass edge's shade
+
     /// The track behind a green progress bar: a quiet surface in both modes.
     static let accentTrack = Color(UIColor.adaptive(dark: "#2A3330", light: "#E4EAE8"))
 
