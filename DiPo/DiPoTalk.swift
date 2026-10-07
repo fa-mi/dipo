@@ -276,6 +276,7 @@ struct DiPoHomeStrip: View {
                         .foregroundStyle(AppTheme.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+            }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.leading, 14).padding(.trailing, 14 + BubbleShape.tail).padding(.vertical, 10)
             .dipoBubble(tail: .trailing)
