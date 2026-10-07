@@ -1,16 +1,16 @@
 import SwiftUI
+import AVFoundation
 
 // MARK: - DiPo talks
 //
-// Home's Smart Insights, said by DiPo in a comic speech bubble instead of
-// sitting in flat banners. One line at a time: unread notifications first (a
-// nudge to go and read them), then the insights, most urgent first. His mood
-// follows what he is saying — a hop for good news, a shiver and a sweat drop
-// for a warning.
+// On Home, DiPo stands at the top. His comic speech bubble appears only to
+// remind about unread notifications; tapping DiPo opens Ask DiPo.
 //
-// Free hears the top insight; the rest wait behind Royal, which also gets the
-// crown and "Ask DiPo". With no insight to give, he passes on a money tip of
-// the day, so the bubble is never empty.
+// In Ask DiPo he opens the conversation with the Smart Insights, most urgent
+// first, in place of the flat banners Home used to show. Free hears the top
+// insight; the rest wait behind Royal, which can also chat by text or voice
+// and wears the crown. With no insight to give, he passes on a money tip of
+// the day.
 //
 // The figures are the Smart Budget engine's own: DiPo only says them.
 
@@ -100,170 +100,149 @@ enum DiPoScript {
     }
 }
 
-// MARK: - The card
+// MARK: - DiPo's voice
 
-/// DiPo and his bubble, above the daily check-in.
-struct DiPoTalkCard: View {
-    let lines: [DiPoLine]
-    let isRoyal: Bool
-    var onAction: (DiPoLine.Action) -> Void
-    var onAsk: () -> Void
+/// DiPo saying his replies aloud, in the app's language.
+@MainActor
+final class DiPoVoice {
+    /// Suggested questions in Ask DiPo: `dipo.q.0` … `dipo.q.<count-1>`.
+    static let questionCount = 4
+    private let synth = AVSpeechSynthesizer()
 
-    @State private var index = 0
-    @State private var shown = 0
-    private let calm = UIAccessibility.isReduceMotionEnabled
-    private static let perCharacter = 0.025
-
-    private var current: DiPoLine? { lines.isEmpty ? nil : lines[min(index, lines.count - 1)] }
-    private var fullText: String { current?.text ?? "" }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            if let line = current {
-                bubble(line)
-                    .padding(.horizontal, 4)
-                    .zIndex(1)
-            }
-            HStack(alignment: .bottom, spacing: 0) {
-                DiPoDragonView(mood: current?.mood ?? .idle, line: current?.id ?? "",
-                               talkSeconds: calm ? 0 : Double(fullText.count) * Self.perCharacter,
-                               crowned: isRoyal)
-                    .frame(width: 150, height: 150)
-                Spacer(minLength: 8)
-                VStack(alignment: .trailing, spacing: 8) {
-                    if lines.count > 1 {
-                        Button {
-                            HapticManager.shared.tap()
-                            withAnimation(.spring(response: 0.3)) { index = (index + 1) % lines.count }
-                        } label: {
-                            HStack(spacing: 4) {
-                                Text(loc("dipo.next"))
-                                Image(systemName: "chevron.right")
-                            }
-                            .font(.system(.footnote, weight: .bold))
-                            .foregroundStyle(AppTheme.onVividFill)
-                            .padding(.horizontal, 14).padding(.vertical, 9)
-                            .background(AppTheme.accentFill, in: Capsule())
-                        }
-                        .buttonStyle(ScaleButtonStyle())
-                        Text(verbatim: "\(index + 1) / \(lines.count)")
-                            .font(.system(.caption2, weight: .semibold).monospacedDigit())
-                            .foregroundStyle(AppTheme.textSecondary)
-                    }
-                    if isRoyal {
-                        Button {
-                            HapticManager.shared.tap()
-                            onAsk()
-                        } label: {
-                            Label(loc("dipo.ask"), systemImage: "bubble.left.and.text.bubble.right")
-                                .font(.system(.footnote, weight: .bold))
-                                .foregroundStyle(AppTheme.accent)
-                                .padding(.horizontal, 12).padding(.vertical, 8)
-                                .overlay(Capsule().stroke(AppTheme.accent, lineWidth: 1.5))
-                        }
-                        .buttonStyle(ScaleButtonStyle())
-                    }
-                }
-                .padding(.bottom, 12)
-            }
-            .padding(.top, -14)
-        }
-        .onChange(of: lines.map(\.id)) { _, _ in index = 0; type() }
-        .onChange(of: index) { _, _ in type() }
-        .task { type() }
+    func speak(_ text: String) {
+        synth.stopSpeaking(at: .immediate)
+        // Dictation may have left the session recording; replies need playback.
+        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .spokenAudio, options: [.duckOthers])
+        try? AVAudioSession.sharedInstance().setActive(true)
+        let utterance = AVSpeechUtterance(string: text)
+        utterance.voice = AVSpeechSynthesisVoice(language: Self.voiceLanguage)
+        utterance.pitchMultiplier = 1.15
+        synth.speak(utterance)
     }
 
-    // MARK: Bubble
+    func stop() { synth.stopSpeaking(at: .immediate) }
 
-    private func bubble(_ line: DiPoLine) -> some View {
-        // A quick shake when he has a warning; still otherwise.
-        let shake: CGFloat = line.mood == .worry && !calm ? 6 : 0
-        return Button {
-            HapticManager.shared.tap()
-            onAction(line.action)
-        } label: {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(line.exclamation)
-                    .font(.system(size: 22, weight: .black, design: .rounded).italic())
-                    .foregroundStyle(tint(line.mood))
-                if !line.title.isEmpty {
-                    Text(line.title)
-                        .font(.system(.subheadline, weight: .heavy))
-                }
-                ZStack(alignment: .topLeading) {
-                    // The full text, hidden, holds the height so the bubble
-                    // does not grow line by line as it types.
-                    Text(line.text).opacity(0)
-                    Text(String(line.text.prefix(shown)))
-                }
-                .font(.system(.subheadline, weight: .semibold))
-                .fixedSize(horizontal: false, vertical: true)
-            }
-            .foregroundStyle(AppTheme.bubbleInk)
-            .multilineTextAlignment(.leading)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 14)
-            // Room for the tail, inside the shape's frame.
-            .padding(.bottom, BubbleShape.tail)
-            .background { BubbleShape().fill(AppTheme.bubbleInk).offset(x: 3, y: 4) }
-            .background { BubbleShape().fill(AppTheme.bubbleFill) }
-            .overlay { BubbleShape().stroke(AppTheme.bubbleInk, lineWidth: 2.5) }
-            .overlay(alignment: .topTrailing) { Halftone().frame(width: 70, height: 46).padding(6).allowsHitTesting(false) }
-        }
-        .buttonStyle(.plain)
-        .id(line.id)
-        .transition(.scale(scale: 0.85, anchor: .bottomLeading).combined(with: .opacity))
-        .keyframeAnimator(initialValue: CGFloat(0), trigger: line.id) { view, x in
-            view.offset(x: x)
-        } keyframes: { _ in
-            KeyframeTrack {
-                LinearKeyframe(-shake, duration: 0.06)
-                LinearKeyframe(shake, duration: 0.08)
-                LinearKeyframe(-shake * 0.7, duration: 0.08)
-                LinearKeyframe(shake * 0.5, duration: 0.08)
-                LinearKeyframe(0, duration: 0.08)
-            }
-        }
-        .accessibilityLabel([line.title, line.text].filter { !$0.isEmpty }.joined(separator: ". "))
-        .accessibilityHint(line.opens ? loc("dipo.a11y_open") : "")
+    static var voiceLanguage: String {
+        LanguageManager.shared.currentLocale.identifier.hasPrefix("id") ? "id-ID" : "en-US"
     }
 
-    private func tint(_ mood: DiPoMood) -> Color {
-        switch mood {
-        case .happy, .cheer: return AppTheme.accent
-        case .worry:         return AppTheme.red
-        case .info, .idle:   return AppTheme.blue
-        }
-    }
-
-    /// Types the current line out, a letter at a time.
-    private func type() {
-        let target = fullText
-        guard !calm else { shown = target.count; return }
-        shown = 0
-        Task { @MainActor in
-            for n in 1...max(1, target.count) {
-                try? await Task.sleep(for: .seconds(Self.perCharacter))
-                guard fullText == target else { return }
-                shown = n
-            }
-        }
+    /// Roughly how long the text takes to say, so DiPo nods for that long.
+    static func estimatedSeconds(_ text: String) -> Double {
+        min(20, max(1, Double(text.count) * 0.065))
     }
 }
 
-/// A rounded speech bubble with its tail at the bottom left, toward DiPo.
+// MARK: - Home: DiPo at the top
+
+/// DiPo under Home's header. A speech bubble reminds about unread
+/// notifications; otherwise a quiet invitation. Tapping DiPo opens Ask DiPo.
+struct DiPoHomeStrip: View {
+    let unread: Int
+    let isRoyal: Bool
+    var onAskDiPo: () -> Void
+    var onNotifications: () -> Void
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 0) {
+            DiPoDragonView(mood: unread > 0 ? .info : .idle, line: "home-\(unread)",
+                           crowned: isRoyal, onTap: onAskDiPo)
+                .frame(width: 96, height: 96)
+                .accessibilityAddTraits(.isButton)
+                .accessibilityHint(loc("dipo.a11y_ask"))
+            if unread > 0 {
+                Button {
+                    HapticManager.shared.tap()
+                    onNotifications()
+                } label: {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(loc("dipo.sfx.psst"))
+                            .font(.system(size: 18, weight: .black, design: .rounded).italic())
+                            .foregroundStyle(AppTheme.blue)
+                        Text(unread == 1 ? loc("dipo.unread_one")
+                                         : String(format: loc("dipo.unread_many"), unread))
+                            .font(.system(.footnote, weight: .semibold))
+                            .foregroundStyle(AppTheme.bubbleInk)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.leading, BubbleShape.tail + 10).padding(.trailing, 12).padding(.vertical, 10)
+                    .comicBubble(tail: true)
+                }
+                .buttonStyle(ScaleButtonStyle())
+                .transition(.scale(scale: 0.8, anchor: .leading).combined(with: .opacity))
+            } else {
+                Button {
+                    HapticManager.shared.tap()
+                    onAskDiPo()
+                } label: {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(loc("dipo.ask"))
+                            .font(.system(.subheadline, weight: .bold))
+                            .foregroundStyle(AppTheme.textPrimary)
+                        Text(loc("dipo.home_invite"))
+                            .font(.system(.caption))
+                            .foregroundStyle(AppTheme.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.leading, 4)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .animation(.spring(response: 0.35), value: unread)
+    }
+}
+
+// MARK: - Comic bubble
+
+extension View {
+    /// White paper, an ink outline and a hard ink shadow, like a manga panel.
+    /// With `tail`, a point on the leading edge toward DiPo.
+    func comicBubble(tail: Bool = false) -> some View {
+        let shape = BubbleShape(tail: tail)
+        return self
+            .background {
+                ZStack {
+                    shape.fill(AppTheme.bubbleInk).offset(x: 3, y: 4)
+                    shape.fill(AppTheme.bubbleFill)
+                }
+            }
+            .overlay { shape.stroke(AppTheme.bubbleInk, style: StrokeStyle(lineWidth: 2.5, lineJoin: .round)) }
+            .overlay(alignment: .topTrailing) {
+                Halftone().frame(width: 56, height: 36).padding(6).allowsHitTesting(false)
+            }
+    }
+}
+
+/// A rounded bubble drawn as one outline, so the tail joins the body without
+/// a seam. The tail, when there is one, takes the first `tail` points of the
+/// width on the leading edge.
 struct BubbleShape: Shape {
-    static let tail: CGFloat = 18
+    static let tail: CGFloat = 14
+    var tail = false
 
     func path(in rect: CGRect) -> Path {
-        let body = CGRect(x: rect.minX, y: rect.minY, width: rect.width, height: rect.height - Self.tail)
-        var p = Path(roundedRect: body, cornerRadius: 24, style: .continuous)
-        let x = rect.minX + min(110, rect.width * 0.3)
-        p.move(to: CGPoint(x: x, y: body.maxY - 1))
-        p.addQuadCurve(to: CGPoint(x: x - 18, y: rect.maxY),
-                       control: CGPoint(x: x - 2, y: body.maxY + 10))
-        p.addQuadCurve(to: CGPoint(x: x + 22, y: body.maxY - 1),
-                       control: CGPoint(x: x + 4, y: body.maxY + 8))
+        let inset: CGFloat = tail ? Self.tail : 0
+        let r = min(20, (rect.height) / 2)
+        let minX = rect.minX + inset, maxX = rect.maxX, minY = rect.minY, maxY = rect.maxY
+        var p = Path()
+        p.move(to: CGPoint(x: minX + r, y: minY))
+        p.addLine(to: CGPoint(x: maxX - r, y: minY))
+        p.addArc(center: CGPoint(x: maxX - r, y: minY + r), radius: r, startAngle: .degrees(-90), endAngle: .degrees(0), clockwise: false)
+        p.addLine(to: CGPoint(x: maxX, y: maxY - r))
+        p.addArc(center: CGPoint(x: maxX - r, y: maxY - r), radius: r, startAngle: .degrees(0), endAngle: .degrees(90), clockwise: false)
+        p.addLine(to: CGPoint(x: minX + r, y: maxY))
+        p.addArc(center: CGPoint(x: minX + r, y: maxY - r), radius: r, startAngle: .degrees(90), endAngle: .degrees(180), clockwise: false)
+        if tail {
+            let mid = rect.midY
+            p.addLine(to: CGPoint(x: minX, y: mid + 9))
+            p.addQuadCurve(to: CGPoint(x: rect.minX, y: mid + 4), control: CGPoint(x: minX - 4, y: mid + 8))
+            p.addQuadCurve(to: CGPoint(x: minX, y: mid - 7), control: CGPoint(x: minX - 6, y: mid - 2))
+        }
+        p.addLine(to: CGPoint(x: minX, y: minY + r))
+        p.addArc(center: CGPoint(x: minX + r, y: minY + r), radius: r, startAngle: .degrees(180), endAngle: .degrees(270), clockwise: false)
+        p.closeSubpath()
         return p
     }
 }
@@ -278,8 +257,7 @@ private struct Halftone: View {
                 var x: CGFloat = 0
                 while x < size.width {
                     // Denser toward the top right corner.
-                    let k = (x / size.width) * (1 - y / size.height)
-                    let r = 1.6 * k
+                    let r = 1.6 * (x / size.width) * (1 - y / size.height)
                     if r > 0.3 {
                         ctx.fill(Path(ellipseIn: CGRect(x: x - r, y: y - r, width: r * 2, height: r * 2)),
                                  with: .color(AppTheme.bubbleInk.opacity(0.18)))

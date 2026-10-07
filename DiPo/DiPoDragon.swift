@@ -269,10 +269,12 @@ struct DiPoDragonView: View {
     var talkSeconds: Double = 0
     /// The Royal crown.
     var crowned = false
+    /// Called after his hop when he is tapped, e.g. to open Ask DiPo.
+    var onTap: (() -> Void)? = nil
 
     var body: some View {
         DiPoDragonScene(interactive: interactive, mood: mood, line: line,
-                        talkSeconds: talkSeconds, crowned: crowned)
+                        talkSeconds: talkSeconds, crowned: crowned, onTap: onTap)
     }
 }
 
@@ -282,14 +284,18 @@ private struct DiPoDragonScene: UIViewRepresentable {
     var line: String
     var talkSeconds: Double
     var crowned: Bool
+    var onTap: (() -> Void)?
 
     func makeCoordinator() -> Coordinator { Coordinator(rig: DiPoDragonRig()) }
 
     func makeUIView(context: Context) -> UIView {
         let rig = context.coordinator.rig
+        context.coordinator.onTap = onTap
         guard rig.hasModel else {
             let image = UIImageView(image: UIImage(named: "DiPoMascot"))
             image.contentMode = .scaleAspectFit
+            image.isUserInteractionEnabled = true
+            image.addGestureRecognizer(UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.tapped)))
             return image
         }
         let view = SCNView()
@@ -310,6 +316,7 @@ private struct DiPoDragonScene: UIViewRepresentable {
 
     func updateUIView(_ view: UIView, context: Context) {
         let c = context.coordinator
+        c.onTap = onTap
         c.rig.setCrowned(crowned)
         guard line != c.lastLine else { return }
         c.lastLine = line
@@ -321,12 +328,14 @@ private struct DiPoDragonScene: UIViewRepresentable {
     final class Coordinator: NSObject {
         let rig: DiPoDragonRig
         var lastLine = ""
+        var onTap: (() -> Void)?
         private var lastX: CGFloat = 0
         init(rig: DiPoDragonRig) { self.rig = rig }
 
         @objc func tapped() {
             HapticManager.shared.tap()
             rig.bounce()
+            onTap?()
         }
 
         @objc func dragged(_ g: UIPanGestureRecognizer) {

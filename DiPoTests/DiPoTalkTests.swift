@@ -56,13 +56,21 @@ final class DiPoTalkTests: XCTestCase {
     func testEveryTipAndLineExistsInBothLanguages() {
         var keys = ["dipo.sfx.happy", "dipo.sfx.worry", "dipo.sfx.cheer", "dipo.sfx.info", "dipo.sfx.psst",
                     "dipo.sfx.tip", "dipo.sfx.tomorrow", "dipo.unread_one", "dipo.unread_many",
-                    "dipo.locked", "dipo.next", "dipo.ask", "dipo.a11y_open"]
+                    "dipo.locked", "dipo.next", "dipo.ask", "dipo.a11y_open", "dipo.a11y_ask",
+                    "dipo.home_invite", "dipo.speak_on", "dipo.speak_off"]
+        keys += (0..<DiPoVoice.questionCount).map { "dipo.q.\($0)" }
         keys += (0..<DiPoScript.tipCount).map { "dipo.tip.\($0)" }
         for lang in LanguageManager.Language.allCases {
             LanguageManager.shared.withLanguage(lang) {
                 for k in keys { XCTAssertNotEqual(loc(k), k, "\(k) in \(lang)") }
             }
         }
+    }
+
+    func testSpeakingTimeIsBounded() {
+        XCTAssertEqual(DiPoVoice.estimatedSeconds(""), 1)
+        XCTAssertEqual(DiPoVoice.estimatedSeconds(String(repeating: "a", count: 10_000)), 20)
+        XCTAssertGreaterThan(DiPoVoice.estimatedSeconds(String(repeating: "a", count: 100)), 1)
     }
 
     func testRigMoodsDoNotBreakIt() {
