@@ -404,18 +404,9 @@ struct HomeView: View {
         // them when Ask DiPo opens (DiPoTalk.swift, AIChatView).
         // A declared schedule is a certainty; the detected pattern below is a
         // guess. Certainty outranks guess.
-        // A bill falling due is no longer a banner: DiPo says it in his bubble
-        // at the top (DiPoNudge), and two cards saying the same was noise.
-        // Payday is status, not a task — it ranks below anything asking for a
-        // decision. Inside the last three days DiPo says it instead.
-        if let salary = nearestSalary,
-           SalaryDateEngine.daysUntilPay(dayOfMonth: salary.dayOfMonth) > DiPoNudge.window {
-            items.append(.init(id: "payday", rank: 5, view: AnyView(
-                Button { HapticManager.shared.tap(); vm.open(PlanRoute.salary) } label: {
-                    SalaryReminderBanner(schedule: salary, tappable: true)
-                }
-                .buttonStyle(ScaleButtonStyle()))))
-        }
+        // A bill falling due and payday are no longer banners: DiPo says them
+        // in his bubble at the top (DiPoNudge) — two cards saying the same was
+        // noise, and payday sixteen days away is not news.
         if let next = cachedRecurring.first(where: { $0.isDueSoon }) {
             items.append(.init(id: "recurring", rank: 6, view: AnyView(
                 RecurringReminderBanner(pattern: next,
@@ -453,15 +444,19 @@ struct HomeView: View {
                     // DiPo at the top, in his own frame: reminds about unread
                     // notifications, a bill falling due and payday, and opens
                     // Ask DiPo when tapped.
-                    DiPoHomeStrip(nudges: dipoNudges,
-                                  onAskDiPo: { showAskDiPo = true },
-                                  onNudge: { action in
-                                      switch action {
-                                      case .notifications: showNotifications = true
-                                      case .bills:         vm.open(PlanRoute.bills)
-                                      case .salary:        vm.open(PlanRoute.salary)
-                                      }
-                                  })
+                    DiPoHomeSection(unread: NotificationManager.shared.unreadCount,
+                                    bill: dipoBill,
+                                    daysToPayday: nearestSalary.map { SalaryDateEngine.daysUntilPay(dayOfMonth: $0.dayOfMonth) },
+                                    payDate: nearestSalary.map { SalaryDateEngine.nextPayDate(dayOfMonth: $0.dayOfMonth) },
+                                    onAskDiPo: { showAskDiPo = true },
+                                    onAction: { action in
+                                        switch action {
+                                        case .notifications: showNotifications = true
+                                        case .bills:         vm.open(PlanRoute.bills)
+                                        case .salary:        vm.open(PlanRoute.salary)
+                                        case .checkIn:       break   // answered inside DiPo's section
+                                        }
+                                    })
                         .padding(.horizontal, 22)
                         .padding(.top, 12)
                         .opacity(headerAppeared ? 1 : 0)
@@ -590,11 +585,6 @@ struct HomeView: View {
                             .opacity(contentAppeared ? 1 : 0)
                             .offset(y: contentAppeared ? 0 : 20)
                             .animation(AppMotion.appear, value: contentAppeared)
-
-                        // Above the list it is about, and only ever one line
-                        // unless it has a question to ask.
-                        DailyCheckInCard()
-                            .padding(.horizontal, 22).padding(.top, 18)
 
                         TransactionSection(
                             transactions: selectedCardTransactions,
@@ -738,19 +728,14 @@ struct HomeView: View {
     /// Royal can chat with DiPo; Free hears his top insight.
     private var dipoIsRoyal: Bool { premiumMgr.canAccess(.aiAdvisor) }
 
-    private var dipoNudges: [DiPoNudge] {
-        let salary = nearestSalary
-        let bill = upcomingDeclaredRecurring.map {
+    /// The bill DiPo mentions, when one falls due within three days.
+    private var dipoBill: DiPoNudge.Bill? {
+        upcomingDeclaredRecurring.map {
             DiPoNudge.Bill(label: $0.label,
                            amount: CurrencyManager.shared.formatted($0.amount, currency: $0.currency),
                            daysLeft: RecurringDateEngine.daysUntil(dayOfMonth: $0.dayOfMonth),
                            autoRecord: $0.autoRecord)
         }
-        return DiPoNudge.all(
-            unread: NotificationManager.shared.unreadCount,
-            bill: bill,
-            daysToPayday: salary.map { SalaryDateEngine.daysUntilPay(dayOfMonth: $0.dayOfMonth) },
-            payDate: salary.map { SalaryDateEngine.nextPayDate(dayOfMonth: $0.dayOfMonth) })
     }
 
     /// Route handler for `SmartInsight.action`. Each kind opens the matching

@@ -136,7 +136,7 @@ final class DiPoVoice {
 
 /// Something DiPo's bubble on Home reminds about.
 struct DiPoNudge: Equatable, Identifiable {
-    enum Action: Equatable { case notifications, bills, salary }
+    enum Action: Equatable { case notifications, checkIn, bills, salary }
     let id: String
     let mood: DiPoMood
     let exclamation: String
@@ -159,12 +159,17 @@ struct DiPoNudge: Equatable, Identifiable {
     /// Everything worth a reminder, most pressing first: unread notifications,
     /// then a bill falling due within three days, then payday from three days
     /// out. Empty means DiPo just invites a question.
-    static func all(unread: Int, bill: Bill?, daysToPayday: Int?, payDate: Date?) -> [DiPoNudge] {
+    static func all(unread: Int, checkIn: Bool = false, bill: Bill?, daysToPayday: Int?, payDate: Date?) -> [DiPoNudge] {
         var out: [DiPoNudge] = []
         if unread > 0 {
             out.append(DiPoNudge(id: "unread-\(unread)", mood: .info, exclamation: loc("dipo.sfx.psst"),
                                  text: unread == 1 ? loc("dipo.unread_one") : String(format: loc("dipo.unread_many"), unread),
                                  action: .notifications, link: loc("dipo.link.notifications")))
+        }
+        // The evening check-in: nothing logged today yet.
+        if checkIn {
+            out.append(DiPoNudge(id: "checkin", mood: .info, exclamation: loc("checkin.ask_title"),
+                                 text: loc("checkin.ask_body"), action: .checkIn, link: loc("dipo.link.checkin")))
         }
         if let bill, bill.daysLeft >= 0, bill.daysLeft <= window {
             let when: String
@@ -213,6 +218,10 @@ struct DiPoNudge: Equatable, Identifiable {
 /// DiPo opens Ask DiPo.
 struct DiPoHomeStrip: View {
     let nudges: [DiPoNudge]
+    /// Today in a few words ("Today is logged"), when there is no reminder.
+    var status: String? = nil
+    /// Days in a row accounted for; shown from two.
+    var streak: Int = 0
     var onAskDiPo: () -> Void
     var onNudge: (DiPoNudge.Action) -> Void
 
@@ -255,13 +264,22 @@ struct DiPoHomeStrip: View {
                         .padding(.top, 3)
                         .padding(.trailing, nudges.count > 1 ? 44 : 0)
                 } else {
-                    Text(loc("dipo.ask"))
+                    Text(status ?? loc("dipo.ask"))
                         .font(.system(.subheadline, weight: .bold))
                         .foregroundStyle(AppTheme.textPrimary)
                     Text(loc("dipo.home_invite"))
                         .font(.system(.caption))
                         .foregroundStyle(AppTheme.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
+                }
+                // Two days is the shortest run that means anything.
+                if streak >= 2 {
+                    Label(String(format: loc("checkin.streak"), streak), systemImage: "flame.fill")
+                        .font(.system(.caption2, weight: .bold))
+                        .foregroundStyle(AppTheme.orange)
+                        .padding(.horizontal, 8).padding(.vertical, 3)
+                        .background(AppTheme.orange.opacity(0.13), in: Capsule())
+                        .padding(.top, 5)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)

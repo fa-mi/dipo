@@ -101,33 +101,45 @@ final class RunGame {
     /// How long the "tap to jump" hint shows at the start of a run.
     static let hintSeconds = 3.0
 
-    private(set) var dipoY: Double = 0          // height above the ground
-    private(set) var vy: Double = 0
-    private var jumpsLeft = 2
-    private(set) var entities: [RunEntity] = []
-    private(set) var popups: [RunPopup] = []
-    private(set) var dust: [RunDust] = []
+    // Everything that moves every frame is left out of observation. The
+    // canvas redraws each frame anyway, from TimelineView; observing these
+    // made every frame invalidate the screen around it as well — the HUD,
+    // its glass, the hint — which is where the stutter on a jump or a coin
+    // came from. Only what the HUD and the cards show is observed, and that
+    // changes a few times a run, not sixty times a second.
+    @ObservationIgnored private(set) var dipoY: Double = 0          // height above the ground
+    @ObservationIgnored private(set) var vy: Double = 0
+    @ObservationIgnored private var jumpsLeft = 2
+    @ObservationIgnored private(set) var entities: [RunEntity] = []
+    @ObservationIgnored private(set) var popups: [RunPopup] = []
+    @ObservationIgnored private(set) var dust: [RunDust] = []
     private(set) var coins = 0
     private(set) var lives: Int
     private(set) var shielded = false
-    private(set) var speed: Double = RunGame.startSpeed
-    private(set) var elapsed: Double = 0
+    @ObservationIgnored private(set) var speed: Double = RunGame.startSpeed
+    @ObservationIgnored private(set) var elapsed: Double = 0
     /// Distance run, for the scenery to scroll by.
-    private(set) var distance: Double = 0
+    @ObservationIgnored private(set) var distance: Double = 0
     private(set) var running = false
     private(set) var over = false
     private(set) var lastTrap: RunTrap? = nil
     /// Seconds of blinking after a hit, while another hit cannot land.
-    private(set) var invulnerable: Double = 0
+    @ObservationIgnored private(set) var invulnerable: Double = 0
     /// Seconds left of the red flash and the screen shake after a hit.
-    private(set) var flash: Double = 0
-    private(set) var shake: Double = 0
+    @ObservationIgnored private(set) var flash: Double = 0
+    @ObservationIgnored private(set) var shake: Double = 0
     /// Seconds left of the squash after landing.
-    private(set) var landing: Double = 0
+    @ObservationIgnored private(set) var landing: Double = 0
+    /// Whether the "tap to jump" hint shows: stored, and set only when it
+    /// flips, so the screen hears about it twice a run rather than every frame.
+    private(set) var showsHint = false
 
-    private var nextSpawn: Double = 1.1
-    private var nextID = 0
-    private var rng: SplitMix
+    @ObservationIgnored private var nextSpawn: Double = 1.1
+    @ObservationIgnored private var nextID = 0
+    @ObservationIgnored private var rng: SplitMix
+    /// The frame time last stepped from; kept here, not in the view's state,
+    /// so a new frame does not invalidate the view.
+    @ObservationIgnored private var lastTick: Date? = nil
     let startingLives: Int
 
     init(bonusLife: Bool, seed: UInt64 = UInt64.random(in: 1...UInt64.max)) {
@@ -137,7 +149,6 @@ final class RunGame {
     }
 
     var saved: Int { coins * Self.coinValue }
-    var showsHint: Bool { running && elapsed < Self.hintSeconds }
 
     func resize(width: Double) { self.width = max(240, width) }
 
@@ -145,6 +156,19 @@ final class RunGame {
         guard !running else { return }
         running = true
         over = false
+        lastTick = nil
+        updateHint()
+    }
+
+    /// Steps the world to the frame at `now`.
+    func tick(_ now: Date) {
+        if let last = lastTick { step(now.timeIntervalSince(last)) }
+        lastTick = running ? now : nil
+    }
+
+    private func updateHint() {
+        let shows = running && elapsed < Self.hintSeconds
+        if shows != showsHint { showsHint = shows }
     }
 
     func restart() {
@@ -153,7 +177,8 @@ final class RunGame {
         coins = 0; lives = startingLives; shielded = false
         speed = Self.startSpeed; elapsed = 0; distance = 0; nextSpawn = 1.1
         lastTrap = nil; invulnerable = 0; flash = 0; shake = 0; landing = 0
-        over = false; running = true
+        over = false; running = true; lastTick = nil
+        updateHint()
     }
 
     func jump() {
@@ -201,6 +226,7 @@ final class RunGame {
         if nextSpawn <= 0 { spawn() }
 
         collide()
+        updateHint()
     }
 
     /// Puts an entity in the world directly; used by tests to stage a moment.
@@ -324,7 +350,6 @@ struct DiPoRunGameView: View {
     @Query private var todays: [TxRecord]
     @AppStorage("game_best_saved") private var best = 0
     @State private var game: RunGame
-    @State private var lastTick: Date? = nil
     @State private var showPaywall = false
     @State private var playsLeft: Int?
     @State private var counted = false
@@ -346,17 +371,14 @@ struct DiPoRunGameView: View {
         ZStack {
             AppTheme.gameSkyTop.ignoresSafeArea()
             GeometryReader { geo in
-                TimelineView(.animation) { timeline in
+                // Paused between runs: the start and finish cards sit on a still frame.
+                TimelineView(.animation(minimumInterval: nil, paused: !game.running)) { timeline in
                     Canvas { ctx, size in
                         RunScene(game: game, dark: scheme == .dark,
                                  time: timeline.date.timeIntervalSinceReferenceDate)
                             .draw(&ctx, size: size)
                     }
-                    .onChange(of: timeline.date) { _, now in
-                        if let last = lastTick { game.step(now.timeIntervalSince(last)) }
-                        lastTick = now
-                        if game.over, !counted { finish() }
-                    }
+                    .onChange(of: timeline.date) { _, now in game.tick(now) }
                 }
                 .onAppear { game.resize(width: geo.size.width) }
                 .onChange(of: geo.size.width) { _, w in game.resize(width: w) }
@@ -377,7 +399,7 @@ struct DiPoRunGameView: View {
                         .font(.system(.subheadline, weight: .semibold))
                         .foregroundStyle(AppTheme.textPrimary)
                         .padding(.horizontal, 16).padding(.vertical, 10)
-                        .background(.ultraThinMaterial, in: Capsule())
+                        .background(hudFill, in: Capsule())
                         .padding(.bottom, 48)
                         .transition(.opacity)
                         .allowsHitTesting(false)
@@ -397,6 +419,9 @@ struct DiPoRunGameView: View {
         .onAppear {
             if bonusLife { game = RunGame(bonusLife: true) }
         }
+        .onChange(of: game.over) { _, over in
+            if over, !counted { finish() }
+        }
     }
 
     private func tap() {
@@ -411,13 +436,11 @@ struct DiPoRunGameView: View {
         HapticManager.shared.tap()
         counted = false
         newBest = false
-        lastTick = nil
         if game.over { game.restart() } else { game.start() }
     }
 
     private func finish() {
         counted = true
-        lastTick = nil
         HapticManager.shared.error()
         newBest = game.saved > best
         best = max(best, game.saved)
@@ -431,6 +454,10 @@ struct DiPoRunGameView: View {
 
     // MARK: HUD
 
+    /// Solid rather than glass: a blur over a canvas that redraws every frame
+    /// is recomputed every frame, and the HUD sits over it the whole run.
+    private var hudFill: Color { AppTheme.cardDark.opacity(0.88) }
+
     private var hud: some View {
         HStack(spacing: 8) {
             Button { dismiss() } label: {
@@ -438,7 +465,7 @@ struct DiPoRunGameView: View {
                     .font(.system(.subheadline, weight: .semibold))
                     .foregroundStyle(AppTheme.textPrimary)
                     .frame(width: 36, height: 36)
-                    .background(.ultraThinMaterial, in: Circle())
+                    .background(hudFill, in: Circle())
             }
             .accessibilityLabel(loc("game.close"))
             HStack(spacing: 3) {
@@ -455,7 +482,7 @@ struct DiPoRunGameView: View {
             }
             .font(.system(.footnote, weight: .semibold))
             .padding(.horizontal, 11).padding(.vertical, 9)
-            .background(.ultraThinMaterial, in: Capsule())
+            .background(hudFill, in: Capsule())
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(String(format: loc("game.lives"), game.lives))
             Spacer()
@@ -467,7 +494,7 @@ struct DiPoRunGameView: View {
                     .contentTransition(.numericText())
             }
             .padding(.horizontal, 12).padding(.vertical, 8)
-            .background(.ultraThinMaterial, in: Capsule())
+            .background(hudFill, in: Capsule())
         }
         .padding(.horizontal, 14).padding(.top, 8)
         .animation(.spring(response: 0.3), value: game.coins)
@@ -761,7 +788,9 @@ private struct RunScene {
             dc.translateBy(x: centre.x, y: centre.y)
             dc.rotate(by: .radians(tilt))
             dc.scaleBy(x: 1 / sqrt(squash), y: squash)
-            dc.draw(Image("DiPoMascot"), in: CGRect(x: -ds / 2, y: -ds, width: ds, height: ds))
+            // DiPo in 3D, seen from the side and running right — rendered from
+            // the same model as the DiPo on Home, small enough to draw cheaply.
+            dc.draw(Image("DiPoRunner"), in: CGRect(x: -ds / 2, y: -ds, width: ds, height: ds))
         }
 
         // Floating words
@@ -778,11 +807,10 @@ private struct RunScene {
             let at = CGPoint(x: p.x, y: ground - p.y - p.age * 50)
             var tc = c
             tc.opacity = a
-            let halo = tc.resolve(Text(text).font(.system(size: 15, weight: .heavy))
-                .foregroundStyle(dark ? Color.black.opacity(0.55) : Color.white.opacity(0.9)))
-            for (ox, oy) in [(-1.5, 0.0), (1.5, 0), (0, -1.5), (0, 1.5)] {
-                tc.draw(halo, at: CGPoint(x: at.x + ox, y: at.y + oy))
-            }
+            // One drop shadow instead of a four-way halo: a fifth of the text work.
+            tc.draw(Text(text).font(.system(size: 15, weight: .heavy))
+                .foregroundStyle(dark ? Color.black.opacity(0.6) : Color.white.opacity(0.95)),
+                    at: CGPoint(x: at.x, y: at.y + 1.5))
             tc.draw(Text(text).font(.system(size: 15, weight: .heavy)).foregroundStyle(color), at: at)
         }
 
@@ -866,6 +894,15 @@ private struct RunScene {
         c.draw(symbol, in: CGRect(x: centre.x - 9, y: centre.y - 10, width: 18, height: 20))
     }
 
+    /// Label sizes, measured once per trap rather than every frame.
+    private static var labelSizes: [String: CGSize] = [:]
+    private static func labelSize(_ trap: RunTrap, _ label: GraphicsContext.ResolvedText) -> CGSize {
+        if let size = labelSizes[trap.label] { return size }
+        let size = label.measure(in: CGSize(width: 200, height: 40))
+        labelSizes[trap.label] = size
+        return size
+    }
+
     private func trap(_ c: inout GraphicsContext, rect: CGRect, trap: RunTrap, ground: Double) {
         let board = CGRect(x: rect.minX, y: rect.minY, width: rect.width, height: 46)
         // Post and its shadow
@@ -881,7 +918,7 @@ private struct RunScene {
         c.draw(symbol, in: CGRect(x: board.midX - 11, y: board.midY - 10, width: 22, height: 20))
         // Name above, on a small pill
         let label = c.resolve(Text(trap.label).font(.system(size: 11, weight: .semibold)).foregroundStyle(trap.color))
-        let size = label.measure(in: CGSize(width: 200, height: 40))
+        let size = Self.labelSize(trap, label)
         let pill = CGRect(x: board.midX - size.width / 2 - 7, y: board.minY - 24, width: size.width + 14, height: 19)
         c.fill(Path(roundedRect: pill, cornerRadius: 9.5), with: .color(AppTheme.cardDark.opacity(0.94)))
         c.draw(label, at: CGPoint(x: pill.midX, y: pill.midY))

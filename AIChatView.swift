@@ -53,6 +53,10 @@ final class AIChatViewModel {
     var isLoading = false
     /// Remaining monthly AI credits. nil until first load.
     var creditsLeft: Int? = nil
+    /// The plan the server sees. "free" here while the app shows Royal means
+    /// the server could not read the subscription — a grant of 0, not credits
+    /// spent — and the user is told that instead of "used up".
+    var serverPlan: String? = nil
 
     private let chatURL    = "https://dipo-receipt-scanner.fahmi-aquinas.workers.dev/api/chat"
     private let creditsURL = "https://dipo-receipt-scanner.fahmi-aquinas.workers.dev/api/credits"
@@ -95,6 +99,9 @@ final class AIChatViewModel {
     }
     private struct CreditsResponse: Decodable {
         let balance: Int
+        /// The plan the server read from RevenueCat, and that plan's grant.
+        let plan: String?
+        let monthlyGrant: Int?
     }
 
     // ── Credit balance ────────────────────────────────────────────────────
@@ -107,6 +114,7 @@ final class AIChatViewModel {
                                 headers: await WorkerAuth.headers(), body: body)
         if let resp: CreditsResponse = try? await NetworkService.shared.fetch(endpoint) {
             creditsLeft = resp.balance
+            serverPlan = resp.plan
         }
     }
 
@@ -314,6 +322,9 @@ struct AIChatView: View {
     @State private var dipoMood: DiPoMood = .idle
     @State private var dipoLine = ""
     @State private var dipoTalk: Double = 0
+    /// What DiPo says in the bubble beside him in the header: the greeting,
+    /// then a short word after each turn. The chat below keeps the answers.
+    @State private var dipoSays = loc("ai.greeting")
     @State private var dipoVoice = DiPoVoice()
     /// Speak every reply aloud. Off by default; a question asked by voice is
     /// always answered by voice too.
@@ -324,12 +335,13 @@ struct AIChatView: View {
 
     @State private var voice = VoiceDictation()
     @State private var voiceNotice: String? = nil
-    @State private var showCardPicker = false
-
-    /// Card new transactions are written to. Defaults to the first card.
-    private var targetCard: BankCard? {
-        if let id = selectedCardID { return cards.first { $0.id == id } }
-        return cards.first
+    /// The transaction being checked before it is saved, and the message
+    /// it came from.
+    @State private var confirming: PendingTx? = nil
+    private struct PendingTx: Identifiable {
+        let tx: AIParsedTx
+        let messageID: UUID
+        var id: UUID { tx.id }
     }
 
     var body: some View {
@@ -339,20 +351,18 @@ struct AIChatView: View {
             if cards.isEmpty {
                 noCardState
             } else {
-                cardPickerBar
-                Divider().overlay(AppTheme.cardMid)
                 chatScroll
                 inputBar
             }
         }
         .background(AppTheme.bg)
         .task {
+            let fresh = vm.messages.isEmpty
             await vm.loadCredits()
             if selectedCardID == nil { selectedCardID = cards.first?.id }
-            // Friendly opening message, then what DiPo has noticed.
+            // The greeting is DiPo's own bubble in the header now; the chat
+            // opens with what he has noticed.
             if vm.messages.isEmpty {
-                vm.messages.append(AIChatMessage(role: .assistant,
-                    text: loc("ai.greeting")))
                 if !insights.isEmpty {
                     for line in DiPoScript.lines(unread: 0, insights: insights, isRoyal: isRoyal) {
                         let head = [line.exclamation, line.title].filter { !$0.isEmpty }.joined(separator: " ")
@@ -375,7 +385,7 @@ struct AIChatView: View {
                 inputFocused = false
                 submit(byVoice: true)
             }
-            if let initialMessage, !initialMessage.isEmpty, vm.messages.isEmpty {
+            if let initialMessage, !initialMessage.isEmpty, fresh {
                 vm.input = initialMessage
                 askedByVoice = true
                 let snapshot = buildFinancialContext()
@@ -406,6 +416,9 @@ struct AIChatView: View {
             guard vm.messages.count > openingCount,
                   let last = vm.messages.last, last.role == .assistant else { return }
             dipoMood = last.isError ? .worry : .happy
+            dipoSays = last.isError ? loc("ai.bubble.oops")
+                : last.transactions.isEmpty ? loc("ai.bubble.more")
+                : loc("ai.bubble.check")
             let spoken = askedByVoice || speakAlways
             dipoTalk = spoken ? DiPoVoice.estimatedSeconds(last.text) : 1.2
             dipoLine = last.id.uuidString
@@ -428,12 +441,17 @@ struct AIChatView: View {
                 .presentationDetents([.large]).presentationDragIndicator(.visible)
                 .presentationBackground(AppTheme.bg).preferredColorScheme(appColorScheme())
         }
-        .sheet(isPresented: $showCardPicker) {
-            cardPickerSheet
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
-                .presentationBackground(AppTheme.bg)
-                .preferredColorScheme(appColorScheme())
+        // Every entry DiPo understood is checked here before it is saved,
+        // and this is where the card is chosen.
+        .sheet(item: $confirming) { pending in
+            AIConfirmTxSheet(tx: pending.tx, cards: cards, preferredCardID: selectedCardID) { edited, card in
+                selectedCardID = card.id
+                addTransaction(edited, to: card, replacing: pending.tx.id, in: pending.messageID)
+            }
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+            .presentationBackground(AppTheme.bg)
+            .preferredColorScheme(appColorScheme())
         }
         .trackScreen(.askDiPo)
     }
@@ -469,8 +487,13 @@ struct AIChatView: View {
             .padding(.top, 16)
 
             DiPoFrame(size: nil, cornerRadius: 28) {
-                DiPoDragonView(mood: dipoMood, line: dipoLine, talkSeconds: dipoTalk)
-                    .frame(width: 150, height: 150)
+                HStack(spacing: 2) {
+                    DiPoDragonView(mood: dipoMood, line: dipoLine, talkSeconds: dipoTalk)
+                        .frame(width: 140, height: 140)
+                    headerBubble
+                        .padding(.trailing, 14)
+                        .padding(.bottom, 12)   // clear of the game button on the edge
+                }
             }
             .frame(height: 168)
             .padding(.horizontal, 18)
@@ -505,105 +528,31 @@ struct AIChatView: View {
         }
     }
 
-    // MARK: Card picker
-
-    /// Short, human-readable label for a card — "Holder ·· 1234".
-    /// A credit card has no "balance" in the cash sense. Running
-    /// `computedBalance()` on one applies the cash formula (seed + transactions)
-    /// to a liability account and prints a meaningless figure — which is how a
-    /// credit card came to advertise "Rp 1jt" that was neither a balance nor a
-    /// limit. What matters when choosing a credit card as the destination is
-    /// how much room is left on it.
-    private func subtitle(for card: BankCard) -> String {
-        let cm = CurrencyManager.shared
-        if card.isCreditCard {
-            return String(format: loc("cc.available_short"),
-                          cm.formatted(card.availableCredit(installments),
-                                       currency: card.resolvedCurrency))
-        }
-        return cm.formatted(card.computedBalance(), currency: card.resolvedCurrency)
+    /// DiPo talking to the user, manga-style: a bubble whose tail points at
+    /// him. It changes as the chat goes — thinking while a reply is on its
+    /// way, a word after it, and the credit news when there is nothing left.
+    private var bubbleText: String {
+        if vm.isLoading { return loc("ai.thinking") }
+        if planNotRecognized { return loc("ai.credits_plan_unread") }
+        if outOfCredits { return String(format: loc("ai.credits_out"), creditsReturn) }
+        return dipoSays
     }
 
-    private func cardLabel(_ card: BankCard) -> String {
-        let last4 = String(card.cardNumber.filter(\.isNumber).suffix(4))
-        let name  = card.isDigitalWallet && !card.walletProvider.isEmpty
-            ? card.walletProvider
-            : card.holderName
-        if name.isEmpty { return last4.isEmpty ? loc("ai.add_to") : "•• \(last4)" }
-        return last4.isEmpty ? name : "\(name) ·· \(last4)"
-    }
-
-    /// Lets the user choose which card AI-confirmed transactions land in.
-    /// Defaults to the first card; shown as a tappable menu so it stays
-    /// compact even with many cards.
-    private var cardPickerBar: some View {
-        Button {
-            guard cards.count > 1 else { return }
-            HapticManager.shared.tap()
-            showCardPicker = true
-        } label: {
-            HStack(spacing: 9) {
-                // The card's own colour, so the destination is recognisable at a
-                // glance rather than by reading four digits.
-                RoundedRectangle(cornerRadius: 4)
-                    .fill(targetCard.map { LinearGradient(colors: [Color(hex: $0.gradientStart),
-                                                                   Color(hex: $0.gradientEnd)],
-                                                          startPoint: .topLeading,
-                                                          endPoint: .bottomTrailing) }
-                          ?? LinearGradient(colors: [AppTheme.cardMid, AppTheme.cardMid],
-                                            startPoint: .top, endPoint: .bottom))
-                    .frame(width: 26, height: 17)
-                Text(loc("ai.add_to"))
-                    .font(.system(.caption))
-                    .foregroundStyle(AppTheme.textSecondary)
-                Text(targetCard.map(cardLabel) ?? "—")
-                    .font(.system(.caption, weight: .semibold))
-                    .foregroundStyle(AppTheme.textPrimary)
-                    .lineLimit(1)
-                if cards.count > 1 {
-                    Image(systemName: "chevron.down")
-                        .font(.system(.caption2, weight: .bold)).imageScale(.small)
-                        .foregroundStyle(AppTheme.textSecondary)
-                }
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, 18)
-            .padding(.vertical, 10)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .disabled(cards.count <= 1)
-    }
-
-    /// Card chooser. The system Menu showed a bare list of names with no way to
-    /// tell an e-wallet from a bank account or to see what is in either.
-    private var cardPickerSheet: some View {
-        NavigationStack {
-            ZStack {
-                AppTheme.bg.ignoresSafeArea()
-                ScrollView(showsIndicators: false) {
-                    VStack(spacing: 10) {
-                        ForEach(cards) { card in
-                            Button {
-                                HapticManager.shared.tap()
-                                selectedCardID = card.id
-                                showCardPicker = false
-                            } label: {
-                                CardListRow(card: card,
-                                            selected: selectedCardID == card.id,
-                                            showsRadio: false)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                    .padding(.horizontal, 22).padding(.top, 12)
-                    .containerRelativeFrame(.horizontal)
-                }
-            }
-            .navigationTitle(loc("ai.add_to"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(AppTheme.bg, for: .navigationBar)
-        }
+    private var headerBubble: some View {
+        Text(bubbleText)
+            .font(.system(.subheadline))
+            .lineSpacing(1)
+            .foregroundStyle(AppTheme.textPrimary)
+            .lineLimit(6)
+            .minimumScaleFactor(0.8)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.leading, 13 + BubbleShape.tail).padding(.trailing, 13).padding(.vertical, 10)
+            .dipoBubble(tail: .leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .id(bubbleText)
+            .transition(.scale(scale: 0.92, anchor: .leading).combined(with: .opacity))
+            .animation(.spring(response: 0.35, dampingFraction: 0.8), value: bubbleText)
+            .accessibilityLabel(bubbleText)
     }
 
     // MARK: Chat scroll
@@ -701,7 +650,8 @@ struct AIChatView: View {
             }
             // Add / Added button.
             Button {
-                addTransaction(tx, in: messageID)
+                HapticManager.shared.tap()
+                confirming = PendingTx(tx: tx, messageID: messageID)
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: tx.added ? "checkmark.circle.fill" : "plus.circle.fill")
@@ -807,10 +757,16 @@ struct AIChatView: View {
         return f.string(from: next)
     }
 
-    /// Under the input: how many credits are left, and what happens at zero.
-    private var creditLine: String {
+    /// Royal in the app, free on the server: the subscription was not read
+    /// there (a different RevenueCat user, or a store hiccup), so the server
+    /// granted 0. That is not "used up", and restoring purchases fixes it.
+    private var planNotRecognized: Bool { isRoyal && vm.serverPlan == "free" }
+
+    /// Under the input: how many credits are left. Nothing when they are
+    /// gone or the plan was not read — DiPo says that in his bubble.
+    private var creditLine: String? {
+        if planNotRecognized || outOfCredits { return nil }
         guard let left = vm.creditsLeft else { return loc("ai.credit_hint") }
-        if left == 0 { return String(format: loc("ai.credits_out"), creditsReturn) }
         if left < 10 { return String(format: loc("ai.credits_left"), left) + " · " + loc("ai.credit_hint") }
         return loc("ai.credit_hint")
     }
@@ -846,6 +802,7 @@ struct AIChatView: View {
                 micButton
 
                 TextField(voice.isListening ? loc("voice.listening")
+                          : planNotRecognized ? loc("ai.credits_plan_placeholder")
                           : outOfCredits ? String(format: loc("ai.credits_placeholder"), creditsReturn)
                           : loc("ai.input_placeholder"),
                           text: $vm.input, axis: .vertical)
@@ -873,12 +830,14 @@ struct AIChatView: View {
             // Credits: how many are left once they run low, and when they
             // come back once they are gone — in place of the red chip that
             // used to sit up by DiPo.
-            Text(creditLine)
-                .font(.system(.caption2, weight: outOfCredits ? .semibold : .regular))
-                .foregroundStyle(outOfCredits || (vm.creditsLeft ?? 99) < 10 ? AppTheme.orange : AppTheme.textSecondary.opacity(0.7))
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 16)
-                .padding(.bottom, 8)
+            if let creditLine {
+                Text(creditLine)
+                    .font(.system(.caption2))
+                    .foregroundStyle((vm.creditsLeft ?? 99) < 10 ? AppTheme.orange : AppTheme.textSecondary.opacity(0.7))
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 8)
+            }
         }
         .background(AppTheme.bg)
     }
@@ -901,8 +860,9 @@ struct AIChatView: View {
 
     // MARK: Add transaction to SwiftData
 
-    private func addTransaction(_ tx: AIParsedTx, in messageID: UUID) {
-        guard let card = targetCard else { return }
+    /// Saves the checked transaction to the chosen card and marks DiPo's
+    /// original card as added.
+    private func addTransaction(_ tx: AIParsedTx, to card: BankCard, replacing originalID: UUID, in messageID: UUID) {
         HapticManager.shared.success()
         let record = TxRecord(
             name: tx.name,
@@ -920,9 +880,13 @@ struct AIChatView: View {
 
         // Mark the card as added in the message list.
         if let mi = vm.messages.firstIndex(where: { $0.id == messageID }),
-           let ti = vm.messages[mi].transactions.firstIndex(where: { $0.id == tx.id }) {
+           let ti = vm.messages[mi].transactions.firstIndex(where: { $0.id == originalID }) {
             vm.messages[mi].transactions[ti].added = true
         }
+        dipoMood = .cheer
+        dipoSays = loc("ai.bubble.saved")
+        dipoTalk = 1.2
+        dipoLine = UUID().uuidString
     }
 
     // MARK: - Financial snapshot for analysis
