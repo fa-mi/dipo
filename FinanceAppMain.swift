@@ -226,6 +226,8 @@ struct DiPoApp: App {
     }()
 
     init() {
+        // DiPo's 3D model, read off the main thread while launch carries on.
+        DiPoModel.preload()
         // Must precede configure(): Firebase reads the provider factory then.
         AppCheckSetup.install()
         FirebaseApp.configure()

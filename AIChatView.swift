@@ -488,7 +488,8 @@ struct AIChatView: View {
 
             DiPoFrame(size: nil, cornerRadius: 28) {
                 HStack(spacing: 2) {
-                    DiPoDragonView(mood: dipoMood, line: dipoLine, talkSeconds: dipoTalk)
+                    DiPoDragonView(mood: dipoMood, line: dipoLine, talkSeconds: dipoTalk,
+                                   animates: !showGame)
                         .frame(width: 140, height: 140)
                     headerBubble
                         .padding(.trailing, 14)
