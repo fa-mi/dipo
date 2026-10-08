@@ -484,6 +484,9 @@ struct QuestLessonView: View {
                         }
                     }
                     .padding(.horizontal, 18).padding(.top, 18).padding(.bottom, 24)
+                    // Clamped to the screen: a long option must wrap, not
+                    // let the whole question slide sideways.
+                    .containerRelativeFrame(.horizontal)
                     .id(q.id + "-\(lesson.index)")
                     .transition(.asymmetric(insertion: .move(edge: .trailing).combined(with: .opacity),
                                             removal: .move(edge: .leading).combined(with: .opacity)))
