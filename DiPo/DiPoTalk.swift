@@ -142,6 +142,8 @@ struct DiPoNudge: Equatable, Identifiable {
         case interestGuess(DiPoInterest)
         /// A confirmed interest: opens Ask DiPo with its question.
         case interestTip(DiPoInterest)
+        /// Today's DiPo Quest has not been played yet.
+        case quest
     }
     let id: String
     let mood: DiPoMood
@@ -169,7 +171,8 @@ struct DiPoNudge: Equatable, Identifiable {
     /// out. Empty means DiPo just invites a question.
     static func all(unread: Int, checkIn: Bool = false, streak: Int = 0,
                     bill: Bill?, daysToPayday: Int?, payDate: Date?,
-                    interestGuess: DiPoInterest? = nil, interestTip: DiPoInterest? = nil) -> [DiPoNudge] {
+                    interestGuess: DiPoInterest? = nil, interestTip: DiPoInterest? = nil,
+                    questWaiting: Bool = false) -> [DiPoNudge] {
         var out: [DiPoNudge] = []
         // The streak greets the user when they open the app; two days is the
         // shortest run worth a word.
@@ -233,6 +236,12 @@ struct DiPoNudge: Equatable, Identifiable {
                                  exclamation: String(format: loc("interest.tip_title"), tip.emoji),
                                  text: loc("interest.\(tip.rawValue).tip"),
                                  action: .interestTip(tip), link: loc("interest.link_ask")))
+        }
+        // Last of all: a nudge back to the game, whose daily quests include
+        // logging a transaction — the habit the rest of the app is for.
+        if questWaiting {
+            out.append(DiPoNudge(id: "quest", mood: .happy, exclamation: loc("dipo.quest_title"),
+                                 text: loc("dipo.quest_body"), action: .quest, link: loc("dipo.link.quest")))
         }
         return out
     }

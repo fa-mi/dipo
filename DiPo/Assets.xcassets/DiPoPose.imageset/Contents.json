@@ -1,0 +1,8 @@
+{
+  "images" : [
+    { "filename" : "DiPoPose.png", "idiom" : "universal", "scale" : "1x" },
+    { "filename" : "DiPoPose@2x.png", "idiom" : "universal", "scale" : "2x" },
+    { "filename" : "DiPoPose@3x.png", "idiom" : "universal", "scale" : "3x" }
+  ],
+  "info" : { "author" : "xcode", "version" : 1 }
+}

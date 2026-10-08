@@ -432,8 +432,9 @@ struct AIChatView: View {
             }
             .preferredColorScheme(appColorScheme())
         }
+        // DiPo Quest: the levelled money game, with DiPo Run inside it as a bonus.
         .fullScreenCover(isPresented: $showGame) {
-            DiPoRunGameView(isRoyal: isRoyal)
+            DiPoQuestView(isRoyal: isRoyal)
                 .preferredColorScheme(appColorScheme())
         }
         .sheet(isPresented: $showPaywall) {
@@ -505,12 +506,12 @@ struct AIChatView: View {
                     showGame = true
                 } label: {
                     HStack(spacing: 8) {
-                        Image(systemName: "figure.run")
+                        Image(systemName: "gamecontroller.fill")
                             .font(.system(.caption, weight: .bold))
                             .foregroundStyle(AppTheme.royalGoldText)
                             .frame(width: 26, height: 26)
                             .background(AppTheme.royalGold.opacity(0.2), in: Circle())
-                        Text(loc("game.play"))
+                        Text(loc("quest.play"))
                             .font(.system(.footnote, weight: .semibold))
                             .foregroundStyle(AppTheme.textPrimary)
                         Image(systemName: "chevron.right")
