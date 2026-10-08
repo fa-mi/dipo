@@ -68,6 +68,10 @@ enum PendingSource: String, CaseIterable {
     case backTap    // the Back Tap screenshot flow
     case scan       // a scanned receipt
     case manual
+    /// A bill that fell due while a hand-entered row of the same amount was
+    /// already in its period — held here instead of being recorded twice.
+    /// `rawText` holds that row's id (see RecurringManualMatch).
+    case recurring
 
     var icon: String {
         switch self {
@@ -75,6 +79,7 @@ enum PendingSource: String, CaseIterable {
         case .backTap:  return "iphone.gen3.badge.play"
         case .scan:     return "doc.text.viewfinder"
         case .manual:   return "square.and.pencil"
+        case .recurring: return "repeat.circle.fill"
         }
     }
 
@@ -84,6 +89,7 @@ enum PendingSource: String, CaseIterable {
         case .backTap:  return "pending.source.backtap"
         case .scan:     return "pending.source.scan"
         case .manual:   return "pending.source.manual"
+        case .recurring: return "pending.source.recurring"
         }
     }
 }
@@ -130,7 +136,10 @@ enum PendingInbox {
             iconBgHex: item.category.iconBg,
             category: item.category,
             currency: item.currency,
-            notes: "tx.note.from_inbox"
+            // A held bill becomes the bill's own charge, so everything that
+            // recognises recorded bills (due status, duplicates, projection)
+            // sees it as one.
+            notes: item.source == .recurring ? "tx.note.recurring_auto" : "tx.note.from_inbox"
         )
         // Insert before appending: `transactions` has no inverse, so a child
         // added only through the parent's array is not reliably persisted.

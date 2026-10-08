@@ -90,25 +90,29 @@ extension StatisticsView {
 
     // MARK: 0 · The headline, at a glance
     //
-    // A hero figure with the period's progress under it, a strip of the four
-    // numbers people check daily, and two tiles that show the shape of the week
-    // and of the months. The working stays one tap away in Full analysis.
+    // A hero figure with the period's cash book under it, its progress, a strip
+    // of the four numbers people check daily, and two tiles that show the shape
+    // of the week and of the months. The working stays one tap away in Full
+    // analysis.
 
     var spendHero: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        let left = leftToSpend
+        let book = cashBook
+        return VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 4) {
-                Text(leftToSpend != nil ? loc("stats.left_to_spend") : loc("stats.expenses"))
+                Text(heroLabel(left))
                     .font(.system(.footnote, weight: .medium))
                     .foregroundStyle(AppTheme.textSecondary)
-                Text(money(max(leftToSpend ?? filteredExpenses, 0)))
+                // Signed, never clamped. "Rp 0" for a period Rp 273.500 over
+                // its income hid the one thing the screen should say.
+                Text(heroFigure(left))
                     .font(.system(size: 40, weight: .bold))
-                    .foregroundStyle(AppTheme.textPrimary)
+                    .foregroundStyle((left ?? 0) < -0.5 ? AppTheme.red : AppTheme.textPrimary)
                     .contentTransition(.numericText())
                     .minimumScaleFactor(0.5).lineLimit(1)
-                if let left = leftToSpend, let recon = leftReconciliation(left: left) {
-                    leftExplainer(left: left, recon)
-                }
             }
+
+            if let book { cashBookView(book, left: left) }
 
             if filteredIncome > 0 {
                 VStack(alignment: .leading, spacing: 8) {
@@ -119,8 +123,7 @@ extension StatisticsView {
                                timeMarker: periodProgress.map { Double($0.elapsed) / Double($0.total) })
 
                     HStack(spacing: 8) {
-                        Text(String(format: loc("stats.spent_of"),
-                                    money(filteredExpenses), money(filteredIncome)))
+                        Text(String(format: loc("stats.pct_of_income"), incomeUsedPct))
                             .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                             .lineLimit(1).minimumScaleFactor(0.7)
                         Spacer(minLength: 4)
@@ -128,8 +131,12 @@ extension StatisticsView {
                             HStack(spacing: 3) {
                                 Image(systemName: c >= 0 ? "arrow.up.right" : "arrow.down.right")
                                     .font(.system(.caption2, weight: .bold))
-                                Text(String(format: "%.0f%%", abs(c)))
+                                // Says what it is compared with: "60%" alone
+                                // read as anything.
+                                Text(String(format: loc("stats.vs_last_period"),
+                                            String(format: "%.0f%%", abs(c))))
                                     .font(.system(.caption2, weight: .bold))
+                                    .lineLimit(1)
                             }
                             .foregroundStyle(c >= 0 ? AppTheme.red : AppTheme.accent)
                             .padding(.horizontal, 8).padding(.vertical, 4)
@@ -140,7 +147,7 @@ extension StatisticsView {
             }
 
             // Where this period is heading, in one sentence.
-            if let line = paceLine {
+            if let line = paceLine(book) {
                 HStack(alignment: .top, spacing: 8) {
                     Image(systemName: line.ok ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
                         .font(.system(.subheadline))
@@ -174,119 +181,156 @@ extension StatisticsView {
         }
     }
 
-    // MARK: Left to spend is not the balance
+    func heroLabel(_ left: Double?) -> String {
+        guard let left else { return loc("stats.expenses") }
+        return loc(left < -0.5 ? "stats.net_over" : "stats.net_left")
+    }
+
+    func heroFigure(_ left: Double?) -> String {
+        guard let left else { return money(filteredExpenses) }
+        return left < -0.5 ? "−" + money(-left) : money(max(left, 0))
+    }
+
+    /// Share of income spent, as on Home: past 100 when spending passes
+    /// income, and held below 100 until the income is actually all gone.
+    var incomeUsedPct: Int {
+        guard filteredIncome > 0 else { return 0 }
+        let ratio = filteredExpenses / filteredIncome
+        let pct = Int((ratio * 100).rounded())
+        return ratio < 1 ? min(pct, 99) : max(pct, 100)
+    }
+
+    // MARK: The period as a cash book
     //
-    // "Left to spend" is this period's income minus what went out of it. The
-    // card on Home shows the account balance, which also holds what was on
-    // the card before payday and every transfer in or out — Rp 6,3 jt there
-    // beside Rp 2 jt here read as a mistake. One line says which is which;
-    // tapped, it adds up from one to the other.
+    // Always open, under the hero figure: where the card stood when the period
+    // began, what came in and went out, and where it stands now. The old hero
+    // put "Left to spend Rp 0" beside a Rp 4 jt balance and hid the arithmetic
+    // that joins them behind a chevron; with a loan repaid that is not income,
+    // the two read as a mistake. See PeriodCashBook.
 
-    struct LeftReconciliation {
-        let balanceNow: Double
-        let transfers: Double
-        /// What the card held when the period began — the figure the other
-        /// lines are closed against, so the sum always lands on the balance.
-        let before: Double
+    /// Nil without a card to read a balance from.
+    var cashBook: PeriodCashBook? {
+        guard let start = periodStartBalance else { return nil }
+        return PeriodCashBook.build(filteredTx, start: start, convert: convertedAmount)
     }
 
-    /// Only for a period running up to today: a finished period's leftover
-    /// has nothing to do with today's balance.
-    func leftReconciliation(left: Double) -> LeftReconciliation? {
-        guard let card = selectedCard, Calendar.current.isDateInToday(effectiveRange.end) else { return nil }
-        let balance = CurrencyManager.shared.convert(card.computedBalance(),
-                                                     from: card.resolvedCurrency, to: displayCurrency)
-        let transfers = periodTransferNet
-        return LeftReconciliation(balanceNow: balance, transfers: transfers,
-                                  before: balance - left - transfers)
+    /// The window runs to today, so its last line is today's balance.
+    var periodRunsToToday: Bool {
+        Calendar.current.isDateInToday(effectiveRange.end) || effectiveRange.end > Date()
     }
 
-    func leftExplainer(left: Double, _ r: LeftReconciliation) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Button {
-                HapticManager.shared.tap()
-                withAnimation(.spring(response: 0.3)) { showLeftBreakdown.toggle() }
-            } label: {
-                HStack(alignment: .top, spacing: 6) {
-                    Image(systemName: "info.circle")
-                        .font(.system(.caption))
-                    Text(String(format: loc("stats.left_from_income"),
-                                money(filteredIncome), money(r.balanceNow)))
-                        .font(.system(.caption))
-                        .multilineTextAlignment(.leading)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Spacer(minLength: 4)
-                    Image(systemName: showLeftBreakdown ? "chevron.up" : "chevron.down")
-                        .font(.system(.caption2, weight: .semibold))
-                }
-                .foregroundStyle(AppTheme.textSecondary)
-                .contentShape(Rectangle())
+    /// Up to two named rows a side; the rest folded into "and N more".
+    func bookRows(_ rows: [NonFlowMovements.Row]) -> [(label: String, amount: Double)] {
+        let shown = rows.count > 3 ? Array(rows.prefix(2)) : rows
+        var out: [(label: String, amount: Double)] = shown.map { (label: $0.label, amount: $0.amount) }
+        if rows.count > 3 {
+            let rest = rows.dropFirst(2)
+            out.append((label: String(format: loc("stats.nonflow.more"), rest.count),
+                        amount: rest.reduce(0.0) { $0 + $1.amount }))
+        }
+        return out
+    }
+
+    func cashBookView(_ book: PeriodCashBook, left: Double?) -> some View {
+        let fmt = DateFormatter()
+        fmt.locale = LanguageManager.shared.currentLocale
+        fmt.setLocalizedDateFormatFromTemplate("d MMM")
+        return VStack(alignment: .leading, spacing: 6) {
+            bookLine(String(format: loc("stats.book_start"), fmt.string(from: effectiveRange.start)),
+                     book.start, op: "")
+            bookLine(loc("stats.recon_income"), book.income, op: "+")
+            ForEach(Array(bookRows(book.otherIn).enumerated()), id: \.offset) { _, row in
+                bookLine(row.label, row.amount, op: "+", caption: loc("stats.book_not_income"),
+                         tint: AppTheme.accent)
             }
-            .buttonStyle(.plain)
-            .accessibilityHint(loc("stats.left_breakdown_hint"))
+            bookLine(loc("stats.recon_spent"), book.spent, op: "−")
+            ForEach(Array(bookRows(book.otherOut).enumerated()), id: \.offset) { _, row in
+                bookLine(row.label, row.amount, op: "−", caption: loc("stats.book_not_spending"))
+            }
+            if abs(book.ownMoves) >= 0.5 {
+                bookLine(loc("stats.book_own_moves"), abs(book.ownMoves), op: book.ownMoves < 0 ? "−" : "+")
+            }
+            Rectangle().fill(AppTheme.cardMid).frame(height: 1).padding(.vertical, 2)
+            bookLine(loc(periodRunsToToday ? "stats.card_balance_now" : "stats.recon_end"),
+                     book.end, op: "=", total: true)
 
-            if showLeftBreakdown {
-                VStack(spacing: 6) {
-                    reconLine(loc("stats.recon_income"), filteredIncome)
-                    reconLine(loc("stats.recon_spent"), -filteredExpenses)
-                    reconLine(loc("stats.left_to_spend"), left, total: true)
-                    Divider().background(AppTheme.cardMid)
-                    reconLine(loc("stats.recon_start"), r.before)
-                    if abs(r.transfers) >= 1 {
-                        reconLine(loc("stats.recon_transfers"), r.transfers)
-                    }
-                    reconLine(loc("stats.card_balance_now"), r.balanceNow, total: true)
-                    Text(loc("stats.left_breakdown_note"))
-                        .font(.system(.caption2))
-                        .foregroundStyle(AppTheme.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.top, 2)
-                }
-                .padding(12)
-                .background(AppTheme.bg.opacity(0.55), in: RoundedRectangle(cornerRadius: AppRadius.md))
-                .transition(.opacity.combined(with: .move(edge: .top)))
+            if let note = bookNote(book, left: left) {
+                Text(note)
+                    .font(.system(.caption))
+                    .foregroundStyle(AppTheme.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.top, 4)
             }
         }
-        .padding(.top, 4)
+        .padding(12)
+        .background(AppTheme.bg.opacity(0.55), in: RoundedRectangle(cornerRadius: AppRadius.md))
     }
 
-    /// One line of the breakdown. Totals carry "=", the rest their sign.
-    func reconLine(_ label: String, _ value: Double, total: Bool = false) -> some View {
-        let sign: String
-        if total { sign = value < 0 ? "= −" : "= " } else { sign = value < 0 ? "− " : "+ " }
-        let figure: String = sign + money(abs(value))
-        return HStack {
-            Text(label)
-                .font(.system(.caption2, weight: total ? .semibold : .regular))
-                .foregroundStyle(total ? AppTheme.textPrimary : AppTheme.textSecondary)
+    /// One line of the book. `value` is a magnitude; `op` carries its direction,
+    /// except the opening balance, which can itself be below zero.
+    func bookLine(_ label: String, _ value: Double, op: String, caption: String? = nil,
+                  total: Bool = false, tint: Color? = nil) -> some View {
+        let figure = (value < -0.5 ? "−" : "") + money(abs(value))
+        return HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text(op)
+                .font(.system(.caption, weight: .semibold))
+                .foregroundStyle(AppTheme.textSecondary)
+                .frame(width: 12, alignment: .leading)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(label)
+                    .font(.system(.caption, weight: total ? .semibold : .regular))
+                    .foregroundStyle(total ? AppTheme.textPrimary : AppTheme.textSecondary)
+                    .lineLimit(2)
+                if let caption {
+                    Text(caption)
+                        .font(.system(.caption2))
+                        .foregroundStyle(AppTheme.textSecondary.opacity(0.85))
+                        .lineLimit(1).minimumScaleFactor(0.8)
+                }
+            }
             Spacer(minLength: 8)
             Text(figure)
-                .font(.system(.caption, weight: total ? .bold : .medium))
-                .foregroundStyle(total ? AppTheme.textPrimary : AppTheme.textSecondary)
+                .font(.system(.caption, weight: total ? .bold : .semibold))
+                .foregroundStyle(tint ?? (total ? AppTheme.textPrimary : AppTheme.textSecondary))
                 .monospacedDigit()
                 .lineLimit(1).minimumScaleFactor(0.7)
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    /// One sentence when spending passed income: what kept the balance up.
+    func bookNote(_ book: PeriodCashBook, left: Double?) -> String? {
+        guard let left, left < -0.5, let why = book.overspend(deficit: -left) else { return nil }
+        switch why {
+        case .coveredBy(let label, let amount):
+            return String(format: loc("stats.book_over_in"), money(-left), money(book.end), label, money(amount))
+        case .savings:
+            return String(format: loc("stats.book_over_saved"), money(-left))
+        case .plain:
+            return String(format: loc("stats.book_over_plain"), money(-left))
         }
     }
 
     var metricStrip: some View {
         let top = topCategories.first
-        // Rounded, as every other percentage is; held below 100 until the
-        // income is actually all gone.
-        let usedPct: Int = min(BudgetGroup.pct(spentRatio), spentRatio < 1 ? 99 : 100)
-        let usedText: String = filteredIncome > 0 ? "\(usedPct)%" : "—"
+        let usedText: String = filteredIncome > 0 ? "\(incomeUsedPct)%" : "—"
         return HStack(spacing: 0) {
             metricCell("chart.pie.fill", AppTheme.accent,
                        usedText,
-                       loc("stats.metric_budget"))
+                       loc("stats.metric_of_income"))
             metricDivider
             metricCell("sun.max.fill", AppTheme.amber, money(todaySpend), loc("common.today"))
             metricDivider
-            metricCell("scope", AppTheme.blue, money(typicalDailySpend), loc("stats.metric_per_day"))
+            // The median day of day-to-day spending — not an allowance. "per
+            // day" read as how much may be spent each day.
+            metricCell("scope", AppTheme.blue, money(typicalDailySpend), loc("stats.metric_typical_day"))
             metricDivider
+            // Named as the top category, or "Bills" read as bills still due.
             metricCell("tag.fill", top?.category.color ?? AppTheme.purple,
                        money(top?.amount ?? 0),
-                       top?.category.displayLabel ?? loc("stats.metric_top"))
+                       top.map { String(format: loc("stats.metric_top_named"), $0.category.displayLabel) }
+                           ?? loc("stats.metric_top"))
         }
         .padding(.vertical, 12)
         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
@@ -364,13 +408,27 @@ extension StatisticsView {
     }
 
     /// One sentence on where this is heading, for a period still running.
-    var paceLine: (ok: Bool, text: String)? {
+    /// `book` is the hero's own, passed in rather than rebuilt.
+    func paceLine(_ book: PeriodCashBook?) -> (ok: Bool, text: String)? {
         guard let projected = projectedSpend, filteredIncome > 0 else { return nil }
-        if projected <= filteredIncome {
-            return (true, String(format: loc("stats.pace_safe"), money(projected)))
+        var text = projected <= filteredIncome
+            ? String(format: loc("stats.pace_safe"), money(projected))
+            : String(format: loc("stats.pace_over"), money(projected), money(projected - filteredIncome))
+        // What that leaves on the card — the question behind the pace. Today's
+        // balance less the spending still to come; money in or out that is not
+        // income or spending can't be foreseen and isn't guessed at.
+        if let book, let p = periodProgress,
+           let last = Calendar.current.date(byAdding: .day, value: p.total - 1,
+                                            to: Calendar.current.startOfDay(for: effectiveRange.start)) {
+            let fmt = DateFormatter()
+            fmt.locale = LanguageManager.shared.currentLocale
+            fmt.setLocalizedDateFormatFromTemplate("d MMM")
+            let endBalance = book.end - max(projected - filteredExpenses, 0)
+            text += " " + String(format: loc("stats.pace_balance"),
+                                 (endBalance < -0.5 ? "−" : "") + money(abs(endBalance)),
+                                 fmt.string(from: last))
         }
-        return (false, String(format: loc("stats.pace_over"), money(projected),
-                              money(projected - filteredIncome)))
+        return (projected <= filteredIncome, text)
     }
 
     // MARK: 2 · Where it went
