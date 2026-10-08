@@ -161,9 +161,15 @@ final class RecurringManualMatchTests: XCTestCase {
         let start = RecurringManualMatch.windowStart(due: due, periodStart: monthStart, previousCharge: nil)
         XCTAssertEqual(start, cal.date(byAdding: .day, value: -7, to: due))
 
-        let payPeriod = cal.date(from: DateComponents(year: 2026, month: 9, day: 25))!
+        // Payday on the 20th, the bill due on the 1st: the pay period opened
+        // before the week-early mark (the 24th), so it is the start.
+        let payPeriod = cal.date(from: DateComponents(year: 2026, month: 9, day: 20))!
         XCTAssertEqual(RecurringManualMatch.windowStart(due: due, periodStart: payPeriod, previousCharge: nil),
                        payPeriod, "the pay period opened earlier still")
+        // Payday on the 25th: the week-early mark is earlier, so it wins.
+        let laterPayPeriod = cal.date(from: DateComponents(year: 2026, month: 9, day: 25))!
+        XCTAssertEqual(RecurringManualMatch.windowStart(due: due, periodStart: laterPayPeriod, previousCharge: nil),
+                       cal.date(byAdding: .day, value: -7, to: due))
 
         let lastCharge = cal.date(from: DateComponents(year: 2026, month: 9, day: 28))!
         XCTAssertGreaterThan(RecurringManualMatch.windowStart(due: due, periodStart: payPeriod,
