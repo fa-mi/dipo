@@ -15,8 +15,11 @@ import SwiftData
 // period. So a pair needs:
 //   • one charge DiPo recorded for this bill — its marker and its name;
 //   • another charge in the same pay period for the same amount, in a
-//     fixed-cost category or the bill's own, that is not another bill's
-//     recorded charge.
+//     fixed-cost category, the bill's own or "Other" (or any category, if it
+//     shares a word with the bill), that is not another bill's recorded
+//     charge.
+// From 2026-10 the engine asks before recording a bill that already has such
+// a row (RecurringManualMatch); this still catches the ones logged after.
 // Each pair is shown with both rows so the user can see which to delete — or
 // say both are real, which DiPo then remembers.
 
@@ -109,8 +112,12 @@ enum RecurringDuplicates {
                 func isTwin(_ tx: TxRecord) -> Bool {
                     guard tx.id != charge.id, !used.contains(tx.id) else { return false }
                     guard abs(value(tx) - amt) <= tolerance else { return false }
-                    guard SmartBudgetManager.fixedCategories.contains(tx.category)
-                            || tx.category == charge.category else { return false }
+                    // The same rule the engine asks with before recording a
+                    // bill (RecurringManualMatch): fixed costs, the bill's own
+                    // category and "Other" on the amount; anything else only
+                    // if it shares a word with the bill.
+                    guard RecurringManualMatch.couldBe(tx, planLabel: plan.label,
+                                                       planCategory: charge.category) else { return false }
                     // Another bill's own recorded charge is that bill's, not a
                     // twin of this one — the Netlify case.
                     let name = RecurringHistory.normalized(tx.name)

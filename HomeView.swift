@@ -70,6 +70,7 @@ struct HomeView: View {
     @State private var monthIncome: Double = 0
     @State private var monthExpense: Double = 0
     @State private var flowPeriodLabel: String = ""
+    @State private var flowNote: String? = nil
     @State private var showAllAttention = false
     @State private var showGoalDetail: SavingsGoal? = nil
     @State private var headerAppeared    = false
@@ -298,6 +299,40 @@ struct HomeView: View {
     /// across all cards. Recompute fires when a tx is added or removed.
     private var totalTxCount: Int { vm.cards.reduce(0) { $0 + $1.transactions.count } }
 
+    /// Statistics reads the main card; the link is offered only when that is
+    /// the card on screen, or it would open on another card's figures.
+    private var flowDetails: (() -> Void)? {
+        guard let card = selectedCard, MainCard.isMain(card) else { return nil }
+        return {
+            vm.statsPath = []
+            vm.activeTab = .stats
+        }
+    }
+
+    /// When spending has passed income, the one sentence that says why the
+    /// balance is still where it is — the same reasoning, and the same book,
+    /// as Statistics. Only then is the card's ledger read; the figures above
+    /// come from the rollup buckets.
+    private func overspendNote(card: BankCard, from start: Date, currency cur: String,
+                               deficit: Double) -> String? {
+        guard deficit >= 0.5 else { return nil }
+        let fmt = { (v: Double) in CurrencyManager.shared.formatted(v, currency: cur) }
+        // A credit card's "balance" is what is owed; "still up" means nothing there.
+        guard !card.isCreditCard else { return String(format: loc("home.over_plain"), fmt(deficit)) }
+        let book = PeriodCashBook.build(card.transactions.filter { $0.date >= start },
+                                        end: card.computedBalance(),
+                                        convert: { CurrencyManager.shared.convert(
+                                            $0.amount, from: $0.currency.isEmpty ? cur : $0.currency, to: cur) })
+        switch book.overspend(deficit: deficit) ?? .plain {
+        case .coveredBy(let label, let amount):
+            return String(format: loc("home.over_in"), fmt(deficit), label, fmt(amount))
+        case .savings:
+            return String(format: loc("home.over_saved"), fmt(deficit))
+        case .plain:
+            return String(format: loc("home.over_plain"), fmt(deficit))
+        }
+    }
+
     /// Runs the three Smart-Budget analyses ONCE, off the render path, storing
     /// the results in @State. Called on appear and whenever the inputs change
     /// (selected card, tx count, budget on/off, ratios) — never per render.
@@ -327,7 +362,7 @@ struct HomeView: View {
             flowPeriodLabel = loc("home.this_month")
         }
 
-        guard let card = selectedCard else { monthIncome = 0; monthExpense = 0; return }
+        guard let card = selectedCard else { monthIncome = 0; monthExpense = 0; flowNote = nil; return }
         let cur = card.resolvedCurrency
         // Read the pre-aggregated daily buckets instead of scanning the card's
         // whole ledger (see RollupEngine). This runs on the tx-count / balance /
@@ -341,6 +376,8 @@ struct HomeView: View {
                                          convert: { CurrencyManager.shared.convert($0, from: $1, to: $2) })
         monthIncome = totals.income
         monthExpense = max(totals.expenses, 0)
+        flowNote = overspendNote(card: card, from: windowStart, currency: cur,
+                                 deficit: monthExpense - monthIncome)
     }
 
     private func recomputeHomeInsights() {
@@ -531,7 +568,9 @@ struct HomeView: View {
                                       currency: selectedCard?.resolvedCurrency
                                                 ?? CurrencyManager.shared.preferredCurrency,
                                       periodLabel: flowPeriodLabel,
-                                      isHidden: selectedCard?.isHidden ?? false)
+                                      isHidden: selectedCard?.isHidden ?? false,
+                                      note: flowNote,
+                                      onDetails: flowDetails)
                             .padding(.horizontal, 22)
                             .padding(.top, 14)
                             .opacity(contentAppeared ? 1 : 0)

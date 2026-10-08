@@ -125,6 +125,15 @@ struct RecurringExpenseEngine {
 
         var didCharge = false
 
+        // For the double-log check: the pay period a due date falls in, on the
+        // boundaries every screen uses.
+        let schedules = (try? context.fetch(FetchDescriptor<SalarySchedule>())) ?? []
+        let payDay = MainCard.payDay(schedules)
+        let salaryDates = StatPeriod.salaryDates(on: MainCard.resolve(in: cards) ?? cards.first)
+        /// Hand-entered rows already offered against a bill in this run, so one
+        /// payment is never offered against two bills of the same amount.
+        var claimed = Set<UUID>()
+
         for e in items {
             guard e.isActive, e.autoRecord else { continue }
             if e.lastChargedMonth == month && e.lastChargedYear == year { continue }
@@ -183,6 +192,37 @@ struct RecurringExpenseEngine {
                         txAmount      = -abs(e.amount * rate)
                         txCurrency    = cardCurrency
                     }
+                }
+
+                // Already paid by hand this period? Then don't write it — ask.
+                // It goes to the Pending inbox, which opens on the next visit,
+                // with the hand-entered row named. Submitting it records the
+                // bill as usual; swiping it away means it was the same payment.
+                // The month is stamped either way: the question is the charge.
+                let key = RecurringHistory.normalized(e.label)
+                let previous = card.transactions
+                    .filter { $0.notes == "tx.note.recurring_auto" && $0.date < due
+                        && RecurringHistory.normalized($0.name) == key }
+                    .map(\.date).max()
+                let periodStart = RecurringDuplicates.periodStart(of: due, payDay: payDay,
+                                                                  salaryDates: salaryDates)
+                if let match = RecurringManualMatch.find(
+                    amount: abs(txAmount), currency: txCurrency.isEmpty ? cardCurrency : txCurrency,
+                    planLabel: e.label, planCategory: e.category, due: due,
+                    from: RecurringManualMatch.windowStart(due: due, periodStart: periodStart,
+                                                           previousCharge: previous, cal: cal),
+                    to: Date(), in: card.transactions, excluding: claimed) {
+                    claimed.insert(match.id)
+                    PendingInbox.capture(name: e.label, amount: txAmount,
+                                         currency: txCurrency.isEmpty ? cardCurrency : txCurrency,
+                                         date: due, category: e.category, cardID: card.id,
+                                         source: .recurring, rawText: match.id.uuidString,
+                                         context: context)
+                    e.lastChargedMonth = m
+                    e.lastChargedYear  = y
+                    didCharge = true
+                    print("[RecurringExpenseEngine] Held \(e.label) (\(m)/\(y)) — matches a hand-entered row")
+                    continue
                 }
 
                 // Stable keys only (type/notes) — translated at display time,

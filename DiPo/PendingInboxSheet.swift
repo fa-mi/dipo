@@ -87,6 +87,26 @@ struct PendingInboxSheet: View {
     // MARK: Row
 
     private func row(_ item: PendingTransaction) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            rowLine(item)
+            // A held bill says what it was matched against, or the two
+            // gestures would mean nothing.
+            if item.source == .recurring {
+                Label(RecurringManualMatch.holdNote(for: item, context: context),
+                      systemImage: "questionmark.circle.fill")
+                    .font(.system(.caption))
+                    .foregroundStyle(AppTheme.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(10)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(AppTheme.orange.opacity(0.10), in: RoundedRectangle(cornerRadius: AppRadius.sm))
+            }
+        }
+        .padding(14)
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+    }
+
+    private func rowLine(_ item: PendingTransaction) -> some View {
         let card = cards.first { $0.id == item.cardID }
         return HStack(spacing: 12) {
             Image(systemName: item.category.icon)
@@ -127,8 +147,6 @@ struct PendingInboxSheet: View {
                     .lineLimit(1)
             }
         }
-        .padding(14)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
     }
 
     private var emptyState: some View {
@@ -259,7 +277,17 @@ struct PendingRowEditor: View {
                             DateTimeFields(date: $item.date)
                         }
 
-                        if !item.rawText.isEmpty {
+                        if item.source == .recurring {
+                            // rawText is the matched row's id here, not words.
+                            Label(RecurringManualMatch.holdNote(for: item, context: context),
+                                  systemImage: "questionmark.circle.fill")
+                                .font(.system(.footnote))
+                                .foregroundStyle(AppTheme.textPrimary)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .padding(12)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(AppTheme.orange.opacity(0.10), in: RoundedRectangle(cornerRadius: AppRadius.md))
+                        } else if !item.rawText.isEmpty {
                             VStack(alignment: .leading, spacing: 6) {
                                 FormSectionLabel(text: loc("pending.read_from"))
                                 Text(item.rawText)

@@ -22,6 +22,13 @@ struct MonthFlowCard: View {
     /// income and expense on screen would defeat the point of hiding it —
     /// anyone reading over a shoulder learns the same thing either way.
     var isHidden: Bool = false
+    /// One sentence when spending has passed income: what kept the balance up
+    /// (a loan repaid, the money already on the card). Built by HomeView from
+    /// PeriodCashBook, the same reasoning Statistics prints.
+    var note: String? = nil
+    /// Opens Statistics, where the period's cash book adds it all up. Nil when
+    /// this card is not the one Statistics reads.
+    var onDetails: (() -> Void)? = nil
 
     /// Share of income already spent this cycle; nil without income.
     private var spentShare: Double? { income > 0 ? expense / income : nil }
@@ -85,8 +92,45 @@ struct MonthFlowCard: View {
             HStack(spacing: 6) {
                 column(icon: "arrow.down.left", label: loc("home.income"), amount: income, tint: AppTheme.flowIn)
                 column(icon: "arrow.up.right", label: loc("home.expense"), amount: expense, tint: AppTheme.flowOut)
-                column(icon: "wallet.bifold.fill", label: loc("home.remaining"), amount: remaining,
-                       tint: remaining < 0 ? AppTheme.red : AppTheme.blue)
+                // "Net", not "Remaining": this is income minus spending for
+                // the period. What remains is the balance on the card above,
+                // which also holds money from before payday and money that is
+                // not income — "Remaining −Rp 273.500" under a Rp 4 jt
+                // balance read as a contradiction.
+                column(icon: "equal", label: loc("home.net"), amount: remaining,
+                       tint: remaining < -0.5 ? AppTheme.red : AppTheme.blue, signed: true)
+            }
+
+            if let note, !isHidden {
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: "exclamationmark.circle.fill")
+                        .font(.system(.footnote))
+                        .foregroundStyle(AppTheme.red)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(note)
+                            .font(.system(.caption))
+                            .foregroundStyle(AppTheme.textPrimary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        if let onDetails {
+                            Button {
+                                HapticManager.shared.tap()
+                                onDetails()
+                            } label: {
+                                HStack(spacing: 2) {
+                                    Text(loc("home.flow_details"))
+                                    Image(systemName: "chevron.right").imageScale(.small)
+                                }
+                                .font(.system(.caption, weight: .semibold))
+                                .foregroundStyle(AppTheme.accent)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    Spacer(minLength: 0)
+                }
+                .padding(10)
+                .background(AppTheme.red.opacity(0.08), in: RoundedRectangle(cornerRadius: AppRadius.sm))
+                .transition(.opacity)
             }
         }
         .padding(14)
@@ -94,7 +138,8 @@ struct MonthFlowCard: View {
     }
 
     @ViewBuilder
-    private func column(icon: String, label: String, amount: Double, tint: Color) -> some View {
+    private func column(icon: String, label: String, amount: Double, tint: Color,
+                        signed: Bool = false) -> some View {
         HStack(spacing: 7) {
             // A SOLID badge: a pale tint of the green washes out to near-white
             // on a light card. The glyph takes `onVividFill`, like every label
@@ -109,7 +154,7 @@ struct MonthFlowCard: View {
                     .font(.system(.caption2))
                     .foregroundStyle(AppTheme.textSecondary)
                     .lineLimit(1)
-                Text(isHidden ? "••••" : CurrencyManager.shared.formatted(amount, currency: currency))
+                Text(isHidden ? "••••" : figure(amount, signed: signed))
                     .font(.system(.footnote, weight: .bold))
                     .foregroundStyle(tint)
                     .lineLimit(1)
@@ -122,6 +167,13 @@ struct MonthFlowCard: View {
             Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity)
+    }
+
+    /// A signed figure carries a real minus sign in front of the currency, as
+    /// Statistics prints it: "−Rp 273.500".
+    private func figure(_ amount: Double, signed: Bool) -> String {
+        guard signed else { return CurrencyManager.shared.formatted(amount, currency: currency) }
+        return (amount < -0.5 ? "−" : "") + CurrencyManager.shared.formatted(abs(amount), currency: currency)
     }
 }
 
