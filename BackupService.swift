@@ -133,11 +133,15 @@ struct BackupTransaction: Codable {
     let fxRate: Double
     /// User's correction to the engine's irregular-expense call. nil = auto.
     let oneOffOverride: Bool?
+    /// The Receivable a loan or a repayment belongs to. Missing before
+    /// 2026-10, when backups dropped it: a restored repayment then no longer
+    /// counted against its loan, and the money lent read as never repaid.
+    let linkedReceivableID: String
 
     private enum CodingKeys: String, CodingKey {
         case id, cardID, name, date, amount, type, icon, iconBgHex,
              categoryRaw, currency, notes, linkedDebtID, linkedGoalID, subtype,
-             fxOriginalAmount, fxOriginalCurrency, fxRate, oneOffOverride
+             fxOriginalAmount, fxOriginalCurrency, fxRate, oneOffOverride, linkedReceivableID
     }
 
     /// Custom decoder so older backups (exported before `subtype` existed)
@@ -164,6 +168,7 @@ struct BackupTransaction: Codable {
         fxOriginalCurrency = try c.decodeIfPresent(String.self, forKey: .fxOriginalCurrency) ?? ""
         fxRate             = try c.decodeIfPresent(Double.self, forKey: .fxRate) ?? 0
         oneOffOverride     = try c.decodeIfPresent(Bool.self,   forKey: .oneOffOverride)
+        linkedReceivableID = try c.decodeIfPresent(String.self, forKey: .linkedReceivableID) ?? ""
     }
 
     init(id: UUID, cardID: UUID, name: String, date: Date, amount: Double,
@@ -174,7 +179,8 @@ struct BackupTransaction: Codable {
          fxOriginalAmount: Double = 0,
          fxOriginalCurrency: String = "",
          fxRate: Double = 0,
-         oneOffOverride: Bool? = nil) {
+         oneOffOverride: Bool? = nil,
+         linkedReceivableID: String = "") {
         self.id = id
         self.cardID = cardID
         self.name = name
@@ -193,6 +199,7 @@ struct BackupTransaction: Codable {
         self.fxOriginalCurrency = fxOriginalCurrency
         self.fxRate = fxRate
         self.oneOffOverride = oneOffOverride
+        self.linkedReceivableID = linkedReceivableID
     }
 }
 
@@ -625,7 +632,8 @@ enum BackupService {
                     fxOriginalAmount: t.fxOriginalAmount,
                     fxOriginalCurrency: t.fxOriginalCurrency,
                     fxRate: t.fxRate,
-                    oneOffOverride: t.oneOffOverride
+                    oneOffOverride: t.oneOffOverride,
+                    linkedReceivableID: t.linkedReceivableID
                 )
             },
             salaries: salaries.map { s in
@@ -864,6 +872,7 @@ enum BackupService {
                 fxRate: t.fxRate
             )
             tx.oneOffOverride = t.oneOffOverride
+            tx.linkedReceivableID = t.linkedReceivableID
             tx.id = t.id
             // CRITICAL: explicit insert. BankCard.transactions has a cascade
             // relationship but no `inverse:` declared on TxRecord, so SwiftData
@@ -1131,6 +1140,7 @@ enum BackupService {
                 fxRate: t.fxRate
             )
             tx.oneOffOverride = t.oneOffOverride
+            tx.linkedReceivableID = t.linkedReceivableID
             tx.id = t.id
             // Same critical pattern as the inline import path: explicit
             // insert + append. Without insert(), append-only relationships
