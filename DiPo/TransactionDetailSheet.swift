@@ -24,6 +24,8 @@ struct TransactionDetailSheet: View {
     /// Open while the row is being made a loan, or a repayment.
     @State private var convertMode: ReceivableConvertSheet.Mode? = nil
     @State private var confirmUnlink = false
+    /// Observed so the extra-funds switch redraws when flipped.
+    @State private var budget = SmartBudgetManager.shared
     @Query private var receivables: [Receivable]
     private var linkedReceivable: Receivable? {
         tx.linkedReceivableID.isEmpty ? nil
@@ -261,6 +263,36 @@ struct TransactionDetailSheet: View {
         }
     }
 
+    /// Money in that isn't income — a repayment, a gift — can be added to
+    /// this period's budget, by choice and off by default. See ExtraFunds.
+    @ViewBuilder
+    private var extraFundSection: some View {
+        if ExtraFunds.canFlag(tx) {
+            let on = budget.extraFundTxIDs.contains(tx.id.uuidString)
+            VStack(alignment: .leading, spacing: 6) {
+                Toggle(isOn: Binding(
+                    get: { on },
+                    set: { value in
+                        HapticManager.shared.select()
+                        ExtraFunds.set(tx, value)
+                        LedgerRevision.shared.bump()
+                    })) {
+                    Text(loc("tx.extra.toggle"))
+                        .font(.system(.subheadline, weight: .semibold))
+                        .foregroundStyle(AppTheme.textPrimary)
+                }
+                .tint(AppTheme.accent)
+                Text(loc(on ? "tx.extra.on_hint" : "tx.extra.off_hint"))
+                    .font(.system(.caption))
+                    .foregroundStyle(AppTheme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(14)
+            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+            .padding(.horizontal, 22)
+        }
+    }
+
     private func loanRow(icon: String, title: String, sub: String?, tint: Color) -> some View {
         HStack(spacing: 12) {
             Image(systemName: icon)
@@ -467,6 +499,7 @@ struct TransactionDetailSheet: View {
             // tag/reset control here.
 
             loanSection
+            extraFundSection
 
             // Delete button
             Button {

@@ -39,14 +39,18 @@ struct PeriodCashBook: Equatable {
     var otherOut: [NonFlowMovements.Row]
     /// Net of moves between the user's own cards and wallets. Signed.
     var ownMoves: Double
+    /// Of `otherIn`: what the person chose to add to this period's budget
+    /// (ExtraFunds). Living costs are measured against income plus this.
+    var extraFunds: Double = 0
 
     /// Income minus spending — the period's own result.
     var net: Double { income - spent }
     /// Spending on living — everything but debt paid and money put away. The
     /// figure to hold against income when asking "am I living within it?".
     var living: Double { max(spent - debtPaid - invested, 0) }
-    /// Income minus living. Positive: room left; negative: living past income.
-    var livingNet: Double { income - living }
+    /// Income (and any money added to the budget) minus living. Positive:
+    /// room left; negative: living past it.
+    var livingNet: Double { income + extraFunds - living }
     var otherInTotal: Double { otherIn.reduce(0) { $0 + $1.amount } }
     var otherOutTotal: Double { otherOut.reduce(0) { $0 + $1.amount } }
     /// Balance at the end of the window. Equals the card balance for a window

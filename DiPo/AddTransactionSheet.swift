@@ -829,7 +829,12 @@ struct AddTransactionSheet: View {
                                                        to: main.resolvedCurrency),
                 currency: main.resolvedCurrency,
                 transactions: MainCard.budgetTransactions(in: vm.cards),
-                income: monthlyIncome,
+                // Plus money in added to this period's budget, as Smart Budget shows it.
+                income: monthlyIncome + ExtraFunds.total(
+                    in: MainCard.budgetTransactions(in: vm.cards),
+                    from: cycleStart ?? Calendar.current.safeDate(
+                        from: Calendar.current.dateComponents([.year, .month], from: Date())),
+                    currency: main.resolvedCurrency),
                 periodStart: cycleStart,
                 cardID: main.id.uuidString,
                 configs: cardBudgetConfigs

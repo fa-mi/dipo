@@ -141,11 +141,11 @@ extension StatisticsView {
                 }
             }
 
-            if let book, filteredIncome > 0 { livingBox(book, danger: danger) }
+            if let book, livingFunds > 0 { livingBox(book, danger: danger) }
             if let book, book.debtPaid >= 0.5 || book.invested >= 0.5 { debtBox(book) }
             if let book { cashBookView(book) }
 
-            if filteredIncome > 0 {
+            if livingFunds > 0 {
                 VStack(alignment: .leading, spacing: 8) {
                     // The existing gauge, not a plain bar: it carries the tick for
                     // how much of the period has elapsed, so spending ahead of the
@@ -194,7 +194,7 @@ extension StatisticsView {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background((line.ok ? AppTheme.accent : AppTheme.orange).opacity(0.10),
                             in: RoundedRectangle(cornerRadius: AppRadius.md))
-            } else if filteredIncome <= 0 {
+            } else if livingFunds <= 0 {
                 Label(loc("stats.no_income_hint"), systemImage: "info.circle")
                     .font(.system(.caption))
                     .foregroundStyle(AppTheme.textSecondary)
@@ -240,14 +240,23 @@ extension StatisticsView {
     /// Living costs over income, for the gauge: debt paid and money put away
     /// left out, as in the cash book.
     var livingRatio: Double {
-        guard filteredIncome > 0 else { return 0 }
-        return (cashBook?.living ?? filteredExpenses) / filteredIncome
+        guard livingFunds > 0 else { return 0 }
+        return (cashBook?.living ?? filteredExpenses) / livingFunds
     }
+
+    /// Money in that isn't income but the person added to this period's
+    /// budget (ExtraFunds).
+    var periodExtraFunds: Double {
+        ExtraFunds.total(in: filteredTx, from: .distantPast, currency: displayCurrency)
+    }
+
+    /// What living costs are measured against: income, plus that.
+    var livingFunds: Double { filteredIncome + periodExtraFunds }
 
     /// Share of income spent on living, as on Home: past 100 when living costs
     /// pass income, and held below 100 until the income is actually all gone.
     var incomeUsedPct: Int {
-        guard filteredIncome > 0 else { return 0 }
+        guard livingFunds > 0 else { return 0 }
         let ratio = livingRatio
         let pct = Int((ratio * 100).rounded())
         return ratio < 1 ? min(pct, 99) : max(pct, 100)
@@ -260,6 +269,9 @@ extension StatisticsView {
         let over = book.livingNet < -0.5
         var text = String(format: loc(over ? "stats.living_over" : "stats.living_under"),
                           money(book.living), money(abs(book.livingNet)))
+        if book.extraFunds >= 0.5 {
+            text += " " + String(format: loc("stats.extra_included"), money(book.extraFunds))
+        }
         if over, let why = book.overspend(deficit: -book.livingNet) {
             switch why {
             case .coveredBy(let label, let amount):
@@ -317,7 +329,9 @@ extension StatisticsView {
     /// Nil without a card to read a balance from.
     var cashBook: PeriodCashBook? {
         guard let start = periodStartBalance else { return nil }
-        return PeriodCashBook.build(filteredTx, start: start, convert: convertedAmount)
+        var book = PeriodCashBook.build(filteredTx, start: start, convert: convertedAmount)
+        book.extraFunds = periodExtraFunds
+        return book
     }
 
     /// The window runs to today, so its last line is today's balance.
@@ -426,7 +440,7 @@ extension StatisticsView {
 
     var metricStrip: some View {
         let top = topCategories.first
-        let usedText: String = filteredIncome > 0 ? "\(incomeUsedPct)%" : "—"
+        let usedText: String = livingFunds > 0 ? "\(incomeUsedPct)%" : "—"
         return HStack(spacing: 0) {
             metricCell("chart.pie.fill", AppTheme.accent,
                        usedText,
@@ -524,12 +538,12 @@ extension StatisticsView {
     /// money put away so far are taken out of the projection, or a card
     /// payment would read as a pace of overspending.
     func paceLine(_ book: PeriodCashBook?) -> (ok: Bool, text: String)? {
-        guard let projected = projectedSpend, filteredIncome > 0 else { return nil }
+        guard let projected = projectedSpend, livingFunds > 0 else { return nil }
         let living = max(projected - (book.map { $0.debtPaid + $0.invested } ?? 0), 0)
-        if living <= filteredIncome {
+        if living <= livingFunds {
             return (true, String(format: loc("stats.pace_safe"), money(living)))
         }
-        return (false, String(format: loc("stats.pace_over"), money(living), money(living - filteredIncome)))
+        return (false, String(format: loc("stats.pace_over"), money(living), money(living - livingFunds)))
     }
 
     // MARK: 2 · Where it went

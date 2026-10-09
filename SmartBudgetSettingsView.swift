@@ -110,7 +110,17 @@ struct SmartBudgetSettingsSheet: View {
     ///   1. Salary schedules explicitly linked to the selected card (converted to card currency)
     ///   2. Income transactions on the selected card this month (jobless / irregular income)
     ///   3. Zero — budget structure still shows, just without monetary amounts
-    private var monthlyIncome: Double {
+    /// Income plus the money in the person chose to add to this period.
+    private var monthlyIncome: Double { statedIncome + extraFunds }
+
+    /// Money in that isn't income but was added to this period's budget —
+    /// the main card's pot only, and only rows the person switched on.
+    private var extraFunds: Double {
+        guard budgetCardIDs != nil else { return 0 }
+        return ExtraFunds.total(in: budgetTx, from: periodStart, to: periodEnd, currency: cardCurrency)
+    }
+
+    private var statedIncome: Double {
         let mgr = CurrencyManager.shared
 
         // 1. Salary schedules linked to this card
@@ -639,6 +649,12 @@ struct SmartBudgetSettingsSheet: View {
                     Text(incomeIsFromTransactions ? loc("budget.from_tx") : loc("budget.from_salary")).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                     Text(CurrencyManager.shared.formatted(monthlyIncome, currency: primary))
                         .font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.accent)
+                    if extraFunds >= 0.5 {
+                        Text(String(format: loc("budget.extra_included"),
+                                    CurrencyManager.shared.formatted(extraFunds, currency: primary)))
+                            .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
+                            .multilineTextAlignment(.trailing)
+                    }
                 }
             } else {
                 HStack(spacing: 4) {

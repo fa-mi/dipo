@@ -76,6 +76,8 @@ struct HomeView: View {
     @State private var flowNoteTone: MonthFlowCard.NoteTone = .info
     /// Debt paid and money put away this period, kept out of "Spending".
     @State private var flowPutAway: Double = 0
+    /// Flagged money in this period, added to the flow card's budget.
+    @State private var flowExtra: Double = 0
     @State private var showAllAttention = false
     @State private var showGoalDetail: SavingsGoal? = nil
     @State private var headerAppeared    = false
@@ -322,7 +324,7 @@ struct HomeView: View {
     /// covered it. Orange for that; red only when the balance itself is gone.
     /// Reads the card's ledger once, off the render path.
     private func flowNoteParts(card: BankCard, scope: [BankCard], from start: Date, currency cur: String,
-                               income: Double, expense: Double)
+                               income: Double, expense: Double, extra: Double = 0)
         -> (text: String?, tone: MonthFlowCard.NoteTone, putAway: Double) {
         let fmt = { (v: Double) in CurrencyManager.shared.formatted(v, currency: cur) }
         let cm = CurrencyManager.shared
@@ -335,10 +337,11 @@ struct HomeView: View {
                                         convert: { cm.convert(
                                             $0.amount, from: $0.currency.isEmpty ? cur : $0.currency, to: cur) })
         let putAway = book.debtPaid + book.invested
-        let over = max(expense - putAway, 0) - income
+        let over = max(expense - putAway, 0) - income - extra
         // A credit card's "balance" is what is owed; nothing there "covers" anything.
         let balanceUp = !card.isCreditCard && book.end >= 0.5
         var parts: [String] = []
+        if extra >= 0.5 { parts.append(String(format: loc("home.extra_note"), fmt(extra))) }
         if book.debtPaid >= 0.5 { parts.append(String(format: loc("home.debt_note"), fmt(book.debtPaid))) }
         if book.invested >= 0.5 { parts.append(String(format: loc("home.invest_note"), fmt(book.invested))) }
         if over >= 0.5 {
@@ -386,7 +389,7 @@ struct HomeView: View {
         }
 
         guard let card = selectedCard else {
-            monthIncome = 0; monthExpense = 0; flowNote = nil; flowPutAway = 0
+            monthIncome = 0; monthExpense = 0; flowNote = nil; flowPutAway = 0; flowExtra = 0
             return
         }
         let cur = card.resolvedCurrency
@@ -405,8 +408,11 @@ struct HomeView: View {
                                          convert: { CurrencyManager.shared.convert($0, from: $1, to: $2) })
         monthIncome = totals.income
         monthExpense = max(totals.expenses, 0)
+        // Only the main card's pot has a budget to add to.
+        flowExtra = MainCard.isMain(card)
+            ? ExtraFunds.total(in: scope.flatMap(\.transactions), from: windowStart, currency: cur) : 0
         let note = flowNoteParts(card: card, scope: scope, from: windowStart, currency: cur,
-                                 income: monthIncome, expense: monthExpense)
+                                 income: monthIncome, expense: monthExpense, extra: flowExtra)
         flowNote = note.text
         flowNoteTone = note.tone
         flowPutAway = note.putAway
@@ -444,8 +450,14 @@ struct HomeView: View {
                 .reduce(0.0) { $0 + cm.convert($1.minimumPayment, from: $1.currency, to: budgetCurrency) }
             + ObligationLoad.cardPayments(cards: vm.cards, installments: installments,
                                           debts: activeDebts, currency: budgetCurrency)
+        // Money in the person chose to budget with this period (ExtraFunds).
+        let extra = budgetCard.map(MainCard.isMain) == true
+            ? ExtraFunds.total(in: tx, from: cycleStart ?? Calendar.current.safeDate(
+                from: Calendar.current.dateComponents([.year, .month], from: Date())),
+                               to: cycle?.end, currency: budgetCurrency)
+            : 0
         cachedInsights = SmartBudgetManager.shared.evaluateAll(
-            allTransactions: tx, income: totalMonthlyIncome,
+            allTransactions: tx, income: totalMonthlyIncome + extra,
             cardID: budgetCard?.id.uuidString, configs: cardBudgetConfigs,
             targetCurrency: budgetCurrency, goals: activeGoals,
             periodStart: cycleStart, periodEnd: cycle?.end,
@@ -603,6 +615,7 @@ struct HomeView: View {
                         MonthFlowCard(income: monthIncome,
                                       expense: monthExpense,
                                       putAway: flowPutAway,
+                                      extra: flowExtra,
                                       currency: selectedCard?.resolvedCurrency
                                                 ?? CurrencyManager.shared.preferredCurrency,
                                       periodLabel: flowPeriodLabel,
@@ -758,6 +771,7 @@ struct HomeView: View {
         .onChange(of: MainCard.payDay(salarySchedules)) { _, _ in recomputeMonthFlow() }
         .onChange(of: ledger.value)            { _, _ in recomputeHomeInsights(); recomputeMonthFlow() }
         .onChange(of: budgetManager.billCardIDs) { _, _ in recomputeHomeInsights(); recomputeMonthFlow() }
+        .onChange(of: budgetManager.extraFundTxIDs) { _, _ in recomputeHomeInsights(); recomputeMonthFlow() }
         .onChange(of: budgetManager.isEnabled) { _, _ in recomputeHomeInsights() }
         .onChange(of: budgetManager.dailyRatio)     { _, _ in recomputeHomeInsights() }
         .onChange(of: budgetManager.lifestyleRatio) { _, _ in recomputeHomeInsights() }

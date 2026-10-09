@@ -543,8 +543,10 @@ final class WebSyncService {
         if sb.hasActiveBudget, let cycle {
             let configs: [CardBudgetConfig] = source.configs
             let r = sb.ratios(forCardID: sb.budgetCardID, configs: configs)
+            // Plus any money in the person added to this period's budget.
             let income = MainCard.salaries(salaries)
                 .reduce(0.0) { $0 + cm.convert($1.amount, from: $1.currency, to: base) }
+                + ExtraFunds.total(in: allTx, from: cycle.start, currency: base)
             let windowTx = allTx.filter { $0.date >= cycle.start && $0.txSubtype != .transfer }
 
             func group(_ g: BudgetGroup, _ ratio: Double) -> [String: Any] {

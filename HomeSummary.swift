@@ -18,6 +18,9 @@ struct MonthFlowCard: View {
     /// into savings or investments. Kept out of "Spending", because paying a
     /// Rp 3,9 jt card bill is not a month of overspending — it clears a debt.
     var putAway: Double = 0
+    /// Money in that isn't income but the person added to this period's
+    /// budget (see ExtraFunds). Not shown as income; it widens what is left.
+    var extra: Double = 0
     let currency: String
     /// Names the window the figures cover — "Since payday 25 Aug", or "This
     /// month" when no salary schedule exists to define a cycle.
@@ -41,8 +44,9 @@ struct MonthFlowCard: View {
     /// Spending on living: everything but debt paid and money put away.
     private var living: Double { max(expense - putAway, 0) }
     /// Share of income spent on living this cycle; nil without income.
-    private var spentShare: Double? { income > 0 ? living / income : nil }
-    private var remaining: Double { income - living }
+    private var budgetIn: Double { income + extra }
+    private var spentShare: Double? { budgetIn > 0 ? living / budgetIn : nil }
+    private var remaining: Double { budgetIn - living }
 
     /// Green while there is room, orange from 80 % on. Not red: passing income
     /// is a warning, and the note says whether the balance covers it.
