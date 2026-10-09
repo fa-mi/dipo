@@ -823,18 +823,18 @@ struct AddTransactionSheet: View {
             let cycleStart: Date? = MainCard.payDay(salarySchedules).map {
                 StatPeriod.cycle(payDay: $0, salaryDates: StatPeriod.salaryDates(on: main)).start
             }
+            let potTx: [TxRecord] = MainCard.budgetTransactions(in: vm.cards)
+            // Plus money in added to this period's budget, as Smart Budget shows it.
+            let cal = Calendar.current
+            let extraFrom: Date = cycleStart ?? cal.safeDate(from: cal.dateComponents([.year, .month], from: Date()))
+            let extra: Double = ExtraFunds.total(in: potTx, from: extraFrom, currency: main.resolvedCurrency)
             if let alert = SmartBudgetManager.shared.wouldExceed(
                 category: selectedCategory,
                 amount: CurrencyManager.shared.convert(abs(effectiveAmount), from: effectiveCurrency,
                                                        to: main.resolvedCurrency),
                 currency: main.resolvedCurrency,
-                transactions: MainCard.budgetTransactions(in: vm.cards),
-                // Plus money in added to this period's budget, as Smart Budget shows it.
-                income: monthlyIncome + ExtraFunds.total(
-                    in: MainCard.budgetTransactions(in: vm.cards),
-                    from: cycleStart ?? Calendar.current.safeDate(
-                        from: Calendar.current.dateComponents([.year, .month], from: Date())),
-                    currency: main.resolvedCurrency),
+                transactions: potTx,
+                income: monthlyIncome + extra,
                 periodStart: cycleStart,
                 cardID: main.id.uuidString,
                 configs: cardBudgetConfigs

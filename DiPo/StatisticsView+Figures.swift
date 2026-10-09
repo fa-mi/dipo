@@ -723,7 +723,7 @@ extension StatisticsView {
         let committed = recurringPlans
             .filter { plan in
                 plan.isActive && (plan.cardID == nil || plan.cardID == mainCardID
-                                  || plan.cardID.map(billCardIDs.contains) == true)
+                                  || plan.cardID.map { billCardIDs.contains($0) } == true)
             }
             .reduce(0.0) { $0 + cm.convert(abs($1.amount), from: $1.currency, to: currency) }
         return max(income - committed, 0) / Double(total)
@@ -1007,7 +1007,7 @@ extension StatisticsView {
         // project money that will never leave the pot being measured.
         return recurrings
             .filter { plan in
-                plan.isActive && (plan.cardID == nil || plan.cardID.map(cardIDs.contains) == true)
+                plan.isActive && (plan.cardID == nil || plan.cardID.map { cardIDs.contains($0) } == true)
             }
             .reduce(0.0) { sum, plan in
                 let due = RecurringDateEngine.nextDueDate(dayOfMonth: plan.dayOfMonth)

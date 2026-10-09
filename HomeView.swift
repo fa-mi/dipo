@@ -451,10 +451,11 @@ struct HomeView: View {
             + ObligationLoad.cardPayments(cards: vm.cards, installments: installments,
                                           debts: activeDebts, currency: budgetCurrency)
         // Money in the person chose to budget with this period (ExtraFunds).
-        let extra = budgetCard.map(MainCard.isMain) == true
-            ? ExtraFunds.total(in: tx, from: cycleStart ?? Calendar.current.safeDate(
-                from: Calendar.current.dateComponents([.year, .month], from: Date())),
-                               to: cycle?.end, currency: budgetCurrency)
+        let cal = Calendar.current
+        let extraFrom: Date = cycleStart ?? cal.safeDate(from: cal.dateComponents([.year, .month], from: Date()))
+        let onMain: Bool = budgetCard.map { MainCard.isMain($0) } ?? false
+        let extra: Double = onMain
+            ? ExtraFunds.total(in: tx, from: extraFrom, to: cycle?.end, currency: budgetCurrency)
             : 0
         cachedInsights = SmartBudgetManager.shared.evaluateAll(
             allTransactions: tx, income: totalMonthlyIncome + extra,
