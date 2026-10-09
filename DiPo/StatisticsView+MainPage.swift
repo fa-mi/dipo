@@ -372,7 +372,7 @@ extension StatisticsView {
                 bookLine(row.label, row.amount, op: "−", caption: loc("stats.book_not_spending"))
             }
             if abs(book.ownMoves) >= 0.5 {
-                bookLine(loc("stats.book_own_moves"), abs(book.ownMoves), op: book.ownMoves < 0 ? "−" : "+")
+                ownMovesLine(book)
             }
             Rectangle().fill(AppTheme.cardMid).frame(height: 1).padding(.vertical, 2)
             bookLine(loc(periodRunsToToday ? "stats.card_balance_now" : "stats.recon_end"),
@@ -406,10 +406,66 @@ extension StatisticsView {
         .background(AppTheme.bg.opacity(0.55), in: RoundedRectangle(cornerRadius: AppRadius.md))
     }
 
+    /// The moves between own cards, one line per other card. See OwnMoves.
+    var ownMoveLines: [OwnMoves.Line] {
+        OwnMoves.lines(filteredTx, scope: scopeCards, cards: appVM.cards, convert: convertedAmount)
+    }
+
+    /// "Between your own accounts", which opens into where the money came
+    /// from and went — and what had come into the other card just before.
+    @ViewBuilder
+    func ownMovesLine(_ book: PeriodCashBook) -> some View {
+        let lines = ownMoveLines
+        if lines.isEmpty {
+            bookLine(loc("stats.book_own_moves"), abs(book.ownMoves), op: book.ownMoves < 0 ? "−" : "+")
+        } else {
+            Button {
+                HapticManager.shared.tap()
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { showOwnMoves.toggle() }
+            } label: {
+                bookLine(loc("stats.book_own_moves"), abs(book.ownMoves), op: book.ownMoves < 0 ? "−" : "+",
+                         chevron: showOwnMoves)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint(loc(showOwnMoves ? "stats.own_hide" : "stats.own_show"))
+
+            if showOwnMoves {
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(lines) { line in
+                        VStack(alignment: .leading, spacing: 2) {
+                            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                                Text(String(format: loc(line.incoming ? "stats.own_from" : "stats.own_to"), line.label))
+                                    .font(.system(.caption2))
+                                    .foregroundStyle(AppTheme.textSecondary)
+                                    .lineLimit(1)
+                                Spacer(minLength: 8)
+                                Text((line.incoming ? "+" : "−") + money(line.amount))
+                                    .font(.system(.caption2, weight: .semibold))
+                                    .foregroundStyle(AppTheme.textSecondary)
+                                    .monospacedDigit()
+                            }
+                            ForEach(line.sources) { src in
+                                Text(String(format: loc("stats.own_source"), src.name, money(src.amount),
+                                            dayMonth(src.date)))
+                                    .font(.system(.caption2))
+                                    .foregroundStyle(AppTheme.accent)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                    }
+                }
+                .padding(.leading, 20)
+                .transition(.opacity)
+            }
+        }
+    }
+
     /// One line of the book. `value` is a magnitude; `op` carries its direction,
-    /// except the opening balance, which can itself be below zero.
+    /// except the opening balance, which can itself be below zero. `chevron`
+    /// marks a line that opens: false closed, true open.
     func bookLine(_ label: String, _ value: Double, op: String, caption: String? = nil,
-                  total: Bool = false, tint: Color? = nil) -> some View {
+                  total: Bool = false, tint: Color? = nil, chevron: Bool? = nil) -> some View {
         let figure = (value < -0.5 ? "−" : "") + money(abs(value))
         return HStack(alignment: .firstTextBaseline, spacing: 8) {
             Text(op)
@@ -417,10 +473,18 @@ extension StatisticsView {
                 .foregroundStyle(AppTheme.textSecondary)
                 .frame(width: 12, alignment: .leading)
             VStack(alignment: .leading, spacing: 1) {
-                Text(label)
-                    .font(.system(.caption, weight: total ? .semibold : .regular))
-                    .foregroundStyle(total ? AppTheme.textPrimary : AppTheme.textSecondary)
-                    .lineLimit(2)
+                HStack(spacing: 4) {
+                    Text(label)
+                        .font(.system(.caption, weight: total ? .semibold : .regular))
+                        .foregroundStyle(total ? AppTheme.textPrimary : AppTheme.textSecondary)
+                        .lineLimit(2)
+                    if let open = chevron {
+                        Image(systemName: "chevron.down")
+                            .font(.system(.caption2, weight: .semibold))
+                            .foregroundStyle(AppTheme.accent)
+                            .rotationEffect(.degrees(open ? 180 : 0))
+                    }
+                }
                 if let caption {
                     Text(caption)
                         .font(.system(.caption2))
