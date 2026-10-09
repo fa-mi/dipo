@@ -524,6 +524,9 @@ struct HomeView: View {
                                         case .interestTip(let interest):
                                             askDiPoPrompt = interest.prompt
                                             showAskDiPo = true
+                                        case .customInterestTip(let name):
+                                            askDiPoPrompt = String(format: loc("interest.custom.prompt"), name)
+                                            showAskDiPo = true
                                         }
                                     })
                         .padding(.horizontal, 22)

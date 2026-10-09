@@ -949,7 +949,8 @@ struct AIChatView: View {
             "Transactions this month: \(monthTx.count).",
         ]
         // Early, so the server's length cap never cuts it.
-        if let interests = DiPoInterestStore.contextLine(DiPoInterestStore.liked) {
+        if let interests = DiPoInterestStore.contextLine(DiPoInterestStore.liked,
+                                                         custom: DiPoInterestStore.custom) {
             lines.append(interests)
         }
         if !topCats.isEmpty { lines.append("Top expense categories: \(topCats).") }
