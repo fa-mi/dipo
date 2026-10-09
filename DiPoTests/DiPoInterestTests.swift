@@ -51,6 +51,52 @@ final class DiPoInterestTests: XCTestCase {
         XCTAssertEqual(all.map(\.action), [.notifications, .interestGuess(.coffee), .interestTip(.travel)])
     }
 
+    func testNewInterestsAreGuessedFromTheirOwnWords() {
+        let farm = [tx("Pupuk urea 5kg"), tx("Bibit cabai"), tx("Pestisida")]
+        XCTAssertEqual(DiPoInterest.nextGuess(in: farm, answered: []), .farming)
+        let ride = [tx("Bengkel AHASS"), tx("Ganti oli"), tx("Servis motor")]
+        XCTAssertEqual(DiPoInterest.nextGuess(in: ride, answered: []), .automotive)
+        let giving = [tx("Zakat"), tx("Sedekah jumat"), tx("Tabungan kurban")]
+        XCTAssertEqual(DiPoInterest.nextGuess(in: giving, answered: []), .faith)
+    }
+
+    /// A wallet top-up is not a game: "top up" alone must not count.
+    func testAWalletTopUpIsNotAGame() {
+        let txs = (0..<4).map { _ in tx("Top up GoPay") }
+        XCTAssertNil(DiPoInterest.nextGuess(in: txs, answered: []))
+    }
+
+    func testCustomInterestsAreKeptTrimmedUniqueAndCapped() {
+        let key = "dipo_interests_custom"
+        let saved = UserDefaults.standard.object(forKey: key)
+        defer { UserDefaults.standard.set(saved, forKey: key) }
+        UserDefaults.standard.removeObject(forKey: key)
+
+        XCTAssertTrue(DiPoInterestStore.addCustom("  Burung kicau "))
+        XCTAssertFalse(DiPoInterestStore.addCustom("burung KICAU"), "no repeats")
+        XCTAssertFalse(DiPoInterestStore.addCustom("   "), "nothing empty")
+        XCTAssertEqual(DiPoInterestStore.custom, ["Burung kicau"])
+        for n in ["Batik", "Kopi tubruk", "Wayang", "Catur"] { DiPoInterestStore.addCustom(n) }
+        XCTAssertFalse(DiPoInterestStore.addCustom("Layangan"), "five at most")
+        XCTAssertEqual(DiPoInterestStore.custom.count, DiPoInterestStore.customLimit)
+        DiPoInterestStore.removeCustom("Batik")
+        XCTAssertFalse(DiPoInterestStore.custom.contains("Batik"))
+    }
+
+    func testContextLineCarriesCustomInterests() {
+        let line = DiPoInterestStore.contextLine([.coffee], custom: ["burung kicau"]) ?? ""
+        XCTAssertTrue(line.contains("coffee") && line.contains("burung kicau"))
+        XCTAssertNotNil(DiPoInterestStore.contextLine([], custom: ["batik"]))
+    }
+
+    func testACustomInterestGetsItsOwnIdea() {
+        let all = DiPoNudge.all(unread: 0, bill: nil, daysToPayday: nil, payDate: nil,
+                                customInterestTip: "burung kicau")
+        XCTAssertEqual(all.map(\.action), [.customInterestTip("burung kicau")])
+        XCTAssertNotEqual(loc("interest.custom.tip"), "interest.custom.tip")
+        XCTAssertNotEqual(loc("interest.custom.prompt"), "interest.custom.prompt")
+    }
+
     func testEveryInterestHasItsStrings() {
         for i in DiPoInterest.allCases {
             for key in ["interest.\(i.rawValue)", "interest.\(i.rawValue).ask",

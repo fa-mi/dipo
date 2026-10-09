@@ -40,6 +40,32 @@ struct HomeView: View {
     }
     // Observed so HomeView re-renders whenever budgetCardID changes
     @State private var budgetManager = SmartBudgetManager.shared
+    /// Bumped when a row changes in place, which the tx count cannot see.
+    @State private var ledger = LedgerRevision.shared
+
+    /// What changes the pot or the money in it without changing the tx count:
+    /// a row edited in place, a bill card added, money in added to the budget.
+    private struct ScopeSignal: Equatable {
+        let ledger: Int
+        let bills: [String]
+        let extra: [String]
+    }
+    private var scopeSignal: ScopeSignal {
+        ScopeSignal(ledger: ledger.value, bills: budgetManager.billCardIDs,
+                    extra: budgetManager.extraFundTxIDs)
+    }
+
+    /// Smart Budget's switch and split — what the insights are judged by.
+    private struct BudgetSettingsSignal: Equatable {
+        let enabled: Bool
+        let daily: Double
+        let lifestyle: Double
+        let investDebt: Double
+    }
+    private var budgetSettingsSignal: BudgetSettingsSignal {
+        BudgetSettingsSignal(enabled: budgetManager.isEnabled, daily: budgetManager.dailyRatio,
+                             lifestyle: budgetManager.lifestyleRatio, investDebt: budgetManager.investDebtRatio)
+    }
     /// Held in @State so SwiftUI observes plan changes — reading the singleton
     /// inline inside a computed property registers no dependency, so the net
     /// worth chip would linger after a subscription lapsed until a redraw.
@@ -71,6 +97,11 @@ struct HomeView: View {
     @State private var monthExpense: Double = 0
     @State private var flowPeriodLabel: String = ""
     @State private var flowNote: String? = nil
+    @State private var flowNoteTone: MonthFlowCard.NoteTone = .info
+    /// Debt paid and money put away this period, kept out of "Spending".
+    @State private var flowPutAway: Double = 0
+    /// Flagged money in this period, added to the flow card's budget.
+    @State private var flowExtra: Double = 0
     @State private var showAllAttention = false
     @State private var showGoalDetail: SavingsGoal? = nil
     @State private var headerAppeared    = false
@@ -265,7 +296,8 @@ struct HomeView: View {
                     $0 + CurrencyManager.shared.convert($1.amount, from: $1.currency, to: budgetCurrency)
                 }
             }
-            return card.transactions
+            let source = MainCard.isMain(card) ? MainCard.budgetTransactions(in: queriedCards) : card.transactions
+            return source
                 .filter { $0.amount > 0 && $0.txSubtype == TxSubtype.normal && $0.date >= monthStart }
                 .reduce(0.0) { $0 + conv($1) }
         }
@@ -290,7 +322,8 @@ struct HomeView: View {
     /// the income computation above.
     private var budgetTransactions: [TxRecord] {
         if let card = budgetCard {
-            return card.transactions
+            // The main card reads with the cards it pays bills from.
+            return MainCard.isMain(card) ? MainCard.budgetTransactions(in: queriedCards) : card.transactions
         }
         return vm.cards.flatMap { $0.transactions }
     }
@@ -309,28 +342,45 @@ struct HomeView: View {
         }
     }
 
-    /// When spending has passed income, the one sentence that says why the
-    /// balance is still where it is — the same reasoning, and the same book,
-    /// as Statistics. Only then is the card's ledger read; the figures above
-    /// come from the rollup buckets.
-    private func overspendNote(card: BankCard, from start: Date, currency cur: String,
-                               deficit: Double) -> String? {
-        guard deficit >= 0.5 else { return nil }
+    /// The line under the period figures, from the same cash book Statistics
+    /// prints: debt paid down and money put away (named, in blue, because
+    /// neither is overspending), and — when living costs passed income — what
+    /// covered it. Orange for that; red only when the balance itself is gone.
+    /// Reads the card's ledger once, off the render path.
+    private func flowNoteParts(card: BankCard, scope: [BankCard], from start: Date, currency cur: String,
+                               income: Double, expense: Double, extra: Double = 0)
+        -> (text: String?, tone: MonthFlowCard.NoteTone, putAway: Double) {
         let fmt = { (v: Double) in CurrencyManager.shared.formatted(v, currency: cur) }
-        // A credit card's "balance" is what is owed; "still up" means nothing there.
-        guard !card.isCreditCard else { return String(format: loc("home.over_plain"), fmt(deficit)) }
-        let book = PeriodCashBook.build(card.transactions.filter { $0.date >= start },
-                                        end: card.computedBalance(),
-                                        convert: { CurrencyManager.shared.convert(
+        let cm = CurrencyManager.shared
+        // Over the whole pot when the main card has bill cards: the kos paid
+        // from BCA is in the spending, so the balance that covers it is too.
+        let book = PeriodCashBook.build(scope.flatMap(\.transactions).filter { $0.date >= start },
+                                        end: scope.reduce(0.0) {
+                                            $0 + cm.convert($1.computedBalance(), from: $1.resolvedCurrency, to: cur)
+                                        },
+                                        convert: { cm.convert(
                                             $0.amount, from: $0.currency.isEmpty ? cur : $0.currency, to: cur) })
-        switch book.overspend(deficit: deficit) ?? .plain {
-        case .coveredBy(let label, let amount):
-            return String(format: loc("home.over_in"), fmt(deficit), label, fmt(amount))
-        case .savings:
-            return String(format: loc("home.over_saved"), fmt(deficit))
-        case .plain:
-            return String(format: loc("home.over_plain"), fmt(deficit))
+        let putAway = book.debtPaid + book.invested
+        let over = max(expense - putAway, 0) - income - extra
+        // A credit card's "balance" is what is owed; nothing there "covers" anything.
+        let balanceUp = !card.isCreditCard && book.end >= 0.5
+        var parts: [String] = []
+        if extra >= 0.5 { parts.append(String(format: loc("home.extra_note"), fmt(extra))) }
+        if book.debtPaid >= 0.5 { parts.append(String(format: loc("home.debt_note"), fmt(book.debtPaid))) }
+        if book.invested >= 0.5 { parts.append(String(format: loc("home.invest_note"), fmt(book.invested))) }
+        if over >= 0.5 {
+            switch (card.isCreditCard ? nil : book.overspend(deficit: over)) ?? .plain {
+            case .coveredBy(let label, let amount):
+                parts.append(String(format: loc("home.over_in"), fmt(over), label, fmt(amount)))
+            case .savings:
+                parts.append(String(format: loc("home.over_saved"), fmt(over)))
+            case .plain:
+                parts.append(String(format: loc("home.over_plain"), fmt(over)))
+            }
         }
+        if !parts.isEmpty, balanceUp { parts.append(String(format: loc("home.balance_ok"), fmt(book.end))) }
+        let tone: MonthFlowCard.NoteTone = over >= 0.5 ? (balanceUp ? .warn : .danger) : .info
+        return (parts.isEmpty ? nil : parts.joined(separator: " "), tone, putAway)
     }
 
     /// Runs the three Smart-Budget analyses ONCE, off the render path, storing
@@ -362,7 +412,10 @@ struct HomeView: View {
             flowPeriodLabel = loc("home.this_month")
         }
 
-        guard let card = selectedCard else { monthIncome = 0; monthExpense = 0; flowNote = nil; return }
+        guard let card = selectedCard else {
+            monthIncome = 0; monthExpense = 0; flowNote = nil; flowPutAway = 0; flowExtra = 0
+            return
+        }
         let cur = card.resolvedCurrency
         // Read the pre-aggregated daily buckets instead of scanning the card's
         // whole ledger (see RollupEngine). This runs on the tx-count / balance /
@@ -371,13 +424,22 @@ struct HomeView: View {
         // a refund takes back its expense. Counting a refund as income here
         // made Home's two figures disagree with Statistics' for the same days.
         let buckets = RollupStore.shared.rebuildIfStale(context: context, txCount: totalTxCount)
-        let window = RollupEngine.buckets(buckets, cardID: card.id.uuidString, from: windowStart)
+        // The main card is shown with the cards it pays bills from, the same
+        // pot Smart Budget and Statistics read; any other card on its own.
+        let scope = MainCard.isMain(card) ? MainCard.budgetCards(in: queriedCards) : [card]
+        let window = RollupEngine.buckets(buckets, cardIDs: Set(scope.map(\.id.uuidString)), from: windowStart)
         let totals = RollupEngine.totals(for: window, targetCurrency: cur,
                                          convert: { CurrencyManager.shared.convert($0, from: $1, to: $2) })
         monthIncome = totals.income
         monthExpense = max(totals.expenses, 0)
-        flowNote = overspendNote(card: card, from: windowStart, currency: cur,
-                                 deficit: monthExpense - monthIncome)
+        // Only the main card's pot has a budget to add to.
+        flowExtra = MainCard.isMain(card)
+            ? ExtraFunds.total(in: scope.flatMap(\.transactions), from: windowStart, currency: cur) : 0
+        let note = flowNoteParts(card: card, scope: scope, from: windowStart, currency: cur,
+                                 income: monthIncome, expense: monthExpense, extra: flowExtra)
+        flowNote = note.text
+        flowNoteTone = note.tone
+        flowPutAway = note.putAway
     }
 
     private func recomputeHomeInsights() {
@@ -397,7 +459,9 @@ struct HomeView: View {
         // so the warning here quotes the figure that screen shows.
         let projected: Double? = {
             guard let day = payDay, let card = budgetCard else { return nil }
-            return StatisticsView.projectedCycleSpend(card: card, payDay: day,
+            return StatisticsView.projectedCycleSpend(card: card,
+                                                      billCards: MainCard.isMain(card) ? MainCard.billCards(in: queriedCards) : [],
+                                                      payDay: day,
                                                       recurrings: recurringExpenses,
                                                       currency: budgetCurrency)
         }()
@@ -410,8 +474,15 @@ struct HomeView: View {
                 .reduce(0.0) { $0 + cm.convert($1.minimumPayment, from: $1.currency, to: budgetCurrency) }
             + ObligationLoad.cardPayments(cards: vm.cards, installments: installments,
                                           debts: activeDebts, currency: budgetCurrency)
+        // Money in the person chose to budget with this period (ExtraFunds).
+        let cal = Calendar.current
+        let extraFrom: Date = cycleStart ?? cal.safeDate(from: cal.dateComponents([.year, .month], from: Date()))
+        let onMain: Bool = budgetCard.map { MainCard.isMain($0) } ?? false
+        let extra: Double = onMain
+            ? ExtraFunds.total(in: tx, from: extraFrom, to: cycle?.end, currency: budgetCurrency)
+            : 0
         cachedInsights = SmartBudgetManager.shared.evaluateAll(
-            allTransactions: tx, income: totalMonthlyIncome,
+            allTransactions: tx, income: totalMonthlyIncome + extra,
             cardID: budgetCard?.id.uuidString, configs: cardBudgetConfigs,
             targetCurrency: budgetCurrency, goals: activeGoals,
             periodStart: cycleStart, periodEnd: cycle?.end,
@@ -504,6 +575,9 @@ struct HomeView: View {
                                         case .interestTip(let interest):
                                             askDiPoPrompt = interest.prompt
                                             showAskDiPo = true
+                                        case .customInterestTip(let name):
+                                            askDiPoPrompt = String(format: loc("interest.custom.prompt"), name)
+                                            showAskDiPo = true
                                         }
                                     })
                         .padding(.horizontal, 22)
@@ -565,11 +639,14 @@ struct HomeView: View {
                         // direction it has been moving to get there.
                         MonthFlowCard(income: monthIncome,
                                       expense: monthExpense,
+                                      putAway: flowPutAway,
+                                      extra: flowExtra,
                                       currency: selectedCard?.resolvedCurrency
                                                 ?? CurrencyManager.shared.preferredCurrency,
                                       periodLabel: flowPeriodLabel,
                                       isHidden: selectedCard?.isHidden ?? false,
                                       note: flowNote,
+                                      noteTone: flowNoteTone,
                                       onDetails: flowDetails)
                             .padding(.horizontal, 22)
                             .padding(.top, 14)
@@ -717,10 +794,11 @@ struct HomeView: View {
         .onChange(of: selectedCardBalance)     { _, _ in recomputeMonthFlow() }
         // Setting up or moving the salary schedule moves where the cycle starts.
         .onChange(of: MainCard.payDay(salarySchedules)) { _, _ in recomputeMonthFlow() }
-        .onChange(of: budgetManager.isEnabled) { _, _ in recomputeHomeInsights() }
-        .onChange(of: budgetManager.dailyRatio)     { _, _ in recomputeHomeInsights() }
-        .onChange(of: budgetManager.lifestyleRatio) { _, _ in recomputeHomeInsights() }
-        .onChange(of: budgetManager.investDebtRatio){ _, _ in recomputeHomeInsights() }
+        // Grouped into two signals rather than one modifier each: this chain
+        // is long enough that every extra `.onChange` costs the type checker
+        // seconds, and past a point it gives up on the whole body.
+        .onChange(of: scopeSignal)             { _, _ in recomputeHomeInsights(); recomputeMonthFlow() }
+        .onChange(of: budgetSettingsSignal)    { _, _ in recomputeHomeInsights() }
         .trackScreen(.home)
         .onAppear {
             headerAppeared  = true

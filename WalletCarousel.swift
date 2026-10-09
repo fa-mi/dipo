@@ -327,6 +327,7 @@ struct WalletCardActions: View {
     var onDelete: () -> Void
     /// Observed so the badge and the star swap the instant the choice changes.
     @State private var sb = SmartBudgetManager.shared
+    @State private var showMatchBalance = false
 
     private var isMain: Bool {
         let _ = sb.budgetCardID
@@ -390,6 +391,19 @@ struct WalletCardActions: View {
                     .accessibilityLabel(loc("main.make_main"))
                 }
             }
+            // Match DiPo's balance to the bank's — for the drift a hand-kept
+            // ledger gathers. A credit card's figure is what is owed, not a
+            // balance to read off a bank app, so it isn't offered there.
+            if !card.isCreditCard {
+                Button { HapticManager.shared.tap(); showMatchBalance = true } label: {
+                    Image(systemName: "equal.circle")
+                        .font(.system(.subheadline)).foregroundStyle(AppTheme.textSecondary)
+                        .frame(width: 36, height: 36)
+                        .background(AppTheme.cardMid, in: Circle())
+                }
+                .accessibilityLabel(loc("match.title"))
+                .buttonStyle(ScaleButtonStyle())
+            }
             Button { HapticManager.shared.tap(); onEdit() } label: {
                 Image(systemName: "pencil")
                     .font(.system(.subheadline)).foregroundStyle(AppTheme.textSecondary)
@@ -409,7 +423,13 @@ struct WalletCardActions: View {
         }
         .padding(.horizontal, 14).padding(.vertical, 12)
         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
-
+        .sheet(isPresented: $showMatchBalance) {
+            MatchBalanceSheet(card: card)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+                .presentationBackground(AppTheme.bg)
+                .preferredColorScheme(appColorScheme())
+        }
     }
 
     private var subtitle: String {

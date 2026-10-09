@@ -1505,7 +1505,7 @@ enum NotificationScheduler {
         // saying they were comfortably under — with no way to tell which number
         // was lying. An alert the user cannot reproduce is worse than no alert:
         // it teaches them to ignore the next one.
-        let scopedTx: [TxRecord] = MainCard.resolve(in: allCards)?.transactions ?? txs
+        let scopedTx: [TxRecord] = MainCard.potTransactions(in: allCards) ?? txs
 
         // Stated salary income first (the budget's signal even before payday);
         // else income transactions logged within the window.
@@ -1513,6 +1513,10 @@ enum NotificationScheduler {
         if income <= 0 {
             income = scopedTx.filter { $0.date >= periodStart && $0.amount > 0 && $0.txSubtype == TxSubtype.normal }
                 .reduce(0.0) { $0 + cm.convert($1.amount, from: ($1.currency.isEmpty ? preferred : $1.currency), to: preferred) }
+        }
+        // Money in the person added to this period's budget, as the screen counts it.
+        if MainCard.resolve(in: allCards) != nil {
+            income += ExtraFunds.total(in: scopedTx, from: periodStart, currency: preferred)
         }
         guard income > 0 else { return }
 

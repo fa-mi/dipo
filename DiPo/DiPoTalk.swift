@@ -142,6 +142,8 @@ struct DiPoNudge: Equatable, Identifiable {
         case interestGuess(DiPoInterest)
         /// A confirmed interest: opens Ask DiPo with its question.
         case interestTip(DiPoInterest)
+        /// An interest the user wrote themselves: opens Ask DiPo with it.
+        case customInterestTip(String)
         /// Today's DiPo Quest has not been played yet.
         case quest
     }
@@ -172,6 +174,7 @@ struct DiPoNudge: Equatable, Identifiable {
     static func all(unread: Int, checkIn: Bool = false, streak: Int = 0,
                     bill: Bill?, daysToPayday: Int?, payDate: Date?,
                     interestGuess: DiPoInterest? = nil, interestTip: DiPoInterest? = nil,
+                    customInterestTip: String? = nil,
                     questWaiting: Bool = false) -> [DiPoNudge] {
         var out: [DiPoNudge] = []
         // The streak greets the user when they open the app; two days is the
@@ -236,6 +239,11 @@ struct DiPoNudge: Equatable, Identifiable {
                                  exclamation: String(format: loc("interest.tip_title"), tip.emoji),
                                  text: loc("interest.\(tip.rawValue).tip"),
                                  action: .interestTip(tip), link: loc("interest.link_ask")))
+        } else if let name = customInterestTip {
+            out.append(DiPoNudge(id: "interest-tip-custom-\(name)", mood: .happy,
+                                 exclamation: String(format: loc("interest.tip_title"), "✨"),
+                                 text: String(format: loc("interest.custom.tip"), name),
+                                 action: .customInterestTip(name), link: loc("interest.link_ask")))
         }
         // Last of all: a nudge back to the game, whose daily quests include
         // logging a transaction — the habit the rest of the app is for.

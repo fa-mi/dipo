@@ -21,6 +21,16 @@ struct TransactionDetailSheet: View {
     /// Non-nil while the delete confirmation is up. Holds the tx so the sheet
     /// is the same `DeleteTransactionSheet` the swipe gesture opens.
     @State private var pendingDelete: TxRecord? = nil
+    /// Open while the row is being made a loan, or a repayment.
+    @State private var convertMode: ReceivableConvertSheet.Mode? = nil
+    @State private var confirmUnlink = false
+    /// Observed so the extra-funds switch redraws when flipped.
+    @State private var budget = SmartBudgetManager.shared
+    @Query private var receivables: [Receivable]
+    private var linkedReceivable: Receivable? {
+        tx.linkedReceivableID.isEmpty ? nil
+            : receivables.first { $0.id.uuidString == tx.linkedReceivableID }
+    }
     
     /// History the rhythm is measured over: every transaction on this card, not
     /// just this one. Cadence is a property of a habit, not of a purchase.
@@ -191,7 +201,123 @@ struct TransactionDetailSheet: View {
                 onCancel: { pendingDelete = nil })
             .preferredColorScheme(appColorScheme())
         }
+        .sheet(item: $convertMode) { mode in
+            ReceivableConvertSheet(tx: tx, mode: mode)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+                .presentationBackground(AppTheme.bg)
+                .preferredColorScheme(appColorScheme())
+        }
+        .confirmationDialog(loc("tx.loan.unlink_title"), isPresented: $confirmUnlink,
+                            titleVisibility: .visible) {
+            Button(loc("tx.loan.undo"), role: .destructive) {
+                ReceivableConversion.unlink(tx, receivables: receivables,
+                                            allTx: allCards.flatMap(\.transactions), context: context)
+                try? context.save()
+                LedgerRevision.shared.edited(tx, context: context)
+                HapticManager.shared.success()
+            }
+            Button(loc("common.cancel"), role: .cancel) {}
+        } message: {
+            Text(loc(tx.amount < 0 ? "tx.loan.unlink_msg_lent" : "tx.loan.unlink_msg_repaid"))
+        }
         .trackScreen(.transactionDetail)
+    }
+
+    /// A loan written down as spending, or a repayment written down as
+    /// income — the two rows people most often get "wrong" without being
+    /// wrong at the time. One quiet row, and the way back when it's linked.
+    @ViewBuilder
+    private var loanSection: some View {
+        if linkedReceivable != nil {
+            Button {
+                HapticManager.shared.tap()
+                confirmUnlink = true
+            } label: {
+                loanRow(icon: "arrow.uturn.backward.circle",
+                        title: loc(tx.amount < 0 ? "tx.loan.unlink_lent" : "tx.loan.unlink_repaid"),
+                        sub: nil, tint: AppTheme.textSecondary)
+            }
+            .buttonStyle(ScaleButtonStyle())
+            .padding(.horizontal, 22)
+        } else if ReceivableConversion.canLend(tx) {
+            Button {
+                HapticManager.shared.tap()
+                convertMode = .lend
+            } label: {
+                loanRow(icon: "person.crop.circle.badge.clock", title: loc("tx.loan.make"),
+                        sub: loc("tx.loan.make_hint"), tint: AppTheme.blue)
+            }
+            .buttonStyle(ScaleButtonStyle())
+            .padding(.horizontal, 22)
+        } else if ReceivableConversion.canRepay(tx), receivables.contains(where: { !$0.isSettled }) {
+            Button {
+                HapticManager.shared.tap()
+                convertMode = .repay
+            } label: {
+                loanRow(icon: "arrow.down.left.circle", title: loc("tx.loan.repay"),
+                        sub: loc("tx.loan.repay_hint"), tint: AppTheme.blue)
+            }
+            .buttonStyle(ScaleButtonStyle())
+            .padding(.horizontal, 22)
+        }
+    }
+
+    /// Money in that isn't income — a repayment, a gift — can be added to
+    /// this period's budget, by choice and off by default. See ExtraFunds.
+    @ViewBuilder
+    private var extraFundSection: some View {
+        if ExtraFunds.canFlag(tx) {
+            let on = budget.extraFundTxIDs.contains(tx.id.uuidString)
+            VStack(alignment: .leading, spacing: 6) {
+                Toggle(isOn: Binding(
+                    get: { on },
+                    set: { value in
+                        HapticManager.shared.select()
+                        ExtraFunds.set(tx, value)
+                        LedgerRevision.shared.bump()
+                    })) {
+                    Text(loc("tx.extra.toggle"))
+                        .font(.system(.subheadline, weight: .semibold))
+                        .foregroundStyle(AppTheme.textPrimary)
+                }
+                .tint(AppTheme.accent)
+                Text(loc(on ? "tx.extra.on_hint" : "tx.extra.off_hint"))
+                    .font(.system(.caption))
+                    .foregroundStyle(AppTheme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(14)
+            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+            .padding(.horizontal, 22)
+        }
+    }
+
+    private func loanRow(icon: String, title: String, sub: String?, tint: Color) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(.title3))
+                .foregroundStyle(tint)
+                .frame(width: 28)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(.subheadline, weight: .semibold))
+                    .foregroundStyle(AppTheme.textPrimary)
+                if let sub {
+                    Text(sub)
+                        .font(.system(.caption))
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            Spacer(minLength: 8)
+            Image(systemName: "chevron.right")
+                .font(.system(.caption, weight: .semibold))
+                .foregroundStyle(AppTheme.textSecondary.opacity(0.6))
+        }
+        .multilineTextAlignment(.leading)
+        .padding(14)
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
     }
 
     /// A short, stable handle for one transaction, taken from the id it already
@@ -308,6 +434,9 @@ struct TransactionDetailSheet: View {
                     ticketRow(loc("common.date"), tx.displayDate)
                     ticketRow(loc("common.category"), tx.category.displayLabel)
                     ticketRow(loc("common.type"), tx.displayType)
+                    if let r = linkedReceivable {
+                        ticketRow(loc("tx.loan.linked"), r.personName)
+                    }
                     ticketRow(loc("common.currency"), tx.currency)
                     if !tx.notes.isEmpty {
                         ticketRow(loc("common.notes"), tx.displayNotes)
@@ -368,6 +497,9 @@ struct TransactionDetailSheet: View {
             // expense shouldn't exist). Transfers are still created/tagged by
             // the dedicated Transfer feature; they just don't expose a manual
             // tag/reset control here.
+
+            loanSection
+            extraFundSection
 
             // Delete button
             Button {
@@ -555,6 +687,7 @@ struct TransactionDetailSheet: View {
         if !tx.hasSystemNote { tx.notes = editNotes }
         tx.type      = editType == .expense ? "tx.type.purchase" : "tx.type.income"
         try? context.save()
+        LedgerRevision.shared.edited(tx, context: context)
         HapticManager.shared.success()
         withAnimation { isEditing = false }
     }

@@ -144,6 +144,8 @@ struct DiPoHomeSection: View {
     /// at once. Parsed by DiPoInterestStore's own rules.
     @AppStorage("dipo_interests_yes") private var likedRaw = ""
     @AppStorage("dipo_interests_no") private var declinedRaw = ""
+    /// Read so a custom interest added in Profile takes its turn at once.
+    @AppStorage("dipo_interests_custom") private var customRaw = ""
     @State private var askingInterest: DiPoInterest?
     @State private var quest = QuestStore.shared
 
@@ -186,7 +188,8 @@ struct DiPoHomeSection: View {
         DiPoHomeStrip(
             nudges: DiPoNudge.all(unread: unread, checkIn: asking, streak: greeting ? streak : 0,
                                   bill: bill, daysToPayday: daysToPayday, payDate: payDate,
-                                  interestGuess: interestGuess, interestTip: interestTip,
+                                  interestGuess: interestGuess, interestTip: interestTip?.preset,
+                                  customInterestTip: interestTip?.custom,
                                   questWaiting: questWaiting),
             status: status,
             onAskDiPo: onAskDiPo,
@@ -260,13 +263,18 @@ struct DiPoHomeSection: View {
         return DiPoInterest.nextGuess(in: transactions, answered: DiPoInterestStore.answered)
     }
 
-    /// One confirmed interest a day, in turn, for an idea from DiPo.
-    private var interestTip: DiPoInterest? {
+    /// One confirmed interest a day, in turn, for an idea from DiPo — the
+    /// listed ones first, then those the user wrote themselves.
+    private var interestTip: (preset: DiPoInterest?, custom: String?)? {
         guard isRoyal else { return nil }
+        _ = customRaw   // read so a change re-renders
         let liked = DiPoInterest.allCases.filter(likedInterests.contains)
-        guard !liked.isEmpty else { return nil }
+        let custom = DiPoInterestStore.custom
+        let count = liked.count + custom.count
+        guard count > 0 else { return nil }
         let day = Calendar.current.ordinality(of: .day, in: .era, for: refreshedAt) ?? 0
-        return liked[day % liked.count]
+        let i = day % count
+        return i < liked.count ? (liked[i], nil) : (nil, custom[i - liked.count])
     }
 
     /// No DiPo Quest level finished today yet.

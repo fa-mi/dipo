@@ -166,7 +166,7 @@ enum FinancialBriefingEngine {
         let declared = CycleIntentSet.resolve(
             intents, cycleKey: ISO8601DateFormatter.dayString(from: windowStart))
 
-        let allTx = mainCard?.transactions ?? cards.flatMap { $0.transactions }
+        let allTx = MainCard.potTransactions(in: cards) ?? cards.flatMap { $0.transactions }
         let windowExpense = allTx.filter {
             $0.date >= windowStart && $0.date < windowEnd
             && $0.amount < 0 && $0.txSubtype == .normal
@@ -712,7 +712,8 @@ struct FinancialBriefingView: View {
                 let projected: Double? = {
                     guard let card = MainCard.resolve(in: cards),
                           let day = MainCard.payDay(salaries) else { return nil }
-                    return StatisticsView.projectedCycleSpend(card: card, payDay: day,
+                    return StatisticsView.projectedCycleSpend(card: card, billCards: MainCard.billCards(in: cards),
+                                                              payDay: day,
                                                               recurrings: recurrings,
                                                               currency: CurrencyManager.shared.preferredCurrency)
                 }()

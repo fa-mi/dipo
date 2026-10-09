@@ -114,7 +114,7 @@ struct SmartRecommendationView: View {
     /// Scoped to the main card, like every other figure in the app. This screen
     /// was still summing all nine accounts.
     private var allTx: [TxRecord] {
-        MainCard.resolve(in: cards)?.transactions ?? cards.flatMap { $0.transactions }
+        MainCard.potTransactions(in: cards) ?? cards.flatMap { $0.transactions }
     }
 
     /// Records whose shape suggests they don't describe what actually happened.

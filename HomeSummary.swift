@@ -14,6 +14,13 @@ import SwiftUI
 struct MonthFlowCard: View {
     let income: Double
     let expense: Double
+    /// Of `expense`: debt paid down (instalments, card bills) and money put
+    /// into savings or investments. Kept out of "Spending", because paying a
+    /// Rp 3,9 jt card bill is not a month of overspending — it clears a debt.
+    var putAway: Double = 0
+    /// Money in that isn't income but the person added to this period's
+    /// budget (see ExtraFunds). Not shown as income; it widens what is left.
+    var extra: Double = 0
     let currency: String
     /// Names the window the figures cover — "Since payday 25 Aug", or "This
     /// month" when no salary schedule exists to define a cycle.
@@ -22,23 +29,38 @@ struct MonthFlowCard: View {
     /// income and expense on screen would defeat the point of hiding it —
     /// anyone reading over a shoulder learns the same thing either way.
     var isHidden: Bool = false
-    /// One sentence when spending has passed income: what kept the balance up
-    /// (a loan repaid, the money already on the card). Built by HomeView from
-    /// PeriodCashBook, the same reasoning Statistics prints.
+    /// One or two sentences under the figures: debt paid this period, or what
+    /// kept the balance up when living costs passed income. Built by HomeView
+    /// from PeriodCashBook, the same reasoning Statistics prints.
     var note: String? = nil
+    var noteTone: NoteTone = .info
     /// Opens Statistics, where the period's cash book adds it all up. Nil when
     /// this card is not the one Statistics reads.
     var onDetails: (() -> Void)? = nil
 
-    /// Share of income already spent this cycle; nil without income.
-    private var spentShare: Double? { income > 0 ? expense / income : nil }
-    private var remaining: Double { income - expense }
+    /// How the note reads. Red only when the balance itself is gone.
+    enum NoteTone { case info, warn, danger }
 
-    /// Green while there is room, amber past 80 %, red once spending
-    /// passes income.
+    /// Spending on living: everything but debt paid and money put away.
+    private var living: Double { max(expense - putAway, 0) }
+    /// Share of income spent on living this cycle; nil without income.
+    private var budgetIn: Double { income + extra }
+    private var spentShare: Double? { budgetIn > 0 ? living / budgetIn : nil }
+    private var remaining: Double { budgetIn - living }
+
+    /// Green while there is room, orange from 80 % on. Not red: passing income
+    /// is a warning, and the note says whether the balance covers it.
     private var shareTint: Color {
         guard let s = spentShare else { return AppTheme.accent }
-        return s > 1 ? AppTheme.red : (s >= 0.8 ? AppTheme.orange : AppTheme.accent)
+        return s >= 0.8 ? AppTheme.orange : AppTheme.accent
+    }
+
+    private var noteTint: Color {
+        switch noteTone {
+        case .info:   return AppTheme.blue
+        case .warn:   return AppTheme.orange
+        case .danger: return AppTheme.red
+        }
     }
 
     var body: some View {
@@ -91,21 +113,25 @@ struct MonthFlowCard: View {
             // same directions the add-transaction form and Statistics use.
             HStack(spacing: 6) {
                 column(icon: "arrow.down.left", label: loc("home.income"), amount: income, tint: AppTheme.flowIn)
-                column(icon: "arrow.up.right", label: loc("home.expense"), amount: expense, tint: AppTheme.flowOut)
-                // "Net", not "Remaining": this is income minus spending for
-                // the period. What remains is the balance on the card above,
-                // which also holds money from before payday and money that is
-                // not income — "Remaining −Rp 273.500" under a Rp 4 jt
-                // balance read as a contradiction.
-                column(icon: "equal", label: loc("home.net"), amount: remaining,
-                       tint: remaining < -0.5 ? AppTheme.red : AppTheme.blue, signed: true)
+                column(icon: "arrow.up.right", label: loc("home.spending"), amount: living, tint: AppTheme.flowOut)
+                // Never a minus. What is left of income, or how far living
+                // costs went past it — said in words, in blue or orange.
+                // "Remaining −Rp 2.311.881" under a Rp 4,5 jt balance read as
+                // being in debt.
+                if remaining >= -0.5 {
+                    column(icon: "equal", label: loc("home.left_of_income"), amount: max(remaining, 0),
+                           tint: AppTheme.blue)
+                } else {
+                    column(icon: "exclamationmark", label: loc("home.over_income_label"), amount: -remaining,
+                           tint: AppTheme.orange)
+                }
             }
 
             if let note, !isHidden {
                 HStack(alignment: .top, spacing: 8) {
-                    Image(systemName: "exclamationmark.circle.fill")
+                    Image(systemName: noteTone == .info ? "creditcard.fill" : "exclamationmark.circle.fill")
                         .font(.system(.footnote))
-                        .foregroundStyle(AppTheme.red)
+                        .foregroundStyle(noteTint)
                     VStack(alignment: .leading, spacing: 4) {
                         Text(note)
                             .font(.system(.caption))
@@ -129,7 +155,7 @@ struct MonthFlowCard: View {
                     Spacer(minLength: 0)
                 }
                 .padding(10)
-                .background(AppTheme.red.opacity(0.08), in: RoundedRectangle(cornerRadius: AppRadius.sm))
+                .background(noteTint.opacity(0.08), in: RoundedRectangle(cornerRadius: AppRadius.sm))
                 .transition(.opacity)
             }
         }

@@ -37,6 +37,14 @@ extension StatisticsView {
                     Text(periodSubtitle)
                         .font(.system(.footnote))
                         .foregroundStyle(AppTheme.textSecondary)
+                    // Said once, where the screen names itself: the figures
+                    // below include the cards the main card pays bills from.
+                    if let bills = billCardsLabel {
+                        Text(String(format: loc("stats.with_bill_cards"), bills))
+                            .font(.system(.caption))
+                            .foregroundStyle(AppTheme.textSecondary)
+                            .lineLimit(2)
+                    }
                 }
                 Spacer()
                 Button {
@@ -90,37 +98,61 @@ extension StatisticsView {
 
     // MARK: 0 · The headline, at a glance
     //
-    // A hero figure with the period's cash book under it, its progress, a strip
-    // of the four numbers people check daily, and two tiles that show the shape
-    // of the week and of the months. The working stays one tap away in Full
-    // analysis.
+    // Opens on what reassures and is true: whether the money lasts to payday,
+    // the balance, and what it should be at payday. Then how living costs
+    // compare with income — debt paid down and money put away kept apart, since
+    // neither is spending on living — and the period's cash book, which adds it
+    // all up to the balance.
+    //
+    // Red is kept for one case: the balance is on course to run out before
+    // payday. A Rp 3,9 jt credit card payment folded into "spending" used to
+    // put a large red minus at the top of a healthy card, and a person with
+    // money in the bank read it as being in trouble.
 
     var spendHero: some View {
-        let left = leftToSpend
         let book = cashBook
-        return VStack(alignment: .leading, spacing: 16) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(heroLabel(left))
-                    .font(.system(.footnote, weight: .medium))
-                    .foregroundStyle(AppTheme.textSecondary)
-                // Signed, never clamped. "Rp 0" for a period Rp 273.500 over
-                // its income hid the one thing the screen should say.
-                Text(heroFigure(left))
-                    .font(.system(size: 40, weight: .bold))
-                    .foregroundStyle((left ?? 0) < -0.5 ? AppTheme.red : AppTheme.textPrimary)
-                    .contentTransition(.numericText())
-                    .minimumScaleFactor(0.5).lineLimit(1)
+        let outlook = book.flatMap { paydayOutlook($0) }
+        let danger = book.map { (outlook?.end ?? $0.end) < 0.5 } ?? false
+        return VStack(alignment: .leading, spacing: 14) {
+            if let outlook {
+                Label(String(format: loc(outlook.end >= 0.5 ? "stats.safe_until" : "stats.risk_until"),
+                             dayMonth(outlook.payday)),
+                      systemImage: outlook.end >= 0.5 ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                    .font(.system(.footnote, weight: .bold))
+                    .foregroundStyle(outlook.end >= 0.5 ? AppTheme.accent : AppTheme.red)
+                    .padding(.horizontal, 11).padding(.vertical, 6)
+                    .background((outlook.end >= 0.5 ? AppTheme.accent : AppTheme.red).opacity(0.14), in: Capsule())
             }
 
-            if let book { cashBookView(book, left: left) }
+            VStack(alignment: .leading, spacing: 4) {
+                Text(book == nil ? loc("stats.expenses")
+                     : loc(periodRunsToToday ? "stats.balance_now" : "stats.recon_end"))
+                    .font(.system(.footnote, weight: .medium))
+                    .foregroundStyle(AppTheme.textSecondary)
+                Text(book.map { signedMoney($0.end) } ?? money(filteredExpenses))
+                    .font(.system(size: 40, weight: .bold))
+                    .foregroundStyle(danger ? AppTheme.red : AppTheme.textPrimary)
+                    .contentTransition(.numericText())
+                    .minimumScaleFactor(0.5).lineLimit(1)
+                if let outlook {
+                    Text(String(format: loc("stats.at_payday"), signedMoney(outlook.end)))
+                        .font(.system(.footnote))
+                        .foregroundStyle(AppTheme.textSecondary)
+                }
+            }
 
-            if filteredIncome > 0 {
+            if let book, livingFunds > 0 { livingBox(book, danger: danger) }
+            if let book, book.debtPaid >= 0.5 || book.invested >= 0.5 { debtBox(book) }
+            if let book { cashBookView(book) }
+
+            if livingFunds > 0 {
                 VStack(alignment: .leading, spacing: 8) {
                     // The existing gauge, not a plain bar: it carries the tick for
                     // how much of the period has elapsed, so spending ahead of the
                     // calendar is visible rather than merely counted.
-                    SpendGauge(fraction: spentRatio,
-                               timeMarker: periodProgress.map { Double($0.elapsed) / Double($0.total) })
+                    SpendGauge(fraction: livingRatio,
+                               timeMarker: periodProgress.map { Double($0.elapsed) / Double($0.total) },
+                               overColor: danger ? AppTheme.red : AppTheme.orange)
 
                     HStack(spacing: 8) {
                         Text(String(format: loc("stats.pct_of_income"), incomeUsedPct))
@@ -128,6 +160,7 @@ extension StatisticsView {
                             .lineLimit(1).minimumScaleFactor(0.7)
                         Spacer(minLength: 4)
                         if let c = expenseChange, abs(c) >= 1 {
+                            let tint = c < 0 ? AppTheme.accent : (danger ? AppTheme.red : AppTheme.orange)
                             HStack(spacing: 3) {
                                 Image(systemName: c >= 0 ? "arrow.up.right" : "arrow.down.right")
                                     .font(.system(.caption2, weight: .bold))
@@ -138,9 +171,9 @@ extension StatisticsView {
                                     .font(.system(.caption2, weight: .bold))
                                     .lineLimit(1)
                             }
-                            .foregroundStyle(c >= 0 ? AppTheme.red : AppTheme.accent)
+                            .foregroundStyle(tint)
                             .padding(.horizontal, 8).padding(.vertical, 4)
-                            .background((c >= 0 ? AppTheme.red : AppTheme.accent).opacity(0.15), in: Capsule())
+                            .background(tint.opacity(0.15), in: Capsule())
                         }
                     }
                 }
@@ -161,7 +194,7 @@ extension StatisticsView {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background((line.ok ? AppTheme.accent : AppTheme.orange).opacity(0.10),
                             in: RoundedRectangle(cornerRadius: AppRadius.md))
-            } else if filteredIncome <= 0 {
+            } else if livingFunds <= 0 {
                 Label(loc("stats.no_income_hint"), systemImage: "info.circle")
                     .font(.system(.caption))
                     .foregroundStyle(AppTheme.textSecondary)
@@ -181,37 +214,124 @@ extension StatisticsView {
         }
     }
 
-    func heroLabel(_ left: Double?) -> String {
-        guard let left else { return loc("stats.expenses") }
-        return loc(left < -0.5 ? "stats.net_over" : "stats.net_left")
+    func signedMoney(_ v: Double) -> String {
+        (v < -0.5 ? "−" : "") + money(abs(v))
     }
 
-    func heroFigure(_ left: Double?) -> String {
-        guard let left else { return money(filteredExpenses) }
-        return left < -0.5 ? "−" + money(-left) : money(max(left, 0))
+    func dayMonth(_ d: Date) -> String {
+        let f = DateFormatter()
+        f.locale = LanguageManager.shared.currentLocale
+        f.setLocalizedDateFormatFromTemplate("d MMM")
+        return f.string(from: d)
     }
 
-    /// Share of income spent, as on Home: past 100 when spending passes
-    /// income, and held below 100 until the income is actually all gone.
+    /// For a running pay cycle: the next payday, and the balance it should
+    /// find — today's less the spending still to come at the current pace.
+    /// Money in or out that is not income or spending can't be foreseen and
+    /// isn't guessed at.
+    func paydayOutlook(_ book: PeriodCashBook) -> (payday: Date, end: Double)? {
+        guard periodRunsToToday, let projected = projectedSpend, let p = periodProgress,
+              let payday = Calendar.current.date(byAdding: .day, value: p.total,
+                                                 to: Calendar.current.startOfDay(for: effectiveRange.start))
+        else { return nil }
+        return (payday, book.end - max(projected - filteredExpenses, 0))
+    }
+
+    /// Living costs over income, for the gauge: debt paid and money put away
+    /// left out, as in the cash book.
+    var livingRatio: Double {
+        guard livingFunds > 0 else { return 0 }
+        return (cashBook?.living ?? filteredExpenses) / livingFunds
+    }
+
+    /// Money in that isn't income but the person added to this period's
+    /// budget (ExtraFunds).
+    var periodExtraFunds: Double {
+        ExtraFunds.total(in: filteredTx, from: .distantPast, currency: displayCurrency)
+    }
+
+    /// What living costs are measured against: income, plus that.
+    var livingFunds: Double { filteredIncome + periodExtraFunds }
+
+    /// Share of income spent on living, as on Home: past 100 when living costs
+    /// pass income, and held below 100 until the income is actually all gone.
     var incomeUsedPct: Int {
-        guard filteredIncome > 0 else { return 0 }
-        let ratio = filteredExpenses / filteredIncome
+        guard livingFunds > 0 else { return 0 }
+        let ratio = livingRatio
         let pct = Int((ratio * 100).rounded())
         return ratio < 1 ? min(pct, 99) : max(pct, 100)
     }
 
+    /// Living costs against income, in one sentence, coloured by what it
+    /// means: green within income, orange past it, red only when the balance
+    /// itself is in danger.
+    func livingBox(_ book: PeriodCashBook, danger: Bool) -> some View {
+        let over = book.livingNet < -0.5
+        var text = String(format: loc(over ? "stats.living_over" : "stats.living_under"),
+                          money(book.living), money(abs(book.livingNet)))
+        if book.extraFunds >= 0.5 {
+            text += " " + String(format: loc("stats.extra_included"), money(book.extraFunds))
+        }
+        if over, let why = book.overspend(deficit: -book.livingNet) {
+            switch why {
+            case .coveredBy(let label, let amount):
+                text += " " + String(format: loc("stats.over_covered"), label, money(amount))
+            case .savings:
+                text += " " + loc("stats.over_saved")
+            case .plain:
+                break
+            }
+        }
+        let tint = !over ? AppTheme.accent : (danger ? AppTheme.red : AppTheme.orange)
+        return HStack(alignment: .top, spacing: 8) {
+            Image(systemName: over ? "exclamationmark.circle.fill" : "checkmark.circle.fill")
+                .font(.system(.subheadline))
+                .foregroundStyle(tint)
+            Text(text)
+                .font(.system(.footnote, weight: .medium))
+                .foregroundStyle(AppTheme.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(tint.opacity(0.10), in: RoundedRectangle(cornerRadius: AppRadius.md))
+    }
+
+    /// Debt paid down and money put away — named as what they are, in blue,
+    /// rather than counted as overspending.
+    func debtBox(_ book: PeriodCashBook) -> some View {
+        var parts: [String] = []
+        if book.debtPaid >= 0.5 { parts.append(String(format: loc("stats.debt_box"), money(book.debtPaid))) }
+        if book.invested >= 0.5 { parts.append(String(format: loc("stats.invest_box"), money(book.invested))) }
+        // Where the money came from, when income alone didn't cover it.
+        if book.spent - book.income >= 0.5, let top = book.otherIn.first {
+            parts.append(String(format: loc("stats.debt_helped"), top.label, money(top.amount)))
+        }
+        return HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "creditcard.fill")
+                .font(.system(.subheadline))
+                .foregroundStyle(AppTheme.blue)
+            Text(parts.joined(separator: " "))
+                .font(.system(.footnote, weight: .medium))
+                .foregroundStyle(AppTheme.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(AppTheme.blue.opacity(0.09), in: RoundedRectangle(cornerRadius: AppRadius.md))
+    }
+
     // MARK: The period as a cash book
     //
-    // Always open, under the hero figure: where the card stood when the period
-    // began, what came in and went out, and where it stands now. The old hero
-    // put "Left to spend Rp 0" beside a Rp 4 jt balance and hid the arithmetic
-    // that joins them behind a chevron; with a loan repaid that is not income,
-    // the two read as a mistake. See PeriodCashBook.
+    // Always open: where the card stood when the period began, what came in
+    // and went out, and where it stands now. See PeriodCashBook.
 
     /// Nil without a card to read a balance from.
     var cashBook: PeriodCashBook? {
         guard let start = periodStartBalance else { return nil }
-        return PeriodCashBook.build(filteredTx, start: start, convert: convertedAmount)
+        var book = PeriodCashBook.build(filteredTx, start: start, convert: convertedAmount)
+        book.extraFunds = periodExtraFunds
+        return book
     }
 
     /// The window runs to today, so its last line is today's balance.
@@ -231,19 +351,23 @@ extension StatisticsView {
         return out
     }
 
-    func cashBookView(_ book: PeriodCashBook, left: Double?) -> some View {
-        let fmt = DateFormatter()
-        fmt.locale = LanguageManager.shared.currentLocale
-        fmt.setLocalizedDateFormatFromTemplate("d MMM")
+    func cashBookView(_ book: PeriodCashBook) -> some View {
+        let startDay = dayMonth(effectiveRange.start)
         return VStack(alignment: .leading, spacing: 6) {
-            bookLine(String(format: loc("stats.book_start"), fmt.string(from: effectiveRange.start)),
-                     book.start, op: "")
+            bookLine(String(format: loc("stats.book_start"), startDay), book.start, op: "")
             bookLine(loc("stats.recon_income"), book.income, op: "+")
             ForEach(Array(bookRows(book.otherIn).enumerated()), id: \.offset) { _, row in
                 bookLine(row.label, row.amount, op: "+", caption: loc("stats.book_not_income"),
                          tint: AppTheme.accent)
             }
-            bookLine(loc("stats.recon_spent"), book.spent, op: "−")
+            bookLine(loc("stats.book_living"), book.living, op: "−")
+            if book.debtPaid >= 0.5 {
+                bookLine(loc("stats.book_debt"), book.debtPaid, op: "−",
+                         caption: loc("stats.book_debt_note"), tint: AppTheme.blue)
+            }
+            if book.invested >= 0.5 {
+                bookLine(loc("stats.book_invest"), book.invested, op: "−", tint: AppTheme.blue)
+            }
             ForEach(Array(bookRows(book.otherOut).enumerated()), id: \.offset) { _, row in
                 bookLine(row.label, row.amount, op: "−", caption: loc("stats.book_not_spending"))
             }
@@ -254,13 +378,28 @@ extension StatisticsView {
             bookLine(loc(periodRunsToToday ? "stats.card_balance_now" : "stats.recon_end"),
                      book.end, op: "=", total: true)
 
-            if let note = bookNote(book, left: left) {
-                Text(note)
-                    .font(.system(.caption))
-                    .foregroundStyle(AppTheme.textPrimary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.top, 4)
+            // A debit account can't start below zero; a negative opening is
+            // money in that was never logged. Say so, and offer the fix.
+            if book.start < -0.5, let card = selectedCard, !card.isCreditCard {
+                VStack(alignment: .leading, spacing: 6) {
+                    Label(String(format: loc("stats.book_neg_start"), startDay), systemImage: "info.circle")
+                        .font(.system(.caption2))
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Button {
+                        HapticManager.shared.tap()
+                        matchBalanceCard = card
+                    } label: {
+                        HStack(spacing: 3) {
+                            Text(loc("stats.match_cta"))
+                            Image(systemName: "chevron.right").imageScale(.small)
+                        }
+                        .font(.system(.caption, weight: .semibold))
+                        .foregroundStyle(AppTheme.accent)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.top, 4)
             }
         }
         .padding(12)
@@ -299,22 +438,9 @@ extension StatisticsView {
         .accessibilityElement(children: .combine)
     }
 
-    /// One sentence when spending passed income: what kept the balance up.
-    func bookNote(_ book: PeriodCashBook, left: Double?) -> String? {
-        guard let left, left < -0.5, let why = book.overspend(deficit: -left) else { return nil }
-        switch why {
-        case .coveredBy(let label, let amount):
-            return String(format: loc("stats.book_over_in"), money(-left), money(book.end), label, money(amount))
-        case .savings:
-            return String(format: loc("stats.book_over_saved"), money(-left))
-        case .plain:
-            return String(format: loc("stats.book_over_plain"), money(-left))
-        }
-    }
-
     var metricStrip: some View {
         let top = topCategories.first
-        let usedText: String = filteredIncome > 0 ? "\(incomeUsedPct)%" : "—"
+        let usedText: String = livingFunds > 0 ? "\(incomeUsedPct)%" : "—"
         return HStack(spacing: 0) {
             metricCell("chart.pie.fill", AppTheme.accent,
                        usedText,
@@ -407,28 +533,17 @@ extension StatisticsView {
         return (filteredExpenses - prev) / prev * 100
     }
 
-    /// One sentence on where this is heading, for a period still running.
-    /// `book` is the hero's own, passed in rather than rebuilt.
+    /// One sentence on where this is heading, for a period still running —
+    /// for living costs, the figure held against income above. Debt paid and
+    /// money put away so far are taken out of the projection, or a card
+    /// payment would read as a pace of overspending.
     func paceLine(_ book: PeriodCashBook?) -> (ok: Bool, text: String)? {
-        guard let projected = projectedSpend, filteredIncome > 0 else { return nil }
-        var text = projected <= filteredIncome
-            ? String(format: loc("stats.pace_safe"), money(projected))
-            : String(format: loc("stats.pace_over"), money(projected), money(projected - filteredIncome))
-        // What that leaves on the card — the question behind the pace. Today's
-        // balance less the spending still to come; money in or out that is not
-        // income or spending can't be foreseen and isn't guessed at.
-        if let book, let p = periodProgress,
-           let last = Calendar.current.date(byAdding: .day, value: p.total - 1,
-                                            to: Calendar.current.startOfDay(for: effectiveRange.start)) {
-            let fmt = DateFormatter()
-            fmt.locale = LanguageManager.shared.currentLocale
-            fmt.setLocalizedDateFormatFromTemplate("d MMM")
-            let endBalance = book.end - max(projected - filteredExpenses, 0)
-            text += " " + String(format: loc("stats.pace_balance"),
-                                 (endBalance < -0.5 ? "−" : "") + money(abs(endBalance)),
-                                 fmt.string(from: last))
+        guard let projected = projectedSpend, livingFunds > 0 else { return nil }
+        let living = max(projected - (book.map { $0.debtPaid + $0.invested } ?? 0), 0)
+        if living <= livingFunds {
+            return (true, String(format: loc("stats.pace_safe"), money(living)))
         }
-        return (projected <= filteredIncome, text)
+        return (false, String(format: loc("stats.pace_over"), money(living), money(living - livingFunds)))
     }
 
     // MARK: 2 · Where it went

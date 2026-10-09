@@ -35,7 +35,7 @@ extension StatisticsView {
         // every empty day here was the screen congratulating the user for days
         // it knew nothing about — the week someone forgot to open the app scored
         // best of all.
-        let loggedDays = DailyCheckIn.loggedDays(selectedCard?.transactions ?? [])
+        let loggedDays = DailyCheckIn.loggedDays(scopeTransactions)
         let answeredDays = Set(checkIns.map(\.dayKey))
         let known = elapsed.filter {
             DailyCheckIn.knowledge(of: $0.date, logged: loggedDays, answered: answeredDays) != .unknown
@@ -160,7 +160,7 @@ extension StatisticsView {
             if !rows.isEmpty {
                 VStack(spacing: 10) {
                     ForEach(rows) { tx in
-                        TxRow(tx: tx, sourceCard: selectedCard,
+                        TxRow(tx: tx, sourceCard: sourceCard(of: tx),
                               showCard: false, animateEntrance: false)
                     }
                 }
@@ -183,9 +183,9 @@ extension StatisticsView {
         let prev: Double = {
             guard points.count >= 2, let last = points.last else { return 0 }
             let before = points[points.count - 2]
-            guard last.isRunning, let card = selectedCard else { return before.expense }
+            guard last.isRunning, selectedCard != nil else { return before.expense }
             let cutoff = before.start.addingTimeInterval(Date().timeIntervalSince(last.start))
-            return Self.stretchTotal(card.transactions, from: before.start, to: min(cutoff, before.end),
+            return Self.stretchTotal(scopeTransactions, from: before.start, to: min(cutoff, before.end),
                                      income: false, convert: convertedAmount) ?? 0
         }()
         let change: Double? = prev > 0 ? (trendTotal - prev) / prev * 100 : nil
@@ -298,7 +298,7 @@ extension StatisticsView {
     }
 
     func cycleDetail(start: Date, end: Date, label: String) -> some View {
-        let txs = (selectedCard?.transactions ?? []).filter { $0.date >= start && $0.date < end }
+        let txs = scopeTransactions.filter { $0.date >= start && $0.date < end }
         let income = txs.filter { $0.amount > 0 && $0.txSubtype == .normal }
             .reduce(0.0) { $0 + convertedAmount($1) }
         let expense = expenseSum(txs)
@@ -367,7 +367,7 @@ extension StatisticsView {
                                 }
                                 VStack(spacing: 10) {
                                     ForEach(g.rows) { tx in
-                                        TxRow(tx: tx, sourceCard: selectedCard,
+                                        TxRow(tx: tx, sourceCard: sourceCard(of: tx),
                                               showCard: false, animateEntrance: false)
                                     }
                                 }
@@ -602,13 +602,18 @@ extension StatisticsView {
                             Text(String(format: loc("stats.main_card_line"), cardLabel(main)))
                                 .font(.system(.caption))
                                 .foregroundStyle(AppTheme.textSecondary)
+                            if let bills = billCardsLabel {
+                                Text(String(format: loc("stats.with_bill_cards"), bills))
+                                    .font(.system(.caption))
+                                    .foregroundStyle(AppTheme.textSecondary)
+                            }
                         }
                     }
                     .padding(.bottom, 4)
 
                     NetBalanceSummary(net: filteredIncome - filteredExpenses, income: filteredIncome,
                                       expenses: filteredExpenses, currency: displayCurrency,
-                                      cardBalanceNow: selectedCard?.computedBalance(),
+                                      cardBalanceNow: scopeBalanceNow,
                                       startBalance: periodStartBalance,
                                       transferNet: periodTransferNet,
                                       progress: periodProgress,

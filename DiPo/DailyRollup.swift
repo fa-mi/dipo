@@ -229,6 +229,36 @@ final class RollupStore {
         return buckets
     }
 
+    /// Re-reads one row whose fields changed in place — an edited amount or
+    /// date, or a row turned into a loan. `update` only reads rows it has not
+    /// seen, keyed by identity, so an edit kept its old figure until the next
+    /// launch: Home's flow card recomputed on the new balance and still read
+    /// the stale bucket. Redoes the day it left and the day it landed on.
+    func refresh(_ tx: TxRecord, context: ModelContext) {
+        let id = tx.persistentModelID
+        guard let old = factsByID[id] else {
+            update(context: context)
+            return
+        }
+        let fresh = TxFact(tx, cardID: old.cardID)
+        guard fresh != old else { return }
+        let oldKey = DailyRollup.key(cardID: old.cardID, day: old.date)
+        let newKey = DailyRollup.key(cardID: fresh.cardID, day: fresh.date)
+        factsByID[id] = fresh
+        if oldKey != newKey {
+            idsByDay[oldKey]?.remove(id)
+            if idsByDay[oldKey]?.isEmpty == true { idsByDay[oldKey] = nil }
+            idsByDay[newKey, default: []].insert(id)
+        }
+        let touched: Set<String> = [oldKey, newKey]
+        for key in touched {
+            let facts = (idsByDay[key] ?? []).compactMap { factsByID[$0] }
+            if let b = RollupEngine.daily(from: facts).first { bucketsByKey[key] = b } else { bucketsByKey[key] = nil }
+        }
+        buckets = bucketsByKey.values.sorted { $0.dayStart < $1.dayStart }
+        persist(keys: touched, context: context)
+    }
+
     private func forget(_ id: PersistentIdentifier, touched: inout Set<String>) {
         guard let f = factsByID.removeValue(forKey: id) else { return }
         let key = DailyRollup.key(cardID: f.cardID, day: f.date)

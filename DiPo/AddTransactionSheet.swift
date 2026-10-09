@@ -72,7 +72,7 @@ struct AddTransactionSheet: View {
         // No schedule → fall back to income actually received this month.
         let cal = Calendar.current
         let monthStart = cal.safeDate(from: cal.dateComponents([.year, .month], from: Date()))
-        let source: [TxRecord] = MainCard.resolve(in: vm.cards)?.transactions ?? allCardTransactions
+        let source: [TxRecord] = MainCard.potTransactions(in: vm.cards) ?? allCardTransactions
         let received: [TxRecord] = source.filter { (tx: TxRecord) -> Bool in
             tx.amount > 0 && tx.txSubtype == TxSubtype.normal && tx.date >= monthStart
         }
@@ -814,20 +814,27 @@ struct AddTransactionSheet: View {
         // group past its limit. This used to sum every card against the main
         // card's pay, and the global split rather than the card's own.
         let budgetCard = MainCard.resolve(in: vm.cards)
-        if txType == .expense, let main = budgetCard, selectedCardOrNil?.id == main.id {
+        // A bill card's spending is the main card's money too.
+        if txType == .expense, let main = budgetCard,
+           let picked = selectedCardOrNil, picked.id == main.id || MainCard.isBillCard(picked) {
             // Pay-cycle scoped, the same window the Smart Budget screen uses — a
             // calendar month understates spend before payday, so the warning
             // wouldn't fire even when already over.
             let cycleStart: Date? = MainCard.payDay(salarySchedules).map {
                 StatPeriod.cycle(payDay: $0, salaryDates: StatPeriod.salaryDates(on: main)).start
             }
+            let potTx: [TxRecord] = MainCard.budgetTransactions(in: vm.cards)
+            // Plus money in added to this period's budget, as Smart Budget shows it.
+            let cal = Calendar.current
+            let extraFrom: Date = cycleStart ?? cal.safeDate(from: cal.dateComponents([.year, .month], from: Date()))
+            let extra: Double = ExtraFunds.total(in: potTx, from: extraFrom, currency: main.resolvedCurrency)
             if let alert = SmartBudgetManager.shared.wouldExceed(
                 category: selectedCategory,
                 amount: CurrencyManager.shared.convert(abs(effectiveAmount), from: effectiveCurrency,
                                                        to: main.resolvedCurrency),
                 currency: main.resolvedCurrency,
-                transactions: main.transactions,
-                income: monthlyIncome,
+                transactions: potTx,
+                income: monthlyIncome + extra,
                 periodStart: cycleStart,
                 cardID: main.id.uuidString,
                 configs: cardBudgetConfigs

@@ -95,6 +95,9 @@ struct SalarySetupCTA: View {
 struct DebtSummaryCard: View {
     let engine: FinancialHealthEngine
     let monthlyIncome: Double
+    /// Of the total: what credit cards carry. Said under the figure so the
+    /// total can be traced to the cards listed further down.
+    var cardOwed: Double = 0
     let debtFreeDate: Date?
     var showSimulator: Bool
     let onAdd: () -> Void
@@ -123,6 +126,11 @@ struct DebtSummaryCard: View {
                         .foregroundStyle(AppTheme.textPrimary)
                         .lineLimit(1).minimumScaleFactor(0.55)
                         .contentTransition(.numericText())
+                    if cardOwed >= 0.5 {
+                        Text(String(format: loc("debt.total_cards_note"), money(cardOwed)))
+                            .font(.system(.caption))
+                            .foregroundStyle(AppTheme.textSecondary)
+                    }
                 }
                 Spacer(minLength: 8)
                 Button(action: onAdd) {

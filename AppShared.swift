@@ -491,6 +491,10 @@ struct SpendGauge: View {
     /// the tick is spending faster than the calendar. Nil hides it.
     var timeMarker: Double? = nil
     var height: CGFloat = 10
+    /// The fill once the fraction reaches 1. Red by default; a caller that
+    /// knows the overrun is covered (Statistics, with a healthy balance)
+    /// passes orange, so a full bar doesn't read as an emergency.
+    var overColor: Color = AppTheme.red
 
     private static let yellow = Color(hex: "#EAB308")
     private static let amber  = Color(hex: "#F97316")
@@ -518,7 +522,7 @@ struct SpendGauge: View {
             ZStack(alignment: .leading) {
                 Capsule().fill(AppTheme.cardMid)
                 if fraction >= 1 {
-                    Capsule().fill(AppTheme.red)
+                    Capsule().fill(overColor)
                 } else {
                     LinearGradient(stops: Self.stops, startPoint: .leading, endPoint: .trailing)
                         .frame(width: width)

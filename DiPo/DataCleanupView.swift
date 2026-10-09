@@ -58,6 +58,7 @@ struct DataCleanupView: View {
                                              salarySchedules: salarySchedules,
                                              recurringPlans: recurringPlans,
                                              mainCardID: mainCard?.id,
+                                             billCardIDs: Set(MainCard.billCards(in: cards).map(\.id)),
                                              currency: currency)
     }
 

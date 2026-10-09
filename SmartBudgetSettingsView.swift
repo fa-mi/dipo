@@ -10,6 +10,7 @@ struct SmartBudgetSettingsSheet: View {
     @Query(sort: \BankCard.sortOrder) private var cards: [BankCard]
     @Query(sort: \SalarySchedule.createdAt) private var schedules: [SalarySchedule]
     @Query private var cardConfigs: [CardBudgetConfig]
+    @Query private var recurringPlans: [RecurringExpense]
 
     @State private var isEnabled    = SmartBudgetManager.shared.isEnabled
     @State private var dailyPct     = Self.pct(SmartBudgetManager.shared.dailyRatio)
@@ -109,7 +110,17 @@ struct SmartBudgetSettingsSheet: View {
     ///   1. Salary schedules explicitly linked to the selected card (converted to card currency)
     ///   2. Income transactions on the selected card this month (jobless / irregular income)
     ///   3. Zero — budget structure still shows, just without monetary amounts
-    private var monthlyIncome: Double {
+    /// Income plus the money in the person chose to add to this period.
+    private var monthlyIncome: Double { statedIncome + extraFunds }
+
+    /// Money in that isn't income but was added to this period's budget —
+    /// the main card's pot only, and only rows the person switched on.
+    private var extraFunds: Double {
+        guard budgetCardIDs != nil else { return 0 }
+        return ExtraFunds.total(in: budgetTx, from: periodStart, to: periodEnd, currency: cardCurrency)
+    }
+
+    private var statedIncome: Double {
         let mgr = CurrencyManager.shared
 
         // 1. Salary schedules linked to this card
@@ -135,9 +146,31 @@ struct SmartBudgetSettingsSheet: View {
     /// Transactions filtered to the selected main card (or all cards if nil)
     private var budgetTx: [TxRecord] {
         if let id = selectedCardID, let card = cards.first(where: { $0.id.uuidString == id }) {
-            return card.transactions
+            // The main card brings the cards it pays bills from.
+            return MainCard.isMain(card) ? MainCard.budgetTransactions(in: cards) : card.transactions
         }
         return cards.flatMap { $0.transactions }
+    }
+
+    /// The cards the rollup is read over: the main card and its bill cards.
+    /// nil for any other card, which is read on its own.
+    private var budgetCardIDs: Set<String>? {
+        guard let id = selectedCardID, id == MainCard.id else { return nil }
+        return MainCard.budgetCardIDs(in: cards)
+    }
+
+    /// The first active monthly bill charged to a card this budget does not
+    /// count — kos paid from BCA while the budget reads BRI. Offered as a
+    /// one-tap fix rather than left as a silent gap.
+    private var billOutside: (plan: RecurringExpense, card: BankCard)? {
+        guard MainCard.resolve(in: cards) != nil else { return nil }
+        let eligible = MainCard.billEligible(cards)
+        for plan in recurringPlans.filter(\.isActive).sorted(by: { $0.amount > $1.amount }) {
+            guard let id = plan.cardID, let card = eligible.first(where: { $0.id == id }),
+                  !MainCard.isBillCard(card) else { continue }
+            return (plan, card)
+        }
+        return nil
     }
 
     /// Selected card object for display
@@ -205,6 +238,65 @@ struct SmartBudgetSettingsSheet: View {
     /// rollup cache whether it must recompute (mirrors StatisticsView.statTxCount).
     private var totalTxCount: Int { cards.reduce(0) { $0 + $1.transactions.count } }
 
+    // ── Bills paid from other cards ──────────────────────────────────────
+    //
+    // Someone who pays kos from BCA and tops BCA up from the main card each
+    // month spends the main card's money there — but the budget read only the
+    // main card, so the kos was in no budget at all, and an over-generous
+    // top-up was in none either. Picking BCA here reads both cards as one pot:
+    // what is spent on either counts, and what moves between them does not.
+    @ViewBuilder
+    private var billCardsSection: some View {
+        let eligible = MainCard.billEligible(cards)
+        if !eligible.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(loc("budget.bill_cards_title"))
+                    .font(.system(.footnote, weight: .semibold))
+                    .foregroundStyle(AppTheme.textPrimary)
+                    .padding(.horizontal, 22)
+                Text(loc("budget.bill_cards_hint"))
+                    .font(.system(.caption))
+                    .foregroundStyle(AppTheme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 22)
+                CardChipPicker(cards: eligible,
+                               isSelected: { MainCard.isBillCard($0) },
+                               onSelect: { card in
+                                   MainCard.setBillCard(card, !MainCard.isBillCard(card))
+                                   LedgerRevision.shared.bump()
+                               })
+                if let gap = billOutside {
+                    let money = CurrencyManager.shared.formatted(gap.plan.amount, currency: gap.plan.currency)
+                    VStack(alignment: .leading, spacing: 8) {
+                        Label(String(format: loc("budget.bill_outside"),
+                                     gap.plan.label, money, gap.card.pickerLabel),
+                              systemImage: "info.circle.fill")
+                            .font(.system(.caption, weight: .medium))
+                            .foregroundStyle(AppTheme.textPrimary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Button {
+                            HapticManager.shared.tap()
+                            MainCard.setBillCard(gap.card, true)
+                            LedgerRevision.shared.bump()
+                        } label: {
+                            Text(String(format: loc("budget.bill_outside_add"), gap.card.pickerLabel))
+                                .font(.system(.caption, weight: .bold))
+                                .foregroundStyle(AppTheme.onVividFill)
+                                .padding(.horizontal, 12).padding(.vertical, 7)
+                                .background(AppTheme.accentFill, in: Capsule())
+                        }
+                        .buttonStyle(ScaleButtonStyle())
+                    }
+                    .padding(12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(AppTheme.blue.opacity(0.1), in: RoundedRectangle(cornerRadius: AppRadius.md))
+                    .padding(.horizontal, 22)
+                }
+            }
+            .padding(.bottom, 6)
+        }
+    }
+
     /// Refresh the local buckets from the shared store, recomputing only when the
     /// ledger changed. Called from lifecycle hooks, never from a body read.
     private func refreshRollup() {
@@ -218,7 +310,8 @@ struct SmartBudgetSettingsSheet: View {
         SmartBudgetManager.shared.spent(in: grp, buckets: rollupBuckets,
                                         targetCurrency: cardCurrency,
                                         periodStart: periodStart,
-                                        cardID: selectedCardID)
+                                        cardID: selectedCardID,
+                                        cardIDs: budgetCardIDs)
     }
 
     // Groups past their LIMIT. Only Needs and Wants have one: Savings & debt is
@@ -556,6 +649,12 @@ struct SmartBudgetSettingsSheet: View {
                     Text(incomeIsFromTransactions ? loc("budget.from_tx") : loc("budget.from_salary")).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                     Text(CurrencyManager.shared.formatted(monthlyIncome, currency: primary))
                         .font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.accent)
+                    if extraFunds >= 0.5 {
+                        Text(String(format: loc("budget.extra_included"),
+                                    CurrencyManager.shared.formatted(extraFunds, currency: primary)))
+                            .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
+                            .multilineTextAlignment(.trailing)
+                    }
                 }
             } else {
                 HStack(spacing: 4) {
@@ -693,6 +792,8 @@ struct SmartBudgetSettingsSheet: View {
             .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
             .padding(.horizontal, 22)
             .padding(.bottom, 4)
+
+            billCardsSection
         }
 
         // ── Budget Allocation ─────────────────────────────────────────────
