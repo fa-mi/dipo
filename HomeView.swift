@@ -775,7 +775,15 @@ struct HomeView: View {
                 .preferredColorScheme(appColorScheme())
         }
         .sheet(isPresented: $showNotifications) {
-            NotificationCenterView()
+            // "Open Smart Budget" and the like: close the list (and the
+            // detail on it), then go. Closing only the detail left the list
+            // covering the destination.
+            NotificationCenterView(onRoute: { route in
+                showNotifications = false
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
+                    NotificationCenter.default.post(name: route.notificationName, object: nil)
+                }
+            })
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
                 .presentationBackground(AppTheme.bg)

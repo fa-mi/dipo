@@ -937,6 +937,9 @@ extension ISO8601DateFormatter {
 // MARK: - Notification Center View
 
 struct NotificationCenterView: View {
+    /// Closes this list and opens a notification's destination. Nil keeps
+    /// the detail's own behaviour (it closes itself only).
+    var onRoute: ((NotificationRoute) -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
     @Query(sort: \SalarySchedule.createdAt) private var schedules: [SalarySchedule]
     @Query(sort: \BankCard.sortOrder) private var cards: [BankCard]
@@ -991,7 +994,12 @@ struct NotificationCenterView: View {
         .onAppear { seedFromSchedules() }
         // Tap a row → full detail (bigger image, full text, "learn more").
         .sheet(item: $selectedItem) { item in
-            NotificationDetailView(item: item)
+            // A route closes the whole stack — this list with the detail on
+            // top of it — and only then opens the destination, so the user
+            // lands on it rather than on a list that is still open. The
+            // presenter does the closing: it owns this sheet's binding, and
+            // clearing that takes the detail down with it.
+            NotificationDetailView(item: item, onRoute: onRoute)
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
                 .presentationBackground(AppTheme.bg)
@@ -1099,6 +1107,11 @@ struct NotificationCenterView: View {
 
 struct NotificationDetailView: View {
     let item: AppNotificationItem
+    /// Takes the user to the advice's destination. The list that presented
+    /// this sheet passes it, so it can close ITSELF as well: dismissing only
+    /// this sheet left the Notifications list standing over the screen the
+    /// route had just opened underneath.
+    var onRoute: ((NotificationRoute) -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
 
@@ -1206,12 +1219,16 @@ struct NotificationDetailView: View {
                                    let route = NotificationRoute(rawValue: routeRaw) {
                                     Button {
                                         HapticManager.shared.tap()
-                                        // Dismiss first so the destination sheet
-                                        // isn't presented behind this one.
-                                        dismiss()
-                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                                            NotificationCenter.default.post(
-                                                name: route.notificationName, object: nil)
+                                        if let onRoute {
+                                            onRoute(route)
+                                        } else {
+                                            // Dismiss first so the destination
+                                            // isn't opened behind this sheet.
+                                            dismiss()
+                                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                                                NotificationCenter.default.post(
+                                                    name: route.notificationName, object: nil)
+                                            }
                                         }
                                     } label: {
                                         HStack(spacing: 8) {
