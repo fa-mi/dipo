@@ -137,16 +137,20 @@ struct CardHistorySheet: View {
             ZStack {
                 AppTheme.bg.ignoresSafeArea()
                 ScrollView(showsIndicators: false) {
-                    if card.transactions.isEmpty {
-                        Text(loc("cc.history_empty"))
-                            .font(.system(.footnote))
-                            .foregroundStyle(AppTheme.textSecondary)
-                            .padding(.top, 40)
-                    } else {
-                        CardHistoryList(days: CardHistory.days(card.transactions)) { selectedTx = $0 }
-                            .padding(.horizontal, 22)
-                            .padding(.vertical, 12)
+                    VStack(alignment: .leading, spacing: 0) {
+                        if card.transactions.isEmpty {
+                            Text(loc("cc.history_empty"))
+                                .font(.system(.footnote))
+                                .foregroundStyle(AppTheme.textSecondary)
+                                .frame(maxWidth: .infinity)
+                                .padding(.top, 40)
+                        } else {
+                            CardHistoryList(days: CardHistory.days(card.transactions)) { selectedTx = $0 }
+                                .padding(.vertical, 12)
+                        }
                     }
+                    .padding(.horizontal, 22)
+                    .containerRelativeFrame(.horizontal)
                 }
             }
             .navigationTitle(String(format: loc("cc.history_title"), card.pickerLabel))
