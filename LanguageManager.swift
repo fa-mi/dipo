@@ -1529,6 +1529,9 @@ final class LanguageManager {
         "debt.dti_label":       "Debt payments: %@%% of income",
         "debt.extra_recommended": "Extra %@ above minimums recommended for debt acceleration",
         "debt.reduce_expenses": "Reduce expenses by %@ to stay on track with debt repayment.",
+        "debt.total_cards_note": "Includes %@ on credit cards.",
+        "debt.advice.card_only": "Your credit card still carries %@. Paying the whole bill each month keeps interest away.",
+        "debt.reduce_spending_plan": "Spending is %@ past what's free this period, after bills and savings.",
         "debt.due_short":       "due %dth",
         "debt.delete_title":    "Delete %@?",
         
@@ -4740,6 +4743,9 @@ final class LanguageManager {
         "debt.dti_label":       "Cicilan: %@%% dari pemasukan",
         "debt.extra_recommended": "Ekstra %@ di atas minimum disarankan untuk percepatan pelunasan utang",
         "debt.reduce_expenses": "Kurangi pengeluaran sebesar %@ agar tetap pada rencana pelunasan utang.",
+        "debt.total_cards_note": "Termasuk %@ di kartu kredit.",
+        "debt.advice.card_only": "Kartu kreditmu masih menanggung %@. Bayar tagihan penuh tiap bulan supaya tidak kena bunga.",
+        "debt.reduce_spending_plan": "Pengeluaran sudah lewat %@ dari yang bebas dipakai periode ini, setelah tagihan dan tabungan.",
         "debt.due_short":       "jatuh tempo tgl %d",
         "debt.delete_title":    "Hapus %@?",
         

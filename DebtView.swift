@@ -124,15 +124,7 @@ struct DebtView: View {
             return StatPeriod.cycle(payDay: day,
                                     salaryDates: StatPeriod.salaryDates(on: MainCard.resolve(in: cards))).start
         }()
-        return allTx.filter {
-            $0.amount < 0 &&
-            $0.txSubtype != .transfer &&   // transfers aren't spending
-            $0.category != .debtPayment &&
-            $0.date >= cycleStart
-        }.reduce(0) { sum, tx in
-            let txCur = tx.currency.isEmpty ? pref : tx.currency
-            return sum + CurrencyManager.shared.convert(abs(tx.amount), from: txCur, to: pref)
-        }
+        return FinancialHealthEngine.planSpending(allTx, from: cycleStart, currency: pref)
     }
     
     /// Total cash on hand right now across all cards, in preferred currency.
@@ -177,13 +169,32 @@ struct DebtView: View {
             .reduce(0.0) { $0 + cm.convert($1.amount, from: $1.currency.isEmpty ? pref : $1.currency, to: pref) }
     }
 
+    /// A credit-card debt recorded by hand is the same balance the card
+    /// already carries; counting both would double it. Same rule as
+    /// `ObligationLoad.cardPayments`.
+    private var cardDebtRecorded: Bool {
+        debts.contains { $0.isActive && !$0.manuallyClosed && $0.type == DebtType.creditCard.rawValue }
+    }
+
+    /// What the credit cards are owed, in the preferred currency.
+    private var cardOwed: Double {
+        guard !cardDebtRecorded else { return 0 }
+        let cm = CurrencyManager.shared
+        let pref = cm.preferredCurrency
+        return creditCards.reduce(0.0) { $0 + cm.convert($1.totalOwed(installments), from: $1.resolvedCurrency, to: pref) }
+    }
+
     private var engine: FinancialHealthEngine {
-        FinancialHealthEngine(monthlyIncome: monthlyIncome,
-                              debts: debts,
-                              monthlyExpenses: monthlyExpenses,
-                              fixedCommitments: monthlyCommitments,
-                              investDebtRatio: liveInvestDebtRatio,
-                              extraIncomeThisCycle: extraIncomeThisCycle)
+        var e = FinancialHealthEngine(monthlyIncome: monthlyIncome,
+                                      debts: debts,
+                                      monthlyExpenses: monthlyExpenses,
+                                      fixedCommitments: monthlyCommitments,
+                                      investDebtRatio: liveInvestDebtRatio,
+                                      extraIncomeThisCycle: extraIncomeThisCycle)
+        e.cardOwed = cardOwed
+        e.cardMonthly = ObligationLoad.cardPayments(cards: cards, installments: installments, debts: debts,
+                                                    currency: CurrencyManager.shared.preferredCurrency)
+        return e
     }
     
     /// Recomputes each debt's `currentBalance` from its linked payment transactions.
@@ -255,13 +266,15 @@ struct DebtView: View {
         ZStack { AppTheme.bg.ignoresSafeArea()
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 18) {
-                    if debts.isEmpty {
+                    // A card balance alone is enough to show the summary.
+                    if debts.isEmpty && cardOwed < 0.5 {
                         DebtEmptyState(vm: vm)
                             .frame(maxWidth: .infinity)
                             .padding(.top, 30)
                     } else {
                         DebtSummaryCard(engine: engine,
                                         monthlyIncome: monthlyIncome,
+                                        cardOwed: cardOwed,
                                         debtFreeDate: debtFreeDate,
                                         showSimulator: !embedded && !activeDebts.isEmpty,
                                         onAdd: { HapticManager.shared.tap(); vm.resetForm(); vm.showAddSheet = true },
@@ -269,7 +282,8 @@ struct DebtView: View {
 
                         if engine.isOverspending {
                             InlineBanner(tone: .warning,
-                                         message: String(format: loc("debt.reduce_expenses"),
+                                         message: String(format: loc(engine.hasAnyDebt ? "debt.reduce_expenses"
+                                                                                       : "debt.reduce_spending_plan"),
                                                          CurrencyManager.shared.formatted(engine.overspendAmount,
                                                                                           currency: CurrencyManager.shared.preferredCurrency)))
                         }

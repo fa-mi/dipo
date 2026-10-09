@@ -226,6 +226,14 @@ struct FinancialHealthEngine {
     /// one makes those overrides invisible exactly where they matter most.
     /// Default matches the app's own starting ratio for callers that predate it.
     var investDebtRatio: Double = 0.20
+    /// Owed on credit cards, in the preferred currency, and what they ask for
+    /// each month (instalments plus the minimum on a carried balance). Cards
+    /// are accounts, not DebtRecords, so this engine used to miss them
+    /// entirely: Rp 8 jt on a card read as "Total you owe Rp 0 — no active
+    /// debts". The caller leaves both at zero when a credit-card debt is
+    /// already recorded by hand, which would be the same money twice.
+    var cardOwed: Double = 0
+    var cardMonthly: Double = 0
 
     // MARK: - Core Calculations
 
@@ -235,16 +243,41 @@ struct FinancialHealthEngine {
     /// $5k = "500,005,000" — nonsense).
     var totalDebt: Double {
         let pref = CurrencyManager.shared.preferredCurrency
-        return debts.filter { $0.isActive }.reduce(0) {
+        return debts.filter { $0.isActive }.reduce(cardOwed) {
             $0 + CurrencyManager.shared.convert($1.currentBalance, from: $1.currency, to: pref)
         }
     }
     var totalMinimumPayments: Double {
         let pref = CurrencyManager.shared.preferredCurrency
-        return debts.filter { $0.isActive }.reduce(0) {
+        return debts.filter { $0.isActive }.reduce(cardMonthly) {
             $0 + CurrencyManager.shared.convert($1.minimumPayment, from: $1.currency, to: pref)
         }
     }
+
+    /// Spending measured against `safeSpendingBudget`, from `start`.
+    ///
+    /// Left out, because the allowance already accounts for them: transfers,
+    /// debt payments, money put into savings (the set-aside), and posted
+    /// recurring bills (the plan total in `fixedCommitments`). Counting a
+    /// posted bill here as well told Fahmi to cut Rp 3.880.707 when kos, the
+    /// transfer to Mom and the subscriptions — Rp 3.805.000 posted — were
+    /// simply counted twice; the honest gap was about Rp 76.000.
+    static func planSpending(_ txs: [TxRecord], from start: Date, currency pref: String) -> Double {
+        txs.filter {
+            $0.amount < 0 &&
+            $0.txSubtype != .transfer &&
+            $0.category != .debtPayment &&
+            $0.category != .investment &&
+            $0.notes != "tx.note.recurring_auto" &&
+            $0.date >= start
+        }.reduce(0) { sum, tx in
+            let txCur = tx.currency.isEmpty ? pref : tx.currency
+            return sum + CurrencyManager.shared.convert(abs(tx.amount), from: txCur, to: pref)
+        }
+    }
+
+    /// Anything owed at all — a recorded debt or a card balance.
+    var hasAnyDebt: Bool { debts.contains(where: \.isActive) || cardOwed >= 0.5 }
     var totalMonthlyInterest: Double {
         let pref = CurrencyManager.shared.preferredCurrency
         return debts.filter { $0.isActive }.reduce(0) {
@@ -261,7 +294,7 @@ struct FinancialHealthEngine {
     /// what we advise.
     var totalEffectiveMinimums: Double {
         let pref = CurrencyManager.shared.preferredCurrency
-        return debts.filter { $0.isActive }.reduce(0) {
+        return debts.filter { $0.isActive }.reduce(cardMonthly) {
             $0 + CurrencyManager.shared.convert($1.effectiveMinimumPayment, from: $1.currency, to: pref)
         }
     }
@@ -390,15 +423,16 @@ struct FinancialHealthEngine {
         // If no income data at all, use a debt-only score
         // based purely on total debt load and interest rates
         if monthlyIncome <= 0 {
-            if activeDebts.isEmpty { return 100 }
+            if activeDebts.isEmpty && cardOwed < 0.5 { return 100 }
             // Score based on average interest rate and number of debts
-            let avgAPR = activeDebts.reduce(0.0) { $0 + $1.annualInterestRate } / Double(activeDebts.count)
+            let avgAPR = activeDebts.isEmpty ? 0
+                : activeDebts.reduce(0.0) { $0 + $1.annualInterestRate } / Double(activeDebts.count)
             let totalDebt = totalDebt
             var score = 100.0
             // Heavy penalty for high interest (e.g. 24% APR → -48 pts capped at -50)
             score -= min(avgAPR * 2.0, 50)
             // Penalty for having multiple debts
-            score -= min(Double(activeDebts.count - 1) * 5, 20)
+            score -= min(Double(max(activeDebts.count - 1, 0)) * 5, 20)
             // Penalty for large absolute debt (rough heuristic: Rp 10M+ is significant)
             if totalDebt > 10_000_000 { score -= 10 }
             else if totalDebt > 1_000_000 { score -= 5 }
@@ -467,6 +501,11 @@ struct FinancialHealthEngine {
 
     var primaryAdvice: String {
         if debts.filter({ $0.isActive }).isEmpty {
+            // A card balance is still money owed.
+            if cardOwed >= 0.5 {
+                return String(format: loc("debt.advice.card_only"),
+                              CurrencyManager.shared.formatted(cardOwed, currency: CurrencyManager.shared.preferredCurrency))
+            }
             return loc("debt.advice.no_active")
         }
         if monthlyIncome <= 0 {
