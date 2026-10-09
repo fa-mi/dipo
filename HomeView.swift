@@ -42,6 +42,30 @@ struct HomeView: View {
     @State private var budgetManager = SmartBudgetManager.shared
     /// Bumped when a row changes in place, which the tx count cannot see.
     @State private var ledger = LedgerRevision.shared
+
+    /// What changes the pot or the money in it without changing the tx count:
+    /// a row edited in place, a bill card added, money in added to the budget.
+    private struct ScopeSignal: Equatable {
+        let ledger: Int
+        let bills: [String]
+        let extra: [String]
+    }
+    private var scopeSignal: ScopeSignal {
+        ScopeSignal(ledger: ledger.value, bills: budgetManager.billCardIDs,
+                    extra: budgetManager.extraFundTxIDs)
+    }
+
+    /// Smart Budget's switch and split — what the insights are judged by.
+    private struct BudgetSettingsSignal: Equatable {
+        let enabled: Bool
+        let daily: Double
+        let lifestyle: Double
+        let investDebt: Double
+    }
+    private var budgetSettingsSignal: BudgetSettingsSignal {
+        BudgetSettingsSignal(enabled: budgetManager.isEnabled, daily: budgetManager.dailyRatio,
+                             lifestyle: budgetManager.lifestyleRatio, investDebt: budgetManager.investDebtRatio)
+    }
     /// Held in @State so SwiftUI observes plan changes — reading the singleton
     /// inline inside a computed property registers no dependency, so the net
     /// worth chip would linger after a subscription lapsed until a redraw.
@@ -770,13 +794,11 @@ struct HomeView: View {
         .onChange(of: selectedCardBalance)     { _, _ in recomputeMonthFlow() }
         // Setting up or moving the salary schedule moves where the cycle starts.
         .onChange(of: MainCard.payDay(salarySchedules)) { _, _ in recomputeMonthFlow() }
-        .onChange(of: ledger.value)            { _, _ in recomputeHomeInsights(); recomputeMonthFlow() }
-        .onChange(of: budgetManager.billCardIDs) { _, _ in recomputeHomeInsights(); recomputeMonthFlow() }
-        .onChange(of: budgetManager.extraFundTxIDs) { _, _ in recomputeHomeInsights(); recomputeMonthFlow() }
-        .onChange(of: budgetManager.isEnabled) { _, _ in recomputeHomeInsights() }
-        .onChange(of: budgetManager.dailyRatio)     { _, _ in recomputeHomeInsights() }
-        .onChange(of: budgetManager.lifestyleRatio) { _, _ in recomputeHomeInsights() }
-        .onChange(of: budgetManager.investDebtRatio){ _, _ in recomputeHomeInsights() }
+        // Grouped into two signals rather than one modifier each: this chain
+        // is long enough that every extra `.onChange` costs the type checker
+        // seconds, and past a point it gives up on the whole body.
+        .onChange(of: scopeSignal)             { _, _ in recomputeHomeInsights(); recomputeMonthFlow() }
+        .onChange(of: budgetSettingsSignal)    { _, _ in recomputeHomeInsights() }
         .trackScreen(.home)
         .onAppear {
             headerAppeared  = true
