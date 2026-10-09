@@ -52,6 +52,8 @@ struct StatisticsView: View {
     /// The card whose balance is being matched to the bank, from the cash
     /// book's negative-opening hint.
     @State var matchBalanceCard: BankCard? = nil
+    /// Whether the cash book's "between your own accounts" line is open.
+    @State var showOwnMoves = false
     /// The slice picked in the ring. Held here rather than inside the chart so
     /// the figure beside it can follow the same choice.
     @State var donutSelection: String? = nil

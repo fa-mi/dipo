@@ -466,6 +466,9 @@ struct DebtView: View {
                                                onLogSpend: { logSpendCard = card },
                                                onPay: { payingCard = card },
                                                onDelete: { deletingCard = card })
+                        // Right under the card, so a purchase just logged is
+                        // the first thing below what it changed.
+                        CardHistorySection(card: card)
                         InstallmentSection(card: card, installments: installments, context: context)
                     }
                 }
