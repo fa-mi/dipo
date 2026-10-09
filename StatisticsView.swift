@@ -47,6 +47,9 @@ struct StatisticsView: View {
     @State var sb = SmartBudgetManager.shared
     @State var showExportSheet = false
     @State var showAllCategories = false
+    /// The card whose balance is being matched to the bank, from the cash
+    /// book's negative-opening hint.
+    @State var matchBalanceCard: BankCard? = nil
     /// The slice picked in the ring. Held here rather than inside the chart so
     /// the figure beside it can follow the same choice.
     @State var donutSelection: String? = nil
@@ -151,6 +154,13 @@ struct StatisticsView: View {
         .onChange(of: statTxCount) { _, _ in
             recomputeStats()
             withAnimation { statsVM.categories = realCategories }
+        }
+        .sheet(item: $matchBalanceCard) { card in
+            MatchBalanceSheet(card: card)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+                .presentationBackground(AppTheme.bg)
+                .preferredColorScheme(appColorScheme())
         }
         .sheet(isPresented: $showCustomPicker) {
             CustomDateRangeSheet(startDate: $customStart, endDate: $customEnd)

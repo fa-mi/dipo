@@ -89,13 +89,57 @@ final class PeriodCashBookTests: XCTestCase {
         XCTAssertEqual(book.end, 4_000_000, accuracy: 0.5)
     }
 
+    /// 9 Oct: two Tokopedia card payments (Rp 3.882.381) pushed spending to
+    /// Rp 2.311.881 over the salary, and the screens put that in red. Living
+    /// costs were Rp 8.429.500 — under the salary — and are now read apart
+    /// from the debt being paid down.
+    func testDebtPaidIsKeptApartFromLiving() {
+        let txs = fahmisPeriod() + [
+            tx("Tokopedia CC bill payment", -1_882_381, .debtPayment, notes: "tx.note.cc_payment"),
+            tx("more of the period", -156_000, .food),
+            tx("Transfer from •••• 9331", 2_600_000, subtype: .transfer, icon: "⇄"),
+        ]
+        let book = PeriodCashBook.build(txs, start: -75_485, convert: { $0.amount })
+        XCTAssertEqual(book.spent, 12_311_881, accuracy: 0.5)
+        XCTAssertEqual(book.debtPaid, 3_882_381, accuracy: 0.5)
+        XCTAssertEqual(book.living, 8_429_500, accuracy: 0.5)
+        XCTAssertEqual(book.livingNet, 1_570_500, accuracy: 0.5, "living costs are under the salary")
+        XCTAssertEqual(book.ownMoves, 1_950_000, accuracy: 0.5)
+        XCTAssertEqual(book.end, 4_562_634, accuracy: 0.5)
+    }
+
+    func testInvestedAndRefundsAreReadByCategory() {
+        let txs = [tx("Gaji", 5_000_000, .salary),
+                   tx("Reksa dana", -500_000, .investment),
+                   tx("Cicilan HP", -600_000, .debtPayment),
+                   tx("Refund cicilan", 100_000, .debtPayment, subtype: .refund),
+                   tx("Makan", -300_000, .food)]
+        let book = PeriodCashBook.build(txs, start: 0, convert: { $0.amount })
+        XCTAssertEqual(book.invested, 500_000, accuracy: 0.5)
+        XCTAssertEqual(book.debtPaid, 500_000, accuracy: 0.5)
+        XCTAssertEqual(book.living, 300_000, accuracy: 0.5)
+    }
+
+    func testMatchingTheBankMovesTheSeedByTheDifference() {
+        XCTAssertEqual(MatchBalance.seed(current: 0, computed: 3_966_015, bankBalance: 4_041_500), 75_485, accuracy: 0.5)
+        XCTAssertEqual(MatchBalance.seed(current: 100_000, computed: 500_000, bankBalance: 450_000), 50_000, accuracy: 0.5)
+    }
+
     func testNewStringsInBothLanguages() {
-        let keys = ["stats.net_left", "stats.net_over", "stats.pct_of_income", "stats.vs_last_period",
+        let keys = ["stats.pct_of_income", "stats.vs_last_period",
                     "stats.book_start", "stats.book_not_income", "stats.book_not_spending",
-                    "stats.book_own_moves", "stats.book_over_in", "stats.book_over_saved",
-                    "stats.book_over_plain", "stats.pace_balance", "stats.metric_of_income",
+                    "stats.book_own_moves", "stats.metric_of_income",
                     "stats.metric_typical_day", "stats.metric_top_named",
-                    "home.net", "home.over_in", "home.over_saved", "home.over_plain", "home.flow_details",
+                    "stats.safe_until", "stats.risk_until", "stats.balance_now", "stats.at_payday",
+                    "stats.living_under", "stats.living_over", "stats.over_covered", "stats.over_saved",
+                    "stats.debt_box", "stats.invest_box", "stats.debt_helped", "stats.book_living",
+                    "stats.book_debt", "stats.book_debt_note", "stats.book_invest",
+                    "stats.book_neg_start", "stats.match_cta",
+                    "home.spending", "home.left_of_income", "home.over_income_label",
+                    "home.debt_note", "home.invest_note", "home.balance_ok",
+                    "home.over_in", "home.over_saved", "home.over_plain", "home.flow_details",
+                    "match.title", "match.intro", "match.dipo_balance", "match.bank_balance",
+                    "match.diff_up", "match.diff_down", "match.already", "match.forgot_hint", "match.apply",
                     "pending.source.recurring", "pending.recurring_note", "pending.recurring_gone"]
         for lang in LanguageManager.Language.allCases {
             LanguageManager.shared.withLanguage(lang) {

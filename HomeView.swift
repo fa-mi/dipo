@@ -71,6 +71,9 @@ struct HomeView: View {
     @State private var monthExpense: Double = 0
     @State private var flowPeriodLabel: String = ""
     @State private var flowNote: String? = nil
+    @State private var flowNoteTone: MonthFlowCard.NoteTone = .info
+    /// Debt paid and money put away this period, kept out of "Spending".
+    @State private var flowPutAway: Double = 0
     @State private var showAllAttention = false
     @State private var showGoalDetail: SavingsGoal? = nil
     @State private var headerAppeared    = false
@@ -309,28 +312,39 @@ struct HomeView: View {
         }
     }
 
-    /// When spending has passed income, the one sentence that says why the
-    /// balance is still where it is — the same reasoning, and the same book,
-    /// as Statistics. Only then is the card's ledger read; the figures above
-    /// come from the rollup buckets.
-    private func overspendNote(card: BankCard, from start: Date, currency cur: String,
-                               deficit: Double) -> String? {
-        guard deficit >= 0.5 else { return nil }
+    /// The line under the period figures, from the same cash book Statistics
+    /// prints: debt paid down and money put away (named, in blue, because
+    /// neither is overspending), and — when living costs passed income — what
+    /// covered it. Orange for that; red only when the balance itself is gone.
+    /// Reads the card's ledger once, off the render path.
+    private func flowNoteParts(card: BankCard, from start: Date, currency cur: String,
+                               income: Double, expense: Double)
+        -> (text: String?, tone: MonthFlowCard.NoteTone, putAway: Double) {
         let fmt = { (v: Double) in CurrencyManager.shared.formatted(v, currency: cur) }
-        // A credit card's "balance" is what is owed; "still up" means nothing there.
-        guard !card.isCreditCard else { return String(format: loc("home.over_plain"), fmt(deficit)) }
         let book = PeriodCashBook.build(card.transactions.filter { $0.date >= start },
                                         end: card.computedBalance(),
                                         convert: { CurrencyManager.shared.convert(
                                             $0.amount, from: $0.currency.isEmpty ? cur : $0.currency, to: cur) })
-        switch book.overspend(deficit: deficit) ?? .plain {
-        case .coveredBy(let label, let amount):
-            return String(format: loc("home.over_in"), fmt(deficit), label, fmt(amount))
-        case .savings:
-            return String(format: loc("home.over_saved"), fmt(deficit))
-        case .plain:
-            return String(format: loc("home.over_plain"), fmt(deficit))
+        let putAway = book.debtPaid + book.invested
+        let over = max(expense - putAway, 0) - income
+        // A credit card's "balance" is what is owed; nothing there "covers" anything.
+        let balanceUp = !card.isCreditCard && book.end >= 0.5
+        var parts: [String] = []
+        if book.debtPaid >= 0.5 { parts.append(String(format: loc("home.debt_note"), fmt(book.debtPaid))) }
+        if book.invested >= 0.5 { parts.append(String(format: loc("home.invest_note"), fmt(book.invested))) }
+        if over >= 0.5 {
+            switch (card.isCreditCard ? nil : book.overspend(deficit: over)) ?? .plain {
+            case .coveredBy(let label, let amount):
+                parts.append(String(format: loc("home.over_in"), fmt(over), label, fmt(amount)))
+            case .savings:
+                parts.append(String(format: loc("home.over_saved"), fmt(over)))
+            case .plain:
+                parts.append(String(format: loc("home.over_plain"), fmt(over)))
+            }
         }
+        if !parts.isEmpty, balanceUp { parts.append(String(format: loc("home.balance_ok"), fmt(book.end))) }
+        let tone: MonthFlowCard.NoteTone = over >= 0.5 ? (balanceUp ? .warn : .danger) : .info
+        return (parts.isEmpty ? nil : parts.joined(separator: " "), tone, putAway)
     }
 
     /// Runs the three Smart-Budget analyses ONCE, off the render path, storing
@@ -362,7 +376,10 @@ struct HomeView: View {
             flowPeriodLabel = loc("home.this_month")
         }
 
-        guard let card = selectedCard else { monthIncome = 0; monthExpense = 0; flowNote = nil; return }
+        guard let card = selectedCard else {
+            monthIncome = 0; monthExpense = 0; flowNote = nil; flowPutAway = 0
+            return
+        }
         let cur = card.resolvedCurrency
         // Read the pre-aggregated daily buckets instead of scanning the card's
         // whole ledger (see RollupEngine). This runs on the tx-count / balance /
@@ -376,8 +393,11 @@ struct HomeView: View {
                                          convert: { CurrencyManager.shared.convert($0, from: $1, to: $2) })
         monthIncome = totals.income
         monthExpense = max(totals.expenses, 0)
-        flowNote = overspendNote(card: card, from: windowStart, currency: cur,
-                                 deficit: monthExpense - monthIncome)
+        let note = flowNoteParts(card: card, from: windowStart, currency: cur,
+                                 income: monthIncome, expense: monthExpense)
+        flowNote = note.text
+        flowNoteTone = note.tone
+        flowPutAway = note.putAway
     }
 
     private func recomputeHomeInsights() {
@@ -565,11 +585,13 @@ struct HomeView: View {
                         // direction it has been moving to get there.
                         MonthFlowCard(income: monthIncome,
                                       expense: monthExpense,
+                                      putAway: flowPutAway,
                                       currency: selectedCard?.resolvedCurrency
                                                 ?? CurrencyManager.shared.preferredCurrency,
                                       periodLabel: flowPeriodLabel,
                                       isHidden: selectedCard?.isHidden ?? false,
                                       note: flowNote,
+                                      noteTone: flowNoteTone,
                                       onDetails: flowDetails)
                             .padding(.horizontal, 22)
                             .padding(.top, 14)

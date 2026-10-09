@@ -26,8 +26,15 @@ struct PeriodCashBook: Equatable {
     var income: Double
     /// Money in that is not income — a loan repaid, say — largest first.
     var otherIn: [NonFlowMovements.Row]
-    /// Spending, refunds netted, as Statistics counts it.
+    /// Spending, refunds netted, as Statistics counts it. Includes the two
+    /// below, which are spending only in the cash sense.
     var spent: Double
+    /// Of `spent`: paying down debt — instalments, credit card bills. It clears
+    /// what is owed; it buys nothing new. Shown on its own line, because folded
+    /// into "spending" a Rp 3,9 jt card payment read as a month of overspending.
+    var debtPaid: Double = 0
+    /// Of `spent`: put into savings and investments.
+    var invested: Double = 0
     /// Money out that is not spending — a credit card bill, lending — largest first.
     var otherOut: [NonFlowMovements.Row]
     /// Net of moves between the user's own cards and wallets. Signed.
@@ -35,6 +42,11 @@ struct PeriodCashBook: Equatable {
 
     /// Income minus spending — the period's own result.
     var net: Double { income - spent }
+    /// Spending on living — everything but debt paid and money put away. The
+    /// figure to hold against income when asking "am I living within it?".
+    var living: Double { max(spent - debtPaid - invested, 0) }
+    /// Income minus living. Positive: room left; negative: living past income.
+    var livingNet: Double { income - living }
     var otherInTotal: Double { otherIn.reduce(0) { $0 + $1.amount } }
     var otherOutTotal: Double { otherOut.reduce(0) { $0 + $1.amount } }
     /// Balance at the end of the window. Equals the card balance for a window
@@ -53,7 +65,22 @@ struct PeriodCashBook: Equatable {
         // between the user's own accounts.
         let own = transfers - ins.reduce(0) { $0 + $1.amount } + outs.reduce(0) { $0 + $1.amount }
         return PeriodCashBook(start: start, income: income, otherIn: ins, spent: spent,
+                              debtPaid: categorySpend(txs, .debtPayment, convert: convert),
+                              invested: categorySpend(txs, .investment, convert: convert),
                               otherOut: outs, ownMoves: abs(own) < 0.5 ? 0 : own)
+    }
+
+    /// Spending in one category by Statistics' rules: transfers skipped, a
+    /// refund taking back its amount. Never below zero.
+    static func categorySpend(_ txs: [TxRecord], _ category: TxCategory,
+                              convert: (TxRecord) -> Double) -> Double {
+        let total = txs.filter { $0.category == category && $0.txSubtype != .transfer }
+            .reduce(0.0) { sum, tx in
+                let a = abs(convert(tx))
+                if tx.txSubtype == .refund { return sum - a }
+                return tx.amount < 0 ? sum + a : sum
+            }
+        return max(total, 0)
     }
 
     /// The book closed against a known end balance — for a window that runs to
