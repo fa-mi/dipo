@@ -133,7 +133,7 @@ enum WidgetDataSync {
             return cal.date(from: cal.dateComponents([.year, .month], from: now)) ?? now
         }()
         let allTxs: [TxRecord] = (try? context.fetch(FetchDescriptor<TxRecord>())) ?? []
-        let txs: [TxRecord] = MainCard.resolve(in: allCards)?.transactions ?? allTxs
+        let txs: [TxRecord] = MainCard.potTransactions(in: allCards) ?? allTxs
 
         let preferred = CurrencyManager.shared.preferredCurrency
         var expenses: Double = 0

@@ -40,6 +40,8 @@ struct HomeView: View {
     }
     // Observed so HomeView re-renders whenever budgetCardID changes
     @State private var budgetManager = SmartBudgetManager.shared
+    /// Bumped when a row changes in place, which the tx count cannot see.
+    @State private var ledger = LedgerRevision.shared
     /// Held in @State so SwiftUI observes plan changes — reading the singleton
     /// inline inside a computed property registers no dependency, so the net
     /// worth chip would linger after a subscription lapsed until a redraw.
@@ -268,7 +270,8 @@ struct HomeView: View {
                     $0 + CurrencyManager.shared.convert($1.amount, from: $1.currency, to: budgetCurrency)
                 }
             }
-            return card.transactions
+            let source = MainCard.isMain(card) ? MainCard.budgetTransactions(in: queriedCards) : card.transactions
+            return source
                 .filter { $0.amount > 0 && $0.txSubtype == TxSubtype.normal && $0.date >= monthStart }
                 .reduce(0.0) { $0 + conv($1) }
         }
@@ -293,7 +296,8 @@ struct HomeView: View {
     /// the income computation above.
     private var budgetTransactions: [TxRecord] {
         if let card = budgetCard {
-            return card.transactions
+            // The main card reads with the cards it pays bills from.
+            return MainCard.isMain(card) ? MainCard.budgetTransactions(in: queriedCards) : card.transactions
         }
         return vm.cards.flatMap { $0.transactions }
     }
@@ -317,13 +321,18 @@ struct HomeView: View {
     /// neither is overspending), and — when living costs passed income — what
     /// covered it. Orange for that; red only when the balance itself is gone.
     /// Reads the card's ledger once, off the render path.
-    private func flowNoteParts(card: BankCard, from start: Date, currency cur: String,
+    private func flowNoteParts(card: BankCard, scope: [BankCard], from start: Date, currency cur: String,
                                income: Double, expense: Double)
         -> (text: String?, tone: MonthFlowCard.NoteTone, putAway: Double) {
         let fmt = { (v: Double) in CurrencyManager.shared.formatted(v, currency: cur) }
-        let book = PeriodCashBook.build(card.transactions.filter { $0.date >= start },
-                                        end: card.computedBalance(),
-                                        convert: { CurrencyManager.shared.convert(
+        let cm = CurrencyManager.shared
+        // Over the whole pot when the main card has bill cards: the kos paid
+        // from BCA is in the spending, so the balance that covers it is too.
+        let book = PeriodCashBook.build(scope.flatMap(\.transactions).filter { $0.date >= start },
+                                        end: scope.reduce(0.0) {
+                                            $0 + cm.convert($1.computedBalance(), from: $1.resolvedCurrency, to: cur)
+                                        },
+                                        convert: { cm.convert(
                                             $0.amount, from: $0.currency.isEmpty ? cur : $0.currency, to: cur) })
         let putAway = book.debtPaid + book.invested
         let over = max(expense - putAway, 0) - income
@@ -388,12 +397,15 @@ struct HomeView: View {
         // a refund takes back its expense. Counting a refund as income here
         // made Home's two figures disagree with Statistics' for the same days.
         let buckets = RollupStore.shared.rebuildIfStale(context: context, txCount: totalTxCount)
-        let window = RollupEngine.buckets(buckets, cardID: card.id.uuidString, from: windowStart)
+        // The main card is shown with the cards it pays bills from, the same
+        // pot Smart Budget and Statistics read; any other card on its own.
+        let scope = MainCard.isMain(card) ? MainCard.budgetCards(in: queriedCards) : [card]
+        let window = RollupEngine.buckets(buckets, cardIDs: Set(scope.map(\.id.uuidString)), from: windowStart)
         let totals = RollupEngine.totals(for: window, targetCurrency: cur,
                                          convert: { CurrencyManager.shared.convert($0, from: $1, to: $2) })
         monthIncome = totals.income
         monthExpense = max(totals.expenses, 0)
-        let note = flowNoteParts(card: card, from: windowStart, currency: cur,
+        let note = flowNoteParts(card: card, scope: scope, from: windowStart, currency: cur,
                                  income: monthIncome, expense: monthExpense)
         flowNote = note.text
         flowNoteTone = note.tone
@@ -417,7 +429,9 @@ struct HomeView: View {
         // so the warning here quotes the figure that screen shows.
         let projected: Double? = {
             guard let day = payDay, let card = budgetCard else { return nil }
-            return StatisticsView.projectedCycleSpend(card: card, payDay: day,
+            return StatisticsView.projectedCycleSpend(card: card,
+                                                      billCards: MainCard.isMain(card) ? MainCard.billCards(in: queriedCards) : [],
+                                                      payDay: day,
                                                       recurrings: recurringExpenses,
                                                       currency: budgetCurrency)
         }()
@@ -742,6 +756,8 @@ struct HomeView: View {
         .onChange(of: selectedCardBalance)     { _, _ in recomputeMonthFlow() }
         // Setting up or moving the salary schedule moves where the cycle starts.
         .onChange(of: MainCard.payDay(salarySchedules)) { _, _ in recomputeMonthFlow() }
+        .onChange(of: ledger.value)            { _, _ in recomputeHomeInsights(); recomputeMonthFlow() }
+        .onChange(of: budgetManager.billCardIDs) { _, _ in recomputeHomeInsights(); recomputeMonthFlow() }
         .onChange(of: budgetManager.isEnabled) { _, _ in recomputeHomeInsights() }
         .onChange(of: budgetManager.dailyRatio)     { _, _ in recomputeHomeInsights() }
         .onChange(of: budgetManager.lifestyleRatio) { _, _ in recomputeHomeInsights() }

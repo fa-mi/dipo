@@ -54,6 +54,62 @@ enum MainCard {
         id = card.id.uuidString
     }
 
+    // MARK: Bill cards
+
+    /// Accounts that can be a bill card: any other debit account or e-wallet.
+    ///
+    /// A credit card cannot. Its purchases already reach this budget through
+    /// the bill the main card pays, as a debt payment — counting them at the
+    /// till as well would count the same kos twice.
+    static func billEligible(_ cards: [BankCard]) -> [BankCard] {
+        cards.filter { !$0.isCreditCard && !isMain($0) }
+    }
+
+    /// The cards whose bills the main card pays. Empty without a main card:
+    /// "the main card's bills" means nothing until there is one.
+    static func billCards(in cards: [BankCard]) -> [BankCard] {
+        guard resolve(in: cards) != nil else { return [] }
+        let ids = Set(SmartBudgetManager.shared.billCardIDs)
+        guard !ids.isEmpty else { return [] }
+        return billEligible(cards).filter { ids.contains($0.id.uuidString) }
+    }
+
+    static func isBillCard(_ card: BankCard) -> Bool {
+        !card.isCreditCard && !isMain(card)
+            && SmartBudgetManager.shared.billCardIDs.contains(card.id.uuidString)
+    }
+
+    static func setBillCard(_ card: BankCard, _ on: Bool) {
+        var ids = SmartBudgetManager.shared.billCardIDs.filter { $0 != card.id.uuidString }
+        if on, !card.isCreditCard, !isMain(card) { ids.append(card.id.uuidString) }
+        SmartBudgetManager.shared.billCardIDs = ids
+    }
+
+    /// The main card and the cards it pays bills from — the one pot of money
+    /// every budget figure is about. Just the main card when there are none.
+    static func budgetCards(in cards: [BankCard]) -> [BankCard] {
+        guard let main = resolve(in: cards) else { return [] }
+        return [main] + billCards(in: cards)
+    }
+
+    /// Every transaction in that pot. Money moved between its cards is a
+    /// transfer on both sides, so it already counts as neither spending nor
+    /// income; what was moved over and not yet spent is still in the pot.
+    static func budgetTransactions(in cards: [BankCard]) -> [TxRecord] {
+        budgetCards(in: cards).flatMap(\.transactions)
+    }
+
+    /// `budgetTransactions`, or nil without a main card — for the callers
+    /// that fall back to every card when there is no anchor.
+    static func potTransactions(in cards: [BankCard]) -> [TxRecord]? {
+        resolve(in: cards) == nil ? nil : budgetTransactions(in: cards)
+    }
+
+    /// Ids of the pot's cards, for the per-card rollup buckets.
+    static func budgetCardIDs(in cards: [BankCard]) -> Set<String> {
+        Set(budgetCards(in: cards).map(\.id.uuidString))
+    }
+
     // MARK: Reconciliation
 
     /// Keeps the stored choice honest against the cards that actually exist.
@@ -88,6 +144,11 @@ enum MainCard {
         if self.id == nil, pool.count == 1 {
             self.id = pool[0].id.uuidString
         }
+        // Bill cards follow the same rule: a deleted card, one turned into a
+        // credit card, or one that became the main card itself drops out.
+        let bills = SmartBudgetManager.shared.billCardIDs
+        let kept = bills.filter { id in id != self.id && pool.contains { $0.id.uuidString == id } }
+        if kept != bills { SmartBudgetManager.shared.billCardIDs = kept }
         return resolve(in: cards)
     }
 

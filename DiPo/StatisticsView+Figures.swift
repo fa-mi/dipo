@@ -148,12 +148,13 @@ extension StatisticsView {
     /// the same rules, the same comparison — for a caller that is not this
     /// screen. Built from the same pieces `effectiveRange`, `filteredTx` and
     /// `previousPeriodTotal` use, so the two cannot drift.
-    static func cycleFigures(card: BankCard, payDay: Int, currency: String) -> CycleFigures {
+    static func cycleFigures(card: BankCard, billCards: [BankCard] = [], payDay: Int,
+                             currency: String) -> CycleFigures {
         let convert: (TxRecord) -> Double = { tx in
             let from = tx.currency.isEmpty ? card.resolvedCurrency : tx.currency
             return CurrencyManager.shared.convert(tx.amount, from: from, to: currency)
         }
-        let all = card.transactions
+        let all = ([card] + billCards).flatMap(\.transactions)
         let salaryDates = StatPeriod.salaryDates(on: card)
         let now = Date()
         let start = StatPeriod.cycle(payDay: payDay, salaryDates: salaryDates, now: now).start
@@ -206,7 +207,7 @@ extension StatisticsView {
             guard let p = periodProgress else { return start }
             return cal.date(byAdding: .day, value: p.elapsed, to: prevStart) ?? start
         }()
-        return Self.stretchTotal(selectedCard?.transactions ?? [], from: prevStart, to: cutoff,
+        return Self.stretchTotal(scopeTransactions, from: prevStart, to: cutoff,
                                  income: positive, convert: convertedAmount)
     }
 
@@ -308,6 +309,31 @@ extension StatisticsView {
         let _ = sb.budgetCardID
         return MainCard.resolve(in: appVM.cards)
     }
+
+    /// The main card and the cards it pays bills from — the pot this screen
+    /// reads, the same one Smart Budget and Home read. Just the main card when
+    /// no bill card is set, which is how it always worked.
+    var scopeCards: [BankCard] {
+        let _ = sb.budgetCardID
+        let _ = sb.billCardIDs
+        return MainCard.budgetCards(in: appVM.cards)
+    }
+
+    /// Every row in that pot.
+    var scopeTransactions: [TxRecord] { scopeCards.flatMap(\.transactions) }
+
+    /// The bill cards' names for the screen's subtitle, or nil when there are none.
+    var billCardsLabel: String? {
+        let bills = scopeCards.dropFirst()
+        return bills.isEmpty ? nil : bills.map(\.pickerLabel).joined(separator: ", ")
+    }
+
+    /// The card a row sits on, for its list row.
+    func sourceCard(of tx: TxRecord) -> BankCard? {
+        let cards = scopeCards
+        guard cards.count > 1 else { return selectedCard }
+        return cards.first { c in c.transactions.contains { $0.id == tx.id } } ?? selectedCard
+    }
     
     /// The currency used to display all stats. Always derived from the selected card —
     /// stats show in the card's native currency, with cross-currency tx converted via CurrencyManager.
@@ -324,9 +350,9 @@ extension StatisticsView {
     var statTxCount: Int { appVM.cards.reduce(0) { $0 + $1.transactions.count } }
 
     func computeFilteredTx() -> [TxRecord] {
-        guard let card = selectedCard else { return [] }
+        guard selectedCard != nil else { return [] }
         let (start, end) = effectiveRange
-        return card.transactions.filter { $0.date >= start && $0.date <= end }
+        return scopeTransactions.filter { $0.date >= start && $0.date <= end }
     }
 
     /// Recompute the memoized heavy derivations. Called on appear and whenever
@@ -357,11 +383,26 @@ extension StatisticsView {
 
     /// Card balance at the START of the period: seed + every tx before it.
     var periodStartBalance: Double? {
-        guard let card = selectedCard else { return nil }
+        guard selectedCard != nil else { return nil }
         let (start, _) = effectiveRange
-        let before = card.transactions.filter { $0.date < start }
-            .reduce(0.0) { $0 + convertedAmount($1) }
-        return card.balance + before
+        // Summed over the pot: money moved between its cards cancels out, and
+        // what was moved to a bill card and not yet spent is still counted.
+        return scopeCards.reduce(0.0) { sum, card in
+            let seed = CurrencyManager.shared.convert(card.balance, from: card.resolvedCurrency,
+                                                      to: displayCurrency)
+            let before = card.transactions.filter { $0.date < start }
+                .reduce(0.0) { $0 + convertedAmount($1) }
+            return sum + seed + before
+        }
+    }
+
+    /// Today's balance across the pot, in the screen's currency.
+    var scopeBalanceNow: Double? {
+        guard selectedCard != nil else { return nil }
+        return scopeCards.reduce(0.0) {
+            $0 + CurrencyManager.shared.convert($1.computedBalance(), from: $1.resolvedCurrency,
+                                                to: displayCurrency)
+        }
     }
 
     /// Income for the period — counts NORMAL income tx only. Refunds have
@@ -392,9 +433,9 @@ extension StatisticsView {
     /// Spent so far today. Deliberately NOT period-filtered — "today" is today
     /// whichever window the user is looking at.
     var todaySpend: Double {
-        guard let card = selectedCard else { return 0 }
+        guard selectedCard != nil else { return 0 }
         let cal = Calendar.current
-        return expenseSum(card.transactions.filter { cal.isDateInToday($0.date) })
+        return expenseSum(scopeTransactions.filter { cal.isDateInToday($0.date) })
     }
 
     /// A Monday-first calendar, in the app's language.
@@ -439,9 +480,9 @@ extension StatisticsView {
     /// Every row this week that counts as spending — what the chips are built from.
     var weekSpendTx: [TxRecord] {
         let cal = weekCalendar
-        guard let card = selectedCard,
+        guard selectedCard != nil,
               let w = cal.dateInterval(of: .weekOfYear, for: Date()) else { return [] }
-        return card.transactions.filter {
+        return scopeTransactions.filter {
             $0.date >= w.start && $0.date < w.end
                 && $0.txSubtype != .transfer && ($0.amount < 0 || $0.txSubtype == .refund)
         }
@@ -451,9 +492,9 @@ extension StatisticsView {
     /// (refunds included, transfers and income left out), so the list opened under
     /// a day adds up to the figure printed beside it.
     func spendTx(on day: Date) -> [TxRecord] {
-        guard let card = selectedCard else { return [] }
+        guard selectedCard != nil else { return [] }
         let cal = weekCalendar
-        return card.transactions
+        return scopeTransactions
             .filter {
                 cal.isDate($0.date, inSameDayAs: day)
                     && $0.txSubtype != .transfer
@@ -470,12 +511,12 @@ extension StatisticsView {
 
     /// Last week's total under the same filter, for the Weekly page's comparison.
     func previousWeekTotal(_ keep: (TxRecord) -> Bool) -> Double {
-        guard let card = selectedCard else { return 0 }
+        guard selectedCard != nil else { return 0 }
         let cal = weekCalendar
         guard let thisWeek = cal.dateInterval(of: .weekOfYear, for: Date()),
               let lastWeekDay = cal.date(byAdding: .day, value: -7, to: thisWeek.start),
               let lastWeek = cal.dateInterval(of: .weekOfYear, for: lastWeekDay) else { return 0 }
-        return expenseSum(card.transactions.filter {
+        return expenseSum(scopeTransactions.filter {
             $0.date >= lastWeek.start && $0.date < lastWeek.end && keep($0)
         })
     }
@@ -523,7 +564,7 @@ extension StatisticsView {
     var rhythm: SpendingRhythm { cachedRhythm }
 
     func computeRhythm() -> SpendingRhythm {
-        SpendingRhythm(history: selectedCard?.transactions ?? []) { tx in
+        SpendingRhythm(history: scopeTransactions) { tx in
             self.convertedAmount(tx)
         }
     }
@@ -657,6 +698,7 @@ extension StatisticsView {
                                salarySchedules: [SalarySchedule],
                                recurringPlans: [RecurringExpense],
                                mainCardID: UUID?,
+                               billCardIDs: Set<UUID> = [],
                                currency: String) -> Double? {
         guard total > 0 else { return nil }
         let cm = CurrencyManager.shared
@@ -679,7 +721,10 @@ extension StatisticsView {
         // stable: it is the same all cycle instead of stepping down each time a
         // bill posts.
         let committed = recurringPlans
-            .filter { $0.isActive && ($0.cardID == nil || $0.cardID == mainCardID) }
+            .filter { plan in
+                plan.isActive && (plan.cardID == nil || plan.cardID == mainCardID
+                                  || plan.cardID.map(billCardIDs.contains) == true)
+            }
             .reduce(0.0) { $0 + cm.convert(abs($1.amount), from: $1.currency, to: currency) }
         return max(income - committed, 0) / Double(total)
     }
@@ -690,6 +735,7 @@ extension StatisticsView {
                                    salarySchedules: salarySchedules,
                                    recurringPlans: recurringPlans,
                                    mainCardID: selectedCard?.id,
+                                   billCardIDs: Set(scopeCards.dropFirst().map(\.id)),
                                    currency: displayCurrency)
     }
 
@@ -786,7 +832,7 @@ extension StatisticsView {
             return out
         }()
 
-        guard let card = selectedCard else {
+        guard selectedCard != nil else {
             // Label a pay-cycle bucket by the month it ends in (the "salary
             // month"); a calendar bucket by its own month.
             return bucketStarts.map {
@@ -796,7 +842,7 @@ extension StatisticsView {
             }
         }
         for (s, e) in bucketStarts {
-            let rows = card.transactions
+            let rows = scopeTransactions
                 .filter { $0.date >= s && $0.date < e && $0.txSubtype != .transfer }
             // The hero's rules, so the last bar and "spent" above it are one
             // figure: a refund takes back its expense rather than counting as
@@ -909,21 +955,25 @@ extension StatisticsView {
     /// The same projection for a caller that is not this screen — Home's
     /// pace warning — built from the same pieces, so the two quote one figure.
     /// Nil when there is no running cycle or nothing has been spent yet.
-    static func projectedCycleSpend(card: BankCard, payDay: Int, recurrings: [RecurringExpense],
+    /// `billCards` are read with `card` as one pot — pass the main card's.
+    static func projectedCycleSpend(card: BankCard, billCards: [BankCard] = [], payDay: Int,
+                                    recurrings: [RecurringExpense],
                                     currency: String, now: Date = Date()) -> Double? {
         let convert: (TxRecord) -> Double = { tx in
             let from = tx.currency.isEmpty ? card.resolvedCurrency : tx.currency
             return CurrencyManager.shared.convert(tx.amount, from: from, to: currency)
         }
+        let pot = [card] + billCards
+        let all = pot.flatMap(\.transactions)
         let salaryDates = StatPeriod.salaryDates(on: card)
         let cycle = StatPeriod.cycle(payDay: payDay, salaryDates: salaryDates, now: now)
-        let window = card.transactions.filter { $0.date >= cycle.start && $0.date <= now }
+        let window = all.filter { $0.date >= cycle.start && $0.date <= now }
         guard expenses(window, convert: convert) > 0,
               let p = progress(start: cycle.start, end: now, payDay: payDay, salaryDates: salaryDates)
         else { return nil }
-        let rhythm = SpendingRhythm(history: card.transactions, convert: convert)
+        let rhythm = SpendingRhythm(history: all, convert: convert)
         let f = figures(for: window, rhythm: rhythm, convert: convert)
-        let upcoming = upcomingFixed(recurrings: recurrings, cardID: card.id,
+        let upcoming = upcomingFixed(recurrings: recurrings, cardIDs: Set(pot.map(\.id)),
                                      periodEnd: cycle.end, currency: currency, now: now)
         return projection(variable: f.variable, fixed: f.fixed, upcoming: upcoming, progress: p)
     }
@@ -938,19 +988,27 @@ extension StatisticsView {
         // silently evaluated to zero. The window has to reach the next payday.
         guard let periodEnd = (selectedPeriod == .payCycle ? cycleBoundary(monthsFromNow: 1) : nil)
                 ?? cal.date(byAdding: .month, value: 1, to: start) else { return 0 }
-        return Self.upcomingFixed(recurrings: recurringPlans, cardID: selectedCard?.id,
+        return Self.upcomingFixed(recurrings: recurringPlans, cardIDs: Set(scopeCards.map(\.id)),
                                   periodEnd: periodEnd, currency: displayCurrency)
     }
 
     static func upcomingFixed(recurrings: [RecurringExpense], cardID: UUID?, periodEnd: Date,
                               currency: String, now: Date = Date()) -> Double {
+        upcomingFixed(recurrings: recurrings, cardIDs: cardID.map { [$0] } ?? [],
+                      periodEnd: periodEnd, currency: currency, now: now)
+    }
+
+    static func upcomingFixed(recurrings: [RecurringExpense], cardIDs: Set<UUID>, periodEnd: Date,
+                              currency: String, now: Date = Date()) -> Double {
         let today = Calendar.current.startOfDay(for: now)
         let cm = CurrencyManager.shared
-        // Only plans that charge THIS card. Statistics reports the main card;
-        // adding a subscription billed to another account would project money
-        // that will never leave the one being measured.
+        // Only plans that charge THESE cards — the main card and the cards it
+        // pays bills from. A subscription billed to any other account would
+        // project money that will never leave the pot being measured.
         return recurrings
-            .filter { $0.isActive && ($0.cardID == nil || $0.cardID == cardID) }
+            .filter { plan in
+                plan.isActive && (plan.cardID == nil || plan.cardID.map(cardIDs.contains) == true)
+            }
             .reduce(0.0) { sum, plan in
                 let due = RecurringDateEngine.nextDueDate(dayOfMonth: plan.dayOfMonth)
                 // `due` is midnight; comparing it against `now` dropped a charge

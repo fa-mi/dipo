@@ -381,6 +381,10 @@ struct BackupSmartBudgetSettings: Codable {
     let lifestyleRatio: Double
     let investDebtRatio: Double
     let budgetCardID: String?
+    /// Optional: added with bill cards and extra funds. Older backups decode
+    /// with none of either, which is what they had.
+    var billCardIDs: [String]? = nil
+    var extraFundTxIDs: [String]? = nil
 }
 
 // MARK: - Backup Service
@@ -685,7 +689,9 @@ enum BackupService {
                 dailyRatio:      SmartBudgetManager.shared.dailyRatio,
                 lifestyleRatio:  SmartBudgetManager.shared.lifestyleRatio,
                 investDebtRatio: SmartBudgetManager.shared.investDebtRatio,
-                budgetCardID:    SmartBudgetManager.shared.budgetCardID
+                budgetCardID:    SmartBudgetManager.shared.budgetCardID,
+                billCardIDs:     SmartBudgetManager.shared.billCardIDs,
+                extraFundTxIDs:  SmartBudgetManager.shared.extraFundTxIDs
             ),
             recurrings: recurrings.map { r in
                 BackupRecurring(
@@ -1051,6 +1057,8 @@ enum BackupService {
             SmartBudgetManager.shared.lifestyleRatio  = payload.smartBudget.lifestyleRatio
             SmartBudgetManager.shared.investDebtRatio = payload.smartBudget.investDebtRatio
             SmartBudgetManager.shared.budgetCardID    = payload.smartBudget.budgetCardID
+            SmartBudgetManager.shared.billCardIDs     = payload.smartBudget.billCardIDs ?? []
+            SmartBudgetManager.shared.extraFundTxIDs  = payload.smartBudget.extraFundTxIDs ?? []
             SmartBudgetManager.shared.isEnabled       = payload.smartBudget.isEnabled
 
             // The restored main-card id may point at a card this backup does

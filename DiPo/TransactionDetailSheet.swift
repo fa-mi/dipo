@@ -212,6 +212,7 @@ struct TransactionDetailSheet: View {
                 ReceivableConversion.unlink(tx, receivables: receivables,
                                             allTx: allCards.flatMap(\.transactions), context: context)
                 try? context.save()
+                LedgerRevision.shared.edited(tx, context: context)
                 HapticManager.shared.success()
             }
             Button(loc("common.cancel"), role: .cancel) {}
@@ -653,6 +654,7 @@ struct TransactionDetailSheet: View {
         if !tx.hasSystemNote { tx.notes = editNotes }
         tx.type      = editType == .expense ? "tx.type.purchase" : "tx.type.income"
         try? context.save()
+        LedgerRevision.shared.edited(tx, context: context)
         HapticManager.shared.success()
         withAnimation { isEditing = false }
     }

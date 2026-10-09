@@ -65,7 +65,7 @@ struct DebtView: View {
     /// of overspending for a cycle that finished ahead. Same anchor as
     /// Statistics, Smart Budget and the alerts, so the four cannot disagree.
     private var scopedTx: [TxRecord] {
-        MainCard.resolve(in: cards)?.transactions ?? cards.flatMap { $0.transactions }
+        MainCard.potTransactions(in: cards) ?? cards.flatMap { $0.transactions }
     }
 
     private var monthlyIncome: Double {

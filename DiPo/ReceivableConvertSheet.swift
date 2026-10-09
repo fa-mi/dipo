@@ -288,6 +288,7 @@ struct ReceivableConvertSheet: View {
             ReceivableConversion.repay(tx, to: r, allTx: allTx)
         }
         try? context.save()
+        LedgerRevision.shared.edited(tx, context: context)
         HapticManager.shared.success()
         dismiss()
     }

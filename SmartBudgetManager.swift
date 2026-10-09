@@ -55,6 +55,24 @@ final class SmartBudgetManager {
         didSet { save() }
     }
 
+    /// Other accounts the main card keeps topped up to pay bills — kos paid
+    /// from BCA with money moved over from the main card each month. What is
+    /// spent there is the main card's money spent, so the budget counts it;
+    /// the transfers between them are the same rupiah moving pockets. Read
+    /// through `MainCard.billCards(in:)`, which drops ids that no longer fit.
+    var billCardIDs: [String] = [] {
+        didSet { save() }
+    }
+
+    /// Money in that is not income — a debt repaid, a gift, a refund of a
+    /// deposit — that the person chose to add to this period's budget. Off
+    /// for every row unless asked: most of it is better kept than spent, and
+    /// counting it by default would make a lucky month look like a raise.
+    /// Read through `ExtraFunds`.
+    var extraFundTxIDs: [String] = [] {
+        didSet { save() }
+    }
+
     // MARK: - Category Groups
 
     // Commitment (rent/kos, family transfer, memberships) is an essential
@@ -202,7 +220,7 @@ final class SmartBudgetManager {
     /// matching the canonical `spent(in:transactions:)` and `filteredExpenses`.
     func spent(in group: BudgetGroup, buckets: [DailyBucket],
                targetCurrency: String? = nil, periodStart: Date? = nil,
-               cardID: String? = nil, gross: Bool = false,
+               cardID: String? = nil, cardIDs: Set<String>? = nil, gross: Bool = false,
                convert: (Double, String, String) -> Double = {
                    CurrencyManager.shared.convert($0, from: $1, to: $2)
                }) -> Double {
@@ -211,7 +229,9 @@ final class SmartBudgetManager {
             ?? cal.safeDate(from: cal.dateComponents([.year, .month], from: Date()))
         let target = targetCurrency ?? CurrencyManager.shared.preferredCurrency
         let cats = Set(categories(for: group).map(\.rawValue))
-        let window = RollupEngine.buckets(buckets, cardID: cardID, from: monthStart)
+        // `cardIDs` (the main card with its bill cards) wins over `cardID`.
+        let window = cardIDs.map { RollupEngine.buckets(buckets, cardIDs: $0, from: monthStart) }
+            ?? RollupEngine.buckets(buckets, cardID: cardID, from: monthStart)
         let totals = RollupEngine.totals(for: window, targetCurrency: target, convert: convert)
         let byCat = gross ? totals.grossExpenseByCategory : totals.expenseByCategory
         return byCat.reduce(0.0) { $0 + (cats.contains($1.key) ? $1.value : 0) }
@@ -1976,6 +1996,7 @@ final class SmartBudgetManager {
 
     private static let storageKeys = [
         "sb_enabled", "sb_daily", "sb_lifestyle", "sb_invest", "sb_card_id",
+        "sb_bill_cards", "sb_extra_funds",
         // Dismissed-insight keys are user-specific; clear on reset/logout so
         // the next user starts fresh and old dismissals don't suppress new
         // user's insights.
@@ -2002,6 +2023,8 @@ final class SmartBudgetManager {
         UserDefaults.standard.set(lifestyleRatio, forKey: "sb_lifestyle")
         UserDefaults.standard.set(investDebtRatio, forKey: "sb_invest")
         UserDefaults.standard.set(budgetCardID, forKey: "sb_card_id")
+        UserDefaults.standard.set(billCardIDs, forKey: "sb_bill_cards")
+        UserDefaults.standard.set(extraFundTxIDs, forKey: "sb_extra_funds")
     }
 
     /// Re-reads persisted settings. Exists so a test can simulate the next
@@ -2023,6 +2046,8 @@ final class SmartBudgetManager {
             investDebtRatio = UserDefaults.standard.double(forKey: "sb_invest")
             budgetCardID    = UserDefaults.standard.string(forKey: "sb_card_id")
         }
+        billCardIDs    = UserDefaults.standard.stringArray(forKey: "sb_bill_cards") ?? []
+        extraFundTxIDs = UserDefaults.standard.stringArray(forKey: "sb_extra_funds") ?? []
     }
 
     /// Called by `PremiumManager.onLogout`. Turns the master toggle off so a
@@ -2055,6 +2080,8 @@ final class SmartBudgetManager {
         lifestyleRatio = 0.30
         investDebtRatio = 0.20
         budgetCardID = nil
+        billCardIDs = []
+        extraFundTxIDs = []
         // Clear the UserDefaults keys outright in case any stale value was
         // written by an older version of the app.
         for key in Self.storageKeys {

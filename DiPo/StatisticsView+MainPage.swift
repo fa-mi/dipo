@@ -37,6 +37,14 @@ extension StatisticsView {
                     Text(periodSubtitle)
                         .font(.system(.footnote))
                         .foregroundStyle(AppTheme.textSecondary)
+                    // Said once, where the screen names itself: the figures
+                    // below include the cards the main card pays bills from.
+                    if let bills = billCardsLabel {
+                        Text(String(format: loc("stats.with_bill_cards"), bills))
+                            .font(.system(.caption))
+                            .foregroundStyle(AppTheme.textSecondary)
+                            .lineLimit(2)
+                    }
                 }
                 Spacer()
                 Button {

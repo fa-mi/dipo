@@ -281,6 +281,14 @@ enum RollupEngine {
         }
     }
 
+    /// The same window over several cards — the main card and the cards it
+    /// pays bills from, read as one pot.
+    static func buckets(_ buckets: [DailyBucket],
+                        cardIDs: Set<String>,
+                        from start: Date) -> [DailyBucket] {
+        buckets.filter { cardIDs.contains($0.cardID) && $0.dayStart >= start }
+    }
+
     // MARK: Backup grouping
 
     /// Group daily buckets by "yyyy-MM" — the stable, timezone-portable key for

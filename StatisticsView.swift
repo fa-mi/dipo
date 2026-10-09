@@ -45,6 +45,8 @@ struct StatisticsView: View {
     @State var selectedCardID: String? = nil // Kept only as a recompute trigger; the card itself comes from MainCard.
     /// Observed so switching the main card in the Wallet redraws this screen.
     @State var sb = SmartBudgetManager.shared
+    /// Bumped when a row changes in place — an edit, a row made a loan.
+    @State var ledger = LedgerRevision.shared
     @State var showExportSheet = false
     @State var showAllCategories = false
     /// The card whose balance is being matched to the bank, from the cash
@@ -121,6 +123,15 @@ struct StatisticsView: View {
         }
         .onChange(of: sb.budgetCardID) { _, newID in
             selectedCardID = newID
+        }
+        // A bill card added or dropped changes the pot every figure reads.
+        .onChange(of: sb.billCardIDs) { _, _ in
+            recomputeStats()
+            withAnimation { statsVM.categories = realCategories }
+        }
+        .onChange(of: ledger.value) { _, _ in
+            recomputeStats()
+            withAnimation { statsVM.categories = realCategories }
         }
         .trackScreen(.statistics)
         .onChange(of: statsVM.selectedStatTab) { _, _ in

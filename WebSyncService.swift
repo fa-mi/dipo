@@ -341,8 +341,10 @@ final class WebSyncService {
         // their phone, which is the failure this whole change exists to end.
         // Falling back to every card keeps a user who somehow has no anchor
         // seeing their data rather than an empty dashboard.
-        let allTx: [TxRecord] = MainCard.resolve(in: cards)?.transactions
-            ?? cards.flatMap { $0.transactions }
+        // With the cards the main card pays bills from, as the phone reads it.
+        let allTx: [TxRecord] = MainCard.resolve(in: cards) != nil
+            ? MainCard.budgetTransactions(in: cards)
+            : cards.flatMap { $0.transactions }
         let windowTx: [TxRecord] = allTx
             .filter { $0.date >= cutoff && $0.txSubtype != .transfer }
             .sorted { $0.date > $1.date }
@@ -445,7 +447,8 @@ final class WebSyncService {
         let figures: StatisticsView.CycleFigures? = {
             guard let card = MainCard.resolve(in: cards),
                   let day = MainCard.payDay(salaries) else { return nil }
-            return StatisticsView.cycleFigures(card: card, payDay: day, currency: base)
+            return StatisticsView.cycleFigures(card: card, billCards: MainCard.billCards(in: cards),
+                                               payDay: day, currency: base)
         }()
 
         // ── Monthly rollup — compact aggregates that scale past the raw window ──
@@ -461,9 +464,11 @@ final class WebSyncService {
         // already converted to base currency. Read from the rollup refreshed at
         // the top of `sync`.
         let mainID = MainCard.resolve(in: cards)?.id.uuidString
+        let potIDs = MainCard.budgetCardIDs(in: cards)
         let monthly: [[String: Any]] = RollupEngine
-            .groupByMonth(RollupEngine.buckets(RollupStore.shared.buckets,
-                                               cardID: mainID, from: .distantPast))
+            .groupByMonth(mainID == nil
+                ? RollupEngine.buckets(RollupStore.shared.buckets, cardID: nil, from: .distantPast)
+                : RollupEngine.buckets(RollupStore.shared.buckets, cardIDs: potIDs, from: .distantPast))
             .sorted { $0.key < $1.key }
             .map { month, buckets in
                 let t = RollupEngine.totals(for: buckets, targetCurrency: base,
@@ -580,7 +585,8 @@ final class WebSyncService {
             }
             let projected: Double? = {
                 guard let day = payDay, let card = mainCard else { return nil }
-                return StatisticsView.projectedCycleSpend(card: card, payDay: day,
+                return StatisticsView.projectedCycleSpend(card: card, billCards: MainCard.billCards(in: cards),
+                                                          payDay: day,
                                                           recurrings: recurrings, currency: base, now: now)
             }()
             func insights(in language: LanguageManager.Language) -> [[String: String]] {
