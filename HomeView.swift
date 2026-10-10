@@ -372,6 +372,8 @@ struct HomeView: View {
             switch (card.isCreditCard ? nil : book.overspend(deficit: over)) ?? .plain {
             case .coveredBy(let label, let amount):
                 parts.append(String(format: loc("home.over_in"), fmt(over), label, fmt(amount)))
+            case .partly(let label, let amount):
+                parts.append(String(format: loc("home.over_partly"), fmt(over), label, fmt(amount)))
             case .savings:
                 parts.append(String(format: loc("home.over_saved"), fmt(over)))
             case .plain:
