@@ -289,9 +289,10 @@ struct DiPoQuestView: View {
                     .overlay(RoundedRectangle(cornerRadius: 10).stroke(AppTheme.cardMid, lineWidth: 2))
                     .offset(y: -62)
                     .allowsHitTesting(false)
-                Image("DiPoPose")
-                    .resizable().scaledToFit()
-                    .frame(width: 96, height: 96)
+                // DiPo himself, in 3D, turning slowly beside the level you
+                // are on. Tap for a hop; drag sideways to turn him.
+                DiPoDragonView(interactive: true, spins: true)
+                    .frame(width: 104, height: 104)
                     .offset(x: swing(wave) <= 0 ? 116 : -116, y: -6)
                     .accessibilityHidden(true)
             }
