@@ -42,6 +42,8 @@ struct PeriodCashBook: Equatable {
     /// Of `otherIn`: what the person chose to add to this period's budget
     /// (ExtraFunds). Living costs are measured against income plus this.
     var extraFunds: Double = 0
+    /// What paid for the spending, in the order it happened. See CoverTimeline.
+    var cover = CoverTimeline.Result()
 
     /// Income minus spending — the period's own result.
     var net: Double { income - spent }
@@ -71,7 +73,8 @@ struct PeriodCashBook: Equatable {
         return PeriodCashBook(start: start, income: income, otherIn: ins, spent: spent,
                               debtPaid: categorySpend(txs, .debtPayment, convert: convert),
                               invested: categorySpend(txs, .investment, convert: convert),
-                              otherOut: outs, ownMoves: abs(own) < 0.5 ? 0 : own)
+                              otherOut: outs, ownMoves: abs(own) < 0.5 ? 0 : own,
+                              cover: CoverTimeline.walk(txs, start: start, convert: convert))
     }
 
     /// Spending in one category by Statistics' rules: transfers skipped, a
@@ -93,14 +96,20 @@ struct PeriodCashBook: Equatable {
                       convert: (TxRecord) -> Double) -> PeriodCashBook {
         var book = build(txs, start: 0, convert: convert)
         book.start = end - book.end
+        // The walk depends on the balance carried in, known only now.
+        book.cover = CoverTimeline.walk(txs, start: book.start, convert: convert)
         return book
     }
 
     // MARK: Why the balance is not what the result suggests
 
     enum Overspend: Equatable {
-        /// Money that is not income covered the gap — named, with its amount.
+        /// Money that is not income covered the gap — named, with how much of
+        /// it went to the gap.
         case coveredBy(label: String, amount: Double)
+        /// Money that is not income covered part of it, the balance carried in
+        /// the rest.
+        case partly(label: String, amount: Double)
         /// It came out of what was on the card before the period.
         case savings
         /// Nothing to point at: the balance itself has run out.
@@ -109,11 +118,17 @@ struct PeriodCashBook: Equatable {
 
     /// Nil unless spending passed income. `deficit` is passed in so a screen
     /// explains the exact figure it shows.
+    ///
+    /// Read off the walk, not the totals: money in only counts as covering
+    /// the gap if it had arrived by the time income ran out.
     func overspend(deficit: Double) -> Overspend? {
         guard deficit >= 0.5 else { return nil }
         guard end >= 0.5 else { return .plain }
-        if otherInTotal >= deficit, let top = otherIn.first {
-            return .coveredBy(label: top.label, amount: top.amount)
+        if let top = cover.topSource, top.amount >= 0.5 {
+            let used = min(top.amount, deficit)
+            return cover.coveredTotal >= deficit - 0.5 || cover.fromSavings < 0.5
+                ? .coveredBy(label: top.label, amount: used)
+                : .partly(label: top.label, amount: used)
         }
         return start >= 0.5 ? .savings : .plain
     }

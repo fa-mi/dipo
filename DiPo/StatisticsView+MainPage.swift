@@ -276,6 +276,8 @@ extension StatisticsView {
             switch why {
             case .coveredBy(let label, let amount):
                 text += " " + String(format: loc("stats.over_covered"), label, money(amount))
+            case .partly(let label, let amount):
+                text += " " + String(format: loc("stats.over_partly"), label, money(amount))
             case .savings:
                 text += " " + loc("stats.over_saved")
             case .plain:
@@ -303,8 +305,9 @@ extension StatisticsView {
         var parts: [String] = []
         if book.debtPaid >= 0.5 { parts.append(String(format: loc("stats.debt_box"), money(book.debtPaid))) }
         if book.invested >= 0.5 { parts.append(String(format: loc("stats.invest_box"), money(book.invested))) }
-        // Where the money came from, when income alone didn't cover it.
-        if book.spent - book.income >= 0.5, let top = book.otherIn.first {
+        // Where the money came from, when income alone didn't cover it — by
+        // what had actually arrived when income ran out, and how much of it.
+        if let top = book.cover.topSource, top.amount >= 0.5 {
             parts.append(String(format: loc("stats.debt_helped"), top.label, money(top.amount)))
         }
         return HStack(alignment: .top, spacing: 8) {
@@ -377,6 +380,14 @@ extension StatisticsView {
             Rectangle().fill(AppTheme.cardMid).frame(height: 1).padding(.vertical, 2)
             bookLine(loc(periodRunsToToday ? "stats.card_balance_now" : "stats.recon_end"),
                      book.end, op: "=", total: true)
+
+            if let line = coverLine(book) {
+                Label(line, systemImage: "calendar.badge.clock")
+                    .font(.system(.caption2))
+                    .foregroundStyle(AppTheme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 4)
+            }
 
             // A debit account can't start below zero; a negative opening is
             // money in that was never logged. Say so, and offer the fix.
@@ -459,6 +470,22 @@ extension StatisticsView {
                 .transition(.opacity)
             }
         }
+    }
+
+    /// When income ran out, and what paid after that — in the order it
+    /// happened. Nil while income covered everything.
+    func coverLine(_ book: PeriodCashBook) -> String? {
+        let c = book.cover
+        guard c.isHelped else { return nil }
+        var paid = c.coveredBy.filter { $0.amount >= 0.5 }
+            .map { String(format: loc("stats.cover_source"), $0.label, money($0.amount)) }
+        if c.fromSavings >= 0.5 { paid.append(String(format: loc("stats.cover_savings"), money(c.fromSavings))) }
+        if c.uncovered >= 0.5 { paid.append(String(format: loc("stats.cover_short"), money(c.uncovered))) }
+        let list = paid.joined(separator: ", ")
+        guard let day = c.incomeRanOutOn, book.income >= 0.5 else {
+            return String(format: loc("stats.cover_no_income"), list)
+        }
+        return String(format: loc("stats.cover_ran_out"), dayMonth(day), list)
     }
 
     /// One line of the book. `value` is a magnitude; `op` carries its direction,

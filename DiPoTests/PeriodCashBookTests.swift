@@ -29,12 +29,14 @@ final class PeriodCashBookTests: XCTestCase {
     private func fahmisPeriod() -> [TxRecord] {
         [
             tx("Main Salary - Salary", 10_000_000, .salary),
+            // Before the spending that passed the salary, as on 4 Oct: rows
+            // are stamped in the order they are made, and the walk reads dates.
+            tx("Repaid by Mom", 5_000_000, subtype: .transfer, notes: "tx.note.receivable_repaid"),
             tx("kos", -2_100_000, .bills),
             tx("Tokopedia CC bill payment", -2_000_000, .debtPayment, notes: "tx.note.cc_payment"),
             tx("transfer mom", -1_000_000, .commitment),
             tx("tf ke ibuk", -1_000_000, .other),
             tx("rest of the period", -4_173_500, .food),
-            tx("Repaid by Mom", 5_000_000, subtype: .transfer, notes: "tx.note.receivable_repaid"),
             tx("Transfer to OVO", -50_000, subtype: .transfer, icon: "⇄"),
             tx("Transfer to •••• 9331", -400_000, subtype: .transfer, icon: "⇄"),
             tx("Transfer to •••• 3661", -200_000, subtype: .transfer, icon: "⇄"),
@@ -58,10 +60,12 @@ final class PeriodCashBookTests: XCTestCase {
         XCTAssertEqual(book.end, 4_001_015, accuracy: 0.5)
     }
 
-    /// The sentence the screen needs: the balance is up because of Mom.
+    /// The sentence the screen needs: the balance is up because of Mom — and
+    /// by how much of her money, not all of it.
     func testOverspendCoveredByMoneyThatIsNotIncomeNamesIt() {
         let book = PeriodCashBook.build(fahmisPeriod(), start: -75_485, convert: { $0.amount })
-        XCTAssertEqual(book.overspend(deficit: 273_500), .coveredBy(label: "Repaid by Mom", amount: 5_000_000))
+        XCTAssertEqual(book.overspend(deficit: 273_500), .coveredBy(label: "Repaid by Mom", amount: 273_500))
+        XCTAssertEqual(book.cover.coveredBy, [.init(label: "Repaid by Mom", amount: 273_500)])
     }
 
     func testOverspendFromSavingsAndPlain() {
