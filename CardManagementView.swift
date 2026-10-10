@@ -277,7 +277,6 @@ struct CardListView: View {
                             // redrew the whole card plus its balance — the same
                             // figure the carousel shows directly above it.
                             WalletCardActions(card: card,
-                                              txCount: card.transactions.count,
                                               onEdit: { editingCard = card },
                                               onDelete: { deletingCard = card })
                                 .padding(.horizontal, 22)
