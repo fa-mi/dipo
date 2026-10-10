@@ -322,7 +322,6 @@ struct WalletPageDots: View {
 // carousel directly above; repeating them was the duplication this replaces.
 struct WalletCardActions: View {
     @Bindable var card: BankCard
-    let txCount: Int
     var onEdit: () -> Void
     var onDelete: () -> Void
     /// Observed so the badge and the star swap the instant the choice changes.
@@ -337,27 +336,31 @@ struct WalletCardActions: View {
     var body: some View {
         HStack(spacing: 12) {
             Circle().fill(Color(hex: card.gradientStart)).frame(width: 9, height: 9)
-            VStack(alignment: .leading, spacing: 1) {
-                HStack(spacing: 6) {
-                    Text(subtitle)
-                        .font(.system(.subheadline, weight: .semibold))
-                        .foregroundStyle(AppTheme.textPrimary).lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                    // Which account the whole app is reasoning about, stated on
-                    // the account itself. Anywhere else and the user has to
-                    // remember a setting to read their own numbers.
-                    if isMain {
-                        Text(loc("main.badge"))
-                            .font(.system(.caption2, weight: .bold))
-                            .foregroundStyle(AppTheme.accent)
-                            .padding(.horizontal, 6).padding(.vertical, 2)
-                            .background(AppTheme.accent.opacity(0.15), in: Capsule())
-                            .lineLimit(1).fixedSize()
-                    }
+            // Name over badge, not beside it. With four round buttons on the
+            // right, a name and a badge on one line left the name a single
+            // clipped letter ("M" for Mastercard), and the transaction count
+            // under it wrapped onto three lines. The count is gone: the
+            // carousel's card already says what matters, and a number of rows
+            // says nothing about the money.
+            VStack(alignment: .leading, spacing: 4) {
+                Text(subtitle)
+                    .font(.system(.subheadline, weight: .semibold))
+                    .foregroundStyle(AppTheme.textPrimary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                // Which account the whole app is reasoning about, stated on
+                // the account itself. Anywhere else and the user has to
+                // remember a setting to read their own numbers.
+                if isMain {
+                    Text(loc("main.badge"))
+                        .font(.system(.caption2, weight: .bold))
+                        .foregroundStyle(AppTheme.accent)
+                        .padding(.horizontal, 6).padding(.vertical, 2)
+                        .background(AppTheme.accent.opacity(0.15), in: Capsule())
+                        .lineLimit(1).fixedSize()
                 }
-                Text(String(format: loc(txCount == 1 ? "cards.tx_count" : "cards.tx_counts"), txCount))
-                    .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
             }
+            .layoutPriority(1)
             Spacer(minLength: 8)
             // One gesture, no sheet.
             //

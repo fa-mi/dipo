@@ -679,8 +679,6 @@ final class LanguageManager {
         // Card count / privacy
         "cards.card_count":      "%d card",
         "cards.card_counts":     "%d cards",
-        "cards.tx_count":        "%d transaction",
-        "cards.tx_counts":       "%d transactions",
         "cards.recurring_counts": "%d recurring plan(s): %@",
         "cards.salary_count":    "%d salary schedule (%@)",
         "cards.salary_counts":   "%d salary schedules (%@)",
@@ -3905,8 +3903,6 @@ final class LanguageManager {
         // Card count / privacy
         "cards.card_count":      "%d kartu",
         "cards.card_counts":     "%d kartu",
-        "cards.tx_count":        "%d transaksi",
-        "cards.tx_counts":       "%d transaksi",
         "cards.recurring_counts": "%d rencana recurring: %@",
         "cards.salary_count":    "%d jadwal gaji (%@)",
         "cards.salary_counts":   "%d jadwal gaji (%@)",
