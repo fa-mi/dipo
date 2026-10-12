@@ -103,7 +103,14 @@ enum WebPeriodView {
         ]
         if let p = cycle.progress, p.total > 0 {
             out["timeMarker"] = Double(p.elapsed) / Double(p.total)
+            out["elapsedDays"] = p.elapsed
+            out["totalDays"] = p.total
         }
+        // The balance day by day, for the dashboard's line.
+        let path = trail(window, start: book.start, from: cycle.start, to: cycle.now,
+                         convert: converter(main: main, currency: currency))
+        out["trail"] = path.balances
+        out["marks"] = path.marks
         if let outlook {
             out["paydayISO"] = ISO8601DateFormatter().string(from: outlook.payday)
             out["atPayday"] = outlook.end
@@ -118,6 +125,61 @@ enum WebPeriodView {
     }
 
     // MARK: Pieces
+
+    struct MarkKey: Hashable {
+        let day: Int
+        let kind: String
+    }
+
+    /// The longest trail sent: two months of days, well past any pay cycle.
+    static let maxTrailDays = 62
+
+    /// The pot's balance at the end of each day from `from` to `to`, oldest
+    /// first, ending on the balance at `to` — the line the dashboard draws.
+    /// With the days money came in or went to a debt, so the line's jumps
+    /// can be named: salary, money in that isn't income, a card paid down.
+    /// Kinds only, no names.
+    static func trail(_ window: [TxRecord], start: Double, from: Date, to: Date,
+                      convert: (TxRecord) -> Double,
+                      calendar: Calendar = .current) -> (balances: [Double], marks: [[String: Any]]) {
+        let first = calendar.startOfDay(for: from)
+        let span = calendar.dateComponents([.day], from: first, to: calendar.startOfDay(for: to)).day ?? 0
+        let days = min(max(span + 1, 1), maxTrailDays)
+        var moved = Array(repeating: 0.0, count: days)
+        var marks: [MarkKey: Double] = [:]
+        for tx in window where tx.date <= to {
+            let raw = calendar.dateComponents([.day], from: first, to: calendar.startOfDay(for: tx.date)).day ?? 0
+            let i = min(max(raw, 0), days - 1)
+            let v = convert(tx)
+            moved[i] += v
+            let kind: String?
+            if tx.txSubtype == .normal && tx.amount > 0 {
+                kind = "income"
+            } else if tx.txSubtype == .transfer && tx.amount > 0
+                        && !NonFlowMovements.isOwnAccountMove(tx, incoming: true) {
+                kind = "in"
+            } else if tx.category == .debtPayment && tx.amount < 0 && tx.txSubtype != .transfer {
+                kind = "debt"
+            } else {
+                kind = nil
+            }
+            if let kind { marks[MarkKey(day: i, kind: kind), default: 0] += abs(v) }
+        }
+        var running = start
+        var balances: [Double] = []
+        for m in moved {
+            running += m
+            balances.append(running)
+        }
+        let order = ["income": 0, "in": 1, "debt": 2]
+        let markRows: [[String: Any]] = marks
+            .filter { $0.value >= 0.5 }
+            .sorted { a, b in
+                a.key.day != b.key.day ? a.key.day < b.key.day : (order[a.key.kind] ?? 9) < (order[b.key.kind] ?? 9)
+            }
+            .map { m -> [String: Any] in ["day": m.key.day, "kind": m.key.kind, "amount": m.value] }
+        return (balances, markRows)
+    }
 
     /// A row's amount in `currency`; a legacy row with no currency is in the
     /// main card's, as `cycleFigures` reads it.

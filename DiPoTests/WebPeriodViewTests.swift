@@ -211,6 +211,36 @@ final class WebPeriodViewTests: XCTestCase {
         XCTAssertEqual(added["livingFunds"] as? Double ?? 0, 2_000_000, accuracy: 0.5)
     }
 
+    /// The line the dashboard draws: one balance per day, ending on today's,
+    /// with the days money came in or paid a debt marked by kind.
+    func testTheTrailEndsOnTodaysBalanceAndMarksTheJumps() throws {
+        let (bri, cycle) = fahmisCycle()
+        let v = try XCTUnwrap(WebPeriodView.payload(pot: [bri], cards: [bri], cycle: cycle,
+                                                    currency: "IDR", extraIDs: []))
+        let trail = try XCTUnwrap(v["trail"] as? [Double])
+        XCTAssertEqual(trail.count, 18, "25 Sep to 12 Oct, both included")
+        XCTAssertEqual(trail.last ?? 0, bri.computedBalance(), accuracy: 0.5)
+        XCTAssertEqual(trail.first ?? 0, 11_000_000, accuracy: 0.5, "carried in, plus the salary that day")
+        XCTAssertEqual(v["elapsedDays"] as? Int, 18)
+        XCTAssertEqual(v["totalDays"] as? Int, 30)
+
+        let marks = try XCTUnwrap(v["marks"] as? [[String: Any]])
+        let kinds = marks.map { "\($0["day"] as? Int ?? -1):\($0["kind"] as? String ?? "")" }
+        XCTAssertEqual(kinds, ["0:income", "9:in", "9:debt", "13:debt"])
+        XCTAssertEqual(marks[1]["amount"] as? Double ?? 0, 5_000_000, accuracy: 0.5)
+        XCTAssertNil(marks.first { $0["name"] != nil }, "kinds only, never a name")
+    }
+
+    func testTheTrailIsCappedAndNeverEmpty() {
+        let bri = card("Fahmi", "5221845086220969", balance: 100_000)
+        let one = WebPeriodView.trail([], start: 100_000, from: day(10, 1), to: day(10, 1),
+                                      convert: { $0.amount })
+        XCTAssertEqual(one.balances, [100_000])
+        let long = WebPeriodView.trail(bri.transactions, start: 0, from: day(1, 1), to: day(10, 1),
+                                       convert: { $0.amount })
+        XCTAssertEqual(long.balances.count, WebPeriodView.maxTrailDays)
+    }
+
     // MARK: The shared words
 
     func testUsedPercentStaysBelowAHundredUntilIncomeIsGone() {
