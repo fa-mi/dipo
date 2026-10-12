@@ -250,9 +250,9 @@ enum WebPeriodView {
     /// balance, which can itself be below zero.
     static func lines(_ book: PeriodCashBook, cycle: Cycle, ownLines: [OwnMoves.Line],
                       money: (Double) -> String, day: (Date) -> String) -> [[String: Any]] {
-        func line(_ op: String, _ label: String, _ amount: Double, caption: String? = nil,
+        func line(_ kind: String, _ op: String, _ label: String, _ amount: Double, caption: String? = nil,
                   tone: String? = nil, total: Bool = false) -> [String: Any] {
-            var l: [String: Any] = ["op": op, "label": label, "amount": amount]
+            var l: [String: Any] = ["kind": kind, "op": op, "label": label, "amount": amount]
             if let caption { l["caption"] = caption }
             if let tone { l["tone"] = tone }
             if total { l["total"] = true }
@@ -260,25 +260,25 @@ enum WebPeriodView {
         }
 
         var out: [[String: Any]] = [
-            line("", String(format: loc("stats.book_start"), day(cycle.start)), book.start),
-            line("+", loc("stats.recon_income"), book.income),
+            line("start", "", String(format: loc("stats.book_start"), day(cycle.start)), book.start),
+            line("income", "+", loc("stats.recon_income"), book.income),
         ]
         for row in PeriodCashBook.shownRows(book.otherIn) {
-            out.append(line("+", row.label, row.amount, caption: loc("stats.book_not_income"), tone: "accent"))
+            out.append(line("in", "+", row.label, row.amount, caption: loc("stats.book_not_income"), tone: "accent"))
         }
-        out.append(line("−", loc("stats.book_living"), book.living))
+        out.append(line("living", "−", loc("stats.book_living"), book.living))
         if book.debtPaid >= 0.5 {
-            out.append(line("−", loc("stats.book_debt"), book.debtPaid,
+            out.append(line("debt", "−", loc("stats.book_debt"), book.debtPaid,
                             caption: loc("stats.book_debt_note"), tone: "blue"))
         }
         if book.invested >= 0.5 {
-            out.append(line("−", loc("stats.book_invest"), book.invested, tone: "blue"))
+            out.append(line("invest", "−", loc("stats.book_invest"), book.invested, tone: "blue"))
         }
         for row in PeriodCashBook.shownRows(book.otherOut) {
-            out.append(line("−", row.label, row.amount, caption: loc("stats.book_not_spending")))
+            out.append(line("out", "−", row.label, row.amount, caption: loc("stats.book_not_spending")))
         }
         if abs(book.ownMoves) >= 0.5 {
-            var own = line(book.ownMoves < 0 ? "−" : "+", loc("stats.book_own_moves"), abs(book.ownMoves))
+            var own = line("own", book.ownMoves < 0 ? "−" : "+", loc("stats.book_own_moves"), abs(book.ownMoves))
             // Which card, which way, and what came into the other card just
             // before — the breakdown the phone opens on a tap.
             if !ownLines.isEmpty {
@@ -295,7 +295,7 @@ enum WebPeriodView {
             }
             out.append(own)
         }
-        out.append(line("=", loc("stats.card_balance_now"), book.end, total: true))
+        out.append(line("end", "=", loc("stats.card_balance_now"), book.end, total: true))
         return out
     }
 }

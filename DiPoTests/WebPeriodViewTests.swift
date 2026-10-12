@@ -121,6 +121,8 @@ final class WebPeriodViewTests: XCTestCase {
             XCTAssertEqual(total.end, bri.computedBalance(), accuracy: 0.5, lang)
             XCTAssertEqual(lines.first(where: { $0["tone"] as? String == "accent" })?["label"] as? String,
                            "Repaid by Mom", "money in that isn't income, by name")
+            XCTAssertEqual(lines.map { $0["kind"] as? String ?? "" },
+                           ["start", "income", "in", "living", "debt", "end"], lang)
         }
         let idLabels = (words(v, "id")["lines"] as? [[String: Any]] ?? []).compactMap { $0["label"] as? String }
         XCTAssertTrue(idLabels.contains("Bayar utang & kartu kredit"))
