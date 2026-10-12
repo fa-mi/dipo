@@ -126,6 +126,11 @@ struct AppTheme {
     static let flowPeach  = Color(hex: "#F09199")   // Peach Pink
     static let flowPlum   = Color(hex: "#895B8A")   // Ancient Purple
 
+    // The Rekening Bersama card face: the brand emerald running into a deep
+    // teal, so a shared account reads as DiPo's own and never as one of the
+    // bank cards beside it. Fixed in both themes, like every card face.
+    static let jointCardDeep = Color(hex: "#058DA4")
+
     /// The track behind a green progress bar: a quiet surface in both modes.
     static let accentTrack = Color(UIColor.adaptive(dark: "#2A3330", light: "#E4EAE8"))
 

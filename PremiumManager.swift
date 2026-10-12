@@ -80,6 +80,7 @@ enum PremiumFeature: String {
     case cardTransfer    = "cardTransfer"
     case investments     = "investments"
     case assets          = "assets"
+    case jointAccount    = "jointAccount"
 
     var icon: String {
         switch self {
@@ -92,6 +93,7 @@ enum PremiumFeature: String {
         case .cardTransfer:    return "arrow.left.arrow.right"
         case .investments:     return "chart.line.uptrend.xyaxis"
         case .assets:          return "house.fill"
+        case .jointAccount:    return "person.2.fill"
         }
     }
 
@@ -107,6 +109,7 @@ enum PremiumFeature: String {
         case .cardTransfer:    return AppTheme.blue
         case .investments:     return AppTheme.accent
         case .assets:          return AppTheme.teal
+        case .jointAccount:    return AppTheme.accent
         }
     }
 
@@ -118,7 +121,7 @@ enum PremiumFeature: String {
         switch self {
         case .smartConversion, .savingsGoals, .smartDebt,
              .smartBudget, .scanReceipt, .aiAdvisor, .cardTransfer,
-             .investments, .assets:
+             .investments, .assets, .jointAccount:
             return .royal
         }
     }
@@ -135,6 +138,7 @@ enum PremiumFeature: String {
         case .cardTransfer:    return loc("premium.feature.transfer")
         case .investments:     return loc("premium.feature.investments")
         case .assets:          return loc("premium.feature.assets")
+        case .jointAccount:    return loc("premium.feature.joint_account")
         }
     }
 
@@ -149,6 +153,7 @@ enum PremiumFeature: String {
         case .cardTransfer:    return loc("premium.feature.transfer_desc")
         case .investments:     return loc("premium.feature.investments_desc")
         case .assets:          return loc("premium.feature.assets_desc")
+        case .jointAccount:    return loc("premium.feature.joint_account_desc")
         }
     }
 }
@@ -656,7 +661,7 @@ struct PaywallView: View {
     /// first so the user sees value before scrolling.
     private let royalAllFeatures: [PremiumFeature] = [
         .aiAdvisor, .scanReceipt, .smartBudget,
-        .smartDebt, .smartConversion, .savingsGoals,
+        .smartDebt, .smartConversion, .savingsGoals, .jointAccount,
     ]
 
     /// Plain-language billing disclosure shown under the CTA. Builds from the

@@ -26,7 +26,7 @@ enum Screen: String {
     case addTransaction, transactionDetail
     case smartBudget, smartBudgetSettings, budgetRecommendation
     case spendingAudit, obligations, debts, receivables, planner
-    case salarySchedule, recurring, savingsGoals, unitySavings
+    case salarySchedule, recurring, savingsGoals, unitySavings, jointAccount
     case cardForm, transfer, mainCardGate
     case askDiPo, receiptScan, backup, webSync, support, paywall
     case quest, questLesson

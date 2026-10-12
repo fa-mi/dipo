@@ -57,6 +57,7 @@ final class PaletteLockTests: XCTestCase {
             ("flowLapis",     AppTheme.flowLapis,     "#16224D", "#16224D"),
             ("flowPeach",     AppTheme.flowPeach,     "#F09199", "#F09199"),
             ("flowPlum",      AppTheme.flowPlum,      "#895B8A", "#895B8A"),
+            ("jointCardDeep", AppTheme.jointCardDeep, "#058DA4", "#058DA4"),
             // DiPo Lari Hemat scenery.
             ("gameSkyTop",     AppTheme.gameSkyTop,    "#0B1622", "#A8DCEB"),
             ("gameSkyLow",     AppTheme.gameSkyLow,    "#18302C", "#E6F5EC"),
