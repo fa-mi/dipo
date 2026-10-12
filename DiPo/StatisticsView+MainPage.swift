@@ -204,12 +204,10 @@ extension StatisticsView {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(18)
         .background {
+            // The one gradient on the screen: a soft field behind the
+            // headline, peach when the balance is heading below zero.
             RoundedRectangle(cornerRadius: AppRadius.xl).fill(AppTheme.cardDark)
-                .overlay {
-                    LinearGradient(colors: [AppTheme.accent.opacity(0.20),
-                                            AppTheme.blue.opacity(0.06), .clear],
-                                   startPoint: .topTrailing, endPoint: .bottomLeading)
-                }
+                .overlay { FlowField(danger: danger) }
                 .clipShape(RoundedRectangle(cornerRadius: AppRadius.xl))
         }
     }
