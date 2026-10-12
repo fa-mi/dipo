@@ -74,6 +74,11 @@ final class WebSyncService {
     private(set) var state: State = .idle
     private(set) var phase: Phase = .reading
 
+    /// The last sync found the DiPo ID pointing at a previous install of the
+    /// app (see `indexMismatch`). The sheet then offers to reconnect.
+    private(set) var needsReconnect = false
+    private(set) var isReconnecting = false
+
     /// Floor on how long a stage stays on screen.
     ///
     /// The work itself is genuinely fast — on a small dataset all three stages
@@ -159,6 +164,7 @@ final class WebSyncService {
         withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
             phase = .reading
             state = .uploading
+            needsReconnect = false
         }
         HapticManager.shared.tap()
 
@@ -216,6 +222,7 @@ final class WebSyncService {
             // invisible from both ends unless something compares the two.
             if let problem = await indexMismatch(uid: uid) {
                 state = .failure(problem)
+                needsReconnect = true
                 HapticManager.shared.error()
                 return
             }
@@ -228,6 +235,29 @@ final class WebSyncService {
         } catch {
             print("[WebSync] upload failed: \(error.localizedDescription)")
             state = .failure(loc("websync.err_upload"))
+            HapticManager.shared.error()
+        }
+    }
+
+    /// After a reinstall: one more sign-in with the same Apple ID or Google
+    /// account brings the DiPo ID to this phone, then the sync runs again.
+    /// See AccountReconnect.
+    func reconnect(context: ModelContext) async {
+        guard !isReconnecting else { return }
+        isReconnecting = true
+        let outcome = await AccountReconnect.run()
+        isReconnecting = false
+        switch outcome {
+        case .reconnected:
+            needsReconnect = false
+            await sync(context: context)
+        case .cancelled:
+            break
+        case .otherAccount:
+            state = .failure(loc("websync.reconnect_other"))
+            HapticManager.shared.error()
+        case .failed:
+            state = .failure(loc("websync.reconnect_failed"))
             HapticManager.shared.error()
         }
     }
