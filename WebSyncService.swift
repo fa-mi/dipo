@@ -523,6 +523,22 @@ final class WebSyncService {
             if let v = f.previousIncome { summary["previousIncome"] = v }
             if let v = f.previousSpent  { summary["previousSpent"]  = v }
             out["cycleSummary"] = summary
+
+            // Statistics' headline as the phone now opens on it: safe until
+            // payday, the balance, living costs against income with debt paid
+            // kept apart, and the cash book. `cycleSummary` stays for a page
+            // that predates this.
+            let pot = MainCard.budgetCards(in: cards)
+            if let main = pot.first, let day = MainCard.payDay(salaries) {
+                let projected = StatisticsView.projectedCycleSpend(
+                    card: main, billCards: Array(pot.dropFirst()), payDay: day,
+                    recurrings: recurrings, currency: base, now: f.end)
+                let period = WebPeriodView.Cycle(start: f.start, now: f.end, progress: f.progress,
+                                                 projected: projected, previousSpent: f.previousSpent)
+                if let view = WebPeriodView.payload(pot: pot, cards: cards, cycle: period, currency: base) {
+                    out["periodView"] = view
+                }
+            }
         } else if let cycle {
             out["cycleStartISO"] = iso.string(from: cycle.start)
             out["cycleEndISO"]   = iso.string(from: cycle.end)

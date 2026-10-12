@@ -234,7 +234,7 @@ extension StatisticsView {
               let payday = Calendar.current.date(byAdding: .day, value: p.total,
                                                  to: Calendar.current.startOfDay(for: effectiveRange.start))
         else { return nil }
-        return (payday, book.end - max(projected - filteredExpenses, 0))
+        return (payday, book.endAtPayday(projected: projected))
     }
 
     /// Living costs over income, for the gauge: debt paid and money put away
@@ -257,9 +257,7 @@ extension StatisticsView {
     /// pass income, and held below 100 until the income is actually all gone.
     var incomeUsedPct: Int {
         guard livingFunds > 0 else { return 0 }
-        let ratio = livingRatio
-        let pct = Int((ratio * 100).rounded())
-        return ratio < 1 ? min(pct, 99) : max(pct, 100)
+        return PeriodCashBook.usedPct(ratio: livingRatio)
     }
 
     /// Living costs against income, in one sentence, coloured by what it
@@ -267,23 +265,7 @@ extension StatisticsView {
     /// itself is in danger.
     func livingBox(_ book: PeriodCashBook, danger: Bool) -> some View {
         let over = book.livingNet < -0.5
-        var text = String(format: loc(over ? "stats.living_over" : "stats.living_under"),
-                          money(book.living), money(abs(book.livingNet)))
-        if book.extraFunds >= 0.5 {
-            text += " " + String(format: loc("stats.extra_included"), money(book.extraFunds))
-        }
-        if over, let why = book.overspend(deficit: -book.livingNet) {
-            switch why {
-            case .coveredBy(let label, let amount):
-                text += " " + String(format: loc("stats.over_covered"), label, money(amount))
-            case .partly(let label, let amount):
-                text += " " + String(format: loc("stats.over_partly"), label, money(amount))
-            case .savings:
-                text += " " + loc("stats.over_saved")
-            case .plain:
-                break
-            }
-        }
+        let text = book.livingSentence(money: money)
         let tint = !over ? AppTheme.accent : (danger ? AppTheme.red : AppTheme.orange)
         return HStack(alignment: .top, spacing: 8) {
             Image(systemName: over ? "exclamationmark.circle.fill" : "checkmark.circle.fill")
@@ -302,19 +284,11 @@ extension StatisticsView {
     /// Debt paid down and money put away — named as what they are, in blue,
     /// rather than counted as overspending.
     func debtBox(_ book: PeriodCashBook) -> some View {
-        var parts: [String] = []
-        if book.debtPaid >= 0.5 { parts.append(String(format: loc("stats.debt_box"), money(book.debtPaid))) }
-        if book.invested >= 0.5 { parts.append(String(format: loc("stats.invest_box"), money(book.invested))) }
-        // Where the money came from, when income alone didn't cover it — by
-        // what had actually arrived when income ran out, and how much of it.
-        if let top = book.cover.topSource, top.amount >= 0.5 {
-            parts.append(String(format: loc("stats.debt_helped"), top.label, money(top.amount)))
-        }
         return HStack(alignment: .top, spacing: 8) {
             Image(systemName: "creditcard.fill")
                 .font(.system(.subheadline))
                 .foregroundStyle(AppTheme.blue)
-            Text(parts.joined(separator: " "))
+            Text(book.debtSentence(money: money) ?? "")
                 .font(.system(.footnote, weight: .medium))
                 .foregroundStyle(AppTheme.textPrimary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -344,14 +318,7 @@ extension StatisticsView {
 
     /// Up to two named rows a side; the rest folded into "and N more".
     func bookRows(_ rows: [NonFlowMovements.Row]) -> [(label: String, amount: Double)] {
-        let shown = rows.count > 3 ? Array(rows.prefix(2)) : rows
-        var out: [(label: String, amount: Double)] = shown.map { (label: $0.label, amount: $0.amount) }
-        if rows.count > 3 {
-            let rest = rows.dropFirst(2)
-            out.append((label: String(format: loc("stats.nonflow.more"), rest.count),
-                        amount: rest.reduce(0.0) { $0 + $1.amount }))
-        }
-        return out
+        PeriodCashBook.shownRows(rows)
     }
 
     func cashBookView(_ book: PeriodCashBook) -> some View {
@@ -475,17 +442,7 @@ extension StatisticsView {
     /// When income ran out, and what paid after that — in the order it
     /// happened. Nil while income covered everything.
     func coverLine(_ book: PeriodCashBook) -> String? {
-        let c = book.cover
-        guard c.isHelped else { return nil }
-        var paid = c.coveredBy.filter { $0.amount >= 0.5 }
-            .map { String(format: loc("stats.cover_source"), $0.label, money($0.amount)) }
-        if c.fromSavings >= 0.5 { paid.append(String(format: loc("stats.cover_savings"), money(c.fromSavings))) }
-        if c.uncovered >= 0.5 { paid.append(String(format: loc("stats.cover_short"), money(c.uncovered))) }
-        let list = paid.joined(separator: ", ")
-        guard let day = c.incomeRanOutOn, book.income >= 0.5 else {
-            return String(format: loc("stats.cover_no_income"), list)
-        }
-        return String(format: loc("stats.cover_ran_out"), dayMonth(day), list)
+        book.coverSentence(money: money, day: dayMonth)
     }
 
     /// One line of the book. `value` is a magnitude; `op` carries its direction,
@@ -629,12 +586,8 @@ extension StatisticsView {
     /// money put away so far are taken out of the projection, or a card
     /// payment would read as a pace of overspending.
     func paceLine(_ book: PeriodCashBook?) -> (ok: Bool, text: String)? {
-        guard let projected = projectedSpend, livingFunds > 0 else { return nil }
-        let living = max(projected - (book.map { $0.debtPaid + $0.invested } ?? 0), 0)
-        if living <= livingFunds {
-            return (true, String(format: loc("stats.pace_safe"), money(living)))
-        }
-        return (false, String(format: loc("stats.pace_over"), money(living), money(living - livingFunds)))
+        PeriodCashBook.paceSentence(projected: projectedSpend, book: book, livingFunds: livingFunds,
+                                    money: money)
     }
 
     // MARK: 2 · Where it went
