@@ -111,21 +111,28 @@ struct MonthFlowCard: View {
 
             // Money coming IN points in, money going OUT points out — the
             // same directions the add-transaction form and Statistics use.
-            HStack(spacing: 6) {
-                column(icon: "arrow.down.left", label: loc("home.income"), amount: income, tint: AppTheme.flowIn)
-                column(icon: "arrow.up.right", label: loc("home.spending"), amount: living, tint: AppTheme.flowOut)
+            //
+            // Three tiles, each with its badge above its label. Side by side
+            // in one row, a 28pt badge beside every label left the third
+            // 67pt, and "Left of income" was cut to "Left of inc…". Stacked,
+            // a label has the tile's width and may take a second line
+            // ("Sisa / pemasukan"); the figures sit on one baseline below.
+            HStack(alignment: .top, spacing: 8) {
+                tile(icon: "arrow.down.left", label: loc("home.income"), amount: income, tint: AppTheme.flowIn)
+                tile(icon: "arrow.up.right", label: loc("home.spending"), amount: living, tint: AppTheme.flowOut)
                 // Never a minus. What is left of income, or how far living
                 // costs went past it — said in words, in blue or orange.
                 // "Remaining −Rp 2.311.881" under a Rp 4,5 jt balance read as
                 // being in debt.
                 if remaining >= -0.5 {
-                    column(icon: "equal", label: loc("home.left_of_income"), amount: max(remaining, 0),
-                           tint: AppTheme.blue)
+                    tile(icon: "equal", label: loc("home.left_of_income"), amount: max(remaining, 0),
+                         tint: AppTheme.blue)
                 } else {
-                    column(icon: "exclamationmark", label: loc("home.over_income_label"), amount: -remaining,
-                           tint: AppTheme.orange)
+                    tile(icon: "exclamationmark", label: loc("home.over_income_label"), amount: -remaining,
+                         tint: AppTheme.orange)
                 }
             }
+            .fixedSize(horizontal: false, vertical: true)
 
             if let note, !isHidden {
                 HStack(alignment: .top, spacing: 8) {
@@ -163,36 +170,39 @@ struct MonthFlowCard: View {
         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
     }
 
-    @ViewBuilder
-    private func column(icon: String, label: String, amount: Double, tint: Color,
-                        signed: Bool = false) -> some View {
-        HStack(spacing: 7) {
+    /// One figure: its badge, what it is, and the amount, on a quiet wash of
+    /// its own colour. Equal heights across the row, figures at the bottom.
+    private func tile(icon: String, label: String, amount: Double, tint: Color,
+                      signed: Bool = false) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
             // A SOLID badge: a pale tint of the green washes out to near-white
             // on a light card. The glyph takes `onVividFill`, like every label
             // on a solid semantic fill.
             Image(systemName: icon)
-                .font(.system(.caption, weight: .bold))
+                .font(.system(.caption2, weight: .bold))
                 .foregroundStyle(AppTheme.onVividFill)
-                .frame(width: 28, height: 28)
+                .frame(width: 24, height: 24)
                 .background(tint, in: Circle())
-            VStack(alignment: .leading, spacing: 1) {
-                Text(label)
-                    .font(.system(.caption2))
-                    .foregroundStyle(AppTheme.textSecondary)
-                    .lineLimit(1)
-                Text(isHidden ? "••••" : figure(amount, signed: signed))
-                    .font(.system(.footnote, weight: .bold))
-                    .foregroundStyle(tint)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.55)
-                    // Roll the digits when a new transaction moves them, so the
-                    // entry the user just made is visibly connected to its effect.
-                    .contentTransition(.numericText())
-                    .animation(.easeOut(duration: 0.4), value: amount)
-            }
+            Text(label)
+                .font(.system(.caption2))
+                .foregroundStyle(AppTheme.textSecondary)
+                .lineLimit(3)
+                .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
+            Text(isHidden ? "••••" : figure(amount, signed: signed))
+                .font(.system(.footnote, weight: .bold))
+                .foregroundStyle(tint)
+                .lineLimit(1)
+                .minimumScaleFactor(0.55)
+                // Roll the digits when a new transaction moves them, so the
+                // entry the user just made is visibly connected to its effect.
+                .contentTransition(.numericText())
+                .animation(.easeOut(duration: 0.4), value: amount)
         }
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .padding(10)
+        .background(tint.opacity(0.08), in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .accessibilityElement(children: .combine)
     }
 
     /// A signed figure carries a real minus sign in front of the currency, as

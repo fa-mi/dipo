@@ -113,6 +113,19 @@ struct AppTheme {
     static let gamePost      = Color(UIColor.adaptive(dark: "#5A4630", light: "#9B7A4E"))   // signposts, pebbles, dust
     static let gameGrassDeep = Color(UIColor.adaptive(dark: "#159462", light: "#17A36B"))   // the grass edge's shade
 
+    // The Statistics headline's soft colour field (FlowField.swift), after the
+    // "Flow" studies at feralui.dev/gradients: the Emerald preset by day, the
+    // Aurora preset by night, Peach Pink and Ancient Purple when the balance is
+    // heading below zero. Large blurred spots behind one card only — never
+    // text, never a bar, never anything that carries a figure.
+    static let flowWillow = Color(hex: "#8FE3B0")   // Young Willow
+    static let flowPine   = Color(hex: "#22C79A")   // Pine Leaf
+    static let flowMoss   = Color(hex: "#0B5F51")   // Black Moss
+    static let flowHanada = Color(hex: "#2E6E80")   // Deep Hanada
+    static let flowLapis  = Color(hex: "#16224D")   // Midnight Lapis
+    static let flowPeach  = Color(hex: "#F09199")   // Peach Pink
+    static let flowPlum   = Color(hex: "#895B8A")   // Ancient Purple
+
     /// The track behind a green progress bar: a quiet surface in both modes.
     static let accentTrack = Color(UIColor.adaptive(dark: "#2A3330", light: "#E4EAE8"))
 

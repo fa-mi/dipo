@@ -49,6 +49,14 @@ final class PaletteLockTests: XCTestCase {
             ("slate",         AppTheme.slate,         "#94A3B8", "#6E829F"),
 
             ("accentTrack",   AppTheme.accentTrack,   "#2A3330", "#E4EAE8"),
+            // The Statistics headline's colour field — one hex in both themes.
+            ("flowWillow",    AppTheme.flowWillow,    "#8FE3B0", "#8FE3B0"),
+            ("flowPine",      AppTheme.flowPine,      "#22C79A", "#22C79A"),
+            ("flowMoss",      AppTheme.flowMoss,      "#0B5F51", "#0B5F51"),
+            ("flowHanada",    AppTheme.flowHanada,    "#2E6E80", "#2E6E80"),
+            ("flowLapis",     AppTheme.flowLapis,     "#16224D", "#16224D"),
+            ("flowPeach",     AppTheme.flowPeach,     "#F09199", "#F09199"),
+            ("flowPlum",      AppTheme.flowPlum,      "#895B8A", "#895B8A"),
             // DiPo Lari Hemat scenery.
             ("gameSkyTop",     AppTheme.gameSkyTop,    "#0B1622", "#A8DCEB"),
             ("gameSkyLow",     AppTheme.gameSkyLow,    "#18302C", "#E6F5EC"),
