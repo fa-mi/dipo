@@ -44,6 +44,7 @@ struct WebSyncView: View {
                         idCard
                         steps
                         statusCard
+                        if service.needsReconnect { reconnectCard }
                         if let code = liveAccessCode { codeCard(code) }
                         syncButton
                         if service.lastSyncedAt != nil { revokeLink }
@@ -310,6 +311,42 @@ struct WebSyncView: View {
     // MARK: Actions
 
     private var isUploading: Bool { service.state == .uploading }
+
+    /// After a reinstall the DiPo ID still points at the old install. One
+    /// sign-in with the same Apple ID or Google account brings it here, and
+    /// the sync runs again. See AccountReconnect.
+    private var reconnectCard: some View {
+        let google = session.provider == .google
+        return VStack(alignment: .leading, spacing: 8) {
+            Button {
+                HapticManager.shared.tap()
+                Task { await service.reconnect(context: context) }
+            } label: {
+                HStack(spacing: 9) {
+                    if service.isReconnecting {
+                        ProgressView().tint(AppTheme.textPrimary).scaleEffect(0.85)
+                    } else {
+                        Image(systemName: google ? "g.circle.fill" : "apple.logo")
+                            .font(.system(.subheadline, weight: .semibold))
+                    }
+                    Text(loc(service.isReconnecting ? "websync.reconnecting" : "websync.reconnect"))
+                        .font(.system(.callout, weight: .semibold))
+                }
+                .foregroundStyle(AppTheme.textPrimary)
+                .frame(maxWidth: .infinity).padding(.vertical, 14)
+                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+                .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.cardMid, lineWidth: 1))
+            }
+            .buttonStyle(ScaleButtonStyle())
+            .disabled(service.isReconnecting || isUploading)
+
+            Text(loc(google ? "websync.reconnect_hint_google" : "websync.reconnect_hint_apple"))
+                .font(.system(.caption))
+                .foregroundStyle(AppTheme.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .transition(.opacity.combined(with: .move(edge: .top)))
+    }
 
     private var syncButton: some View {
         Button {
