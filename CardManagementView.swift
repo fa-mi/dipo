@@ -332,6 +332,14 @@ struct CardListView: View {
                         .opacity(appeared ? 1 : 0)
                     }
 
+                    // Rekening Bersama: shared wallets, and invitations to one.
+                    if !vm.cards.isEmpty {
+                        JointAccountsSection(vm: vm)
+                            .padding(.horizontal, 22)
+                            .padding(.top, 28)
+                            .opacity(appeared ? 1 : 0)
+                    }
+
                     Spacer(minLength: 110)
                 }
                 .containerRelativeFrame(.horizontal)

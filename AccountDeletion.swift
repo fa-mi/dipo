@@ -47,6 +47,8 @@ final class AccountDeletionService {
 
         // 1. Shared savings: transfer / delete / leave + drop invitations.
         await UnitySavingsService.shared.cleanupForAccountDeletion()
+        // 1b. Rekening Bersama: hand over / close / leave + drop invitations.
+        await JointAccountService.shared.cleanupForAccountDeletion()
 
         // 2. Per-user documents keyed by the SOCIAL id.
         if let socialID {
