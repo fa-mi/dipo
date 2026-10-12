@@ -181,6 +181,7 @@ struct JointSettingsSheet: View {
                 }
             }
             .padding(22)
+            .containerRelativeFrame(.horizontal)
         }
     }
 

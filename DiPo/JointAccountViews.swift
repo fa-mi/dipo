@@ -369,6 +369,7 @@ struct JointCreateSheet: View {
                         }
                     }
                     .padding(22)
+                    .containerRelativeFrame(.horizontal)
                 }
             }
             .navigationTitle(loc("joint.create.title"))

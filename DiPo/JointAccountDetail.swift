@@ -154,6 +154,7 @@ struct JointAccountDetailView: View {
             .padding(.horizontal, 22)
             .padding(.top, 8)
             .padding(.bottom, 40)
+            .containerRelativeFrame(.horizontal)
         }
     }
 
@@ -476,6 +477,7 @@ struct JointEntrySheet: View {
                         }
                     }
                     .padding(22)
+                    .containerRelativeFrame(.horizontal)
                 }
             }
             .navigationTitle(account.name)
@@ -615,6 +617,7 @@ struct JointDepositSheet: View {
                         }
                     }
                     .padding(22)
+                    .containerRelativeFrame(.horizontal)
                 }
             }
             .navigationTitle(String(format: loc("joint.deposit.title"), account.name))
