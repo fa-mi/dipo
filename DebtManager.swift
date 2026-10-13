@@ -234,6 +234,10 @@ struct FinancialHealthEngine {
     /// already recorded by hand, which would be the same money twice.
     var cardOwed: Double = 0
     var cardMonthly: Double = 0
+    /// Of `cardOwed`, what is carried over from earlier bills — the part
+    /// charged interest, and the part the monthly payment is worked out on.
+    /// The rest is this month's and last month's shopping, not yet due.
+    var cardCarried: Double = 0
 
     // MARK: - Core Calculations
 
@@ -501,10 +505,14 @@ struct FinancialHealthEngine {
 
     var primaryAdvice: String {
         if debts.filter({ $0.isActive }).isEmpty {
-            // A card balance is still money owed.
+            // A card balance is still money owed. Only the part carried over
+            // from earlier bills is charged interest, so that is the figure
+            // named here — the same one the Financial ladder shows.
             if cardOwed >= 0.5 {
-                return String(format: loc("debt.advice.card_only"),
-                              CurrencyManager.shared.formatted(cardOwed, currency: CurrencyManager.shared.preferredCurrency))
+                return cardCarried >= 0.5
+                    ? String(format: loc("debt.advice.card_carried"),
+                             CurrencyManager.shared.formatted(cardCarried, currency: CurrencyManager.shared.preferredCurrency))
+                    : loc("debt.advice.card_recent")
             }
             return loc("debt.advice.no_active")
         }

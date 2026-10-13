@@ -146,7 +146,10 @@ struct HomeView: View {
     private var totalLiabilities: Double {
         let cm = CurrencyManager.shared
         let pref = cm.preferredCurrency
-        let cc = vm.cards.filter { $0.isCreditCard }
+        // A card also recorded as a debt by hand is the same money; count it
+        // once, as the Debts screen does.
+        let cardRecorded = activeDebts.contains { !$0.manuallyClosed && $0.type == DebtType.creditCard.rawValue }
+        let cc = cardRecorded ? 0 : vm.cards.filter { $0.isCreditCard }
             .reduce(0.0) { $0 + cm.convert($1.totalOwed(installments), from: $1.resolvedCurrency, to: pref) }
         let debt = activeDebts.reduce(0.0) { $0 + cm.convert($1.currentBalance, from: $1.currency, to: pref) }
         return cc + debt

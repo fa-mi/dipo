@@ -72,7 +72,12 @@ struct LadderInputs: Equatable {
     struct CostlyDebt: Equatable {
         var name: String
         var annualRate: Double
+        /// The costly part: for a card, what is carried over from earlier bills.
         var balance: Double
+        /// For a card, everything owed on it — the figure the Debts screen
+        /// shows — so the two screens can be read side by side. Zero when it
+        /// is the same as `balance`.
+        var owedInTotal: Double = 0
     }
 }
 
@@ -204,7 +209,7 @@ extension LadderInputs {
     @MainActor
     static func gather(cards: [BankCard], debts: [DebtRecord], holdings: [InvestmentHolding],
                        goals: [SavingsGoal], salaries: [SalarySchedule], currency: String,
-                       now: Date = .now) -> LadderInputs {
+                       installments: [CardInstallment] = [], now: Date = .now) -> LadderInputs {
         let cm = CurrencyManager.shared
         func conv(_ v: Double, _ from: String) -> Double {
             cm.convert(v, from: from.isEmpty ? currency : from, to: currency)
@@ -243,7 +248,19 @@ extension LadderInputs {
 
         var i = LadderInputs()
         let salary = salaries.filter(\.isActive).reduce(0.0) { $0 + conv($1.amount, $1.currency) }
-        i.monthlyIncome = salary > 0 ? salary : typicalMonth { $0.amount > 0 }
+        // Side income that keeps coming — a weekend stall, a monthly transfer
+        // from family — pays for the month as surely as the salary does.
+        // Leaving it out told a user earning Rp 11 jt a month that they spent
+        // Rp 2 jt more than they earned. Only COMPLETE months, and their
+        // median, so a bonus, a THR or one big sale doesn't count; nor do
+        // selling an investment or taking a loan, which aren't earning.
+        let sideItems = txs
+            .filter { $0.amount > 0 && ![.salary, .bonus, .investment, .debtPayment].contains($0.category) }
+            .map { (date: $0.date, amount: conv($0.amount, $0.currency)) }
+        let sideMonths = FinancialLadder.completeMonthTotals(sideItems, count: 3, firstActivity: firstActivity,
+                                                             now: now, cal: cal)
+        let sideIncome = sideMonths.isEmpty ? 0 : FinancialLadder.median(sideMonths)
+        i.monthlyIncome = salary > 0 ? salary + sideIncome : typicalMonth { $0.amount > 0 }
         i.monthlyConsumption = typicalMonth { $0.amount < 0 && living.contains($0.category) }
         i.monthlyEssentials = typicalMonth { $0.amount < 0 && daily.contains($0.category) }
         i.investedMonthly = averageMonth { $0.amount < 0 && $0.category == .investment }
@@ -263,16 +280,19 @@ extension LadderInputs {
         // paid in full each month costs nothing. DiPo can't see the statement,
         // so charges from this month and last count as the open bill and only
         // what is older counts as carried. Rate unknown, so it reads 0.
-        let lastMonth = cal.date(byAdding: .month, value: -1, to: thisMonth) ?? thisMonth
-        let cardOwed = cards.filter(\.isCreditCard).reduce(0.0) { sum, card in
-            let recent = card.transactions
-                .filter { $0.date >= lastMonth && $0.amount < 0 && $0.txSubtype != .transfer }
-                .reduce(0.0) { $0 + abs($1.amount) }
-            let carried = FinancialLadder.carriedOver(owed: card.owedBalance(), recentCharges: recent)
-            return sum + conv(carried, card.currency)
-        }
-        if worst == nil, cardOwed > 0 {
-            worst = CostlyDebt(name: loc("ladder.credit_card"), annualRate: 0, balance: cardOwed)
+        //
+        // The same rule, from the same function, as the Debts screen's
+        // monthly payment, and the total beside it is the Debts screen's
+        // total. The ladder used to say "Rp 8.000.000 still owed" while
+        // Debts said Rp 8.500.000: both right, but nothing said that the
+        // other Rp 500.000 was this month's shopping, not yet due.
+        let cardCarried = ObligationLoad.cardCarried(cards: cards, currency: currency, now: now)
+        if worst == nil, cardCarried >= 0.5 {
+            let cardTotal = cards.filter(\.isCreditCard).reduce(0.0) {
+                $0 + cm.convert($1.totalOwed(installments), from: $1.resolvedCurrency, to: currency)
+            }
+            worst = CostlyDebt(name: loc("ladder.credit_card"), annualRate: 0, balance: cardCarried,
+                               owedInTotal: cardTotal > cardCarried + 0.5 ? cardTotal : 0)
         }
         i.costlyDebt = worst
 

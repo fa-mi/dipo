@@ -20,6 +20,9 @@ struct JointAccountDetailView: View {
     @State private var showSettings = false
     @State private var deleting: JointTx?
     @State private var seen = false
+    /// Still no account after a few seconds: say so, instead of a spinner
+    /// that never stops.
+    @State private var slow = false
 
     struct EntryRoute: Identifiable {
         let kind: JointTx.Kind
@@ -36,6 +39,8 @@ struct JointAccountDetailView: View {
                 AppTheme.bg.ignoresSafeArea()
                 if let account {
                     content(account)
+                } else if slow {
+                    waiting
                 } else {
                     ProgressView().tint(AppTheme.accent)
                 }
@@ -58,13 +63,20 @@ struct JointAccountDetailView: View {
                 }
             }
         }
-        .onAppear { service.watchHistory(accountID) }
+        // start() is idempotent; it only listens again when Firestore had
+        // ended the listener (no signal, or refused before the rules were up).
+        .onAppear { service.start(); service.watchHistory(accountID) }
         .onDisappear { service.stopHistory(accountID) }
         // Closed by the owner, or I was taken off it: nothing left to show.
         .onChange(of: account == nil) { _, gone in
             if !gone { seen = true } else if seen { dismiss() }
         }
-        .task { if account != nil { seen = true } }
+        .task(id: slow) {
+            if account != nil { seen = true; return }
+            guard !slow else { return }
+            try? await Task.sleep(for: .seconds(8))
+            if account == nil { withAnimation { slow = true } }
+        }
         .sheet(item: $entry) { route in
             if let account {
                 JointEntrySheet(account: account, kind: route.kind)
@@ -105,6 +117,31 @@ struct JointAccountDetailView: View {
         .trackScreen(.jointAccount)
     }
 
+    /// The account isn't here yet: no connection, or the server turned it down.
+    private var waiting: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "wifi.exclamationmark")
+                .font(.system(size: 34))
+                .foregroundStyle(AppTheme.textSecondary)
+            Text(loc("joint.waiting.title"))
+                .font(.system(.headline))
+                .foregroundStyle(AppTheme.textPrimary)
+                .multilineTextAlignment(.center)
+            Text(service.failure ?? loc("joint.waiting.body"))
+                .font(.system(.subheadline))
+                .foregroundStyle(AppTheme.textSecondary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+            JointPrimaryButton(title: loc("joint.waiting.retry")) {
+                service.failure = nil
+                service.retry()
+                withAnimation { slow = false }
+            }
+            .frame(maxWidth: 260)
+        }
+        .padding(28)
+    }
+
     private func content(_ account: JointAccount) -> some View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: 16) {
@@ -130,6 +167,19 @@ struct JointAccountDetailView: View {
                     }
                     .padding(14)
                     .background(AppTheme.orange.opacity(0.10), in: RoundedRectangle(cornerRadius: AppRadius.md))
+                }
+
+                // Entries from someone DiPo has no name for read "Someone".
+                if service.myNameIsMissing(in: account) {
+                    Button {
+                        HapticManager.shared.tap()
+                        showSettings = true
+                    } label: {
+                        JointInfo(icon: "person.crop.circle.badge.questionmark",
+                                  text: String(format: loc("joint.name.unknown"), loc("joint.someone")),
+                                  tint: AppTheme.orange)
+                    }
+                    .buttonStyle(ScaleButtonStyle())
                 }
 
                 if account.isActive {

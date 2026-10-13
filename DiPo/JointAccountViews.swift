@@ -73,7 +73,7 @@ struct JointAccountsSection: View {
         }
         .sheet(isPresented: $showCreate, onDismiss: {
             // Straight into the new account, where inviting a partner is one tap away.
-            if let id = createdID { createdID = nil; open = JointRoute(id: id) }
+            if let id = createdID { createdID = nil; service.start(); open = JointRoute(id: id) }
         }) {
             JointCreateSheet { createdID = $0 }
                 .presentationDetents([.large])
@@ -320,12 +320,14 @@ struct JointCreateSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var service = JointAccountService.shared
     @State private var name = ""
-    @State private var emoji = "🏠"
+    @State private var emoji = JointIcon.all[0].emoji
     @State private var budgetText = ""
     @State private var saving = false
     @State private var failed = false
 
-    static let emojis = ["🏠", "💑", "👨‍👩‍👧", "🏘️", "🛒", "🍚", "✈️", "💰"]
+    /// The name that tapping an icon last filled in, so a second tap can
+    /// replace it but never what the person typed themselves.
+    @State private var suggested = ""
     private var currency: String { CurrencyManager.shared.preferredCurrency }
     private var trimmed: String { name.trimmingCharacters(in: .whitespacesAndNewlines) }
 
@@ -335,7 +337,15 @@ struct JointCreateSheet: View {
                 AppTheme.bg.ignoresSafeArea()
                 ScrollView(showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 20) {
-                        JointEmojiRow(options: Self.emojis, selection: $emoji)
+                        JointEmojiRow(selection: $emoji) { icon in
+                            // An empty name, or one an icon filled in, takes
+                            // the icon's word: one tap names the account.
+                            let typed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+                            if typed.isEmpty || typed == suggested {
+                                name = icon.label
+                                suggested = icon.label
+                            }
+                        }
 
                         JointField(title: loc("joint.create.name")) {
                             TextField(loc("joint.create.name_placeholder"), text: $name)
@@ -401,33 +411,121 @@ struct JointCreateSheet: View {
 
 // MARK: - Small shared pieces
 
+/// What an account is for, as a picture and a word. Pictures alone left
+/// people guessing — is 🏘️ "the neighbours" or "the boarding house"?
+struct JointIcon: Hashable {
+    let emoji: String
+    let key: String
+    var label: String { key.isEmpty ? "" : loc(key) }
+    /// One line on what the account is for — the touch screen's answer to
+    /// a hover: it shows for whichever icon is chosen.
+    var detail: String { key.isEmpty ? "" : loc(key + ".detail") }
+
+    static let all: [JointIcon] = [
+        JointIcon(emoji: "🏠", key: "joint.icon.home"),
+        JointIcon(emoji: "💑", key: "joint.icon.couple"),
+        JointIcon(emoji: "🏡", key: "joint.icon.family"),
+        JointIcon(emoji: "🏘️", key: "joint.icon.housemates"),
+        JointIcon(emoji: "🛒", key: "joint.icon.groceries"),
+        JointIcon(emoji: "🍚", key: "joint.icon.kitchen"),
+        JointIcon(emoji: "✈️", key: "joint.icon.holiday"),
+        JointIcon(emoji: "💰", key: "joint.icon.savings"),
+    ]
+}
+
 struct JointEmojiRow: View {
-    let options: [String]
     @Binding var selection: String
+    var onPick: ((JointIcon) -> Void)? = nil
+
+    /// An account made with an icon no longer offered keeps it, first.
+    private var options: [JointIcon] {
+        JointIcon.all.contains { $0.emoji == selection } || selection.isEmpty
+            ? JointIcon.all
+            : [JointIcon(emoji: selection, key: "")] + JointIcon.all
+    }
+
+    /// The page's side margin. The row scrolls right to the screen's edge,
+    /// starting and ending at the text margin, so neither the first tile nor
+    /// the last is cut in half by the edge of a narrower scroll area.
+    private static let margin: CGFloat = 22
+
+    private var chosen: JointIcon? {
+        options.first { $0.emoji == selection && !$0.key.isEmpty }
+    }
 
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 10) {
-                ForEach(options, id: \.self) { e in
-                    let on = e == selection
-                    Button {
-                        HapticManager.shared.tap()
-                        selection = e
-                    } label: {
-                        Text(e)
-                            .font(.system(size: 26))
-                            .frame(width: 52, height: 52)
-                            .background(on ? AppTheme.accent.opacity(0.14) : AppTheme.cardDark,
-                                        in: RoundedRectangle(cornerRadius: AppRadius.md))
-                            .overlay(RoundedRectangle(cornerRadius: AppRadius.md)
-                                .stroke(on ? AppTheme.accent : .clear, lineWidth: 2))
+        VStack(alignment: .leading, spacing: 12) {
+            ScrollViewReader { proxy in
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(alignment: .top, spacing: 10) {
+                        ForEach(options, id: \.emoji) { icon in
+                            tile(icon)
+                                .id(icon.emoji)
+                        }
                     }
-                    .buttonStyle(ScaleButtonStyle())
-                    .accessibilityAddTraits(on ? .isSelected : [])
+                    .padding(.horizontal, Self.margin)
+                    .padding(.vertical, 3)
                 }
+                .padding(.horizontal, -Self.margin)
+                // An account saved with the last icon opens with it in view.
+                .onAppear { proxy.scrollTo(selection, anchor: .center) }
             }
-            .padding(.vertical, 2)
+
+            if let chosen {
+                HStack(alignment: .top, spacing: 10) {
+                    Text(chosen.emoji)
+                        .font(.system(.subheadline))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(chosen.label)
+                            .font(.system(.footnote, weight: .bold))
+                            .foregroundStyle(AppTheme.textPrimary)
+                        Text(chosen.detail)
+                            .font(.system(.footnote))
+                            .foregroundStyle(AppTheme.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .padding(14)
+                .background(AppTheme.blue.opacity(0.08), in: RoundedRectangle(cornerRadius: AppRadius.md))
+                .id(chosen.emoji)
+                .transition(.opacity)
+                .accessibilityElement(children: .combine)
+            }
         }
+        .animation(.easeOut(duration: 0.18), value: selection)
+    }
+
+    private func tile(_ icon: JointIcon) -> some View {
+        let on = icon.emoji == selection
+        return Button {
+            HapticManager.shared.tap()
+            selection = icon.emoji
+            onPick?(icon)
+        } label: {
+            VStack(spacing: 6) {
+                Text(icon.emoji)
+                    .font(.system(size: 26))
+                    .frame(width: 52, height: 52)
+                    .background(on ? AppTheme.accent.opacity(0.14) : AppTheme.cardDark,
+                                in: RoundedRectangle(cornerRadius: AppRadius.md))
+                    // Drawn inside the tile, so no part of it falls outside.
+                    .overlay(RoundedRectangle(cornerRadius: AppRadius.md)
+                        .strokeBorder(on ? AppTheme.accent : .clear, lineWidth: 2))
+                Text(icon.label)
+                    .font(.system(.caption2, weight: on ? .bold : .medium))
+                    .foregroundStyle(on ? AppTheme.accent : AppTheme.textSecondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+            .frame(width: 68)
+        }
+        .buttonStyle(ScaleButtonStyle())
+        // A real hover where there is a pointer (iPad trackpad, Mac).
+        .help(icon.detail)
+        .accessibilityLabel(icon.label.isEmpty ? icon.emoji : icon.label)
+        .accessibilityHint(icon.detail)
+        .accessibilityAddTraits(on ? .isSelected : [])
     }
 }
 

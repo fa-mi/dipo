@@ -24,6 +24,9 @@ struct JointSettingsSheet: View {
     @State private var confirm: Confirm?
     @State private var working = false
     @State private var failed = false
+    @State private var myName = ""
+    @State private var editingName = false
+    @State private var savingName = false
 
     enum Confirm: Identifiable {
         case remove(JointMember), makeOwner(JointMember), leave, close
@@ -68,6 +71,26 @@ struct JointSettingsSheet: View {
         } message: { c in
             Text(confirmMessage(c))
         }
+        .alert(loc("joint.name.edit"), isPresented: $editingName) {
+            TextField(loc("joint.name.placeholder"), text: $myName)
+                .textInputAutocapitalization(.words)
+            Button(loc("common.save")) { saveName() }
+            Button(loc("common.cancel"), role: .cancel) {}
+        } message: {
+            Text(loc("joint.name.field"))
+        }
+    }
+
+    private func saveName() {
+        guard !JointText.isPlaceholder(myName) else { return }
+        savingName = true
+        failed = false
+        let name = myName
+        Task {
+            let ok = await service.renameMe(to: name)
+            savingName = false
+            if ok { HapticManager.shared.success() } else { HapticManager.shared.warning(); failed = true }
+        }
     }
 
     private func load() async {
@@ -85,10 +108,29 @@ struct JointSettingsSheet: View {
         let owner = account.isOwner(me)
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 24) {
+                if service.myNameIsMissing(in: account) {
+                    section(loc("joint.name.title")) {
+                        VStack(alignment: .leading, spacing: 12) {
+                            JointInfo(icon: "person.crop.circle.badge.questionmark",
+                                      text: String(format: loc("joint.name.unknown"), loc("joint.someone")),
+                                      tint: AppTheme.orange)
+                            JointField(title: loc("joint.name.field")) {
+                                TextField(loc("joint.name.placeholder"), text: $myName)
+                                    .font(.system(.body, weight: .semibold))
+                                    .textInputAutocapitalization(.words)
+                            }
+                            JointPrimaryButton(title: loc("common.save"), busy: savingName,
+                                               enabled: !JointText.isPlaceholder(myName)) {
+                                saveName()
+                            }
+                        }
+                    }
+                }
+
                 if owner {
                     section(loc("joint.settings.name")) {
                         VStack(alignment: .leading, spacing: 12) {
-                            JointEmojiRow(options: JointCreateSheet.emojis, selection: $emoji)
+                            JointEmojiRow(selection: $emoji)
                             JointField(title: loc("joint.create.name")) {
                                 TextField(loc("joint.create.name_placeholder"), text: $name)
                                     .font(.system(.body, weight: .semibold))
@@ -220,6 +262,20 @@ struct JointSettingsSheet: View {
                 Text(loc("joint.role.member"))
                     .font(.system(.caption))
                     .foregroundStyle(AppTheme.textSecondary)
+            }
+            if isMe {
+                Button {
+                    HapticManager.shared.tap()
+                    myName = JointText.isPlaceholder(m.displayName) ? "" : m.displayName
+                    editingName = true
+                } label: {
+                    Image(systemName: "pencil")
+                        .font(.system(.subheadline, weight: .bold))
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .frame(width: 32, height: 32)
+                        .contentShape(Rectangle())
+                }
+                .accessibilityLabel(loc("joint.name.edit"))
             }
             if account.isOwner(me) && !isMe && account.isActive {
                 Menu {

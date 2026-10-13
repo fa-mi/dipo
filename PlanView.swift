@@ -18,6 +18,7 @@ struct PlanView: View {
     @Query private var cards: [BankCard]
     @Query private var debts: [DebtRecord]
     @Query private var physicalAssets: [PhysicalAsset]
+    @Query private var installments: [CardInstallment]
     @State private var pm = PremiumManager.shared
     @State private var budget = SmartBudgetManager.shared
     @State private var showPaywall = false
@@ -119,7 +120,8 @@ struct PlanView: View {
     private func computeLadder() -> LadderResult {
         FinancialLadder.evaluate(.gather(cards: cards, debts: debts, holdings: holdings, goals: goals,
                                          salaries: schedules,
-                                         currency: CurrencyManager.shared.preferredCurrency))
+                                         currency: CurrencyManager.shared.preferredCurrency,
+                                         installments: installments))
     }
 
     // MARK: Header
