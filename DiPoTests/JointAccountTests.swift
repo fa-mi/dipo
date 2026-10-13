@@ -158,6 +158,7 @@ final class JointAccountTests: XCTestCase {
                 for icon in JointIcon.all {
                     XCTAssertNotEqual(icon.label, icon.key, "\(icon.emoji) has no word in \(language)")
                     XCTAssertFalse(icon.label.isEmpty)
+                    XCTAssertNotEqual(icon.detail, icon.key + ".detail", "\(icon.emoji) has no meaning in \(language)")
                 }
                 for key in ["joint.waiting.title", "joint.waiting.body", "joint.waiting.retry"] {
                     XCTAssertNotEqual(loc(key), key, "missing \(key) in \(language)")
@@ -165,6 +166,27 @@ final class JointAccountTests: XCTestCase {
             }
         }
         XCTAssertEqual(JointIcon(emoji: "🎯", key: "").label, "", "an old icon keeps no word")
+        XCTAssertEqual(JointIcon(emoji: "🎯", key: "").detail, "")
+    }
+
+    /// "Someone (you)": Apple sends a name only on the first sign-in, so a
+    /// member row can carry the fallback, in either language.
+    func testAFallbackNameIsRecognisedSoThePersonIsAskedForTheirs() {
+        XCTAssertTrue(JointText.isPlaceholder(""))
+        XCTAssertTrue(JointText.isPlaceholder("  "))
+        XCTAssertTrue(JointText.isPlaceholder("Someone"))
+        XCTAssertTrue(JointText.isPlaceholder("seseorang"))
+        XCTAssertFalse(JointText.isPlaceholder("Fahmi"))
+        for language in [LanguageManager.Language.english, .indonesian] {
+            LanguageManager.shared.withLanguage(language) {
+                for key in ["joint.name.title", "joint.name.field", "joint.name.placeholder", "joint.name.edit"] {
+                    XCTAssertNotEqual(loc(key), key, "missing \(key) in \(language)")
+                }
+                XCTAssertTrue(String(format: loc("joint.name.unknown"), "Someone").contains("Someone"))
+                XCTAssertTrue(JointText.placeholderNames.contains(loc("joint.someone").lowercased()),
+                              "joint.someone changed in \(language); update placeholderNames")
+            }
+        }
     }
 
     func testFormattedStringsKeepTheirArgumentsInBothLanguages() {

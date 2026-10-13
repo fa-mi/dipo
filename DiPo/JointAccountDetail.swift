@@ -169,6 +169,19 @@ struct JointAccountDetailView: View {
                     .background(AppTheme.orange.opacity(0.10), in: RoundedRectangle(cornerRadius: AppRadius.md))
                 }
 
+                // Entries from someone DiPo has no name for read "Someone".
+                if service.myNameIsMissing(in: account) {
+                    Button {
+                        HapticManager.shared.tap()
+                        showSettings = true
+                    } label: {
+                        JointInfo(icon: "person.crop.circle.badge.questionmark",
+                                  text: String(format: loc("joint.name.unknown"), loc("joint.someone")),
+                                  tint: AppTheme.orange)
+                    }
+                    .buttonStyle(ScaleButtonStyle())
+                }
+
                 if account.isActive {
                     HStack(spacing: 10) {
                         actionTile(icon: "arrow.down.left", title: loc("joint.action.in"), tint: AppTheme.accentFill) {

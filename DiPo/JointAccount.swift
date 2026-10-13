@@ -69,6 +69,19 @@ enum JointText {
         return out
     }
 
+    /// The words written when no name was known — "Someone", "Seseorang".
+    /// A row that carries one should ask the person to write their own.
+    static func isPlaceholder(_ name: String) -> Bool {
+        let n = name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return n.isEmpty || placeholderNames.contains(n)
+    }
+
+    /// `joint.someone` in each language, lowercased. Spelled out rather than
+    /// looked up, because this runs while views draw and switching the
+    /// language to read the other table would redraw them; JointAccountTests
+    /// checks it still matches the tables.
+    static let placeholderNames: Set<String> = ["someone", "seseorang"]
+
     /// One or two letters for an avatar.
     static func initials(_ name: String) -> String {
         let words = name.split(separator: " ").prefix(2)
@@ -719,6 +732,36 @@ final class JointAccountService {
         }
     }
 
+    /// My name as the other members see it. Apple sends a name only on the
+    /// very first sign-in, so after a reinstall DiPo may not know it, and
+    /// every entry read "Someone". Written to my row in every account I'm in,
+    /// to the owner's name where I own one, and kept for what I write next.
+    func renameMe(to raw: String) async -> Bool {
+        guard let uid else { return false }
+        let name = JointText.clip(raw, 40)
+        guard !name.isEmpty, !JointText.isPlaceholder(name) else { return false }
+        var ok = true
+        for account in accounts where account.memberUids.contains(uid) {
+            let ref = accountsRef.document(account.id)
+            do {
+                try await ref.collection("members").document(uid).setData(["displayName": name], merge: true)
+                if account.isOwner(uid) { try await ref.updateData(["ownerName": name]) }
+            } catch {
+                print("[Joint] rename refused: \(error.localizedDescription)")
+                ok = false
+            }
+        }
+        UserSession.shared.adoptDisplayName(name)
+        Task { await FirebaseSupportService.shared.registerUserProfile() }
+        return ok
+    }
+
+    /// My own row's name in this account, if it is still a placeholder.
+    func myNameIsMissing(in account: JointAccount) -> Bool {
+        guard let uid, let me = members[account.id]?.first(where: { $0.id == uid }) else { return false }
+        return JointText.isPlaceholder(me.displayName)
+    }
+
     func makeOwner(_ member: JointMember, of account: JointAccount) async -> Bool {
         guard account.isOwner(uid), account.memberUids.contains(member.id) else { return false }
         do {
@@ -883,6 +926,8 @@ final class JointAccountService {
     private func myName(_ uid: String) async -> String {
         let live = (UserSession.shared.displayName ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         if !live.isEmpty { return JointText.clip(live, 40) }
+        let auth = (Auth.auth().currentUser?.displayName ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        if !auth.isEmpty { return JointText.clip(auth, 40) }
         let snap = try? await db.collection("users").document(uid).getDocument()
         let profile = (snap?.data()?["displayName"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         return JointText.clip(profile.isEmpty ? loc("joint.someone") : profile, 40)

@@ -3459,6 +3459,19 @@ final class LanguageManager {
         "joint.waiting.title": "This joint account isn't here yet",
         "joint.waiting.body": "It may still be on its way to the server, or the connection dropped. Check your signal and try again.",
         "joint.waiting.retry": "Try again",
+        "joint.icon.home.detail": "Day-to-day money for the home: groceries, electricity, water.",
+        "joint.icon.couple.detail": "Shared costs for two — with your husband, wife or partner.",
+        "joint.icon.family.detail": "What the family shares, with parents, children or siblings.",
+        "joint.icon.housemates.detail": "Splitting a boarding house or rented home: rent, Wi-Fi, gas.",
+        "joint.icon.groceries.detail": "Shopping together: the market, the minimarket, monthly supplies.",
+        "joint.icon.kitchen.detail": "Rice, cooking oil and everything else for the kitchen.",
+        "joint.icon.holiday.detail": "Putting money together for a trip, and spending it there.",
+        "joint.icon.savings.detail": "A shared pot for setting money aside together.",
+        "joint.name.title": "Your name",
+        "joint.name.unknown": "You're recorded as “%@”. Write your name so the others know who recorded what.",
+        "joint.name.field": "The name the others see",
+        "joint.name.placeholder": "e.g. Rina",
+        "joint.name.edit": "Change my name",
     ]
 
     // MARK: - Indonesian Strings
@@ -6801,6 +6814,19 @@ final class LanguageManager {
         "joint.waiting.title": "Rekening bersama ini belum muncul",
         "joint.waiting.body": "Mungkin masih dalam perjalanan ke server, atau koneksinya putus. Cek sinyal lalu coba lagi.",
         "joint.waiting.retry": "Coba lagi",
+        "joint.icon.home.detail": "Uang harian rumah: belanja dapur, listrik, air.",
+        "joint.icon.couple.detail": "Biaya bersama berdua — dengan suami, istri, atau pacar.",
+        "joint.icon.family.detail": "Kebutuhan bersama keluarga, dengan orang tua, anak, atau saudara.",
+        "joint.icon.housemates.detail": "Patungan kos atau kontrakan: sewa, Wi-Fi, gas.",
+        "joint.icon.groceries.detail": "Belanja bersama: pasar, minimarket, stok bulanan.",
+        "joint.icon.kitchen.detail": "Beras, minyak goreng, dan semua kebutuhan dapur.",
+        "joint.icon.holiday.detail": "Mengumpulkan uang untuk liburan bersama, lalu memakainya di sana.",
+        "joint.icon.savings.detail": "Wadah bersama untuk menyisihkan uang.",
+        "joint.name.title": "Namamu",
+        "joint.name.unknown": "Kamu tercatat sebagai “%@”. Tulis namamu supaya anggota lain tahu siapa yang mencatat.",
+        "joint.name.field": "Nama yang dilihat anggota lain",
+        "joint.name.placeholder": "Contoh: Rina",
+        "joint.name.edit": "Ubah namaku",
     ]
 }
 

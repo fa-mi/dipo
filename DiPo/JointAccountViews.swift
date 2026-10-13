@@ -417,6 +417,9 @@ struct JointIcon: Hashable {
     let emoji: String
     let key: String
     var label: String { key.isEmpty ? "" : loc(key) }
+    /// One line on what the account is for — the touch screen's answer to
+    /// a hover: it shows for whichever icon is chosen.
+    var detail: String { key.isEmpty ? "" : loc(key + ".detail") }
 
     static let all: [JointIcon] = [
         JointIcon(emoji: "🏠", key: "joint.icon.home"),
@@ -441,39 +444,88 @@ struct JointEmojiRow: View {
             : [JointIcon(emoji: selection, key: "")] + JointIcon.all
     }
 
+    /// The page's side margin. The row scrolls right to the screen's edge,
+    /// starting and ending at the text margin, so neither the first tile nor
+    /// the last is cut in half by the edge of a narrower scroll area.
+    private static let margin: CGFloat = 22
+
+    private var chosen: JointIcon? {
+        options.first { $0.emoji == selection && !$0.key.isEmpty }
+    }
+
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(alignment: .top, spacing: 10) {
-                ForEach(options, id: \.emoji) { icon in
-                    let on = icon.emoji == selection
-                    Button {
-                        HapticManager.shared.tap()
-                        selection = icon.emoji
-                        onPick?(icon)
-                    } label: {
-                        VStack(spacing: 6) {
-                            Text(icon.emoji)
-                                .font(.system(size: 26))
-                                .frame(width: 52, height: 52)
-                                .background(on ? AppTheme.accent.opacity(0.14) : AppTheme.cardDark,
-                                            in: RoundedRectangle(cornerRadius: AppRadius.md))
-                                .overlay(RoundedRectangle(cornerRadius: AppRadius.md)
-                                    .stroke(on ? AppTheme.accent : .clear, lineWidth: 2))
-                            Text(icon.label)
-                                .font(.system(.caption2, weight: on ? .bold : .medium))
-                                .foregroundStyle(on ? AppTheme.accent : AppTheme.textSecondary)
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.8)
+        VStack(alignment: .leading, spacing: 12) {
+            ScrollViewReader { proxy in
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(alignment: .top, spacing: 10) {
+                        ForEach(options, id: \.emoji) { icon in
+                            tile(icon)
+                                .id(icon.emoji)
                         }
-                        .frame(width: 68)
                     }
-                    .buttonStyle(ScaleButtonStyle())
-                    .accessibilityLabel(icon.label.isEmpty ? icon.emoji : icon.label)
-                    .accessibilityAddTraits(on ? .isSelected : [])
+                    .padding(.horizontal, Self.margin)
+                    .padding(.vertical, 3)
                 }
+                .padding(.horizontal, -Self.margin)
+                // An account saved with the last icon opens with it in view.
+                .onAppear { proxy.scrollTo(selection, anchor: .center) }
             }
-            .padding(.vertical, 2)
+
+            if let chosen {
+                HStack(alignment: .top, spacing: 10) {
+                    Text(chosen.emoji)
+                        .font(.system(.subheadline))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(chosen.label)
+                            .font(.system(.footnote, weight: .bold))
+                            .foregroundStyle(AppTheme.textPrimary)
+                        Text(chosen.detail)
+                            .font(.system(.footnote))
+                            .foregroundStyle(AppTheme.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .padding(14)
+                .background(AppTheme.blue.opacity(0.08), in: RoundedRectangle(cornerRadius: AppRadius.md))
+                .id(chosen.emoji)
+                .transition(.opacity)
+                .accessibilityElement(children: .combine)
+            }
         }
+        .animation(.easeOut(duration: 0.18), value: selection)
+    }
+
+    private func tile(_ icon: JointIcon) -> some View {
+        let on = icon.emoji == selection
+        return Button {
+            HapticManager.shared.tap()
+            selection = icon.emoji
+            onPick?(icon)
+        } label: {
+            VStack(spacing: 6) {
+                Text(icon.emoji)
+                    .font(.system(size: 26))
+                    .frame(width: 52, height: 52)
+                    .background(on ? AppTheme.accent.opacity(0.14) : AppTheme.cardDark,
+                                in: RoundedRectangle(cornerRadius: AppRadius.md))
+                    // Drawn inside the tile, so no part of it falls outside.
+                    .overlay(RoundedRectangle(cornerRadius: AppRadius.md)
+                        .strokeBorder(on ? AppTheme.accent : .clear, lineWidth: 2))
+                Text(icon.label)
+                    .font(.system(.caption2, weight: on ? .bold : .medium))
+                    .foregroundStyle(on ? AppTheme.accent : AppTheme.textSecondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+            .frame(width: 68)
+        }
+        .buttonStyle(ScaleButtonStyle())
+        // A real hover where there is a pointer (iPad trackpad, Mac).
+        .help(icon.detail)
+        .accessibilityLabel(icon.label.isEmpty ? icon.emoji : icon.label)
+        .accessibilityHint(icon.detail)
+        .accessibilityAddTraits(on ? .isSelected : [])
     }
 }
 
