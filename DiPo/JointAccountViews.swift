@@ -73,7 +73,7 @@ struct JointAccountsSection: View {
         }
         .sheet(isPresented: $showCreate, onDismiss: {
             // Straight into the new account, where inviting a partner is one tap away.
-            if let id = createdID { createdID = nil; open = JointRoute(id: id) }
+            if let id = createdID { createdID = nil; service.start(); open = JointRoute(id: id) }
         }) {
             JointCreateSheet { createdID = $0 }
                 .presentationDetents([.large])
@@ -320,12 +320,14 @@ struct JointCreateSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var service = JointAccountService.shared
     @State private var name = ""
-    @State private var emoji = "🏠"
+    @State private var emoji = JointIcon.all[0].emoji
     @State private var budgetText = ""
     @State private var saving = false
     @State private var failed = false
 
-    static let emojis = ["🏠", "💑", "👨‍👩‍👧", "🏘️", "🛒", "🍚", "✈️", "💰"]
+    /// The name that tapping an icon last filled in, so a second tap can
+    /// replace it but never what the person typed themselves.
+    @State private var suggested = ""
     private var currency: String { CurrencyManager.shared.preferredCurrency }
     private var trimmed: String { name.trimmingCharacters(in: .whitespacesAndNewlines) }
 
@@ -335,7 +337,15 @@ struct JointCreateSheet: View {
                 AppTheme.bg.ignoresSafeArea()
                 ScrollView(showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 20) {
-                        JointEmojiRow(options: Self.emojis, selection: $emoji)
+                        JointEmojiRow(selection: $emoji) { icon in
+                            // An empty name, or one an icon filled in, takes
+                            // the icon's word: one tap names the account.
+                            let typed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+                            if typed.isEmpty || typed == suggested {
+                                name = icon.label
+                                suggested = icon.label
+                            }
+                        }
 
                         JointField(title: loc("joint.create.name")) {
                             TextField(loc("joint.create.name_placeholder"), text: $name)
@@ -401,28 +411,64 @@ struct JointCreateSheet: View {
 
 // MARK: - Small shared pieces
 
+/// What an account is for, as a picture and a word. Pictures alone left
+/// people guessing — is 🏘️ "the neighbours" or "the boarding house"?
+struct JointIcon: Hashable {
+    let emoji: String
+    let key: String
+    var label: String { key.isEmpty ? "" : loc(key) }
+
+    static let all: [JointIcon] = [
+        JointIcon(emoji: "🏠", key: "joint.icon.home"),
+        JointIcon(emoji: "💑", key: "joint.icon.couple"),
+        JointIcon(emoji: "🏡", key: "joint.icon.family"),
+        JointIcon(emoji: "🏘️", key: "joint.icon.housemates"),
+        JointIcon(emoji: "🛒", key: "joint.icon.groceries"),
+        JointIcon(emoji: "🍚", key: "joint.icon.kitchen"),
+        JointIcon(emoji: "✈️", key: "joint.icon.holiday"),
+        JointIcon(emoji: "💰", key: "joint.icon.savings"),
+    ]
+}
+
 struct JointEmojiRow: View {
-    let options: [String]
     @Binding var selection: String
+    var onPick: ((JointIcon) -> Void)? = nil
+
+    /// An account made with an icon no longer offered keeps it, first.
+    private var options: [JointIcon] {
+        JointIcon.all.contains { $0.emoji == selection } || selection.isEmpty
+            ? JointIcon.all
+            : [JointIcon(emoji: selection, key: "")] + JointIcon.all
+    }
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 10) {
-                ForEach(options, id: \.self) { e in
-                    let on = e == selection
+            HStack(alignment: .top, spacing: 10) {
+                ForEach(options, id: \.emoji) { icon in
+                    let on = icon.emoji == selection
                     Button {
                         HapticManager.shared.tap()
-                        selection = e
+                        selection = icon.emoji
+                        onPick?(icon)
                     } label: {
-                        Text(e)
-                            .font(.system(size: 26))
-                            .frame(width: 52, height: 52)
-                            .background(on ? AppTheme.accent.opacity(0.14) : AppTheme.cardDark,
-                                        in: RoundedRectangle(cornerRadius: AppRadius.md))
-                            .overlay(RoundedRectangle(cornerRadius: AppRadius.md)
-                                .stroke(on ? AppTheme.accent : .clear, lineWidth: 2))
+                        VStack(spacing: 6) {
+                            Text(icon.emoji)
+                                .font(.system(size: 26))
+                                .frame(width: 52, height: 52)
+                                .background(on ? AppTheme.accent.opacity(0.14) : AppTheme.cardDark,
+                                            in: RoundedRectangle(cornerRadius: AppRadius.md))
+                                .overlay(RoundedRectangle(cornerRadius: AppRadius.md)
+                                    .stroke(on ? AppTheme.accent : .clear, lineWidth: 2))
+                            Text(icon.label)
+                                .font(.system(.caption2, weight: on ? .bold : .medium))
+                                .foregroundStyle(on ? AppTheme.accent : AppTheme.textSecondary)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.8)
+                        }
+                        .frame(width: 68)
                     }
                     .buttonStyle(ScaleButtonStyle())
+                    .accessibilityLabel(icon.label.isEmpty ? icon.emoji : icon.label)
                     .accessibilityAddTraits(on ? .isSelected : [])
                 }
             }

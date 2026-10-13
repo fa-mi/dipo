@@ -3448,6 +3448,17 @@ final class LanguageManager {
         "joint.err.not_created": "The joint account couldn't be created. Try again.",
         "joint.err.deposit_undone": "The deposit was refused, so it was taken off your card too.",
         "joint.err.generic": "Something went wrong. Check your connection and try again.",
+        "joint.icon.home": "Household",
+        "joint.icon.couple": "Couple",
+        "joint.icon.family": "Family",
+        "joint.icon.housemates": "Housemates",
+        "joint.icon.groceries": "Groceries",
+        "joint.icon.kitchen": "Kitchen",
+        "joint.icon.holiday": "Holiday",
+        "joint.icon.savings": "Savings",
+        "joint.waiting.title": "This joint account isn't here yet",
+        "joint.waiting.body": "It may still be on its way to the server, or the connection dropped. Check your signal and try again.",
+        "joint.waiting.retry": "Try again",
     ]
 
     // MARK: - Indonesian Strings
@@ -6779,6 +6790,17 @@ final class LanguageManager {
         "joint.err.not_created": "Rekening bersama gagal dibuat. Coba lagi.",
         "joint.err.deposit_undone": "Setoran ditolak, jadi catatan di kartumu juga dibatalkan.",
         "joint.err.generic": "Ada yang salah. Cek koneksi lalu coba lagi.",
+        "joint.icon.home": "Rumah tangga",
+        "joint.icon.couple": "Pasangan",
+        "joint.icon.family": "Keluarga",
+        "joint.icon.housemates": "Kos bareng",
+        "joint.icon.groceries": "Belanja",
+        "joint.icon.kitchen": "Dapur",
+        "joint.icon.holiday": "Liburan",
+        "joint.icon.savings": "Tabungan",
+        "joint.waiting.title": "Rekening bersama ini belum muncul",
+        "joint.waiting.body": "Mungkin masih dalam perjalanan ke server, atau koneksinya putus. Cek sinyal lalu coba lagi.",
+        "joint.waiting.retry": "Coba lagi",
     ]
 }
 

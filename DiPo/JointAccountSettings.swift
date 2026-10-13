@@ -88,7 +88,7 @@ struct JointSettingsSheet: View {
                 if owner {
                     section(loc("joint.settings.name")) {
                         VStack(alignment: .leading, spacing: 12) {
-                            JointEmojiRow(options: JointCreateSheet.emojis, selection: $emoji)
+                            JointEmojiRow(selection: $emoji)
                             JointField(title: loc("joint.create.name")) {
                                 TextField(loc("joint.create.name_placeholder"), text: $name)
                                     .font(.system(.body, weight: .semibold))

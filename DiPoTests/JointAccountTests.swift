@@ -150,6 +150,23 @@ final class JointAccountTests: XCTestCase {
         XCTAssertEqual(JointAccountService.maxMembers, 5, "the rules allow 2–5")
     }
 
+    /// Pictures alone left people guessing what an icon meant.
+    func testEveryIconHasAWordInBothLanguages() {
+        XCTAssertEqual(Set(JointIcon.all.map(\.emoji)).count, JointIcon.all.count, "no icon twice")
+        for language in [LanguageManager.Language.english, .indonesian] {
+            LanguageManager.shared.withLanguage(language) {
+                for icon in JointIcon.all {
+                    XCTAssertNotEqual(icon.label, icon.key, "\(icon.emoji) has no word in \(language)")
+                    XCTAssertFalse(icon.label.isEmpty)
+                }
+                for key in ["joint.waiting.title", "joint.waiting.body", "joint.waiting.retry"] {
+                    XCTAssertNotEqual(loc(key), key, "missing \(key) in \(language)")
+                }
+            }
+        }
+        XCTAssertEqual(JointIcon(emoji: "🎯", key: "").label, "", "an old icon keeps no word")
+    }
+
     func testFormattedStringsKeepTheirArgumentsInBothLanguages() {
         for language in [LanguageManager.Language.english, .indonesian] {
             LanguageManager.shared.withLanguage(language) {

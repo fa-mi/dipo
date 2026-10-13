@@ -293,7 +293,7 @@ final class JointAccountService {
     func start() {
         guard let uid else { return }
         let month = JointBudget.month(containing: Date())
-        if uid == listeningUid, month == self.month, accountsListener != nil { return }
+        if uid == listeningUid, month == self.month, accountsListener != nil, invitesListener != nil { return }
         stop()
         listeningUid = uid
         self.month = month
@@ -302,7 +302,17 @@ final class JointAccountService {
             .addSnapshotListener { [weak self] snap, err in
                 guard let self else { return }
                 Task { @MainActor in
-                    if let err { print("[Joint] accounts listen error: \(err.localizedDescription)"); return }
+                    if let err {
+                        // Firestore ends a listener on error. Forget it, so the
+                        // next start() — the Wallet appearing, the app coming
+                        // back — listens again instead of staying deaf until a
+                        // relaunch (which is what happened while the rules were
+                        // not yet published).
+                        print("[Joint] accounts listen error: \(err.localizedDescription)")
+                        self.accountsListener?.remove()
+                        self.accountsListener = nil
+                        return
+                    }
                     let list = (snap?.documents ?? [])
                         .compactMap { JointAccount(id: $0.documentID, data: $0.data()) }
                         .sorted { $0.createdAt < $1.createdAt }
@@ -315,7 +325,12 @@ final class JointAccountService {
             .addSnapshotListener { [weak self] snap, err in
                 guard let self else { return }
                 Task { @MainActor in
-                    if let err { print("[Joint] invites listen error: \(err.localizedDescription)"); return }
+                    if let err {
+                        print("[Joint] invites listen error: \(err.localizedDescription)")
+                        self.invitesListener?.remove()
+                        self.invitesListener = nil
+                        return
+                    }
                     self.invites = (snap?.documents ?? [])
                         .compactMap { JointInvite(id: $0.documentID, data: $0.data()) }
                         .filter { $0.status == "pending" }
@@ -349,7 +364,7 @@ final class JointAccountService {
             let memberReg = ref.collection("members").addSnapshotListener { [weak self] snap, err in
                 guard let self else { return }
                 Task { @MainActor in
-                    if let err { print("[Joint] members listen error: \(err.localizedDescription)"); return }
+                    if let err { print("[Joint] members listen error: \(err.localizedDescription)"); self.forget(id); return }
                     self.members[id] = (snap?.documents ?? [])
                         .map { JointMember(id: $0.documentID, data: $0.data()) }
                         .sorted { $0.joinedAt < $1.joinedAt }
@@ -360,13 +375,26 @@ final class JointAccountService {
                 .addSnapshotListener { [weak self] snap, err in
                     guard let self else { return }
                     Task { @MainActor in
-                        if let err { print("[Joint] month listen error: \(err.localizedDescription)"); return }
+                        if let err { print("[Joint] month listen error: \(err.localizedDescription)"); self.forget(id); return }
                         self.thisMonth[id] = (snap?.documents ?? [])
                             .compactMap { JointTx(id: $0.documentID, data: $0.data()) }
                     }
                 }
             perAccount[id] = [memberReg, monthReg]
         }
+    }
+
+    /// Drops an account's listeners after Firestore ended one, so the next
+    /// accounts snapshot follows it again.
+    private func forget(_ id: String) {
+        perAccount[id]?.forEach { $0.remove() }
+        perAccount[id] = nil
+    }
+
+    /// Listens again from scratch — the "Try again" on a screen still waiting.
+    func retry() {
+        listeningUid = nil
+        start()
     }
 
     /// The latest 200 entries, while the account is open.
@@ -377,7 +405,12 @@ final class JointAccountService {
             .addSnapshotListener { [weak self] snap, err in
                 guard let self else { return }
                 Task { @MainActor in
-                    if let err { print("[Joint] history listen error: \(err.localizedDescription)"); return }
+                    if let err {
+                        print("[Joint] history listen error: \(err.localizedDescription)")
+                        self.historyListeners[accountId]?.remove()
+                        self.historyListeners[accountId] = nil
+                        return
+                    }
                     self.history[accountId] = (snap?.documents ?? [])
                         .compactMap { JointTx(id: $0.documentID, data: $0.data()) }
                 }
@@ -437,8 +470,17 @@ final class JointAccountService {
         ], forDocument: ref)
         batch.setData(["displayName": me, "joinedAt": FieldValue.serverTimestamp()],
                       forDocument: ref.collection("members").document(uid))
-        commit(batch, failure: "joint.err.not_created")
-        return ref.documentID
+        // Waits for the server's answer, so a refusal shows on the Create
+        // sheet instead of an account screen that spins for ever. On one bar
+        // it stops waiting after a few seconds: the write stays queued and
+        // goes out with the next signal, and the account already shows.
+        switch await commit(batch, waitingAtMost: 10) {
+        case .saved, .queued:
+            return ref.documentID
+        case .refused(let error):
+            print("[Joint] create refused: \(error.localizedDescription)")
+            return nil
+        }
     }
 
     // MARK: Entries
@@ -783,6 +825,49 @@ final class JointAccountService {
     }
 
     // MARK: Helpers
+
+    enum CommitOutcome {
+        case saved
+        /// No answer yet — offline or a slow line. Firestore keeps the write and sends it later.
+        case queued
+        case refused(Error)
+    }
+
+    /// Commits, and waits for the server at most `seconds`.
+    private func commit(_ batch: WriteBatch, waitingAtMost seconds: Double) async -> CommitOutcome {
+        let answered = Once()
+        return await withCheckedContinuation { (done: CheckedContinuation<CommitOutcome, Never>) in
+            batch.commit { error in
+                Task { @MainActor in
+                    guard answered.claim() else {
+                        // Answered after the screen moved on: still say so.
+                        if error != nil { self.failure = loc("joint.err.not_saved") }
+                        return
+                    }
+                    if let error {
+                        done.resume(returning: CommitOutcome.refused(error))
+                    } else {
+                        done.resume(returning: CommitOutcome.saved)
+                    }
+                }
+            }
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(seconds))
+                guard answered.claim() else { return }
+                done.resume(returning: CommitOutcome.queued)
+            }
+        }
+    }
+
+    /// Lets exactly one of two racing callbacks resume a continuation.
+    private final class Once {
+        private var taken = false
+        func claim() -> Bool {
+            if taken { return false }
+            taken = true
+            return true
+        }
+    }
 
     private func commit(_ batch: WriteBatch, failure key: String) {
         Task {
