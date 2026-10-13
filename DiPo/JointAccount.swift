@@ -305,6 +305,8 @@ final class JointAccountService {
     /// account or the month has changed since the last time.
     func start() {
         guard let uid else { return }
+        // Each appearance also catches a name changed in Profile meanwhile.
+        defer { for a in accounts { syncMyName(in: a.id) } }
         let month = JointBudget.month(containing: Date())
         if uid == listeningUid, month == self.month, accountsListener != nil, invitesListener != nil { return }
         stop()
@@ -381,6 +383,7 @@ final class JointAccountService {
                     self.members[id] = (snap?.documents ?? [])
                         .map { JointMember(id: $0.documentID, data: $0.data()) }
                         .sorted { $0.joinedAt < $1.joinedAt }
+                    self.syncMyName(in: id)
                 }
             }
             let monthReg = ref.collection("transactions")
@@ -751,6 +754,10 @@ final class JointAccountService {
                 ok = false
             }
         }
+        // One name: what is typed here is the Profile name too, so Home,
+        // Profile and every joint account say the same thing.
+        Keychain.save(name, key: "user_name")
+        NotificationCenter.default.post(name: .profilePhotoDidChange, object: nil)
         UserSession.shared.adoptDisplayName(name)
         Task { await FirebaseSupportService.shared.registerUserProfile() }
         return ok
@@ -759,7 +766,9 @@ final class JointAccountService {
     /// My own row's name in this account, if it is still a placeholder.
     func myNameIsMissing(in account: JointAccount) -> Bool {
         guard let uid, let me = members[account.id]?.first(where: { $0.id == uid }) else { return false }
-        return JointText.isPlaceholder(me.displayName)
+        // A known name fixes the row by itself (syncMyName); ask only when
+        // Profile has none either.
+        return JointText.isPlaceholder(me.displayName) && Self.knownName() == nil
     }
 
     func makeOwner(_ member: JointMember, of account: JointAccount) async -> Bool {
@@ -924,13 +933,59 @@ final class JointAccountService {
     /// The live session name, else the profile's, else "Someone" — never an
     /// empty string, which would show as a blank author on every entry.
     private func myName(_ uid: String) async -> String {
-        let live = (UserSession.shared.displayName ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        if !live.isEmpty { return JointText.clip(live, 40) }
-        let auth = (Auth.auth().currentUser?.displayName ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        if !auth.isEmpty { return JointText.clip(auth, 40) }
+        if let known = Self.knownName() { return known }
         let snap = try? await db.collection("users").document(uid).getDocument()
         let profile = (snap?.data()?["displayName"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         return JointText.clip(profile.isEmpty ? loc("joint.someone") : profile, 40)
+    }
+
+    /// The name as the person set it in Profile — the one Home greets them
+    /// by. Kept in the Keychain under `user_name`, apart from the Apple or
+    /// Google name, which Apple sends only on the very first sign-in and so
+    /// is often empty after a reinstall. That gap is why rows read "Someone"
+    /// while Profile said "Fahmi".
+    static var profileName: String? {
+        let n = (Keychain.load(key: "user_name") ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        // AuthManager shows "User" when nothing was ever saved; it isn't a name.
+        return n.isEmpty || n == "User" || JointText.isPlaceholder(n) ? nil : n
+    }
+
+    /// A name DiPo already knows without asking the server: Profile, then the
+    /// sign-in name, then Firebase's.
+    static func knownName() -> String? {
+        let candidates = [profileName,
+                          UserSession.shared.displayName,
+                          Auth.auth().currentUser?.displayName]
+        for raw in candidates {
+            let n = (raw ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            if !n.isEmpty, !JointText.isPlaceholder(n) { return JointText.clip(n, 40) }
+        }
+        return nil
+    }
+
+    /// Accounts whose name write is on its way, so a second snapshot doesn't
+    /// send it again.
+    @ObservationIgnored private var nameSyncing: Set<String> = []
+
+    /// Keeps my row in step with Profile: a name changed there, or a row
+    /// written as "Someone" before the name was known, is corrected the next
+    /// time the members list arrives — no trip to Settings needed.
+    private func syncMyName(in accountId: String) {
+        guard let uid, let wanted = Self.knownName(),
+              let mine = members[accountId]?.first(where: { $0.id == uid }),
+              mine.displayName != wanted, !nameSyncing.contains(accountId) else { return }
+        nameSyncing.insert(accountId)
+        let ref = accountsRef.document(accountId)
+        let owner = account(accountId)?.isOwner(uid) == true
+        Task {
+            do {
+                try await ref.collection("members").document(uid).setData(["displayName": wanted], merge: true)
+                if owner { try await ref.updateData(["ownerName": wanted]) }
+            } catch {
+                print("[Joint] name sync refused: \(error.localizedDescription)")
+            }
+            nameSyncing.remove(accountId)
+        }
     }
 
     /// Best-effort push through the Worker, which checks that the caller wrote
