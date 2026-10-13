@@ -304,6 +304,7 @@ struct CalculatorSheet: View {
     @Query private var cards: [BankCard]
     @Query private var debts: [DebtRecord]
     @Query private var goals: [SavingsGoal]
+    @Query private var installments: [CardInstallment]
     /// Fields DiPo filled from the user's records this visit, to say so.
     @State private var filledFromRecords: Set<String> = []
     /// Read from the whole history, so computed on appear and on save — not
@@ -531,7 +532,8 @@ struct CalculatorSheet: View {
     /// payment can come from without leaving the household exposed.
     private func computeSpareCash() -> (spare: Double, emergency: Double) {
         let inputs = LadderInputs.gather(cards: cards, debts: debts, holdings: holdings,
-                                         goals: goals, salaries: salaries, currency: pref)
+                                         goals: goals, salaries: salaries, currency: pref,
+                                         installments: installments)
         let ladder = FinancialLadder.evaluate(inputs)
         let buffer = max(inputs.cash, 0) + max(inputs.liquidHoldings, 0)
         return (buffer - ladder.emergencyTarget, ladder.emergencyTarget)

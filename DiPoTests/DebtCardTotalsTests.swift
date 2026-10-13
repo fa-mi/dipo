@@ -60,7 +60,8 @@ final class DebtCardTotalsTests: XCTestCase {
     }
 
     func testStringsExist() {
-        for key in ["debt.total_cards_note", "debt.advice.card_only", "debt.reduce_spending_plan"] {
+        for key in ["debt.total_cards_note", "debt.advice.card_carried", "debt.advice.card_recent",
+                    "debt.reduce_spending_plan"] {
             XCTAssertNotEqual(loc(key), key, "missing \(key)")
         }
     }

@@ -18,9 +18,12 @@ enum LadderCopy {
                 : String(format: loc("ladder.spending.over"), money(i.monthlyConsumption - i.monthlyIncome))
         case .debt:
             guard let d = i.costlyDebt else { return loc("ladder.debt.ok") }
-            return d.annualRate > 0
-                ? String(format: loc("ladder.debt.rate"), d.name, Int(d.annualRate.rounded()), money(d.balance))
-                : String(format: loc("ladder.debt.card"), d.name, money(d.balance))
+            if d.annualRate > 0 {
+                return String(format: loc("ladder.debt.rate"), d.name, Int(d.annualRate.rounded()), money(d.balance))
+            }
+            return d.owedInTotal > 0
+                ? String(format: loc("ladder.debt.card_part"), d.name, money(d.balance), money(d.owedInTotal))
+                : String(format: loc("ladder.debt.card_carried"), d.name, money(d.balance))
         case .emergency:
             if r.emergencyTarget <= 0 { return loc("ladder.emergency.no_data") }
             return r.rung(.emergency).done
@@ -131,6 +134,7 @@ struct FinancialLadderView: View {
     @Query private var holdings: [InvestmentHolding]
     @Query private var goals: [SavingsGoal]
     @Query private var salaries: [SalarySchedule]
+    @Query private var installments: [CardInstallment]
     @State private var openWhy: LadderStep?
     /// Read from the whole history, so refreshed on save, not per render —
     /// opening a "Why?" redraws the screen.
@@ -140,7 +144,8 @@ struct FinancialLadderView: View {
 
     private func computeResult() -> LadderResult {
         FinancialLadder.evaluate(.gather(cards: cards, debts: debts, holdings: holdings,
-                                         goals: goals, salaries: salaries, currency: currency))
+                                         goals: goals, salaries: salaries, currency: currency,
+                                         installments: installments))
     }
 
     var body: some View {

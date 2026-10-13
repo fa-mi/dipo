@@ -192,6 +192,8 @@ struct DebtView: View {
                                       investDebtRatio: liveInvestDebtRatio,
                                       extraIncomeThisCycle: extraIncomeThisCycle)
         e.cardOwed = cardOwed
+        e.cardCarried = cardDebtRecorded ? 0
+            : ObligationLoad.cardCarried(cards: cards, currency: CurrencyManager.shared.preferredCurrency)
         e.cardMonthly = ObligationLoad.cardPayments(cards: cards, installments: installments, debts: debts,
                                                     currency: CurrencyManager.shared.preferredCurrency)
         return e
@@ -292,24 +294,30 @@ struct DebtView: View {
                             DueSoonCard(debts: engine.urgentDebts) { payingDebt = $0 }
                         }
 
-                        VStack(alignment: .leading, spacing: 12) {
-                            HStack(alignment: .firstTextBaseline) {
-                                Text(loc("debt.your_debts"))
-                                    .font(.system(.body, weight: .bold))
-                                    .foregroundStyle(AppTheme.textPrimary)
-                                Spacer()
-                                Text(String(format: loc("debt.active_count"), activeDebts.count))
-                                    .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
-                            }
-                            ForEach(Array(engine.avalancheOrder.prefix(debtPreviewLimit).enumerated()), id: \.element.id) { i, debt in
-                                DebtCard(debt: debt, priority: i + 1,
-                                         payFirst: i == 0 && activeDebts.count > 1, vm: vm)
-                            }
-                            if engine.avalancheOrder.count > debtPreviewLimit {
-                                Button { HapticManager.shared.tap(); showAllDebts = true } label: {
-                                    SeeAllLabel(count: engine.avalancheOrder.count)
+                        // Only when something is recorded: with just a card,
+                        // "Your debts · 0 active" sat under "Total you owe
+                        // Rp 8.500.000" and read as a contradiction. The card
+                        // has its own section further down.
+                        if !activeDebts.isEmpty {
+                            VStack(alignment: .leading, spacing: 12) {
+                                HStack(alignment: .firstTextBaseline) {
+                                    Text(loc("debt.your_debts"))
+                                        .font(.system(.body, weight: .bold))
+                                        .foregroundStyle(AppTheme.textPrimary)
+                                    Spacer()
+                                    Text(String(format: loc("debt.active_count"), activeDebts.count))
+                                        .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                                 }
-                                .buttonStyle(ScaleButtonStyle())
+                                ForEach(Array(engine.avalancheOrder.prefix(debtPreviewLimit).enumerated()), id: \.element.id) { i, debt in
+                                    DebtCard(debt: debt, priority: i + 1,
+                                             payFirst: i == 0 && activeDebts.count > 1, vm: vm)
+                                }
+                                if engine.avalancheOrder.count > debtPreviewLimit {
+                                    Button { HapticManager.shared.tap(); showAllDebts = true } label: {
+                                        SeeAllLabel(count: engine.avalancheOrder.count)
+                                    }
+                                    .buttonStyle(ScaleButtonStyle())
+                                }
                             }
                         }
 

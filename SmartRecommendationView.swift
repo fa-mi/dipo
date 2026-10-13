@@ -285,9 +285,14 @@ struct SmartRecommendationView: View {
     }
 
     /// Total owed across credit-card accounts — folded into the debt picture.
+    /// The same figure as the Debts screen's total: instalment principal
+    /// included, and nothing when the card is already recorded as a debt by
+    /// hand (that would be the same money twice).
     private var creditCardOwed: Double {
-        cards.filter { $0.isCreditCard }
-            .reduce(0.0) { $0 + CurrencyManager.shared.convert($1.owedBalance(), from: $1.resolvedCurrency, to: currency) }
+        let recorded = debts.contains { $0.isActive && !$0.manuallyClosed && $0.type == DebtType.creditCard.rawValue }
+        guard !recorded else { return 0 }
+        return cards.filter { $0.isCreditCard }
+            .reduce(0.0) { $0 + CurrencyManager.shared.convert($1.totalOwed(installments), from: $1.resolvedCurrency, to: currency) }
     }
 
     private var reco: SmartRecommendation {
