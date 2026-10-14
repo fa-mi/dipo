@@ -50,8 +50,7 @@ struct MonthFlowCard: View {
 
     /// What is left of the period's money once living costs are out: income
     /// and added money, less spending other than debt paid and money put
-    /// away. Negative when living costs passed it. Home's total line says
-    /// the same figure, from here.
+    /// away. Negative when living costs passed it.
     static func remaining(income: Double, expense: Double, putAway: Double, extra: Double) -> Double {
         income + extra - max(expense - putAway, 0)
     }

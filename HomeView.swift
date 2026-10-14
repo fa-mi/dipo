@@ -72,11 +72,8 @@ struct HomeView: View {
     @State private var premiumMgr = PremiumManager.shared
     /// Profile → Show DiPo on Home.
     @AppStorage(HomePrefs.showDiPoKey) private var showDiPo = true
-    /// The eye beside the total: every figure on Home behind dots.
+    /// The eye on the total row: every figure on Home behind dots.
     @AppStorage(HomePrefs.hideBalancesKey) private var hideBalances = false
-    /// The words under the total, for the main card's pot. Worked out with
-    /// the period card's figures, off the render path.
-    @State private var heroLine = HomeHeroLine()
 
     @State private var showSearch           = false
     @State private var showNotifications    = false
@@ -424,10 +421,8 @@ struct HomeView: View {
             flowPeriodLabel = loc("home.this_month")
         }
 
-        let daysToPayday = nearestSalary.map { SalaryDateEngine.daysUntilPay(dayOfMonth: $0.dayOfMonth) }
         guard let card = selectedCard else {
             monthIncome = 0; monthExpense = 0; flowNote = nil; flowPutAway = 0; flowExtra = 0
-            heroLine = HomeHeroLine.make(income: 0, expense: 0, putAway: 0, extra: 0, daysToPayday: daysToPayday)
             return
         }
         // Read the pre-aggregated daily buckets instead of scanning the card's
@@ -442,13 +437,6 @@ struct HomeView: View {
         flowNote = flow.note
         flowNoteTone = flow.tone
         flowPutAway = flow.putAway
-        // The total at the top speaks for the main card's pot, whichever
-        // account is chosen below it.
-        let main = budgetCard ?? card
-        let mainFlow = main.id == card.id ? flow : periodFlow(for: main, from: windowStart, buckets: buckets)
-        heroLine = HomeHeroLine.make(income: mainFlow.income, expense: mainFlow.expense,
-                                     putAway: mainFlow.putAway, extra: mainFlow.extra,
-                                     daysToPayday: daysToPayday)
     }
 
     /// One card's pot over the period: what the period card shows for it.
@@ -623,7 +611,7 @@ struct HomeView: View {
                                         }
                                     })
                         .padding(.horizontal, 22)
-                        .padding(.top, hasCards ? 10 : 12)
+                        .padding(.top, hasCards ? 14 : 12)
                         .opacity(headerAppeared ? 1 : 0)
                         .animation(AppMotion.appear, value: headerAppeared)
 
@@ -678,8 +666,8 @@ struct HomeView: View {
                                       extra: flowExtra,
                                       currency: selectedCard?.resolvedCurrency
                                                 ?? CurrencyManager.shared.preferredCurrency,
-                                      periodLabel: flowLabel,
-                                      isHidden: hideBalances || (selectedCard?.isHidden ?? false),
+                                      periodLabel: flowPeriodLabel,
+                                      isHidden: hideAll || (selectedCard?.isHidden ?? false),
                                       note: flowNote,
                                       noteTone: flowNoteTone,
                                       onDetails: flowDetails)
@@ -692,7 +680,7 @@ struct HomeView: View {
                         // Net Worth — cash minus liabilities. Only shown when the
                         // user actually has liabilities (credit cards / debts),
                         // otherwise it's just the cash total again.
-                        if worth.liabilities > 0.5 && canSeeNetWorth && !hideBalances {
+                        if worth.liabilities > 0.5 && canSeeNetWorth && !hideAll {
                             let netWorth = worth.total
                             let fmt = { (v: Double) in CurrencyManager.shared.formatted(v, currency: CurrencyManager.shared.preferredCurrency) }
                             VStack(alignment: .leading, spacing: 5) {
@@ -918,35 +906,37 @@ struct HomeView: View {
         }
     }
 
-    /// The money first: everything held, then the accounts side by side.
-    /// Choosing one points the period card and the list below at it. Its own
-    /// property so the body stays within what the type checker takes in.
+    /// The total of every cash account in one short row, then the cards to
+    /// swipe through. Choosing a card points the period card and the list
+    /// below at it. Its own property so the body stays within what the type
+    /// checker takes in.
     @ViewBuilder
     private var moneyTop: some View {
-        HomeBalanceHero(total: worth.balance,
-                        currency: CurrencyManager.shared.preferredCurrency,
-                        line: heroLine,
-                        hasCycle: MainCard.payDay(salarySchedules) != nil,
-                        hidden: $hideBalances)
-            .padding(.horizontal, 22)
-            .padding(.top, 20)
-            .opacity(headerAppeared ? 1 : 0)
-            .animation(AppMotion.appear, value: headerAppeared)
+        if showsTotalRow {
+            HomeTotalRow(total: worth.balance,
+                         currency: CurrencyManager.shared.preferredCurrency,
+                         accounts: cashAccountCount,
+                         payday: HomeTotalRow.paydayText(days: nearestSalary.map {
+                             SalaryDateEngine.daysUntilPay(dayOfMonth: $0.dayOfMonth) }),
+                         hidden: $hideBalances)
+                .padding(.horizontal, 22)
+                .padding(.top, 18)
+                .opacity(headerAppeared ? 1 : 0)
+                .animation(AppMotion.appear, value: headerAppeared)
+        }
 
-        HomeAccountTiles(vm: vm, hideAll: hideBalances, onAdd: { showAddCard = true })
-            .padding(.top, 12)
+        CardCarousel(vm: vm, hideAll: hideAll, onShowAll: { hideBalances = false })
+            .padding(.top, showsTotalRow ? 12 : 18)
             .opacity(contentAppeared ? 1 : 0)
-            .offset(y: contentAppeared ? 0 : 14)
+            .scaleEffect(contentAppeared ? 1 : 0.94)
             .animation(AppMotion.appear, value: contentAppeared)
     }
 
-    /// The window, and — once there is more than one account — which one the
-    /// figures are for, now that the chosen account is a small tile rather
-    /// than a card filling the screen.
-    private var flowLabel: String {
-        guard vm.cards.count > 1, let card = selectedCard else { return flowPeriodLabel }
-        return flowPeriodLabel + " · " + card.tileLabel
-    }
+    private var cashAccountCount: Int { vm.cards.filter { !$0.isCreditCard }.count }
+    private var showsTotalRow: Bool { HomeTotalRow.shows(cashAccounts: cashAccountCount) }
+    /// The eye lives on the total row; without the row there is no eye to
+    /// undo it with, so it does not apply.
+    private var hideAll: Bool { hideBalances && showsTotalRow }
 
     /// Royal can chat with DiPo; Free hears his top insight.
     private var dipoIsRoyal: Bool { premiumMgr.canAccess(.aiAdvisor) }
