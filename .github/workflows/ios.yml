@@ -63,7 +63,8 @@ jobs:
         run: |
           tool=.spm/checkouts/firebase-ios-sdk/Crashlytics/upload-symbols
           test -x "$tool" || { echo "::error::$tool is missing; release.yml can't send dSYMs to Crashlytics"; exit 1; }
-          usage=$("$tool" 2>&1 || true)
+          # Run bare, it only says no plist was given; --help lists the flags.
+          usage=$("$tool" --help 2>&1 || true)
           for flag in -gsp -p; do
             printf '%s' "$usage" | grep -qE -- "(^|[^A-Za-z-])$flag([^A-Za-z-]|$)" \
               || { echo "::error::upload-symbols no longer lists $flag; update release.yml"; printf '%s\n' "$usage" | head -40; exit 1; }
