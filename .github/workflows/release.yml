@@ -53,7 +53,7 @@ jobs:
       BUNDLE_ID: com.fahmiaquinas.DiPo
       TEAM_ID: 3C6KN7P2NC
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # The runner context isn't available in job-level env, so the paths
       # under RUNNER_TEMP are set here.
@@ -72,7 +72,7 @@ jobs:
           xcodebuild -version
 
       - name: Cache Swift packages
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ${{ runner.temp }}/spm
           key: release-spm-${{ hashFiles('DiPo.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
@@ -234,6 +234,7 @@ jobs:
       - name: Export${{ inputs.upload && ' and upload' || '' }}
         env:
           UPLOAD: ${{ inputs.upload }}
+          GOOGLE_BINARIES: "did not include a dSYM for the (FirebaseAnalytics|FirebaseFirestoreInternal|GoogleAdsOnDeviceConversion|GoogleAppMeasurement|GoogleAppMeasurementIdentitySupport|absl|grpc|grpcpp|openssl_grpc)\\.framework"
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
         run: |
@@ -262,8 +263,39 @@ jobs:
             -authenticationKeyPath "$ASC_KEY_PATH" \
             -authenticationKeyID "$ASC_KEY_ID" \
             -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
-            | tee "$RUNNER_TEMP/export.log" | grep -E "error:|Upload|EXPORT (SUCCEEDED|FAILED)" || true
+            | tee "$RUNNER_TEMP/export.log" | grep -E "error:|Upload|EXPORT (SUCCEEDED|FAILED)" \
+            | grep -vE "$GOOGLE_BINARIES" || true
           grep -q "EXPORT SUCCEEDED" "$RUNNER_TEMP/export.log" || { echo "::error::Export failed; see the export-log artifact"; exit 1; }
+          # Google ships these frameworks prebuilt, without dSYMs, so Apple's
+          # symbol upload reports each of them on every build. Their frames
+          # stay as addresses in Apple's crash reports; DiPo's own are
+          # symbolicated. A missing dSYM for anything else is ours: say so.
+          known=$(grep -cE "$GOOGLE_BINARIES" "$RUNNER_TEMP/export.log" || true)
+          [ "$known" -gt 0 ] && echo "$known prebuilt Google frameworks have no dSYM (expected; Google does not ship them)."
+          grep -E "Upload Symbols Failed" "$RUNNER_TEMP/export.log" | grep -vE "$GOOGLE_BINARIES" \
+            | while IFS= read -r line; do echo "::warning::${line:0:600}"; done || true
+
+      # Crashlytics reads crash stacks against the build's dSYMs, which only
+      # it can be given: Apple's copy (uploadSymbols above) is Apple's. The
+      # project has no Crashlytics run-script phase (the project file is
+      # Fahmi's), so the archive's dSYMs go up here. A failed upload leaves
+      # this build's crashes unreadable in Crashlytics, not the build broken,
+      # so it warns rather than fails. ios.yml checks the tool is where this
+      # looks and still takes these flags.
+      - name: Crashlytics symbols
+        if: success() && inputs.upload
+        run: |
+          tool="$SPM_DIR/checkouts/firebase-ios-sdk/Crashlytics/upload-symbols"
+          if [ ! -x "$tool" ]; then
+            echo "::warning::$tool not found; this build's dSYMs were NOT sent to Crashlytics"
+            exit 0
+          fi
+          ls "$ARCHIVE/dSYMs"
+          if "$tool" -gsp GoogleService-Info.plist -p ios "$ARCHIVE/dSYMs"; then
+            echo "Crashlytics: dSYMs for $BUILD_NUMBER uploaded." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::warning::Crashlytics symbol upload failed; this build's crashes will show as addresses in Crashlytics"
+          fi
 
       - name: Summary
         if: success()
@@ -283,7 +315,7 @@ jobs:
 
       - name: Keep the .ipa
         if: success() && !inputs.upload
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: DiPo-${{ inputs.marketing_version }}-ipa
           path: ${{ runner.temp }}/export/*.ipa
@@ -291,7 +323,7 @@ jobs:
 
       - name: Keep the logs
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: release-logs
           path: |
