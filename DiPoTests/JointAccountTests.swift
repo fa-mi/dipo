@@ -138,6 +138,105 @@ final class JointAccountTests: XCTestCase {
         XCTAssertNil(JointBudget.crossed(before: 1_100_000, after: 1_300_000, budget: 1_000_000))
     }
 
+    // MARK: Smart Budget
+
+    private func entry(_ kind: JointTx.Kind, _ amount: Int64, _ category: TxCategory? = nil,
+                       on date: Date, by uid: String = "a1") -> JointTx {
+        var data: [String: Any] = ["uid": uid, "kind": kind.rawValue, "amount": NSNumber(value: amount)]
+        if let category { data["category"] = category.rawValue }
+        return JointTx(id: UUID().uuidString, data: data)!.with(date: date)
+    }
+
+    private var jakarta: Calendar {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "Asia/Jakarta")!
+        return cal
+    }
+
+    func testTheSplitReadsBackOnlyWhenItAddsUpTo100() {
+        XCTAssertEqual(JointRatios(data: ["needs": NSNumber(value: 60), "wants": NSNumber(value: 20), "save": NSNumber(value: 20)]),
+                       JointRatios(needs: 60, wants: 20, save: 20))
+        XCTAssertEqual(JointRatios(data: ["needs": NSNumber(value: 70), "wants": NSNumber(value: 20), "save": NSNumber(value: 20)]),
+                       .balanced, "110% reads as 50/30/20")
+        XCTAssertEqual(JointRatios(data: nil), .balanced)
+        XCTAssertEqual(JointRatios(data: "50/30/20"), .balanced)
+        for preset in JointRatios.presets { XCTAssertTrue(preset.ratios.isValid, preset.key) }
+        XCTAssertEqual(JointRatios.balanced.firestore["save"] as? Int, 20)
+    }
+
+    func testPotsUseThePersonalSmartBudgetCategories() {
+        XCTAssertEqual(JointPot.of(.food), .needs)
+        XCTAssertEqual(JointPot.of(.bills), .needs)
+        XCTAssertEqual(JointPot.of(.commitment), .needs)
+        XCTAssertEqual(JointPot.of(.shopping), .wants)
+        XCTAssertEqual(JointPot.of(.travel), .wants)
+        XCTAssertNil(JointPot.of(.salary))
+        XCTAssertNil(JointPot.of(nil))
+    }
+
+    func testTheMonthsMoneyInIsSplitAndMeasured() {
+        let cal = jakarta
+        let mid = cal.date(from: DateComponents(year: 2026, month: 10, day: 14, hour: 12))!
+        let month = JointBudget.month(containing: mid, calendar: cal)
+        let previous = JointBudget.month(containing: month.start.addingTimeInterval(-3600), calendar: cal)
+        let entries = [
+            entry(.deposit, 4_000_000, on: mid),
+            entry(.income, 2_000_000, .salary, on: mid),
+            entry(.spend, -2_150_000, .food, on: mid),
+            entry(.spend, -1_950_000, .shopping, on: mid, by: "b1"),
+            entry(.deposit, 9_000_000, on: previous.start.addingTimeInterval(86_400)),   // last month's
+        ]
+        let sb = JointSmartBudget.compute(entries, month: month, previous: previous, ratios: .balanced)
+        XCTAssertEqual(sb.base, 6_000_000)
+        XCTAssertFalse(sb.baseIsLastMonth)
+        XCTAssertEqual(sb.cap(.needs), 3_000_000)
+        XCTAssertEqual(sb.cap(.wants), 1_800_000)
+        XCTAssertEqual(sb.cap(.save), 1_200_000)
+        XCTAssertEqual(sb.spent(.needs), 2_150_000)
+        XCTAssertEqual(sb.spent(.wants), 1_950_000)
+        XCTAssertEqual(sb.saved, 1_900_000, "what is left of the month's money")
+        // Needs has 850 rb left; Wants is over and adds nothing.
+        XCTAssertEqual(sb.safePerDay(daysLeft: 17), 50_000)
+        XCTAssertEqual(sb.crossed(.needs, adding: 300_000), 80)
+        XCTAssertNil(sb.crossed(.needs, adding: 10_000))
+        XCTAssertNil(sb.crossed(.save, adding: 9_999_999))
+    }
+
+    func testLastMonthsMoneyInStandsInUntilSomeArrives() {
+        let cal = jakarta
+        let start = cal.date(from: DateComponents(year: 2026, month: 10, day: 2, hour: 9))!
+        let month = JointBudget.month(containing: start, calendar: cal)
+        let previous = JointBudget.month(containing: month.start.addingTimeInterval(-3600), calendar: cal)
+        let entries = [entry(.deposit, 5_000_000, on: previous.start.addingTimeInterval(5 * 86_400)),
+                       entry(.spend, -100_000, .transport, on: start)]
+        let sb = JointSmartBudget.compute(entries, month: month, previous: previous,
+                                          ratios: JointRatios(needs: 60, wants: 20, save: 20))
+        XCTAssertEqual(sb.base, 5_000_000)
+        XCTAssertTrue(sb.baseIsLastMonth)
+        XCTAssertEqual(sb.cap(.needs), 3_000_000)
+        XCTAssertFalse(JointSmartBudget.compute([], month: month, previous: previous, ratios: .balanced).hasBase)
+    }
+
+    func testDaysLeftCountsToday() {
+        let cal = jakarta
+        let oct14 = cal.date(from: DateComponents(year: 2026, month: 10, day: 14, hour: 20))!
+        XCTAssertEqual(jointDaysLeft(in: JointBudget.month(containing: oct14, calendar: cal), from: oct14, calendar: cal), 18)
+    }
+
+    func testSmartBudgetStringsInBothLanguages() {
+        for language in [LanguageManager.Language.english, .indonesian] {
+            LanguageManager.shared.withLanguage(language) {
+                for pot in JointPot.allCases {
+                    XCTAssertNotEqual(pot.label, "joint.sb.\(pot.rawValue)", "\(language)")
+                    XCTAssertNotEqual(pot.hint, "joint.sb.\(pot.rawValue).hint", "\(language)")
+                }
+                for preset in JointRatios.presets { XCTAssertNotEqual(loc(preset.key), preset.key) }
+                let line = String(format: loc("joint.sb.top_detail"), "Rp 1.150.000", 28)
+                XCTAssertTrue(line.contains("Rp 1.150.000") && line.contains("28%"), line)
+            }
+        }
+    }
+
     // MARK: Wiring
 
     func testTheWorkerRoute() {
