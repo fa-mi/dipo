@@ -18,6 +18,7 @@ struct JointAccountDetailView: View {
     @State private var entry: EntryRoute?
     @State private var showDeposit = false
     @State private var showSettings = false
+    @State private var showSmartBudget = false
     @State private var deleting: JointTx?
     @State private var seen = false
     /// Still no account after a few seconds: say so, instead of a spinner
@@ -89,6 +90,15 @@ struct JointAccountDetailView: View {
         .sheet(isPresented: $showDeposit) {
             if let account {
                 JointDepositSheet(account: account, vm: vm)
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
+                    .presentationBackground(AppTheme.bg)
+                    .preferredColorScheme(appColorScheme())
+            }
+        }
+        .sheet(isPresented: $showSmartBudget) {
+            if let account {
+                JointSmartBudgetSheet(account: account)
                     .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
                     .presentationBackground(AppTheme.bg)
@@ -199,6 +209,8 @@ struct JointAccountDetailView: View {
                 }
 
                 budgetCard(account)
+                JointSmartBudgetCard(account: account, onEdit: smartBudgetEditor(account))
+                JointSmartInsights(account: account)
                 history(account)
             }
             .padding(.horizontal, 22)
@@ -206,6 +218,12 @@ struct JointAccountDetailView: View {
             .padding(.bottom, 40)
             .containerRelativeFrame(.horizontal)
         }
+    }
+
+    /// The owner changes the split; everyone else reads it.
+    private func smartBudgetEditor(_ account: JointAccount) -> (() -> Void)? {
+        guard account.isOwner(me), account.isActive else { return nil }
+        return { showSmartBudget = true }
     }
 
     private func actionTile(icon: String, title: String, tint: Color, action: @escaping () -> Void) -> some View {

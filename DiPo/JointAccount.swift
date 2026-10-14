@@ -110,6 +110,8 @@ struct JointAccount: Identifiable, Hashable {
     var monthlyBudget: Int64
     var status: String
     var createdAt: Date
+    /// Smart Budget's split of the month's money in; 50/30/20 until the owner changes it.
+    var smartRatios: JointRatios
 
     init?(id: String, data: [String: Any]) {
         guard let ownerUid = data["ownerUid"] as? String,
@@ -127,6 +129,7 @@ struct JointAccount: Identifiable, Hashable {
         self.monthlyBudget = jointInt(data["monthlyBudget"]) ?? 0
         self.status = data["status"] as? String ?? "active"
         self.createdAt = (data["createdAt"] as? Timestamp)?.dateValue() ?? Date()
+        self.smartRatios = JointRatios(data: data["smartRatios"])
     }
 
     var isActive: Bool { status == "active" }
@@ -260,6 +263,161 @@ enum JointBudget {
     }
 }
 
+// MARK: - Smart Budget
+
+/// How the month's money in is split: whole percents adding up to 100. The
+/// rules hold the same shape (validJointRatios), so a split saved here is one
+/// every phone reads back the same.
+struct JointRatios: Hashable {
+    var needs: Int
+    var wants: Int
+    var save: Int
+
+    static let balanced = JointRatios(needs: 50, wants: 30, save: 20)
+    static let frugal = JointRatios(needs: 60, wants: 20, save: 20)
+    static let saver = JointRatios(needs: 50, wants: 20, save: 30)
+    /// The quick choices, with the word under each.
+    struct Preset: Identifiable {
+        let ratios: JointRatios
+        let key: String
+        var id: String { key }
+    }
+    static let presets: [Preset] = [
+        Preset(ratios: balanced, key: "joint.sb.preset.balanced"),
+        Preset(ratios: frugal, key: "joint.sb.preset.frugal"),
+        Preset(ratios: saver, key: "joint.sb.preset.saver"),
+    ]
+
+    init(needs: Int, wants: Int, save: Int) {
+        self.needs = needs; self.wants = wants; self.save = save
+    }
+
+    /// From Firestore; anything malformed reads as 50/30/20.
+    init(data: Any?) {
+        let map = data as? [String: Any] ?? [:]
+        func int(_ k: String) -> Int? { (map[k] as? NSNumber).map { $0.intValue } }
+        let parsed = JointRatios(needs: int("needs") ?? -1, wants: int("wants") ?? -1, save: int("save") ?? -1)
+        self = parsed.isValid ? parsed : .balanced
+    }
+
+    var isValid: Bool { needs >= 0 && wants >= 0 && save >= 0 && needs + wants + save == 100 }
+    var label: String { "\(needs) / \(wants) / \(save)" }
+    var firestore: [String: Any] { ["needs": needs, "wants": wants, "save": save] }
+
+    func percent(_ pot: JointPot) -> Int {
+        switch pot {
+        case .needs: return needs
+        case .wants: return wants
+        case .save:  return save
+        }
+    }
+}
+
+/// The three parts of the month, by the personal Smart Budget's categories.
+enum JointPot: String, CaseIterable, Identifiable {
+    case needs, wants, save
+    var id: String { rawValue }
+
+    var categories: Set<TxCategory> {
+        switch self {
+        case .needs: return Set(SmartBudgetManager.dailyCategories)
+        case .wants: return Set(SmartBudgetManager.lifestyleCategories)
+        case .save:  return []
+        }
+    }
+
+    static func of(_ category: TxCategory?) -> JointPot? {
+        guard let category else { return nil }
+        return [.needs, .wants].first { $0.categories.contains(category) }
+    }
+
+    var emoji: String {
+        switch self {
+        case .needs: return "🍚"
+        case .wants: return "🛍️"
+        case .save:  return "💰"
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .needs: return AppTheme.blue
+        case .wants: return AppTheme.purple
+        case .save:  return AppTheme.accent
+        }
+    }
+
+    var label: String { loc("joint.sb.\(rawValue)") }
+    var hint: String { loc("joint.sb.\(rawValue).hint") }
+}
+
+/// One month of a shared account seen through Smart Budget: the money that
+/// came in, split by the owner's ratios, against what each part has spent.
+struct JointSmartBudget: Equatable {
+    /// This month's money in — deposits and money in. Last month's when
+    /// nothing has come in yet, so the first days of a month aren't a blank.
+    let base: Int64
+    let baseIsLastMonth: Bool
+    let ratios: JointRatios
+    let spentNeeds: Int64
+    let spentWants: Int64
+    /// All money out this month, whatever its category.
+    let spentTotal: Int64
+
+    static func compute(_ entries: [JointTx], month: DateInterval, previous: DateInterval,
+                        ratios: JointRatios) -> JointSmartBudget {
+        func moneyIn(_ m: DateInterval) -> Int64 {
+            entries.reduce(0) { sum, tx in
+                guard tx.kind != .spend, tx.amount > 0, tx.date >= m.start, tx.date < m.end else { return sum }
+                return sum + tx.amount
+            }
+        }
+        let outs = entries.filter { $0.kind == .spend && $0.date >= month.start && $0.date < month.end }
+        func spent(_ pot: JointPot) -> Int64 {
+            outs.filter { JointPot.of($0.txCategory) == pot }.reduce(0) { $0 + Swift.abs($1.amount) }
+        }
+        let this = moneyIn(month)
+        return JointSmartBudget(base: this > 0 ? this : moneyIn(previous), baseIsLastMonth: this <= 0,
+                                ratios: ratios, spentNeeds: spent(.needs), spentWants: spent(.wants),
+                                spentTotal: outs.reduce(0) { $0 + Swift.abs($1.amount) })
+    }
+
+    var hasBase: Bool { base > 0 }
+
+    func cap(_ pot: JointPot) -> Int64 { base * Int64(ratios.percent(pot)) / 100 }
+
+    func spent(_ pot: JointPot) -> Int64 {
+        switch pot {
+        case .needs: return spentNeeds
+        case .wants: return spentWants
+        case .save:  return 0
+        }
+    }
+
+    /// What is left of the month's money — Savings' progress towards its target.
+    var saved: Int64 { max(base - spentTotal, 0) }
+
+    /// What can still be spent each day, from Needs and Wants together.
+    func safePerDay(daysLeft: Int) -> Int64 {
+        let left = max(cap(.needs) - spentNeeds, 0) + max(cap(.wants) - spentWants, 0)
+        return left / Int64(max(daysLeft, 1))
+    }
+
+    /// The level (80 or 100) that spending `amount` more from `pot` would push it into.
+    func crossed(_ pot: JointPot, adding amount: Int64) -> Int? {
+        guard pot != .save else { return nil }
+        let before = spent(pot)
+        return JointBudget.crossed(before: before, after: before + amount, budget: cap(pot))
+    }
+}
+
+/// Days from `now` to the end of `month`, today included.
+func jointDaysLeft(in month: DateInterval, from now: Date = .now, calendar: Calendar = .current) -> Int {
+    let today = calendar.startOfDay(for: now)
+    let days = calendar.dateComponents([.day], from: today, to: month.end).day ?? 1
+    return max(days, 1)
+}
+
 // MARK: - Service
 
 @MainActor
@@ -279,8 +437,10 @@ final class JointAccountService {
     var invites: [JointInvite] = []
     /// Members per account, in the order they joined.
     var members: [String: [JointMember]] = [:]
-    /// This month's entries per account, for the budget on the wallet card.
-    var thisMonth: [String: [JointTx]] = [:]
+    /// This month's and last month's entries per account: the budget on the
+    /// wallet card, and Smart Budget, which falls back to last month's money
+    /// in until some has come in this month.
+    var recent: [String: [JointTx]] = [:]
     /// The latest entries of accounts open on screen.
     var history: [String: [JointTx]] = [:]
     /// A write the server turned down after the sheet had already closed.
@@ -292,6 +452,7 @@ final class JointAccountService {
     private var historyListeners: [String: ListenerRegistration] = [:]
     private var listeningUid: String?
     private(set) var month: DateInterval = JointBudget.month(containing: Date())
+    var previousMonth: DateInterval { JointBudget.month(containing: month.start.addingTimeInterval(-3600)) }
 
     private var accountsRef: CollectionReference { db.collection("jointAccounts") }
     private var invitesRef: CollectionReference { db.collection("jointInvitations") }
@@ -361,7 +522,7 @@ final class JointAccountService {
         perAccount = [:]
         historyListeners.values.forEach { $0.remove() }
         historyListeners = [:]
-        accounts = []; invites = []; members = [:]; thisMonth = [:]; history = [:]
+        accounts = []; invites = []; members = [:]; recent = [:]; history = [:]
         listeningUid = nil
     }
 
@@ -372,7 +533,7 @@ final class JointAccountService {
             regs.forEach { $0.remove() }
             perAccount[id] = nil
             members[id] = nil
-            thisMonth[id] = nil
+            recent[id] = nil
         }
         for id in ids where perAccount[id] == nil {
             let ref = accountsRef.document(id)
@@ -387,12 +548,12 @@ final class JointAccountService {
                 }
             }
             let monthReg = ref.collection("transactions")
-                .whereField("date", isGreaterThanOrEqualTo: Timestamp(date: month.start))
+                .whereField("date", isGreaterThanOrEqualTo: Timestamp(date: previousMonth.start))
                 .addSnapshotListener { [weak self] snap, err in
                     guard let self else { return }
                     Task { @MainActor in
                         if let err { print("[Joint] month listen error: \(err.localizedDescription)"); self.forget(id); return }
-                        self.thisMonth[id] = (snap?.documents ?? [])
+                        self.recent[id] = (snap?.documents ?? [])
                             .compactMap { JointTx(id: $0.documentID, data: $0.data()) }
                     }
                 }
@@ -439,8 +600,48 @@ final class JointAccountService {
         history[accountId] = nil
     }
 
+    func smartBudget(_ account: JointAccount) -> JointSmartBudget {
+        JointSmartBudget.compute(recent[account.id] ?? [], month: month, previous: previousMonth,
+                                 ratios: account.smartRatios)
+    }
+
+    /// This month's money out by member, largest first.
+    func spentByMember(_ accountId: String) -> [(uid: String, amount: Int64)] {
+        var by: [String: Int64] = [:]
+        for tx in recent[accountId] ?? [] where tx.kind == .spend && tx.date >= month.start && tx.date < month.end {
+            by[tx.uid, default: 0] += Swift.abs(tx.amount)
+        }
+        return by.map { (uid: $0.key, amount: $0.value) }.sorted { $0.amount > $1.amount }
+    }
+
+    /// This month's largest category of money out.
+    func topCategory(_ accountId: String) -> (category: TxCategory, amount: Int64, share: Double)? {
+        var by: [TxCategory: Int64] = [:]
+        var total: Int64 = 0
+        for tx in recent[accountId] ?? [] where tx.kind == .spend && tx.date >= month.start && tx.date < month.end {
+            let amount = Swift.abs(tx.amount)
+            by[tx.txCategory ?? .other, default: 0] += amount
+            total += amount
+        }
+        guard let top = by.max(by: { $0.value < $1.value }), total > 0 else { return nil }
+        return (top.key, top.value, Double(top.value) / Double(total))
+    }
+
+    /// Owner only, and the rules check it too.
+    func setRatios(_ ratios: JointRatios, for account: JointAccount) {
+        guard account.isOwner(uid), ratios.isValid else { return }
+        let ref = accountsRef.document(account.id)
+        let data = ratios.firestore
+        Task {
+            do { try await ref.updateData(["smartRatios": data]) } catch {
+                print("[Joint] ratios refused: \(error.localizedDescription)")
+                failure = loc("joint.err.not_saved")
+            }
+        }
+    }
+
     func spentThisMonth(_ accountId: String) -> Int64 {
-        JointBudget.spent(thisMonth[accountId] ?? [], in: month)
+        JointBudget.spent(recent[accountId] ?? [], in: month)
     }
 
     /// "You & Rina", "You, Rina & Andi".
@@ -525,6 +726,15 @@ final class JointAccountService {
                          forDocument: accountRef)
 
         let level = draft.kind == .spend ? budgetLevel(account, adding: draft.amount, on: draft.date) : nil
+        // Smart Budget: the pot this entry falls in, and whether it tips it
+        // past 80% or 100% of its share. Worked out before the write, from
+        // what was spent until now; the Worker checks it again.
+        var potAlert: (pot: JointPot, level: Int)?
+        if draft.kind == .spend, draft.date >= month.start, draft.date < month.end,
+           let pot = JointPot.of(TxCategory(rawValue: draft.category)),
+           let crossed = smartBudget(account).crossed(pot, adding: draft.amount) {
+            potAlert = (pot, crossed)
+        }
         let accountId = account.id
         Task {
             do {
@@ -538,6 +748,10 @@ final class JointAccountService {
             if let level {
                 await notify(["type": "budget", "accountId": accountId, "level": level,
                               "utcOffsetMinutes": TimeZone.current.secondsFromGMT() / 60])
+            }
+            if let potAlert {
+                await notify(["type": "pot", "accountId": accountId, "pot": potAlert.pot.rawValue,
+                              "level": potAlert.level, "utcOffsetMinutes": TimeZone.current.secondsFromGMT() / 60])
             }
         }
         return true

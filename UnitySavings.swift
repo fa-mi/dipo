@@ -489,8 +489,11 @@ final class UnitySavingsService {
     /// were showing "Member"/"Someone"), fall back to the authoritative profile
     /// doc `users/{uid}.displayName` before the generic fallback.
     private func myDisplayName(uid: String, fallback: String) async -> String {
-        let live = (UserSession.shared.displayName ?? "").trimmingCharacters(in: .whitespaces)
-        if !live.isEmpty { return live }
+        // The Profile name first — the same order Rekening Bersama uses, so
+        // the two shared features call a person by one name. The sign-in name
+        // is empty after a reinstall (Apple sends it once), which is how
+        // rows here came to read "Member".
+        if let known = JointAccountService.knownName() { return known }
         let snap = try? await db.collection("users").document(uid).getDocument()
         let profile = (snap?.data()?["displayName"] as? String)?.trimmingCharacters(in: .whitespaces) ?? ""
         return profile.isEmpty ? fallback : profile
@@ -609,7 +612,7 @@ final class UnitySavingsService {
             //    authoritative profile doc (users/{fromUid}.displayName) rather
             //    than a generic "Someone".
             step = "resolve-sender-name"
-            var fromName = (UserSession.shared.displayName ?? "").trimmingCharacters(in: .whitespaces)
+            var fromName = JointAccountService.knownName() ?? ""
             if fromName.isEmpty {
                 let meSnap = try? await db.collection("users").document(fromUid).getDocument()
                 fromName = (meSnap?.data()?["displayName"] as? String)?.trimmingCharacters(in: .whitespaces) ?? ""
