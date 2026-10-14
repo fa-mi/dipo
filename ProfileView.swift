@@ -30,6 +30,8 @@ struct ProfileView: View {
     @State private var showPaywall        = false
     @State private var appearanceMode: String = UserDefaults.standard.string(forKey: "appearance_mode") ?? "system"
     @State private var voiceLanguage = VoiceLanguage.saved
+    /// DiPo's face on Home (his row and the stand-in avatar). On this device.
+    @AppStorage(HomePrefs.showDiPoKey) private var showDiPoOnHome = true
     @State private var premiumMgr  = PremiumManager.shared
     @State private var session     = UserSession.shared
     @State private var showSignOut = false
@@ -884,6 +886,13 @@ struct ProfileView: View {
         .offset(y: appeared ? 0 : 20)
         .animation(AppMotion.appear, value: appeared)
 
+        // ── DiPo on Home ─────────────────────────────────────────────────
+        homeDiPoCard
+            .padding(.horizontal, 22)
+            .opacity(appeared ? 1 : 0)
+            .offset(y: appeared ? 0 : 20)
+            .animation(AppMotion.appear, value: appeared)
+
         // ── Language Toggle ──────────────────────────────────────────────
         languageSection
             .padding(.horizontal, 22)
@@ -896,6 +905,36 @@ struct ProfileView: View {
             .opacity(appeared ? 1 : 0)
             .offset(y: appeared ? 0 : 20)
             .animation(AppMotion.appear, value: appeared)
+    }
+
+    /// Show DiPo on Home. Off, Home reads like a bank's: his row keeps its
+    /// reminders with a plain icon, and the header shows the user's initial.
+    /// DiPo himself stays in Ask DiPo and Quest either way.
+    private var homeDiPoCard: some View {
+        HStack(spacing: 12) {
+            Image("DiPoMascot")
+                .resizable()
+                .scaledToFill()
+                .frame(width: 40, height: 40)
+                .frame(width: 36, height: 36)
+                .background(AppTheme.cardMid)
+                .clipShape(RoundedRectangle(cornerRadius: AppRadius.sm))
+                .opacity(showDiPoOnHome ? 1 : 0.45)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(loc("profile.home_dipo"))
+                    .font(.system(.subheadline, weight: .medium)).foregroundStyle(AppTheme.textPrimary)
+                Text(loc("profile.home_dipo_sub"))
+                    .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 8)
+            DiPoSwitch(isOn: $showDiPoOnHome)
+                .accessibilityLabel(loc("profile.home_dipo"))
+        }
+        .padding(16)
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.textSecondary.opacity(0.12), lineWidth: 1))
     }
 
     @ViewBuilder
