@@ -1,5 +1,6 @@
 import XCTest
 import SwiftUI
+import UIKit
 @testable import DiPo
 
 /// What DiPo says on Home, and in which order, for Free and Royal.
@@ -57,7 +58,7 @@ final class DiPoTalkTests: XCTestCase {
         var keys = ["dipo.sfx.happy", "dipo.sfx.worry", "dipo.sfx.cheer", "dipo.sfx.info", "dipo.sfx.psst",
                     "dipo.sfx.tip", "dipo.sfx.tomorrow", "dipo.unread_one", "dipo.unread_many",
                     "dipo.locked", "dipo.next", "dipo.ask", "dipo.a11y_open", "dipo.a11y_ask",
-                    "dipo.home_invite", "dipo.speak_on", "dipo.speak_off",
+                    "dipo.row_invite", "dipo.row.unread_one", "dipo.row.unread_many", "dipo.speak_on", "dipo.speak_off",
                     "dipo.sfx.payday_soon", "dipo.sfx.payday_today", "dipo.payday_today",
                     "dipo.payday_tomorrow", "dipo.payday_in", "dipo.sfx.bill", "dipo.bill_today",
                     "dipo.bill_tomorrow", "dipo.bill_in", "dipo.bill_auto", "dipo.bill_manual",
@@ -98,15 +99,44 @@ final class DiPoTalkTests: XCTestCase {
                       "nothing to say: DiPo just invites a question")
     }
 
-    func testCloudBumpsStayInsideTheirFrame() {
-        let rect = CGRect(x: 0, y: 0, width: 200, height: 90)
-        let r: CGFloat = 10
-        let pts = CloudBubble.bumps(in: rect, radius: r)
-        XCTAssertGreaterThanOrEqual(pts.count, 8)
-        for p in pts {
-            XCTAssertTrue(rect.insetBy(dx: r, dy: r).insetBy(dx: -0.01, dy: -0.01).contains(p), "\(p)")
+    /// DiPo's row on Home leads with the thing itself: no "Psst…" over a
+    /// sentence. A bill is its date and amount, then the balance after.
+    func testHomeRowSaysTheThingNotTheExclamation() {
+        LanguageManager.shared.withLanguage(.indonesian) {
+            let bill = DiPoNudge.Bill(label: "kos", amount: "Rp 2.100.000", daysLeft: 1, autoRecord: true,
+                                      balanceAfter: "Rp 4.036.015")
+            let all = DiPoNudge.all(unread: 2, bill: bill, daysToPayday: 2, payDate: .now)
+            XCTAssertEqual(all.map(\.action), [.notifications, .bills, .salary])
+
+            XCTAssertEqual(all[0].rowTitle, "2 notifikasi belum dibaca")
+            XCTAssertEqual(all[0].rowDetail, loc("dipo.link.notifications"))
+            XCTAssertFalse(all[0].rowTitle.contains("Psst"))
+
+            XCTAssertEqual(all[1].rowTitle, "Besok tagihan kos, Rp 2.100.000.")
+            XCTAssertEqual(all[1].rowDetail, "Saldo setelahnya Rp 4.036.015.")
+
+            // Payday keeps its own short heading, with the advice under it.
+            XCTAssertEqual(all[2].rowTitle, loc("dipo.sfx.payday_soon"))
+            XCTAssertEqual(all[2].rowDetail, all[2].text)
         }
-        XCTAssertTrue(CloudBubble.bumps(in: CGRect(x: 0, y: 0, width: 10, height: 10), radius: r).isEmpty)
+        LanguageManager.shared.withLanguage(.english) {
+            let one = DiPoNudge.all(unread: 1, bill: nil, daysToPayday: nil, payDate: nil)
+            XCTAssertEqual(one.first?.rowTitle, "1 unread notification")
+        }
+    }
+
+    /// With DiPo switched off on Home, every reminder still has an icon, and
+    /// each is a real SF Symbol (a misspelt name draws nothing at all).
+    func testEveryReminderHasAPlainIcon() {
+        let actions: [DiPoNudge.Action] = [.notifications, .checkIn, .bills, .salary, .streak,
+                                           .interestGuess(.coffee), .interestTip(.coffee),
+                                           .customInterestTip("Kopi"), .quest]
+        for action in actions {
+            let nudge = DiPoNudge(id: "x", mood: .info, exclamation: "", text: "", action: action, link: "")
+            XCTAssertNotNil(UIImage(systemName: nudge.symbol), "\(action): \(nudge.symbol)")
+            XCTAssertNil(nudge.rowDetail, "an empty line is no line")
+        }
+        XCTAssertNotNil(UIImage(systemName: "sparkles"), "the invite's icon")
     }
 
     func testBillSaysTheBalanceAfterWhenKnown() {

@@ -46,7 +46,15 @@ struct MonthFlowCard: View {
     /// Share of income spent on living this cycle; nil without income.
     private var budgetIn: Double { income + extra }
     private var spentShare: Double? { budgetIn > 0 ? living / budgetIn : nil }
-    private var remaining: Double { budgetIn - living }
+    private var remaining: Double { Self.remaining(income: income, expense: expense, putAway: putAway, extra: extra) }
+
+    /// What is left of the period's money once living costs are out: income
+    /// and added money, less spending other than debt paid and money put
+    /// away. Negative when living costs passed it. Home's total line says
+    /// the same figure, from here.
+    static func remaining(income: Double, expense: Double, putAway: Double, extra: Double) -> Double {
+        income + extra - max(expense - putAway, 0)
+    }
 
     /// Green while there is room, orange from 80 % on. Not red: passing income
     /// is a warning, and the note says whether the balance covers it.

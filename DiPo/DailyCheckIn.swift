@@ -106,11 +106,11 @@ enum DailyCheckIn {
 
 // MARK: - DiPo on Home
 
-/// DiPo at the top of Home, with the daily check-in folded into him: the
-/// "Today is logged" card is gone. Whether today is accounted for and the
-/// streak sit beside him; the evening question ("nothing logged today —
-/// nothing spent, or not written down yet?") is one of his reminders, after
-/// unread notifications and before bills and payday.
+/// DiPo's row on Home, with the daily check-in folded into it: the "Today
+/// is logged" card is gone. Whether today is accounted for and the streak
+/// are what he says when he has nothing to remind; the evening question
+/// ("nothing logged today — nothing spent, or not written down yet?") is one
+/// of his reminders, after unread notifications and before bills and payday.
 struct DiPoHomeSection: View {
     let unread: Int
     let bill: DiPoNudge.Bill?
@@ -118,7 +118,8 @@ struct DiPoHomeSection: View {
     let payDate: Date?
     var onAskDiPo: () -> Void
     var onAction: (DiPoNudge.Action) -> Void
-    var animates = true
+    /// His face on the row, or a plain icon (Profile → Show DiPo on Home).
+    var showsDiPo = true
     /// Royal gets to know DiPo better: interest guesses and ideas.
     var isRoyal = false
 
@@ -150,9 +151,9 @@ struct DiPoHomeSection: View {
     @State private var quest = QuestStore.shared
 
     init(unread: Int, bill: DiPoNudge.Bill?, daysToPayday: Int?, payDate: Date?,
-         animates: Bool = true, isRoyal: Bool = false,
+         showsDiPo: Bool = true, isRoyal: Bool = false,
          onAskDiPo: @escaping () -> Void, onAction: @escaping (DiPoNudge.Action) -> Void) {
-        self.animates = animates
+        self.showsDiPo = showsDiPo
         self.isRoyal = isRoyal
         self.unread = unread
         self.bill = bill
@@ -185,13 +186,14 @@ struct DiPoHomeSection: View {
     }
 
     var body: some View {
-        DiPoHomeStrip(
+        DiPoHomeRow(
             nudges: DiPoNudge.all(unread: unread, checkIn: asking, streak: greeting ? streak : 0,
                                   bill: bill, daysToPayday: daysToPayday, payDate: payDate,
                                   interestGuess: interestGuess, interestTip: interestTip?.preset,
                                   customInterestTip: interestTip?.custom,
                                   questWaiting: questWaiting),
             status: status,
+            showsDiPo: showsDiPo,
             onAskDiPo: onAskDiPo,
             onNudge: { action in
                 switch action {
@@ -200,8 +202,7 @@ struct DiPoHomeSection: View {
                 case .interestGuess(let interest): askingInterest = interest
                 default:       onAction(action)
                 }
-            },
-            animates: animates)
+            })
         .confirmationDialog(loc("checkin.ask_title"), isPresented: $askingNow, titleVisibility: .visible) {
             Button(loc("checkin.none")) {
                 HapticManager.shared.success()

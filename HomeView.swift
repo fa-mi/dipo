@@ -70,6 +70,13 @@ struct HomeView: View {
     /// inline inside a computed property registers no dependency, so the net
     /// worth chip would linger after a subscription lapsed until a redraw.
     @State private var premiumMgr = PremiumManager.shared
+    /// Profile → Show DiPo on Home.
+    @AppStorage(HomePrefs.showDiPoKey) private var showDiPo = true
+    /// The eye beside the total: every figure on Home behind dots.
+    @AppStorage(HomePrefs.hideBalancesKey) private var hideBalances = false
+    /// The words under the total, for the main card's pot. Worked out with
+    /// the period card's figures, off the render path.
+    @State private var heroLine = HomeHeroLine()
 
     @State private var showSearch           = false
     @State private var showNotifications    = false
@@ -417,34 +424,62 @@ struct HomeView: View {
             flowPeriodLabel = loc("home.this_month")
         }
 
+        let daysToPayday = nearestSalary.map { SalaryDateEngine.daysUntilPay(dayOfMonth: $0.dayOfMonth) }
         guard let card = selectedCard else {
             monthIncome = 0; monthExpense = 0; flowNote = nil; flowPutAway = 0; flowExtra = 0
+            heroLine = HomeHeroLine.make(income: 0, expense: 0, putAway: 0, extra: 0, daysToPayday: daysToPayday)
             return
         }
-        let cur = card.resolvedCurrency
         // Read the pre-aggregated daily buckets instead of scanning the card's
         // whole ledger (see RollupEngine). This runs on the tx-count / balance /
         // payday change signals — off the render path — so keeping the cache
-        // fresh here is safe. Statistics' rules: income is real income only and
-        // a refund takes back its expense. Counting a refund as income here
-        // made Home's two figures disagree with Statistics' for the same days.
+        // fresh here is safe.
         let buckets = RollupStore.shared.rebuildIfStale(context: context, txCount: totalTxCount)
+        let flow = periodFlow(for: card, from: windowStart, buckets: buckets)
+        monthIncome = flow.income
+        monthExpense = flow.expense
+        flowExtra = flow.extra
+        flowNote = flow.note
+        flowNoteTone = flow.tone
+        flowPutAway = flow.putAway
+        // The total at the top speaks for the main card's pot, whichever
+        // account is chosen below it.
+        let main = budgetCard ?? card
+        let mainFlow = main.id == card.id ? flow : periodFlow(for: main, from: windowStart, buckets: buckets)
+        heroLine = HomeHeroLine.make(income: mainFlow.income, expense: mainFlow.expense,
+                                     putAway: mainFlow.putAway, extra: mainFlow.extra,
+                                     daysToPayday: daysToPayday)
+    }
+
+    /// One card's pot over the period: what the period card shows for it.
+    private struct PeriodFlow {
+        var income = 0.0, expense = 0.0, extra = 0.0, putAway = 0.0
+        var note: String? = nil
+        var tone: MonthFlowCard.NoteTone = .info
+    }
+
+    /// Statistics' rules: income is real income only and a refund takes back
+    /// its expense. Counting a refund as income here made Home's two figures
+    /// disagree with Statistics' for the same days.
+    private func periodFlow(for card: BankCard, from windowStart: Date,
+                            buckets: [DailyBucket]) -> PeriodFlow {
+        let cur = card.resolvedCurrency
         // The main card is shown with the cards it pays bills from, the same
         // pot Smart Budget and Statistics read; any other card on its own.
         let scope = MainCard.isMain(card) ? MainCard.budgetCards(in: queriedCards) : [card]
         let window = RollupEngine.buckets(buckets, cardIDs: Set(scope.map(\.id.uuidString)), from: windowStart)
         let totals = RollupEngine.totals(for: window, targetCurrency: cur,
                                          convert: { CurrencyManager.shared.convert($0, from: $1, to: $2) })
-        monthIncome = totals.income
-        monthExpense = max(totals.expenses, 0)
+        var flow = PeriodFlow(income: totals.income, expense: max(totals.expenses, 0))
         // Only the main card's pot has a budget to add to.
-        flowExtra = MainCard.isMain(card)
+        flow.extra = MainCard.isMain(card)
             ? ExtraFunds.total(in: scope.flatMap(\.transactions), from: windowStart, currency: cur) : 0
         let note = flowNoteParts(card: card, scope: scope, from: windowStart, currency: cur,
-                                 income: monthIncome, expense: monthExpense, extra: flowExtra)
-        flowNote = note.text
-        flowNoteTone = note.tone
-        flowPutAway = note.putAway
+                                 income: flow.income, expense: flow.expense, extra: flow.extra)
+        flow.note = note.text
+        flow.tone = note.tone
+        flow.putAway = note.putAway
+        return flow
     }
 
     private func recomputeHomeInsights() {
@@ -559,14 +594,16 @@ struct HomeView: View {
                         .offset(y: headerAppeared ? 0 : -16)
                         .animation(AppMotion.appear, value: headerAppeared)
 
-                    // DiPo at the top, in his own frame: reminds about unread
-                    // notifications, a bill falling due and payday, and opens
-                    // Ask DiPo when tapped.
+                    if hasCards { moneyTop }
+
+                    // DiPo's one line: reminds about unread notifications, a
+                    // bill falling due and payday, and opens Ask DiPo when his
+                    // face is tapped.
                     DiPoHomeSection(unread: NotificationManager.shared.unreadCount,
                                     bill: dipoBill,
                                     daysToPayday: nearestSalary.map { SalaryDateEngine.daysUntilPay(dayOfMonth: $0.dayOfMonth) },
                                     payDate: nearestSalary.map { SalaryDateEngine.nextPayDate(dayOfMonth: $0.dayOfMonth) },
-                                    animates: !showAskDiPo,
+                                    showsDiPo: showDiPo,
                                     isRoyal: dipoIsRoyal,
                                     onAskDiPo: { askDiPoPrompt = nil; showAskDiPo = true },
                                     onAction: { action in
@@ -586,7 +623,7 @@ struct HomeView: View {
                                         }
                                     })
                         .padding(.horizontal, 22)
-                        .padding(.top, 12)
+                        .padding(.top, hasCards ? 10 : 12)
                         .opacity(headerAppeared ? 1 : 0)
                         .animation(AppMotion.appear, value: headerAppeared)
 
@@ -632,24 +669,17 @@ struct HomeView: View {
                             }
                         }
 
-                        // Card Carousel — capped width on iPad
-                        CardCarousel(vm: vm)
-                                                        .padding(.top, 18)
-                            .opacity(contentAppeared ? 1 : 0)
-                            .scaleEffect(contentAppeared ? 1 : 0.94)
-                            .animation(AppMotion.appear, value: contentAppeared)
-
-                        // What came in and what went out this pay cycle. The card
-                        // above says where the money stands; this says which
-                        // direction it has been moving to get there.
+                        // What came in and what went out this pay cycle. The
+                        // total above says where the money stands; this says
+                        // which direction it has been moving to get there.
                         MonthFlowCard(income: monthIncome,
                                       expense: monthExpense,
                                       putAway: flowPutAway,
                                       extra: flowExtra,
                                       currency: selectedCard?.resolvedCurrency
                                                 ?? CurrencyManager.shared.preferredCurrency,
-                                      periodLabel: flowPeriodLabel,
-                                      isHidden: selectedCard?.isHidden ?? false,
+                                      periodLabel: flowLabel,
+                                      isHidden: hideBalances || (selectedCard?.isHidden ?? false),
                                       note: flowNote,
                                       noteTone: flowNoteTone,
                                       onDetails: flowDetails)
@@ -662,7 +692,7 @@ struct HomeView: View {
                         // Net Worth — cash minus liabilities. Only shown when the
                         // user actually has liabilities (credit cards / debts),
                         // otherwise it's just the cash total again.
-                        if worth.liabilities > 0.5 && canSeeNetWorth {
+                        if worth.liabilities > 0.5 && canSeeNetWorth && !hideBalances {
                             let netWorth = worth.total
                             let fmt = { (v: Double) in CurrencyManager.shared.formatted(v, currency: CurrencyManager.shared.preferredCurrency) }
                             VStack(alignment: .leading, spacing: 5) {
@@ -886,6 +916,36 @@ struct HomeView: View {
                 .presentationBackground(AppTheme.bg)
                 .preferredColorScheme(appColorScheme())
         }
+    }
+
+    /// The money first: everything held, then the accounts side by side.
+    /// Choosing one points the period card and the list below at it. Its own
+    /// property so the body stays within what the type checker takes in.
+    @ViewBuilder
+    private var moneyTop: some View {
+        HomeBalanceHero(total: worth.balance,
+                        currency: CurrencyManager.shared.preferredCurrency,
+                        line: heroLine,
+                        hasCycle: MainCard.payDay(salarySchedules) != nil,
+                        hidden: $hideBalances)
+            .padding(.horizontal, 22)
+            .padding(.top, 20)
+            .opacity(headerAppeared ? 1 : 0)
+            .animation(AppMotion.appear, value: headerAppeared)
+
+        HomeAccountTiles(vm: vm, hideAll: hideBalances, onAdd: { showAddCard = true })
+            .padding(.top, 12)
+            .opacity(contentAppeared ? 1 : 0)
+            .offset(y: contentAppeared ? 0 : 14)
+            .animation(AppMotion.appear, value: contentAppeared)
+    }
+
+    /// The window, and — once there is more than one account — which one the
+    /// figures are for, now that the chosen account is a small tile rather
+    /// than a card filling the screen.
+    private var flowLabel: String {
+        guard vm.cards.count > 1, let card = selectedCard else { return flowPeriodLabel }
+        return flowPeriodLabel + " · " + card.tileLabel
     }
 
     /// Royal can chat with DiPo; Free hears his top insight.
