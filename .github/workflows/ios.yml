@@ -21,7 +21,7 @@ jobs:
     runs-on: macos-26
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # The app targets iOS 26.2, so the newest Xcode 26 on the image.
       - name: Select Xcode
@@ -31,7 +31,7 @@ jobs:
           xcodebuild -version
 
       - name: Cache Swift packages
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: .spm
           key: spm-${{ runner.os }}-${{ hashFiles('DiPo.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
@@ -55,6 +55,22 @@ jobs:
           # pipefail makes the step fail with xcodebuild's status; the grep
           # group always succeeds, so it can't mask or cause a failure.
 
+      # release.yml sends each build's dSYMs to Crashlytics with this tool,
+      # from the same package checkout. Releases can't run on a PR, so the
+      # tool's place and flags are checked here, where a package update that
+      # moves or changes it shows up first. Nothing is uploaded.
+      - name: Crashlytics upload tool
+        run: |
+          tool=.spm/checkouts/firebase-ios-sdk/Crashlytics/upload-symbols
+          test -x "$tool" || { echo "::error::$tool is missing; release.yml can't send dSYMs to Crashlytics"; exit 1; }
+          usage=$("$tool" 2>&1 || true)
+          for flag in -gsp -p; do
+            printf '%s' "$usage" | grep -qE -- "(^|[^A-Za-z-])$flag([^A-Za-z-]|$)" \
+              || { echo "::error::upload-symbols no longer lists $flag; update release.yml"; printf '%s\n' "$usage" | head -40; exit 1; }
+          done
+          echo "upload-symbols found and takes -gsp and -p:"
+          printf '%s\n' "$usage" | head -20
+
       # The grep above keeps the step log readable; the failures in full.
       - name: Summarise failures
         if: failure()
@@ -64,7 +80,7 @@ jobs:
 
       - name: Upload results
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: xcode-results
           path: |
@@ -87,11 +103,11 @@ jobs:
       matrix:
         min_ios: ["17.0", "18.0"]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Select Xcode
         run: sudo xcode-select -s "$(ls -d /Applications/Xcode_26*.app | sort -V | tail -1)"
       - name: Cache Swift packages
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: .spm
           key: spm-${{ runner.os }}-${{ hashFiles('DiPo.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
