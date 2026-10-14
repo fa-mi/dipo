@@ -263,9 +263,12 @@ jobs:
             -authenticationKeyPath "$ASC_KEY_PATH" \
             -authenticationKeyID "$ASC_KEY_ID" \
             -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
-            | tee "$RUNNER_TEMP/export.log" | grep -E "error:|Upload|EXPORT (SUCCEEDED|FAILED)" \
+            2>&1 | tee "$RUNNER_TEMP/export.log" | grep -E "error:|Upload|EXPORT (SUCCEEDED|FAILED)" \
             | grep -vE "$GOOGLE_BINARIES" || true
           grep -q "EXPORT SUCCEEDED" "$RUNNER_TEMP/export.log" || { echo "::error::Export failed; see the export-log artifact"; exit 1; }
+          # (2>&1 above: xcodebuild writes its symbol-upload warnings and
+          # progress to stderr, which would otherwise skip this filter and
+          # the log file.)
           # Google ships these frameworks prebuilt, without dSYMs, so Apple's
           # symbol upload reports each of them on every build. Their frames
           # stay as addresses in Apple's crash reports; DiPo's own are
