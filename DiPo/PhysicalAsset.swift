@@ -167,11 +167,16 @@ final class PhysicalAsset {
     /// Lowest realistic price and a typical asking price, for things sold second-hand.
     func marketRange(at date: Date = .now) -> ClosedRange<Double>? {
         guard kind.firstYearDrop > 0 else { return nil }
-        let low = value(at: date)
-        return low...(low * (1 + AssetValuation.askingPremium))
+        let raw = AssetValuation.value(valuation, at: date)
+        let low = AssetValuation.rounded(raw, keeping: manualValue)
+        return low...max(low, AssetValuation.rounded(raw * (1 + AssetValuation.askingPremium)))
     }
 
-    func value(at date: Date = .now) -> Double { AssetValuation.value(valuation, at: date) }
+    /// The value DiPo shows and counts in net worth: the curve, rounded the
+    /// way prices are quoted (see `AssetValuation.rounded`).
+    func value(at date: Date = .now) -> Double {
+        AssetValuation.rounded(AssetValuation.value(valuation, at: date), keeping: manualValue)
+    }
 }
 
 // MARK: - Valuation
@@ -215,6 +220,20 @@ enum AssetValuation {
             grown = base * first * pow(1 + i.annualRate / 100, max(years - 1, 0))
         }
         return i.annualRate < 0 || i.firstYearDrop > 0 ? max(grown, base * wearFloor) : grown
+    }
+
+    /// An estimate shown to the rupiah claims a precision it does not have,
+    /// and it ticks over between two screens opened a moment apart (Rp
+    /// 103.962.044 in the sheet, Rp 103.962.049 in the list). Rounded to half
+    /// a unit of the third digit — Rp 104 jt, Rp 19,5 jt, Rp 2,35 jt — the
+    /// way second-hand prices are quoted. The step scales with the value, so
+    /// it suits any currency. A figure the user typed (`keeping`) shows as
+    /// typed until the curve has moved it half a step.
+    static func rounded(_ v: Double, keeping typed: Double = 0) -> Double {
+        guard v > 0, v.isFinite else { return v }
+        let step = 5 * pow(10, floor(log10(v)) - 3)
+        if typed > 0, abs(v - typed) < step / 2 { return typed }
+        return (v / step).rounded() * step
     }
 
     /// Value lost (negative) or gained over the coming year, from today's value.

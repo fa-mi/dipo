@@ -116,6 +116,8 @@ struct DiPoHomeSection: View {
     let bill: DiPoNudge.Bill?
     let daysToPayday: Int?
     let payDate: Date?
+    /// Assets whose value is due a look, by name (AssetMarketCheck).
+    var assetCheck: [String] = []
     var onAskDiPo: () -> Void
     var onAction: (DiPoNudge.Action) -> Void
     /// His face on the row, or a plain icon (Profile → Show DiPo on Home).
@@ -151,8 +153,9 @@ struct DiPoHomeSection: View {
     @State private var quest = QuestStore.shared
 
     init(unread: Int, bill: DiPoNudge.Bill?, daysToPayday: Int?, payDate: Date?,
-         showsDiPo: Bool = true, isRoyal: Bool = false,
+         assetCheck: [String] = [], showsDiPo: Bool = true, isRoyal: Bool = false,
          onAskDiPo: @escaping () -> Void, onAction: @escaping (DiPoNudge.Action) -> Void) {
+        self.assetCheck = assetCheck
         self.showsDiPo = showsDiPo
         self.isRoyal = isRoyal
         self.unread = unread
@@ -191,6 +194,7 @@ struct DiPoHomeSection: View {
                                   bill: bill, daysToPayday: daysToPayday, payDate: payDate,
                                   interestGuess: interestGuess, interestTip: interestTip?.preset,
                                   customInterestTip: interestTip?.custom,
+                                  assetCheck: assetCheck,
                                   questWaiting: questWaiting),
             status: status,
             showsDiPo: showsDiPo,

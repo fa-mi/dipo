@@ -146,6 +146,8 @@ struct DiPoNudge: Equatable, Identifiable {
         case customInterestTip(String)
         /// Today's DiPo Quest has not been played yet.
         case quest
+        /// An asset's value has gone unchecked for half a year or more.
+        case assetCheck
     }
     let id: String
     let mood: DiPoMood
@@ -178,6 +180,7 @@ struct DiPoNudge: Equatable, Identifiable {
         case .interestGuess:                   return "questionmark.bubble.fill"
         case .interestTip, .customInterestTip: return "lightbulb.fill"
         case .quest:                           return "gamecontroller.fill"
+        case .assetCheck:                      return "tag.fill"
         }
     }
 
@@ -201,6 +204,7 @@ struct DiPoNudge: Equatable, Identifiable {
                     bill: Bill?, daysToPayday: Int?, payDate: Date?,
                     interestGuess: DiPoInterest? = nil, interestTip: DiPoInterest? = nil,
                     customInterestTip: String? = nil,
+                    assetCheck: [String] = [],
                     questWaiting: Bool = false) -> [DiPoNudge] {
         var out: [DiPoNudge] = []
         // The streak greets the user when they open the app; two days is the
@@ -256,6 +260,17 @@ struct DiPoNudge: Equatable, Identifiable {
             out.append(DiPoNudge(id: "payday-\(days)", mood: days == 0 ? .cheer : .happy,
                                  exclamation: loc(days == 0 ? "dipo.sfx.payday_today" : "dipo.sfx.payday_soon"),
                                  text: text, action: .salary, link: loc("dipo.link.salary")))
+        }
+        // An asset not looked at for a while: the curve has carried its value,
+        // but only listings say what it would fetch now.
+        if let first = assetCheck.first {
+            out.append(DiPoNudge(id: "asset-check-\(assetCheck.count)", mood: .info,
+                                 exclamation: loc("dipo.sfx.asset_check"), text: loc("dipo.asset_check_body"),
+                                 action: .assetCheck, link: loc("dipo.link.assets"),
+                                 title: assetCheck.count == 1
+                                     ? String(format: loc("dipo.asset_check_one"), first)
+                                     : String(format: loc("dipo.asset_check_many"), assetCheck.count),
+                                 detail: loc("dipo.asset_check_detail")))
         }
         // Getting to know the user comes after anything with money or a date
         // attached: first a guess to confirm, then ideas for what they enjoy.
@@ -424,7 +439,7 @@ struct DiPoHomeRow: View {
         guard let nudge else { return AppTheme.accent }
         switch nudge.action {
         case .bills, .streak:                                   return AppTheme.orange
-        case .checkIn:                                          return AppTheme.blue
+        case .checkIn, .assetCheck:                             return AppTheme.blue
         case .quest:                                            return AppTheme.purple
         case .interestGuess, .interestTip, .customInterestTip:  return AppTheme.royalGoldText
         case .notifications, .salary:                           return AppTheme.accent
