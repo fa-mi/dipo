@@ -99,6 +99,49 @@ final class PhysicalAssetTests: XCTestCase {
         }
     }
 
+    /// Bought second-hand, the price paid is already a second-hand price: the
+    /// drop from new happened before the user owned it, so only the yearly
+    /// rate applies. A Macbook bought used for Rp 20 jt is worth Rp 17 jt a
+    /// year on, not the Rp 16 jt a new one would be.
+    func testSomethingBoughtUsedDoesNotDropFromNewAgain() throws {
+        let bought = date(2025, 1, 1)
+        let used = asset(.electronics, "Macbook Pro M3", 20_000_000, bought: bought)
+        used.boughtUsed = true
+        let new = asset(.electronics, "Macbook Pro M3", 20_000_000, bought: bought)
+        let later = bought.addingTimeInterval(year)
+
+        XCTAssertEqual(used.firstYearDrop, 0)
+        XCTAssertEqual(new.firstYearDrop, AssetKind.electronics.firstYearDrop)
+        XCTAssertEqual(used.value(at: later), 17_000_000)
+        XCTAssertEqual(new.value(at: later), 16_000_000)
+        // Still sold second-hand: a quick sale and an asking price.
+        let range = try XCTUnwrap(used.marketRange(at: later))
+        XCTAssertEqual(range.lowerBound, 17_000_000)
+        XCTAssertEqual(range.upperBound, 19_550_000)
+        // And it still wears out, to the same floor.
+        XCTAssertEqual(used.value(at: bought.addingTimeInterval(60 * year)), 2_000_000)
+    }
+
+    /// Backups from before V3 carry no flag: they come back as bought new.
+    func testBackupCarriesBoughtUsedAndOldBackupsReadAsNew() throws {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let old = Data("""
+            {"id":"\(UUID().uuidString)","kindRaw":"car","name":"Brio","currency":"IDR",
+             "purchasePrice":175000000,"purchaseDate":"2017-01-05T05:00:00Z","manualValue":0,
+             "annualRate":-4,"notes":"","createdAt":"2026-09-01T05:00:00Z","sortOrder":0}
+            """.utf8)
+        XCTAssertNil(try decoder.decode(BackupAsset.self, from: old).boughtUsed)
+
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        let a = BackupAsset(id: UUID().uuidString, kindRaw: "electronics", name: "Macbook", currency: "IDR",
+                            purchasePrice: 20_000_000, purchaseDate: date(2025, 1, 1), manualValue: 0,
+                            manualValueDate: nil, annualRate: -15, taxDueDate: nil, notes: "",
+                            createdAt: date(2025, 1, 1), sortOrder: 0, boughtUsed: true)
+        XCTAssertEqual(try decoder.decode(BackupAsset.self, from: encoder.encode(a)).boughtUsed, true)
+    }
+
     func testLandGainsAndAUserValueBecomesTheNewStart() {
         let bought = date(2020, 6, 1)
         var i = AssetValuation.Input(purchasePrice: 100_000_000, purchaseDate: bought,
@@ -157,7 +200,9 @@ final class PhysicalAssetTests: XCTestCase {
         for k in AssetKind.allCases { XCTAssertFalse(k.displayName.hasPrefix("asset."), "\(k)") }
         for key in ["premium.feature.assets", "premium.feature.assets_desc", "asset.replace_body",
                     "asset.networth_line", "notif.asset_tax_week_body", "reco.item.replace_title",
-                    "asset.status.summary_one"] {
+                    "asset.status.summary_one", "asset.since_year_used", "asset.field.condition",
+                    "asset.field.bought_new", "asset.field.bought_used", "asset.field.used_note",
+                    "asset.field.used_year_tip"] {
             XCTAssertNotEqual(loc(key), key, key)
         }
     }

@@ -85,6 +85,22 @@ final class AssetMarketCheckTests: XCTestCase {
         XCTAssertEqual(AssetMarketCheck.query(name: "   ", kind: .car, purchaseDate: bought, cal: cal), "")
     }
 
+    /// Bought second-hand, the purchase year isn't the vehicle's year, and a
+    /// wrong year finds the wrong cars: the search uses the name alone.
+    func testAUsedVehicleIsSearchedByTheYearInItsName() throws {
+        let bought = date(2020, 3, 1)
+        XCTAssertEqual(AssetMarketCheck.query(name: "Honda Brio RS", kind: .car, purchaseDate: bought,
+                                              boughtUsed: true, cal: cal), "Honda Brio RS")
+        XCTAssertEqual(AssetMarketCheck.query(name: "Honda Brio RS 2015", kind: .car, purchaseDate: bought,
+                                              boughtUsed: true, cal: cal), "Honda Brio RS 2015")
+        let link = try XCTUnwrap(AssetMarketCheck.link(name: "Brio RS 2015", kind: .car, purchaseDate: bought,
+                                                        boughtUsed: true, currency: "IDR", cal: cal))
+        XCTAssertEqual(link.url.absoluteString, "https://www.olx.co.id/mobil-bekas_c198/q-brio-rs-2015")
+        XCTAssertTrue(AssetMarketCheck.nameHasYear("Brio RS 2015"))
+        XCTAssertFalse(AssetMarketCheck.nameHasYear("Brio RS"))
+        XCTAssertFalse(AssetMarketCheck.nameHasYear("iPhone 13 128GB"))
+    }
+
     func testVehiclesInRupiahGoToOLXsUsedCategories() throws {
         let car = try XCTUnwrap(AssetMarketCheck.link(name: "Honda Brio RS", kind: .car,
                                                        purchaseDate: date(2017, 1, 5), currency: "IDR", cal: cal))

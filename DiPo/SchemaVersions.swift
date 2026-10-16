@@ -82,9 +82,32 @@ nonisolated enum DiPoSchemaV1: VersionedSchema {
 }
 
 /// V2 adds physical assets (house, land, vehicles, electronics). Every other
-/// model is unchanged from V1, so the step is lightweight.
+/// model is unchanged from V1, so the step is lightweight. Builds 3.3 (106)
+/// to (112). Frozen: V1's copies plus PhysicalAsset as it was then
+/// (SchemaV2Frozen.swift).
 nonisolated enum DiPoSchemaV2: VersionedSchema {
     static let versionIdentifier = Schema.Version(2, 0, 0)
+
+    static var models: [any PersistentModel.Type] {
+        [
+            DiPoSchemaV1.BankCard.self, DiPoSchemaV1.TxRecord.self, DiPoSchemaV1.SalarySchedule.self,
+            DiPoSchemaV1.DebtRecord.self, DiPoSchemaV1.SavingsGoal.self, DiPoSchemaV1.RecurringExpense.self,
+            DiPoSchemaV1.Receivable.self, DiPoSchemaV1.CardInstallment.self, DiPoSchemaV1.CardBudgetConfig.self,
+            DiPoSchemaV1.CycleIntent.self, DiPoSchemaV1.InvestmentHolding.self, DiPoSchemaV1.InvestmentLot.self,
+            DiPoSchemaV1.DailyRollup.self, DiPoSchemaV1.DayCheckIn.self, DiPoSchemaV1.PendingTransaction.self,
+            // What the household owns outside its accounts (Royal). See
+            // DiPo/PhysicalAsset.swift.
+            DiPoSchemaV2.PhysicalAsset.self,
+        ]
+    }
+}
+
+/// V3 notes whether an asset was bought second-hand
+/// (`PhysicalAsset.boughtUsed`, defaulting to false), so its value doesn't
+/// take the drop from new a second time. A defaulted property only: the step
+/// is lightweight.
+nonisolated enum DiPoSchemaV3: VersionedSchema {
+    static let versionIdentifier = Schema.Version(3, 0, 0)
 
     static var models: [any PersistentModel.Type] {
         [
@@ -93,25 +116,25 @@ nonisolated enum DiPoSchemaV2: VersionedSchema {
             Receivable.self, CardInstallment.self, CardBudgetConfig.self,
             CycleIntent.self, InvestmentHolding.self, InvestmentLot.self,
             DailyRollup.self, DayCheckIn.self, PendingTransaction.self,
-            // What the household owns outside its accounts (Royal). See
-            // DiPo/PhysicalAsset.swift.
             PhysicalAsset.self,
         ]
     }
 }
 
 /// The version the app runs on. Move it forward with each new version.
-typealias DiPoSchemaCurrent = DiPoSchemaV2
+typealias DiPoSchemaCurrent = DiPoSchemaV3
 
 nonisolated enum DiPoMigrationPlan: SchemaMigrationPlan {
     static var schemas: [any VersionedSchema.Type] {
-        [DiPoSchemaV1.self, DiPoSchemaV2.self]
+        [DiPoSchemaV1.self, DiPoSchemaV2.self, DiPoSchemaV3.self]
     }
 
     static var stages: [MigrationStage] {
         [
             // A new model only: SwiftData creates its empty table.
             .lightweight(fromVersion: DiPoSchemaV1.self, toVersion: DiPoSchemaV2.self),
+            // One new Bool with a default on PhysicalAsset.
+            .lightweight(fromVersion: DiPoSchemaV2.self, toVersion: DiPoSchemaV3.self),
         ]
     }
 }

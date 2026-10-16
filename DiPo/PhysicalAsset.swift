@@ -131,9 +131,12 @@ final class PhysicalAsset {
     var notes: String
     var createdAt: Date
     var sortOrder: Int
+    /// Bought second-hand: the price paid was already a second-hand price, so
+    /// the first year's drop from new doesn't apply again. Added in schema V3.
+    var boughtUsed: Bool = false
 
     init(kind: AssetKind, name: String, currency: String, purchasePrice: Double,
-         purchaseDate: Date, annualRate: Double? = nil, taxDueDate: Date? = nil,
+         purchaseDate: Date, boughtUsed: Bool = false, annualRate: Double? = nil, taxDueDate: Date? = nil,
          notes: String = "", sortOrder: Int = 0) {
         self.id = UUID()
         self.kindRaw = kind.rawValue
@@ -148,6 +151,7 @@ final class PhysicalAsset {
         self.notes = notes
         self.createdAt = .now
         self.sortOrder = sortOrder
+        self.boughtUsed = boughtUsed
     }
 
     var kind: AssetKind { AssetKind(rawValue: kindRaw) ?? .other }
@@ -158,10 +162,14 @@ final class PhysicalAsset {
     /// user who knows better enters the value itself, which wins.
     var effectiveRate: Double { kind.defaultAnnualRate }
 
+    /// The share lost in the first year: the drop from new, which an asset
+    /// bought second-hand has already taken before the user paid for it.
+    var firstYearDrop: Double { boughtUsed ? 0 : kind.firstYearDrop }
+
     var valuation: AssetValuation.Input {
         AssetValuation.Input(purchasePrice: purchasePrice, purchaseDate: purchaseDate,
                              manualValue: manualValue, manualValueDate: manualValueDate,
-                             annualRate: effectiveRate, firstYearDrop: kind.firstYearDrop)
+                             annualRate: effectiveRate, firstYearDrop: firstYearDrop)
     }
 
     /// Lowest realistic price and a typical asking price, for things sold second-hand.

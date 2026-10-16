@@ -264,10 +264,13 @@ private struct AssetRow: View {
                     .font(.system(.subheadline, weight: .semibold))
                     .foregroundStyle(AppTheme.textPrimary)
                     .lineLimit(1)
-                Text("\(asset.kind.displayName) · \(String(format: loc("asset.since_year"), String(year)))")
+                // Two lines rather than "Electronics · since 20…": the year
+                // is the part that matters.
+                Text("\(asset.kind.displayName) · \(String(format: loc(asset.boughtUsed ? "asset.since_year_used" : "asset.since_year"), String(year)))")
                     .font(.system(.caption))
                     .foregroundStyle(AppTheme.textSecondary)
-                    .lineLimit(1)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
                 if asset.isMarketCheckDue() {
                     Label(loc("asset.check_due"), systemImage: "tag.fill")
                         .font(.system(.caption2, weight: .semibold))
@@ -315,6 +318,7 @@ struct AssetFormSheet: View {
     @State private var name = ""
     @State private var price = ""
     @State private var purchaseDate = Date()
+    @State private var boughtUsed = false
     @State private var valueNow = ""
     @State private var hasTax = false
     @State private var taxDate = Date()
@@ -338,6 +342,7 @@ struct AssetFormSheet: View {
                     card {
                         PlainField(label: loc("asset.field.name"), placeholder: loc("asset.field.name_ph"),
                                    bg: AppTheme.bg, text: $name)
+                        if kind.firstYearDrop > 0 { conditionPicker }
                         MoneyField(label: loc("asset.field.price"), prefix: symbol,
                                    hint: loc("asset.field.price_hint"), bg: AppTheme.bg, text: $price)
                         DatePicker(loc("asset.field.bought_on"), selection: $purchaseDate,
@@ -419,18 +424,21 @@ struct AssetFormSheet: View {
         asset.map { $0.kind == kind ? $0.effectiveRate : kind.defaultAnnualRate } ?? kind.defaultAnnualRate
     }
 
+    /// The drop from new in the first year, unless the user paid a
+    /// second-hand price: that drop was taken before they bought it.
+    private var drop: Double { boughtUsed ? 0 : kind.firstYearDrop }
+
     /// DiPo's estimate for today from the purchase, before rounding. Nil
     /// until there is a price.
     private var rawEstimate: Double? {
         let p = InvestmentInput.number(price)
         guard p > 0 else { return nil }
         return AssetValuation.value(.init(purchasePrice: p, purchaseDate: purchaseDate, annualRate: rate,
-                                          firstYearDrop: kind.firstYearDrop), at: .now)
+                                          firstYearDrop: drop), at: .now)
     }
 
     /// What DiPo would estimate today, so the user can see whether to correct it.
     private var estimateHint: String {
-        let drop = kind.firstYearDrop
         let trend = drop > 0
             ? String(format: loc("asset.trend_down_first"), Int(drop), Int(abs(rate)))
             : rate == 0 ? loc("asset.trend_flat")
@@ -438,18 +446,49 @@ struct AssetFormSheet: View {
         guard let est = rawEstimate else { return trend }
         let cm = CurrencyManager.shared
         let low = cm.formatted(AssetValuation.rounded(est), currency: currency)
-        let shown = drop > 0
+        // Sold second-hand, bought new or not: a quick sale and an asking price.
+        let shown = kind.firstYearDrop > 0
             ? String(format: loc("asset.range_inline"), low,
                      cm.formatted(AssetValuation.rounded(est * (1 + AssetValuation.askingPremium)), currency: currency))
             : low
         return String(format: loc("asset.field.value_now_hint"), shown, trend)
     }
 
+    /// New or second-hand when bought. Only for what is sold second-hand: a
+    /// house or land has no drop from new to skip.
+    private var conditionPicker: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(loc("asset.field.condition"))
+                .font(.system(.caption, weight: .medium))
+                .foregroundStyle(AppTheme.textSecondary)
+            Picker(loc("asset.field.condition"), selection: $boughtUsed.animation()) {
+                Text(loc("asset.field.bought_new")).tag(false)
+                Text(loc("asset.field.bought_used")).tag(true)
+            }
+            .pickerStyle(.segmented)
+            if boughtUsed {
+                Text(usedNote)
+                    .font(.system(.caption2))
+                    .foregroundStyle(AppTheme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    /// A used vehicle's price turns on its own year, which the purchase date
+    /// doesn't give; the name is where the search finds it.
+    private var usedNote: String {
+        let isVehicle = kind == .car || kind == .motorcycle
+        guard isVehicle, !AssetMarketCheck.nameHasYear(name) else { return loc("asset.field.used_note") }
+        return loc("asset.field.used_note") + " " + loc("asset.field.used_year_tip")
+    }
+
     /// Real listings, already searched: the only honest source of a
     /// second-hand price, since no marketplace publishes one to follow.
     @ViewBuilder
     private var marketCheck: some View {
-        if let link = AssetMarketCheck.link(name: name, kind: kind, purchaseDate: purchaseDate, currency: currency) {
+        if let link = AssetMarketCheck.link(name: name, kind: kind, purchaseDate: purchaseDate,
+                                            boughtUsed: boughtUsed, currency: currency) {
             VStack(alignment: .leading, spacing: 6) {
                 Button {
                     HapticManager.shared.tap()
@@ -537,6 +576,7 @@ struct AssetFormSheet: View {
         name = a.name
         price = InvestmentInput.text(a.purchasePrice)
         purchaseDate = a.purchaseDate
+        boughtUsed = a.boughtUsed
         valueNow = a.manualValue > 0 ? InvestmentInput.text(a.value()) : ""
         hasTax = a.taxDueDate != nil
         taxDate = a.taxDueDate ?? Date()
@@ -558,6 +598,7 @@ struct AssetFormSheet: View {
         a.name = name.trimmingCharacters(in: .whitespaces)
         a.purchasePrice = p
         a.purchaseDate = purchaseDate
+        a.boughtUsed = kind.firstYearDrop > 0 && boughtUsed
         // A typed value differing from today's estimate becomes the new anchor;
         // left empty, the estimate runs from the purchase price.
         if now > 0 {
