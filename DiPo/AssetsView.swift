@@ -10,6 +10,7 @@ struct AssetsView: View {
     @State private var showAdd = false
     @State private var editing: PhysicalAsset?
     @State private var appeared = false
+    @AppStorage(AssetMarketCheck.snoozeKey) private var checkSnoozedUntil: Double = 0
 
     private var currency: String { CurrencyManager.shared.preferredCurrency }
     private var summary: AssetSummary { AssetSummary.of(assets, currency: currency) }
@@ -57,7 +58,12 @@ struct AssetsView: View {
                 }
             }
             .featureBar(pushed: pushed)
-            .onAppear { withAnimation(.easeOut(duration: 0.35)) { appeared = true } }
+            .onAppear {
+                withAnimation(.easeOut(duration: 0.35)) { appeared = true }
+                // The rows here say which values are due a look, so DiPo's
+                // reminder on Home has been seen; he leaves it for a month.
+                if !AssetMarketCheck.due(assets).isEmpty { checkSnoozedUntil = AssetMarketCheck.snoozed() }
+            }
             .sheet(isPresented: $showAdd) {
                 AssetFormSheet(asset: nil, nextOrder: (assets.map(\.sortOrder).max() ?? -1) + 1)
                     .presentationDetents([.large]).presentationDragIndicator(.visible)
@@ -168,7 +174,8 @@ struct AssetsView: View {
                     .font(.system(.subheadline, weight: .semibold))
                     .foregroundStyle(AppTheme.textPrimary)
             }
-            Text(String(format: loc("asset.replace_body"), money(s.monthlyWear * 12), money(monthly)))
+            Text(String(format: loc("asset.replace_body"), money(AssetValuation.rounded(s.monthlyWear * 12)),
+                        money(monthly)))
                 .font(.system(.footnote))
                 .foregroundStyle(AppTheme.textPrimary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -261,6 +268,12 @@ private struct AssetRow: View {
                     .font(.system(.caption))
                     .foregroundStyle(AppTheme.textSecondary)
                     .lineLimit(1)
+                if asset.isMarketCheckDue() {
+                    Label(loc("asset.check_due"), systemImage: "tag.fill")
+                        .font(.system(.caption2, weight: .semibold))
+                        .foregroundStyle(AppTheme.blue)
+                        .lineLimit(1)
+                }
             }
             Spacer(minLength: 8)
             VStack(alignment: .trailing, spacing: 3) {
@@ -293,6 +306,7 @@ private struct AssetRow: View {
 struct AssetFormSheet: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.openURL) private var openURL
     @Query private var allAssets: [PhysicalAsset]
     let asset: PhysicalAsset?
     let nextOrder: Int
@@ -306,6 +320,9 @@ struct AssetFormSheet: View {
     @State private var taxDate = Date()
     @State private var confirmDelete = false
     @State private var loaded = false
+    /// The user opened the listings from this sheet: whatever value they
+    /// save is one they checked, even if it equals the one before.
+    @State private var checkedMarket = false
 
     private var currency: String { asset?.currency ?? CurrencyManager.shared.preferredCurrency }
     private var symbol: String { CurrencyManager.symbol(for: currency) }
@@ -332,6 +349,7 @@ struct AssetFormSheet: View {
                     card {
                         MoneyField(label: loc("asset.field.value_now"), prefix: symbol,
                                    hint: estimateHint, bg: AppTheme.bg, text: $valueNow)
+                        marketCheck
                     }
                     if let tax = kind.taxLabel {
                         card {
@@ -396,25 +414,84 @@ struct AssetFormSheet: View {
         }
     }
 
+    /// The kind picked now, not the one stored: switching kind resets the rate.
+    private var rate: Double {
+        asset.map { $0.kind == kind ? $0.effectiveRate : kind.defaultAnnualRate } ?? kind.defaultAnnualRate
+    }
+
+    /// DiPo's estimate for today from the purchase, before rounding. Nil
+    /// until there is a price.
+    private var rawEstimate: Double? {
+        let p = InvestmentInput.number(price)
+        guard p > 0 else { return nil }
+        return AssetValuation.value(.init(purchasePrice: p, purchaseDate: purchaseDate, annualRate: rate,
+                                          firstYearDrop: kind.firstYearDrop), at: .now)
+    }
+
     /// What DiPo would estimate today, so the user can see whether to correct it.
     private var estimateHint: String {
-        let p = InvestmentInput.number(price)
-        // The kind picked now, not the one stored: switching kind resets the rate.
-        let rate = asset.map { $0.kind == kind ? $0.effectiveRate : kind.defaultAnnualRate } ?? kind.defaultAnnualRate
         let drop = kind.firstYearDrop
         let trend = drop > 0
             ? String(format: loc("asset.trend_down_first"), Int(drop), Int(abs(rate)))
             : rate == 0 ? loc("asset.trend_flat")
             : String(format: loc(rate < 0 ? "asset.trend_down" : "asset.trend_up"), Int(abs(rate)))
-        guard p > 0 else { return trend }
-        let est = AssetValuation.value(.init(purchasePrice: p, purchaseDate: purchaseDate, annualRate: rate,
-                                             firstYearDrop: drop), at: .now)
+        guard let est = rawEstimate else { return trend }
         let cm = CurrencyManager.shared
+        let low = cm.formatted(AssetValuation.rounded(est), currency: currency)
         let shown = drop > 0
-            ? String(format: loc("asset.range_inline"), cm.formatted(est.rounded(), currency: currency),
-                     cm.formatted((est * (1 + AssetValuation.askingPremium)).rounded(), currency: currency))
-            : cm.formatted(est.rounded(), currency: currency)
+            ? String(format: loc("asset.range_inline"), low,
+                     cm.formatted(AssetValuation.rounded(est * (1 + AssetValuation.askingPremium)), currency: currency))
+            : low
         return String(format: loc("asset.field.value_now_hint"), shown, trend)
+    }
+
+    /// Real listings, already searched: the only honest source of a
+    /// second-hand price, since no marketplace publishes one to follow.
+    @ViewBuilder
+    private var marketCheck: some View {
+        if let link = AssetMarketCheck.link(name: name, kind: kind, purchaseDate: purchaseDate, currency: currency) {
+            VStack(alignment: .leading, spacing: 6) {
+                Button {
+                    HapticManager.shared.tap()
+                    // Back from the listings, the field holds DiPo's figure
+                    // to correct, not an empty box to fill from memory.
+                    if InvestmentInput.number(valueNow) <= 0, let est = rawEstimate {
+                        valueNow = InvestmentInput.text(AssetValuation.rounded(est))
+                    }
+                    checkedMarket = true
+                    openURL(link.url)
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "magnifyingglass")
+                        Text(loc(link.site == .olx ? "asset.market.olx" : "asset.market.web"))
+                            .lineLimit(1).minimumScaleFactor(0.85)
+                        Spacer(minLength: 4)
+                        Image(systemName: "arrow.up.right")
+                    }
+                    .font(.system(.subheadline, weight: .semibold))
+                    .foregroundStyle(AppTheme.accent)
+                    .padding(.horizontal, 12).padding(.vertical, 11)
+                    .background(AppTheme.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: AppRadius.md))
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                Text(marketCheckNote)
+                    .font(.system(.caption2))
+                    .foregroundStyle(due ? AppTheme.blue : AppTheme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    /// A stored asset whose value has gone unchecked for its interval.
+    private var due: Bool { !checkedMarket && (asset?.isMarketCheckDue() ?? false) }
+
+    private var marketCheckNote: String {
+        guard let a = asset, a.manualValue > 0, let set = a.manualValueDate else {
+            return loc(due ? "asset.market.due" : "asset.market.sub")
+        }
+        let when = set.formatted(.dateTime.month(.abbreviated).year().locale(LanguageManager.shared.currentLocale))
+        return String(format: loc("asset.market.yours"), when) + " " + loc(due ? "asset.market.due" : "asset.market.sub")
     }
 
     private var kindPicker: some View {
@@ -484,7 +561,7 @@ struct AssetFormSheet: View {
         // A typed value differing from today's estimate becomes the new anchor;
         // left empty, the estimate runs from the purchase price.
         if now > 0 {
-            if abs(now - a.value()) >= 1 || a.manualValue == 0 {
+            if abs(now - a.value()) >= 1 || a.manualValue == 0 || checkedMarket {
                 a.manualValue = now
                 a.manualValueDate = .now
             }

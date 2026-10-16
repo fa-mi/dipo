@@ -74,6 +74,8 @@ struct HomeView: View {
     @AppStorage(HomePrefs.showDiPoKey) private var showDiPo = true
     /// The eye on the total row: every figure on Home behind dots.
     @AppStorage(HomePrefs.hideBalancesKey) private var hideBalances = false
+    /// DiPo's asset price reminder, left for a month once seen.
+    @AppStorage(AssetMarketCheck.snoozeKey) private var assetCheckSnoozedUntil: Double = 0
 
     @State private var showSearch           = false
     @State private var showNotifications    = false
@@ -591,6 +593,7 @@ struct HomeView: View {
                                     bill: dipoBill,
                                     daysToPayday: nearestSalary.map { SalaryDateEngine.daysUntilPay(dayOfMonth: $0.dayOfMonth) },
                                     payDate: nearestSalary.map { SalaryDateEngine.nextPayDate(dayOfMonth: $0.dayOfMonth) },
+                                    assetCheck: dipoAssetCheck,
                                     showsDiPo: showDiPo,
                                     isRoyal: dipoIsRoyal,
                                     onAskDiPo: { askDiPoPrompt = nil; showAskDiPo = true },
@@ -602,6 +605,9 @@ struct HomeView: View {
                                         case .checkIn, .streak, .interestGuess: break   // handled inside DiPo's section
                                         case .quest:
                                             showQuest = true
+                                        case .assetCheck:
+                                            assetCheckSnoozedUntil = AssetMarketCheck.snoozed()
+                                            vm.open(PlanRoute.assets)
                                         case .interestTip(let interest):
                                             askDiPoPrompt = interest.prompt
                                             showAskDiPo = true
@@ -940,6 +946,14 @@ struct HomeView: View {
 
     /// Royal can chat with DiPo; Free hears his top insight.
     private var dipoIsRoyal: Bool { premiumMgr.canAccess(.aiAdvisor) }
+
+    /// Assets due a market check, for DiPo to mention: only with Assets
+    /// unlocked (it opens that screen), and not again for a month once seen.
+    private var dipoAssetCheck: [String] {
+        guard premiumMgr.canAccess(.assets),
+              !AssetMarketCheck.isSnoozed(until: assetCheckSnoozedUntil) else { return [] }
+        return AssetMarketCheck.due(physicalAssets)
+    }
 
     /// The bill DiPo mentions, when one falls due within three days.
     private var dipoBill: DiPoNudge.Bill? {
