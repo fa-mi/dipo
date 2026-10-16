@@ -198,6 +198,10 @@ struct WishlistView: View {
     /// Max personal goals shown inline before collapsing behind "See all".
     private let goalPreviewLimit = 3
 
+    /// Observed so the screen changes the moment a plan or a sign-in does.
+    @State private var pm = PremiumManager.shared
+    @State private var session = UserSession.shared
+
     private var pref: String { CurrencyManager.shared.preferredCurrency }
     private func toPref(_ v: Double, _ from: String) -> Double {
         CurrencyManager.shared.convert(v, from: from, to: pref)
@@ -212,7 +216,24 @@ struct WishlistView: View {
     }
 
     var body: some View {
-        PremiumGate(feature: .savingsGoals) {
+        let _ = pm.plan
+        let _ = session.userID
+        Group {
+            if pm.canAccess(.savingsGoals) {
+                royalBody
+            } else if session.isLoggedIn {
+                // Target Bersama is open to anyone signed in — only a goal's
+                // creator needs Royal — so a member or someone invited gets
+                // here too. Personal goals stay Royal.
+                SharedGoalsOnlyView()
+            } else {
+                PremiumGate(feature: .savingsGoals) { EmptyView() }
+            }
+        }
+        .trackScreen(.savingsGoals)
+    }
+
+    private var royalBody: some View {
         FeatureStack { pushed in
         ZStack {
             AppTheme.bg.ignoresSafeArea()
@@ -354,8 +375,6 @@ struct WishlistView: View {
             deleteGoal(goal)
         }
         } // end FeatureStack
-        } // end PremiumGate
-        .trackScreen(.savingsGoals)
     }
 
     private var header: some View {

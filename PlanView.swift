@@ -55,9 +55,11 @@ struct PlanView: View {
                                 title: loc("profile.recurring"), status: billsStatus)
                         }
                         section(loc("plan.section_goals")) {
+                            // Open when signed in: Target Bersama needs no Royal
+                            // to take part in; the screen locks personal goals.
                             row(.goals, icon: "target", tint: AppTheme.teal,
                                 title: loc("profile.savings"), status: goalsStatus,
-                                feature: .savingsGoals)
+                                feature: UserSession.shared.isLoggedIn ? nil : .savingsGoals)
                             divider
                             row(.investments, icon: "chart.line.uptrend.xyaxis", tint: AppTheme.accent,
                                 title: loc("premium.feature.investments"), status: investStatus,
@@ -162,7 +164,9 @@ struct PlanView: View {
     }
 
     private var goalsStatus: String {
-        guard pm.canAccess(.savingsGoals) else { return loc("profile.requires_royal") }
+        guard pm.canAccess(.savingsGoals) else {
+            return loc(UserSession.shared.isLoggedIn ? "savings.status_shared_only" : "profile.requires_royal")
+        }
         let active = goals.filter { !$0.isCompleted }.count
         return active == 0 ? loc("savings.no_goals") : String(format: loc("savings.active_goals"), active)
     }

@@ -211,6 +211,9 @@ struct JointAccountDetailView: View {
                 budgetCard(account)
                 JointSmartBudgetCard(account: account, onEdit: smartBudgetEditor(account))
                 JointSmartInsights(account: account)
+                // Goals kept in this account: its members are theirs, and
+                // money goes to them from the shared balance.
+                JointGoalsSection(account: account)
                 history(account)
             }
             .padding(.horizontal, 22)
@@ -389,15 +392,22 @@ struct JointTxRow: View {
     let mine: Bool
 
     private var icon: String {
-        tx.kind == .deposit ? "arrow.left.arrow.right" : (tx.txCategory ?? .other).icon
+        if tx.goalId != nil { return "arrow.down.to.line" }
+        return tx.kind == .deposit ? "arrow.left.arrow.right" : (tx.txCategory ?? .other).icon
     }
     private var tint: Color {
-        tx.kind == .deposit ? AppTheme.blue : Color(hex: (tx.txCategory ?? .other).iconBg)
+        if tx.goalId != nil { return AppTheme.accentFill }
+        return tx.kind == .deposit ? AppTheme.blue : Color(hex: (tx.txCategory ?? .other).iconBg)
     }
     private var categoryLabel: String {
-        tx.kind == .deposit ? loc("joint.entry.deposit_kind") : (tx.txCategory ?? .other).displayLabel
+        if tx.goalId != nil { return loc("joint.entry.goal_kind") }
+        return tx.kind == .deposit ? loc("joint.entry.deposit_kind") : (tx.txCategory ?? .other).displayLabel
     }
     private var title: String {
+        if tx.goalId != nil {
+            // The note is the goal's name, as it was when the money moved.
+            return String(format: loc("joint.entry.to_goal"), tx.note)
+        }
         if tx.kind == .deposit {
             return tx.note.isEmpty ? loc("joint.entry.deposit_kind")
                                    : String(format: loc("joint.entry.deposit_from"), tx.note)
