@@ -360,6 +360,8 @@ struct BackupAsset: Codable {
     let notes: String
     let createdAt: Date
     let sortOrder: Int
+    /// Since schema V3. Absent in older backups, which read as bought new.
+    var boughtUsed: Bool? = nil
 }
 
 struct BackupDayCheckIn: Codable {
@@ -749,7 +751,7 @@ enum BackupService {
                             purchasePrice: a.purchasePrice, purchaseDate: a.purchaseDate,
                             manualValue: a.manualValue, manualValueDate: a.manualValueDate,
                             annualRate: a.annualRate, taxDueDate: a.taxDueDate, notes: a.notes,
-                            createdAt: a.createdAt, sortOrder: a.sortOrder)
+                            createdAt: a.createdAt, sortOrder: a.sortOrder, boughtUsed: a.boughtUsed)
             }
         )
 
@@ -1024,6 +1026,7 @@ enum BackupService {
             asset.manualValue = a.manualValue
             asset.manualValueDate = a.manualValueDate
             asset.createdAt = a.createdAt
+            asset.boughtUsed = a.boughtUsed ?? false
             context.insert(asset)
         }
 
@@ -1286,6 +1289,7 @@ enum BackupService {
             asset.manualValue = a.manualValue
             asset.manualValueDate = a.manualValueDate
             asset.createdAt = a.createdAt
+            asset.boughtUsed = a.boughtUsed ?? false
             context.insert(asset)
         }
 

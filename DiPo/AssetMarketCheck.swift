@@ -34,14 +34,21 @@ enum AssetMarketCheck {
 
     /// What to search for: the name, plus the year for a vehicle, whose price
     /// turns on it — unless the name already carries one ("Brio RS 2017").
-    /// A phone's or laptop's name already says its generation.
-    static func query(name: String, kind: AssetKind, purchaseDate: Date, cal: Calendar = .current) -> String {
+    /// Bought new, the vehicle's year is the year it was bought; bought
+    /// second-hand, it isn't, and a wrong year finds the wrong cars, so the
+    /// search goes without one (the form asks for it in the name). A phone's
+    /// or laptop's name already says its generation.
+    static func query(name: String, kind: AssetKind, purchaseDate: Date, boughtUsed: Bool = false,
+                      cal: Calendar = .current) -> String {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return "" }
-        guard kind == .car || kind == .motorcycle,
-              trimmed.range(of: #"\b(19|20)\d{2}\b"#, options: .regularExpression) == nil
-        else { return trimmed }
+        guard kind == .car || kind == .motorcycle, !boughtUsed, !nameHasYear(trimmed) else { return trimmed }
         return "\(trimmed) \(cal.component(.year, from: purchaseDate))"
+    }
+
+    /// "Brio RS 2015" says its year; "Brio RS" doesn't.
+    static func nameHasYear(_ name: String) -> Bool {
+        name.range(of: #"\b(19|20)\d{2}\b"#, options: .regularExpression) != nil
     }
 
     struct Link: Equatable {
@@ -52,9 +59,9 @@ enum AssetMarketCheck {
     /// The listings for this asset, already searched. Nil without a name.
     /// The name goes to that site only when the user taps, and the button
     /// names the site.
-    static func link(name: String, kind: AssetKind, purchaseDate: Date, currency: String,
-                     cal: Calendar = .current) -> Link? {
-        let q = query(name: name, kind: kind, purchaseDate: purchaseDate, cal: cal)
+    static func link(name: String, kind: AssetKind, purchaseDate: Date, boughtUsed: Bool = false,
+                     currency: String, cal: Calendar = .current) -> Link? {
+        let q = query(name: name, kind: kind, purchaseDate: purchaseDate, boughtUsed: boughtUsed, cal: cal)
         guard !q.isEmpty else { return nil }
         // A name with no Latin letters or digits leaves OLX nothing to search
         // but the year.

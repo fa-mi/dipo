@@ -56,11 +56,55 @@ final class StoreMigrationTests: XCTestCase {
         XCTAssertEqual(v1.split(separator: "\n"), v2WithoutAssets)
     }
 
-    func testV1StoreOpensAsV2WithItsRowsAndAnEmptyAssetTable() throws {
+    /// Frozen V2 is the live models without what V3 added.
+    func testFrozenV2MatchesTheLiveModelsMinusWhatV3Added() {
+        let v2 = SchemaFingerprintTests.fingerprint(Schema(versionedSchema: DiPoSchemaV2.self))
+        let v3 = SchemaFingerprintTests.fingerprint(Schema(versionedSchema: DiPoSchemaV3.self))
+        XCTAssertEqual(v2.split(separator: "\n"),
+                       v3.split(separator: "\n").filter { !$0.hasPrefix("PhysicalAsset.boughtUsed:") })
+    }
+
+    /// A phone on 3.3 (106–112) holds a V2 store with assets in it. They come
+    /// through V3 as they were, counted as bought new.
+    func testV2StoreOpensAsCurrentWithItsAssets() throws {
+        let url = dir.appendingPathComponent("default.store")
+        let schemaV2 = Schema(DiPoSchemaV2.models)
+        let assetID: UUID
+        do {
+            let container = try ModelContainer(for: schemaV2,
+                                               configurations: ModelConfiguration(schema: schemaV2, url: url))
+            let context = ModelContext(container)
+            let card = DiPoSchemaV1.BankCard()
+            card.holderName = "Lama"
+            context.insert(card)
+            let asset = DiPoSchemaV2.PhysicalAsset()
+            asset.kindRaw = "car"
+            asset.name = "Brio"
+            asset.currency = "IDR"
+            asset.purchasePrice = 175_000_000
+            asset.manualValue = 101_000_000
+            context.insert(asset)
+            try context.save()
+            assetID = asset.id
+        }
+
+        let schema = Schema(versionedSchema: DiPoSchemaCurrent.self)
+        let container = try ModelContainer(for: schema, migrationPlan: DiPoMigrationPlan.self,
+                                           configurations: ModelConfiguration(schema: schema, url: url))
+        let context = ModelContext(container)
+        XCTAssertEqual(try context.fetch(FetchDescriptor<BankCard>()).map(\.holderName), ["Lama"])
+        let assets = try context.fetch(FetchDescriptor<PhysicalAsset>())
+        XCTAssertEqual(assets.map(\.id), [assetID])
+        XCTAssertEqual(assets.first?.purchasePrice, 175_000_000)
+        XCTAssertEqual(assets.first?.manualValue, 101_000_000)
+        XCTAssertEqual(assets.first?.boughtUsed, false)
+    }
+
+    func testV1StoreOpensAsCurrentWithItsRowsAndAnEmptyAssetTable() throws {
         let url = dir.appendingPathComponent("default.store")
         let ids = try writeUnversionedStore(at: url)
 
-        let schema = Schema(versionedSchema: DiPoSchemaV2.self)
+        let schema = Schema(versionedSchema: DiPoSchemaCurrent.self)
         let container = try ModelContainer(for: schema, migrationPlan: DiPoMigrationPlan.self,
                                            configurations: ModelConfiguration(schema: schema, url: url))
         let context = ModelContext(container)
