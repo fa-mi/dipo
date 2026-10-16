@@ -3,16 +3,22 @@ import SwiftData
 import FirebaseFirestore
 import FirebaseAuth
 
-// MARK: - Unity Savings (Tabungan Bersama) — F1
+// MARK: - Target Bersama (shared goals; "Unity Savings", once Tabungan Bersama)
 //
 // Collaborative savings goals shared across DiPo users. Unlike solo goals
 // (SwiftData, per-device), shared goals live in Firestore so multiple members
-// can see the same goal and contribute. This file covers F1: the model, the
-// Firestore service (create + live list), and the create UI. Inviting members
-// (F2/F3) and contributions (F4) come next.
+// can see the same goal and contribute.
 //
-// Gating: this whole screen sits behind PremiumGate(.savingsGoals) which is
-// Royal-only, so every user who reaches it is already Royal.
+// Two kinds, one model:
+//   • on its own — friends saving for a trip, people pooling for a gift. The
+//     owner invites by DiPo ID; the invitation's id is "{goalId}_{uid}", which
+//     is how the rules know whoever joins was invited.
+//   • kept in a Rekening Bersama (`jointAccountId`) — the account's members
+//     are its members, without invitations, and money moves to it from the
+//     shared balance (JointAccountService.moveToGoal).
+//
+// Only the person who creates a goal needs Royal, as with Rekening Bersama:
+// a friend does not need a subscription to put money towards a gift.
 
 struct SharedGoal: Identifiable, Hashable {
     let id: String
@@ -29,6 +35,8 @@ struct SharedGoal: Identifiable, Hashable {
     var maxMembers: Int
     var status: String            // "active" | "archived"
     var createdAt: Date
+    /// The Rekening Bersama this goal is kept in, whose members are its members.
+    var jointAccountId: String?
 
     var progress: Double { targetAmount > 0 ? min(savedAmount / targetAmount, 1) : 0 }
     var remaining: Double { max(targetAmount - savedAmount, 0) }
@@ -55,7 +63,10 @@ struct SharedGoal: Identifiable, Hashable {
         self.status = data["status"] as? String ?? "active"
         self.targetDate = (data["targetDate"] as? Timestamp)?.dateValue()
         self.createdAt = (data["createdAt"] as? Timestamp)?.dateValue() ?? Date()
+        self.jointAccountId = (data["jointAccountId"] as? String).flatMap { $0.isEmpty ? nil : $0 }
     }
+
+    var isKeptInAccount: Bool { jointAccountId != nil }
 }
 
 struct SharedInvite: Identifiable {
@@ -65,13 +76,22 @@ struct SharedInvite: Identifiable {
     var goalEmoji: String
     var fromUid: String
     var fromName: String
+    var toUid: String
     var status: String
     var createdAt: Date
+
+    /// The rules find an invitation by this id when someone joins.
+    static func id(goal goalId: String, to uid: String) -> String { "\(goalId)_\(uid)" }
+
+    /// Written by DiPo before 3.3 (114), under a random id the rules cannot
+    /// find: it can only be declined. The owner invites again.
+    var isLegacy: Bool { id != Self.id(goal: goalId, to: toUid) }
 
     init?(id: String, data: [String: Any]) {
         guard let goalId = data["goalId"] as? String else { return nil }
         self.id = id
         self.goalId = goalId
+        self.toUid = data["toUid"] as? String ?? ""
         self.goalTitle = data["goalTitle"] as? String ?? "Shared Goal"
         self.goalEmoji = data["goalEmoji"] as? String ?? "🤝"
         self.fromUid = data["fromUid"] as? String ?? ""
@@ -182,70 +202,41 @@ final class UnitySavingsService {
 
     func stopInvites() { inviteListener?.remove(); inviteListener = nil }
 
-    /// Accept an invite: join the goal (add self to memberUids atomically) +
-    /// create your member record + mark the invite accepted. Hard-gated on Royal.
+    /// Accept an invite: join the goal, write my member row and answer the
+    /// invitation, all in one batch — the rules let me in only while the
+    /// invitation addressed to me is pending. No Royal needed: only the
+    /// goal's creator needs it.
     @discardableResult
     func acceptInvite(_ invite: SharedInvite) async -> Bool {
-        guard let uid = Auth.auth().currentUser?.uid else {
-            print("[Unity][accept] ✗ blocked: no auth uid")
+        // Signed in to DiPo, not just the anonymous Firebase session every
+        // launch establishes.
+        guard UserSession.shared.isLoggedIn, let uid = Auth.auth().currentUser?.uid,
+              invite.toUid == uid, !invite.isLegacy else {
+            print("[Unity][accept] ✗ blocked: not signed in, not mine, or an invitation from an older DiPo")
             return false
         }
-        // `canAccess`, not `plan == .royal`: the uid guard above is satisfied by
-        // the ANONYMOUS Firebase session every launch establishes, so it proves
-        // nothing about whether anyone is signed into DiPo. `canAccess` checks
-        // the plan AND the login, which is what "hard-gated on Royal" means
-        // here. Matches the `PremiumGate(.savingsGoals)` wrapping this screen.
-        guard PremiumManager.shared.canAccess(.savingsGoals) else {
-            print("[Unity][accept] ✗ blocked: no Royal access (plan=\(PremiumManager.shared.plan))")
-            return false
-        }
-        var step = "join-transaction (read+update goal)"
-        print("[Unity][accept] → goal=\(invite.goalId) uid=\(uid)")
         let goalRef = db.collection("sharedGoals").document(invite.goalId)
+        let myName = await myDisplayName(uid: uid, fallback: "Member")
+        let batch = db.batch()
+        batch.updateData(["memberUids": FieldValue.arrayUnion([uid]),
+                          "memberCount": FieldValue.increment(Int64(1))], forDocument: goalRef)
+        batch.setData([
+            "role":        "member",
+            "status":      "active",
+            "displayName": myName,
+            "contributedAmount": 0,
+            "joinedAt":    FieldValue.serverTimestamp(),
+        ], forDocument: goalRef.collection("members").document(uid), merge: true)
+        batch.updateData(["status": "accepted", "respondedAt": FieldValue.serverTimestamp()],
+                         forDocument: db.collection("invitations").document(invite.id))
         do {
-            _ = try await db.runTransaction { txn, errPtr -> Any? in
-                let snap: DocumentSnapshot
-                do { snap = try txn.getDocument(goalRef) }
-                catch let e as NSError {
-                    // Most likely PERMISSION_DENIED: the sharedGoals read rule
-                    // requires membership, but the joiner isn't a member yet.
-                    print("[Unity][accept] ✗ txn READ denied: \(e.domain) code=\(e.code): \(e.localizedDescription)")
-                    errPtr?.pointee = e; return nil
-                }
-                guard let data = snap.data() else { return nil }
-                var members = data["memberUids"] as? [String] ?? []
-                let maxM = data["maxMembers"] as? Int ?? Self.maxMembers
-                if members.contains(uid) { return nil } // already joined
-                if members.count >= maxM {
-                    print("[Unity][accept] ✗ goal full \(members.count)/\(maxM)")
-                    errPtr?.pointee = NSError(domain: "Unity", code: 1, userInfo: [NSLocalizedDescriptionKey: "full"])
-                    return nil
-                }
-                members.append(uid)
-                txn.updateData(["memberUids": members, "memberCount": members.count], forDocument: goalRef)
-                return nil
-            }
-            print("[Unity][accept] ✓ joined memberUids")
-
-            step = "write-member-doc"
-            let myName = await myDisplayName(uid: uid, fallback: "Member")
-            try await goalRef.collection("members").document(uid).setData([
-                "role":        "member",
-                "status":      "active",
-                "displayName": myName,
-                "contributedAmount": 0,
-                "joinedAt":    FieldValue.serverTimestamp(),
-            ], merge: true)
-
-            step = "mark-invite-accepted"
-            try await db.collection("invitations").document(invite.id).setData([
-                "status": "accepted", "respondedAt": FieldValue.serverTimestamp(),
-            ], merge: true)
-            print("[Unity][accept] ✓ SUCCESS — joined goal")
+            try await batch.commit()
+            print("[Unity][accept] ✓ joined goal \(invite.goalId)")
             return true
         } catch {
+            // Full, deleted, withdrawn, or I am already in.
             let ns = error as NSError
-            print("[Unity][accept] ✗ THREW at step='\(step)' — \(ns.domain) code=\(ns.code): \(ns.localizedDescription)")
+            print("[Unity][accept] ✗ \(ns.domain) code=\(ns.code): \(ns.localizedDescription)")
             return false
         }
     }
@@ -265,16 +256,19 @@ final class UnitySavingsService {
         guard amount > 0, let uid = Auth.auth().currentUser?.uid else { return false }
         let goalRef = db.collection("sharedGoals").document(goal.id)
         let name = await myDisplayName(uid: uid, fallback: "Member")
+        // One batch: the contribution, the total and my running total move
+        // together or not at all.
+        let batch = db.batch()
+        batch.setData([
+            "uid": uid, "displayName": name, "amount": amount,
+            "currency": goal.currency, "note": note, "source": "card",
+            "date": FieldValue.serverTimestamp(),
+        ], forDocument: goalRef.collection("contributions").document())
+        batch.updateData(["savedAmount": FieldValue.increment(amount)], forDocument: goalRef)
+        batch.setData(["contributedAmount": FieldValue.increment(amount)],
+                      forDocument: goalRef.collection("members").document(uid), merge: true)
         do {
-            try await goalRef.collection("contributions").document().setData([
-                "uid": uid, "displayName": name, "amount": amount,
-                "currency": goal.currency, "note": note,
-                "date": FieldValue.serverTimestamp(),
-            ])
-            try await goalRef.updateData(["savedAmount": FieldValue.increment(amount)])
-            try await goalRef.collection("members").document(uid).setData([
-                "contributedAmount": FieldValue.increment(amount),
-            ], merge: true)
+            try await batch.commit()
             return true
         } catch { print("[Unity] addContribution error: \(error)"); return false }
     }
@@ -517,7 +511,7 @@ final class UnitySavingsService {
 
     // MARK: - Invite (F2)
 
-    enum InviteResult { case success, notFound, notRoyal, alreadyMember, alreadyInvited, full, cantInviteSelf, error }
+    enum InviteResult { case success, notFound, alreadyMember, alreadyInvited, full, cantInviteSelf, error }
 
     /// Resolve a typed DiPo ID → user, validate, and write a pending invitation.
     /// The write itself is guarded by Firestore rules (only the goal owner may
@@ -525,7 +519,8 @@ final class UnitySavingsService {
     /// for good UX; accept-time re-checks (F3) are the hard gate.
     func invite(goal: SharedGoal, toDipoID rawID: String) async -> InviteResult {
         let dipoID = rawID.uppercased().trimmingCharacters(in: .whitespaces)
-        guard let fromUid = Auth.auth().currentUser?.uid, !dipoID.isEmpty else {
+        // A goal kept in a Rekening Bersama takes its members from the account.
+        guard let fromUid = Auth.auth().currentUser?.uid, !dipoID.isEmpty, !goal.isKeptInAccount else {
             print("[Unity][invite] ✗ blocked: no auth uid or empty DiPo ID (id='\(dipoID)')")
             return .error
         }
@@ -547,8 +542,9 @@ final class UnitySavingsService {
                 return .cantInviteSelf
             }
 
-            // 2. Invitee must be Royal (all participants are Royal).
-            step = "read-user-plan"
+            // 2. The invitee's profile, for the check below. No plan check:
+            //    only the goal's creator needs Royal.
+            step = "read-user-profile"
             let userSnap = try await db.collection("users").document(toUid).getDocument()
 
             // The entry must be the invitee's own. A DiPo ID derives from the
@@ -559,13 +555,6 @@ final class UnitySavingsService {
             guard UserSession.dipoID(dipoID, belongsTo: toSocialID) else {
                 print("[Unity][invite] ✗ step=\(step): dipoIndex/\(dipoID) does not derive from the account it points at")
                 return .notFound
-            }
-
-            let plan = userSnap.data()?["plan"] as? String ?? "free"
-            print("[Unity][invite] ✓ plan check: users/\(toUid).plan='\(plan)'")
-            if plan != "royal" {
-                print("[Unity][invite] ✗ step=\(step): invitee is not Royal")
-                return .notRoyal
             }
 
             // 3. Fresh goal state — not already a member, not full.
@@ -588,21 +577,22 @@ final class UnitySavingsService {
                 return .full
             }
 
-            // 4. No duplicate pending invite. Query by a SINGLE field (fromUid)
-            //    — a single-field index is automatic, so no manual composite
-            //    index is needed — then match the rest client-side.
+            // 4. One invitation per person per goal, by id. An earlier one
+            //    that was declined or withdrawn is cleared first, so the new
+            //    one starts fresh and the push goes out again. Found through
+            //    my own invitations: a document that does not exist cannot
+            //    be read directly under the rules.
             step = "query-existing-invites"
+            let inviteId = SharedInvite.id(goal: goal.id, to: toUid)
             let mine = try await db.collection("invitations")
                 .whereField("fromUid", isEqualTo: fromUid)
                 .getDocuments()
-            let dup = mine.documents.contains {
-                ($0.data()["toUid"] as? String) == toUid &&
-                ($0.data()["goalId"] as? String) == goal.id &&
-                ($0.data()["status"] as? String) == "pending"
-            }
-            if dup {
-                print("[Unity][invite] ✗ step=\(step): duplicate pending invite exists")
-                return .alreadyInvited
+            if let old = mine.documents.first(where: { $0.documentID == inviteId }) {
+                if (old.data()["status"] as? String) == "pending" {
+                    print("[Unity][invite] ✗ step=\(step): duplicate pending invite exists")
+                    return .alreadyInvited
+                }
+                try await old.reference.delete()
             }
 
             // 5. Resolve the SENDER's display name so the invite (and its push)
@@ -622,13 +612,13 @@ final class UnitySavingsService {
 
             // 6. Create the invitation, then fire a best-effort push.
             step = "write-invitation"
-            let ref = db.collection("invitations").document()
+            let ref = db.collection("invitations").document(inviteId)
             try await ref.setData([
                 "goalId":     goal.id,
-                "goalTitle":  goal.title,
-                "goalEmoji":  goal.emoji,
+                "goalTitle":  JointText.clip(goal.title, 60),
+                "goalEmoji":  JointText.clip(goal.emoji, 8),
                 "fromUid":    fromUid,
-                "fromName":   fromName,
+                "fromName":   JointText.clip(fromName, 40),
                 "toUid":      toUid,
                 "toSocialId": toSocialID ?? "",
                 "status":     "pending",
@@ -653,12 +643,16 @@ final class UnitySavingsService {
         }
     }
 
-    /// Create a shared goal owned by the current user (sole member to start).
+    /// Create a shared goal owned by the current user: on its own (sole
+    /// member, inviting afterwards), or kept in a Rekening Bersama, with the
+    /// account's members as its members and in its currency.
     @discardableResult
     func createGoal(title: String, emoji: String, targetAmount: Double,
-                    currency: String, targetDate: Date?) async -> Bool {
+                    currency: String, targetDate: Date?, in account: JointAccount? = nil) async -> Bool {
         guard let uid = Auth.auth().currentUser?.uid else { return false }
+        if let account, !account.memberUids.contains(uid) || !account.isActive { return false }
         let ownerName = await myDisplayName(uid: uid, fallback: "Me")
+        let members = account?.memberUids ?? [uid]
         let ref = db.collection("sharedGoals").document()
         var data: [String: Any] = [
             "ownerUid":    uid,
@@ -666,29 +660,123 @@ final class UnitySavingsService {
             "title":       title,
             "emoji":       emoji,
             "targetAmount": targetAmount,
-            "currency":    currency,
+            "currency":    account?.currency ?? currency,
             "savedAmount": 0,
-            "memberUids":  [uid],
-            "memberCount": 1,
+            "memberUids":  members,
+            "memberCount": members.count,
             "maxMembers":  Self.maxMembers,
             "status":      "active",
             "createdAt":   FieldValue.serverTimestamp(),
         ]
         if let d = targetDate { data["targetDate"] = Timestamp(date: d) }
+        if let account { data["jointAccountId"] = account.id }
         do {
             try await ref.setData(data)
-            // Owner's member record.
-            try await ref.collection("members").document(uid).setData([
-                "role":        "owner",
-                "status":      "active",
-                "displayName": ownerName,
-                "contributedAmount": 0,
-                "joinedAt":    FieldValue.serverTimestamp(),
-            ])
+            // Every member's row, mine as the owner. The account's members
+            // are known by the names they use in it.
+            let names = account.map { JointAccountService.shared.members[$0.id] ?? [] } ?? []
+            let batch = db.batch()
+            for member in members {
+                let name = member == uid ? ownerName
+                    : names.first { $0.id == member }?.displayName ?? ""
+                batch.setData([
+                    "role":        member == uid ? "owner" : "member",
+                    "status":      "active",
+                    "displayName": name.isEmpty ? "Member" : name,
+                    "contributedAmount": 0,
+                    "joinedAt":    FieldValue.serverTimestamp(),
+                ], forDocument: ref.collection("members").document(member), merge: true)
+            }
+            try await batch.commit()
             return true
         } catch {
             print("[Unity] createGoal error: \(error)")
             return false
+        }
+    }
+
+    // MARK: - Goals kept in a Rekening Bersama
+
+    /// Per account: its goals, live, while the account is open on screen.
+    var accountGoals: [String: [SharedGoal]] = [:]
+    private var accountGoalListeners: [String: ListenerRegistration] = [:]
+
+    func watchGoals(of account: JointAccount) {
+        guard accountGoalListeners[account.id] == nil else { return }
+        let accountId = account.id
+        accountGoalListeners[accountId] = db.collection("sharedGoals")
+            .whereField("jointAccountId", isEqualTo: accountId)
+            .addSnapshotListener { [weak self] snap, err in
+                guard let self else { return }
+                Task { @MainActor in
+                    if let err { print("[Unity] account goals listen error: \(err)"); return }
+                    let goals = (snap?.documents ?? [])
+                        .compactMap { SharedGoal(id: $0.documentID, data: $0.data()) }
+                        .filter { $0.status == "active" }
+                        .sorted { $0.createdAt < $1.createdAt }
+                    self.accountGoals[accountId] = goals
+                    if let account = JointAccountService.shared.account(accountId) {
+                        await self.tidy(goals, of: account)
+                    }
+                }
+            }
+    }
+
+    func stopWatchingGoals(of accountId: String) {
+        accountGoalListeners[accountId]?.remove()
+        accountGoalListeners[accountId] = nil
+    }
+
+    /// Keeps each goal's members in step with the account's: I join the ones
+    /// I am not in yet (I may have joined the account after they were made),
+    /// and take off someone who has left the account — handing the goal to
+    /// myself if that was its owner. Quiet: the rules decide, and a refusal
+    /// only means someone else got there first.
+    private func tidy(_ goals: [SharedGoal], of account: JointAccount) async {
+        guard let uid = Auth.auth().currentUser?.uid, account.memberUids.contains(uid) else { return }
+        for goal in goals {
+            let ref = db.collection("sharedGoals").document(goal.id)
+            if JointGoals.shouldJoin(goal, account: account, me: uid) {
+                let me = await myDisplayName(uid: uid, fallback: "Member")
+                let batch = db.batch()
+                batch.updateData(["memberUids": FieldValue.arrayUnion([uid]),
+                                  "memberCount": FieldValue.increment(Int64(1))], forDocument: ref)
+                batch.setData(["role": "member", "status": "active", "displayName": me,
+                               "contributedAmount": 0, "joinedAt": FieldValue.serverTimestamp()],
+                              forDocument: ref.collection("members").document(uid), merge: true)
+                try? await batch.commit()
+            } else if goal.memberUids.contains(uid), let gone = JointGoals.departed(goal, account: account).first {
+                var update: [String: Any] = ["memberUids": FieldValue.arrayRemove([gone]),
+                                             "memberCount": FieldValue.increment(Int64(-1))]
+                if gone == goal.ownerUid {
+                    update["ownerUid"] = uid
+                    update["ownerName"] = await myDisplayName(uid: uid, fallback: "Member")
+                }
+                try? await ref.updateData(update)
+            }
+        }
+    }
+
+    /// Before I leave a Rekening Bersama: I leave its goals too, handing any
+    /// I own to someone who stays.
+    func leaveGoals(keptIn account: JointAccount) async {
+        guard let uid = Auth.auth().currentUser?.uid else { return }
+        let snap = try? await db.collection("sharedGoals")
+            .whereField("jointAccountId", isEqualTo: account.id).getDocuments()
+        for doc in snap?.documents ?? [] {
+            guard let goal = SharedGoal(id: doc.documentID, data: doc.data()),
+                  goal.memberUids.contains(uid) else { continue }
+            let remaining = goal.memberUids.filter { $0 != uid }
+            var update: [String: Any] = ["memberUids": remaining, "memberCount": remaining.count]
+            if goal.ownerUid == uid {
+                guard let heir = remaining.first(where: { account.memberUids.contains($0) }) ?? remaining.first else {
+                    continue   // the last one in it: it stays with me
+                }
+                update["ownerUid"] = heir
+                update["ownerName"] = JointAccountService.shared.name(of: heir, in: account.id)
+            }
+            try? await doc.reference.updateData(update)
+            try? await doc.reference.collection("members").document(uid).setData(["status": "left"], merge: true)
         }
     }
 }
@@ -741,7 +829,9 @@ struct UnitySavingsSection: View {
                 }
             }
         }
-        .onAppear { unity.start(); unity.startInvites() }
+        // The Rekening Bersama service too: a goal kept in an account is
+        // labelled with the account's name.
+        .onAppear { unity.start(); unity.startInvites(); JointAccountService.shared.start() }
         .onDisappear { unity.stop(); unity.stopInvites() }
     }
 
@@ -890,8 +980,10 @@ struct InviteInboxRow: View {
             }
             VStack(alignment: .leading, spacing: 2) {
                 Text(invite.goalTitle).font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.textPrimary).lineLimit(1)
-                Text(String(format: loc("unity.invited_by"), invite.fromName))
-                    .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary).lineLimit(1)
+                Text(invite.isLegacy ? String(format: loc("unity.invite_legacy"), invite.fromName)
+                                     : String(format: loc("unity.invited_by"), invite.fromName))
+                    .font(.system(.caption2)).foregroundStyle(invite.isLegacy ? AppTheme.orange : AppTheme.textSecondary)
+                    .lineLimit(2).fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 6)
             if busy {
@@ -907,19 +999,23 @@ struct InviteInboxRow: View {
                             .frame(width: 34, height: 34).background(AppTheme.cardMid, in: Circle())
                     }
 .accessibilityLabel(loc("a11y.decline_invite")).buttonStyle(ScaleButtonStyle())
-                    Button {
-                        busy = true
-                        Task {
-                            let ok = await unity.acceptInvite(invite)
-                            busy = false
-                            ok ? HapticManager.shared.success() : HapticManager.shared.error()
+                    // Written by an older DiPo under an id the rules cannot
+                    // find: accepting would only fail. The owner invites again.
+                    if !invite.isLegacy {
+                        Button {
+                            busy = true
+                            Task {
+                                let ok = await unity.acceptInvite(invite)
+                                busy = false
+                                ok ? HapticManager.shared.success() : HapticManager.shared.error()
+                            }
+                        } label: {
+                            Image(systemName: "checkmark").font(.system(.footnote, weight: .bold))
+                                .foregroundStyle(AppTheme.onVividFill)
+                                .frame(width: 34, height: 34).background(AppTheme.accentFill, in: Circle())
                         }
-                    } label: {
-                        Image(systemName: "checkmark").font(.system(.footnote, weight: .bold))
-                            .foregroundStyle(AppTheme.onVividFill)
-                            .frame(width: 34, height: 34).background(AppTheme.accentFill, in: Circle())
+                        .accessibilityLabel(loc("a11y.accept_invite")).buttonStyle(ScaleButtonStyle())
                     }
-.accessibilityLabel(loc("a11y.accept_invite")).buttonStyle(ScaleButtonStyle())
                 }
             }
         }
@@ -935,6 +1031,10 @@ struct SharedGoalCard: View {
     @State private var showInvite = false
     @State private var showDetail = false
 
+    private var accountName: String? {
+        goal.jointAccountId.flatMap { JointAccountService.shared.account($0) }.map { "\($0.emoji) \($0.name)" }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 12) {
@@ -945,7 +1045,9 @@ struct SharedGoalCard: View {
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 6) {
                         Text(goal.title).font(.system(.body, weight: .bold)).foregroundStyle(AppTheme.textPrimary).lineLimit(1)
-                        Text(loc("unity.badge")).font(.system(.caption2, weight: .bold)).foregroundStyle(AppTheme.blue)
+                        // Kept in a Rekening Bersama: its name says whose goal it is.
+                        Text(accountName ?? loc("unity.badge")).font(.system(.caption2, weight: .bold)).foregroundStyle(AppTheme.blue)
+                            .lineLimit(1)
                             .padding(.horizontal, 6).padding(.vertical, 2)
                             .background(AppTheme.blue.opacity(0.14), in: Capsule())
                     }
@@ -979,8 +1081,9 @@ struct SharedGoalCard: View {
                 SavingsProgressBar(progress: goal.progress)
             }
 
-            // Owner can invite members until the goal is full.
-            if goal.isOwner && !goal.isFull {
+            // Owner can invite members until the goal is full. A goal kept in
+            // a Rekening Bersama takes its members from the account instead.
+            if goal.isOwner && !goal.isFull && !goal.isKeptInAccount {
                 Button {
                     HapticManager.shared.tap(); showInvite = true
                 } label: {
@@ -1019,6 +1122,9 @@ struct SharedGoalCard: View {
 struct SharedGoalDetailView: View {
     let goal: SharedGoal
     @Environment(\.dismiss) private var dismiss
+    @State private var joint = JointAccountService.shared
+    /// The Rekening Bersama the goal is kept in, when it is loaded.
+    private var account: JointAccount? { goal.jointAccountId.flatMap { joint.account($0) } }
     @State private var unity = UnitySavingsService.shared
     @State private var members: [SharedMember] = []
     @State private var contributions: [SharedContribution] = []
@@ -1038,7 +1144,8 @@ struct SharedGoalDetailView: View {
                         VStack(spacing: 8) {
                             Text(goal.emoji).font(.system(size: 40))
                             Text(goal.title).font(.system(.body, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
-                            Text(String(format: loc("unity.members"), goal.memberCount, goal.maxMembers))
+                            Text(account.map { String(format: loc("unity.kept_in"), "\($0.emoji) \($0.name)") }
+                                 ?? String(format: loc("unity.members"), goal.memberCount, goal.maxMembers))
                                 .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                             GeometryReader { g in
                                 ZStack(alignment: .leading) {
@@ -1078,7 +1185,8 @@ struct SharedGoalDetailView: View {
                                     if m.isOwner { Text(loc("unity.role_owner")).font(.system(.caption2, weight: .bold)).foregroundStyle(AppTheme.purple).padding(.horizontal, 5).padding(.vertical, 1).background(AppTheme.purple.opacity(0.15), in: Capsule()) }
                                     Spacer()
                                     Text(money(m.contributedAmount)).font(.system(.footnote, weight: .semibold)).foregroundStyle(AppTheme.textSecondary)
-                                    if goal.isOwner && !m.isOwner {
+                                    // Members of an account's goal come and go with the account.
+                                    if goal.isOwner && !m.isOwner && !goal.isKeptInAccount {
                                         Button { memberToRemove = m } label: {
                                             Image(systemName: "minus.circle").font(.system(.subheadline)).foregroundStyle(AppTheme.red)
                                         }
@@ -1105,10 +1213,11 @@ struct SharedGoalDetailView: View {
                             }
                         }
 
-                        // Danger zone
+                        // Danger zone. Leaving an account's goal is leaving the
+                        // account: staying in one, you would be back in it.
                         if goal.isOwner {
                             dangerButton(loc("unity.delete_goal")) { confirmDelete = true }
-                        } else {
+                        } else if !goal.isKeptInAccount {
                             dangerButton(loc("unity.leave_goal")) { confirmLeave = true }
                         }
 
@@ -1119,10 +1228,14 @@ struct SharedGoalDetailView: View {
             }
             .navigationTitle(loc("unity.title")).navigationBarTitleDisplayMode(.inline)
             .doneToolbar { dismiss() }
-            .task { await load() }
+            .task {
+                // Its account's balance is where money for it comes from first.
+                if goal.isKeptInAccount { joint.start() }
+                await load()
+            }
             .sheet(isPresented: $showAdd) {
-                AddContributionSheet(goal: goal) { await load() }
-                    .presentationDetents([.medium]).presentationDragIndicator(.visible).presentationBackground(AppTheme.bg)
+                AddContributionSheet(goal: goal, account: account) { await load() }
+                    .presentationDetents([.large]).presentationDragIndicator(.visible).presentationBackground(AppTheme.bg)
             }
             // Centered alerts (not action-sheet popovers) for destructive confirms.
             .confirmSheet(isPresented: $confirmDelete,
@@ -1177,6 +1290,9 @@ struct SharedGoalDetailView: View {
 
 struct AddContributionSheet: View {
     let goal: SharedGoal
+    /// The Rekening Bersama the goal is kept in: its balance is the first
+    /// place the money can come from.
+    var account: JointAccount? = nil
     let onDone: () async -> Void
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
@@ -1186,8 +1302,12 @@ struct AddContributionSheet: View {
     @State private var note = ""
     @State private var saving = false
     @State private var sourceCardID: UUID? = nil
+    /// From the shared balance, when the goal is kept in an account.
+    @State private var fromAccount = true
 
     private var amount: Double { NumberInput.amount(amountText) }
+    private var usesAccount: Bool { account != nil && fromAccount }
+    private var amountMinor: Int64 { JointMoney.toMinor(amount, currency: goal.currency) }
     /// Contributing to a shared goal moves the user's OWN money out of their
     /// OWN account — it must leave the same transaction trail as any other
     /// outflow, otherwise the spending record (and every analysis built on it)
@@ -1197,7 +1317,13 @@ struct AddContributionSheet: View {
         if let id = sourceCardID, let c = fundingCards.first(where: { $0.id == id }) { return c }
         return fundingCards.first
     }
-    private var canSave: Bool { amount > 0 && !saving && selectedCard != nil }
+    private var canSave: Bool {
+        guard amount > 0, !saving else { return false }
+        if usesAccount, let account, let me = Auth.auth().currentUser?.uid {
+            return JointGoals.canMove(amountMinor, to: goal, from: account, as: me)
+        }
+        return selectedCard != nil
+    }
 
     /// Book the contribution locally. The shared goal itself lives in
     /// Firestore, but the cash left a local account, so DiPo records it the
@@ -1229,6 +1355,36 @@ struct AddContributionSheet: View {
         }
     }
 
+    /// The shared balance before and after, and what it means: saved, not
+    /// spent, and not undone.
+    private func accountFlow(_ account: JointAccount) -> some View {
+        let after = account.balance - max(amountMinor, 0)
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("\(account.emoji) \(account.name)").font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
+                    Text(JointMoney.text(account.balance, currency: account.currency))
+                        .font(.system(.subheadline, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
+                }
+                Spacer()
+                Image(systemName: "arrow.right").foregroundStyle(AppTheme.textSecondary)
+                Spacer()
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text(loc("unity.balance_after")).font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
+                    Text((after < 0 ? "−" : "") + JointMoney.text(after, currency: account.currency))
+                        .font(.system(.subheadline, weight: .bold))
+                        .foregroundStyle(after < 0 ? AppTheme.red : AppTheme.textPrimary)
+                }
+            }
+            .padding(14)
+            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+            Text(String(format: loc("unity.move_note"), account.name))
+                .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.horizontal, 22)
+    }
+
     var body: some View {
         NavigationStack {
             ZStack { AppTheme.bg.ignoresSafeArea()
@@ -1243,33 +1399,56 @@ struct AddContributionSheet: View {
                             .padding(.horizontal, 16).padding(.vertical, 12)
                             .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
                     }.padding(.horizontal, 22)
-                    TextField(loc("unity.note_ph"), text: $note)
-                        .font(.system(.subheadline)).padding(.horizontal, 16).padding(.vertical, 12)
-                        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md)).padding(.horizontal, 22)
-
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(loc("savings.source_account"))
-                            .font(.system(.footnote, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
-                        if fundingCards.isEmpty {
-                            Text(loc("savings.reconcile_no_account"))
-                                .font(.system(.caption2, weight: .medium)).foregroundStyle(AppTheme.orange)
-                                .fixedSize(horizontal: false, vertical: true)
-                        } else {
-                            CardChipPicker(cards: fundingCards,
-                                           isSelected: { selectedCard?.id == $0.id },
-                                           onSelect: { sourceCardID = $0.id })
-                                .padding(.horizontal, -22)
-                        }
+                    if !usesAccount {
+                        TextField(loc("unity.note_ph"), text: $note)
+                            .font(.system(.subheadline)).padding(.horizontal, 16).padding(.vertical, 12)
+                            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md)).padding(.horizontal, 22)
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 22)
+
+                    if let account {
+                        Picker(loc("savings.source_account"), selection: $fromAccount) {
+                            Text("\(account.emoji) \(account.name)").tag(true)
+                            Text(loc("unity.source_my_card")).tag(false)
+                        }
+                        .pickerStyle(.segmented)
+                        .padding(.horizontal, 22)
+                    }
+
+                    if usesAccount, let account {
+                        accountFlow(account)
+                    } else {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(loc("savings.source_account"))
+                                .font(.system(.footnote, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                            if fundingCards.isEmpty {
+                                Text(loc("savings.reconcile_no_account"))
+                                    .font(.system(.caption2, weight: .medium)).foregroundStyle(AppTheme.orange)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            } else {
+                                CardChipPicker(cards: fundingCards,
+                                               isSelected: { selectedCard?.id == $0.id },
+                                               onSelect: { sourceCardID = $0.id })
+                                    .padding(.horizontal, -22)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 22)
+                    }
                     Button {
                         saving = true
                         Task {
-                            let ok = await unity.addContribution(goal: goal, amount: amount, note: note.trimmingCharacters(in: .whitespaces))
+                            let ok: Bool
+                            if usesAccount, let account {
+                                // Recorded in the account, not on my cards: the money
+                                // was the account's.
+                                ok = await JointAccountService.shared.moveToGoal(goal, from: account, amount: amountMinor)
+                            } else {
+                                ok = await unity.addContribution(goal: goal, amount: amount,
+                                                                 note: note.trimmingCharacters(in: .whitespaces))
+                                if ok { recordLocalTransaction() }
+                            }
                             saving = false
                             if ok {
-                                recordLocalTransaction()
                                 HapticManager.shared.success(); await onDone(); dismiss()
                             } else { HapticManager.shared.error() }
                         }
@@ -1364,7 +1543,6 @@ struct InviteSheet: View {
                 switch r {
                 case .success:        return (loc("unity.invite.success"), AppTheme.accent, true)
                 case .notFound:       return (loc("unity.invite.not_found"), AppTheme.red, false)
-                case .notRoyal:       return (loc("unity.invite.not_royal"), AppTheme.orange, false)
                 case .alreadyMember:  return (loc("unity.invite.already_member"), AppTheme.orange, false)
                 case .alreadyInvited: return (loc("unity.invite.already_invited"), AppTheme.orange, false)
                 case .full:           return (loc("unity.invite.full"), AppTheme.orange, false)
@@ -1386,6 +1564,8 @@ struct InviteSheet: View {
 // MARK: - Create form
 
 struct SharedGoalFormSheet: View {
+    /// Made from a Rekening Bersama: kept in it, for its members, in its currency.
+    var account: JointAccount? = nil
     @Environment(\.dismiss) private var dismiss
     @State private var unity = UnitySavingsService.shared
 
@@ -1436,6 +1616,8 @@ struct SharedGoalFormSheet: View {
                                         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.sm))
                                         .overlay(RoundedRectangle(cornerRadius: AppRadius.sm).stroke(AppTheme.purple.opacity(0.3), lineWidth: 1))
                                 }.buttonStyle(ScaleButtonStyle())
+                                // An account's goal saves in the account's currency.
+                                .disabled(account != nil)
                                 TextField("0", text: $amountText)
                                     .keyboardType(.decimalPad)
                                     .font(.system(.title2, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
@@ -1474,7 +1656,8 @@ struct SharedGoalFormSheet: View {
                         // Info: Royal + members
                         HStack(spacing: 8) {
                             Image(systemName: "info.circle").font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
-                            Text(String(format: loc("unity.create_note"), UnitySavingsService.maxMembers))
+                            Text(account.map { String(format: loc("unity.create_note_account"), "\($0.emoji) \($0.name)") }
+                                 ?? String(format: loc("unity.create_note"), UnitySavingsService.maxMembers))
                                 .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                                 .fixedSize(horizontal: false, vertical: true)
                             Spacer(minLength: 0)
@@ -1486,6 +1669,7 @@ struct SharedGoalFormSheet: View {
                 }
             }
             .navigationTitle(loc("unity.new_title")).navigationBarTitleDisplayMode(.inline)
+            .onAppear { if let account { currency = account.currency } }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(loc("common.cancel")) { dismiss() }.foregroundStyle(AppTheme.textSecondary)
@@ -1519,7 +1703,8 @@ struct SharedGoalFormSheet: View {
         Task {
             let ok = await unity.createGoal(
                 title: t, emoji: emoji, targetAmount: amount,
-                currency: currency, targetDate: hasDeadline ? deadline : nil)
+                currency: account?.currency ?? currency, targetDate: hasDeadline ? deadline : nil,
+                in: account)
             saving = false
             if ok { HapticManager.shared.success(); dismiss() }
             else  { HapticManager.shared.error() }

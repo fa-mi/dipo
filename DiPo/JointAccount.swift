@@ -6,7 +6,7 @@ import FirebaseAuth
 // MARK: - Rekening Bersama (joint accounts)
 //
 // A shared wallet for two to five people: mostly a couple, sometimes a family
-// or housemates. Tabungan Bersama is a goal everyone saves towards; this is
+// or housemates. Target Bersama is a goal everyone saves towards; this is
 // day-to-day money — what came in, what went out, who spent it, and how much
 // of the month's budget is left.
 //
@@ -18,6 +18,11 @@ import FirebaseAuth
 // same figures, so nothing here is in the local store or in backups and no
 // schema changes. The one place it touches the local books is a deposit, which
 // leaves the personal card as a transfer: money moved, not money spent.
+//
+// A Target Bersama can be kept in an account (SharedGoal.jointAccountId): its
+// members are the account's, and money moves to it from the shared balance
+// as an entry carrying `goalId` — money out of the account, saved rather than
+// spent, so neither the monthly budget nor Smart Budget counts it.
 //
 // The balance is kept honest by the rules (dipo-backend/firestore.rules): it
 // moves only in the same batch as an entry is added or removed, by exactly
@@ -154,6 +159,9 @@ struct JointTx: Identifiable, Hashable {
     var category: String
     var note: String
     var date: Date
+    /// Money put towards one of the account's goals: the goal's id, its
+    /// name in `note`. Saved, not spent.
+    var goalId: String?
 
     init?(id: String, data: [String: Any]) {
         guard let amount = jointInt(data["amount"]),
@@ -166,9 +174,13 @@ struct JointTx: Identifiable, Hashable {
         self.category = data["category"] as? String ?? ""
         self.note = data["note"] as? String ?? ""
         self.date = (data["date"] as? Timestamp)?.dateValue() ?? Date()
+        self.goalId = (data["goalId"] as? String).flatMap { $0.isEmpty ? nil : $0 }
     }
 
     var txCategory: TxCategory? { TxCategory(rawValue: category) }
+
+    /// Money out that the month's budget and Smart Budget count as spending.
+    var isSpending: Bool { kind == .spend && goalId == nil }
 }
 
 struct JointMember: Identifiable, Hashable {
@@ -234,10 +246,11 @@ enum JointBudget {
         calendar.dateInterval(of: .month, for: date) ?? DateInterval(start: date, duration: 0)
     }
 
-    /// Spent in `month`, as a positive amount.
+    /// Spent in `month`, as a positive amount. Money put towards a goal is
+    /// saved, not spent.
     static func spent(_ entries: [JointTx], in month: DateInterval) -> Int64 {
         entries.reduce(0) { sum, tx in
-            guard tx.kind == .spend, tx.date >= month.start, tx.date < month.end else { return sum }
+            guard tx.isSpending, tx.date >= month.start, tx.date < month.end else { return sum }
             return sum + Swift.abs(tx.amount)
         }
     }
@@ -372,7 +385,8 @@ struct JointSmartBudget: Equatable {
                 return sum + tx.amount
             }
         }
-        let outs = entries.filter { $0.kind == .spend && $0.date >= month.start && $0.date < month.end }
+        // Money put towards a goal stays in Savings: it is not spent.
+        let outs = entries.filter { $0.isSpending && $0.date >= month.start && $0.date < month.end }
         func spent(_ pot: JointPot) -> Int64 {
             outs.filter { JointPot.of($0.txCategory) == pot }.reduce(0) { $0 + Swift.abs($1.amount) }
         }
@@ -608,7 +622,7 @@ final class JointAccountService {
     /// This month's money out by member, largest first.
     func spentByMember(_ accountId: String) -> [(uid: String, amount: Int64)] {
         var by: [String: Int64] = [:]
-        for tx in recent[accountId] ?? [] where tx.kind == .spend && tx.date >= month.start && tx.date < month.end {
+        for tx in recent[accountId] ?? [] where tx.isSpending && tx.date >= month.start && tx.date < month.end {
             by[tx.uid, default: 0] += Swift.abs(tx.amount)
         }
         return by.map { (uid: $0.key, amount: $0.value) }.sorted { $0.amount > $1.amount }
@@ -618,7 +632,7 @@ final class JointAccountService {
     func topCategory(_ accountId: String) -> (category: TxCategory, amount: Int64, share: Double)? {
         var by: [TxCategory: Int64] = [:]
         var total: Int64 = 0
-        for tx in recent[accountId] ?? [] where tx.kind == .spend && tx.date >= month.start && tx.date < month.end {
+        for tx in recent[accountId] ?? [] where tx.isSpending && tx.date >= month.start && tx.date < month.end {
             let amount = Swift.abs(tx.amount)
             by[tx.txCategory ?? .other, default: 0] += amount
             total += amount
@@ -814,8 +828,10 @@ final class JointAccountService {
 
     /// Whoever wrote an entry, or the owner, can remove it; the balance goes
     /// back by the same amount in the same write.
+    /// Money put towards a goal stays: the goal has counted it, and a goal's
+    /// history is not rewound either (the rules refuse it too).
     func canDelete(_ tx: JointTx, in account: JointAccount) -> Bool {
-        guard let uid, account.isActive else { return false }
+        guard let uid, account.isActive, tx.goalId == nil else { return false }
         return tx.uid == uid || account.ownerUid == uid
     }
 
@@ -827,6 +843,58 @@ final class JointAccountService {
         batch.updateData(["balance": FieldValue.increment(-tx.amount), "lastTxId": tx.id],
                          forDocument: accountRef)
         commit(batch, failure: "joint.err.not_deleted")
+    }
+
+    /// Money from the shared balance towards one of this account's goals, in
+    /// one write: the entry and the balance on the account side, the
+    /// contribution and the total on the goal's. Saved, not spent.
+    @discardableResult
+    func moveToGoal(_ goal: SharedGoal, from account: JointAccount, amount: Int64) async -> Bool {
+        guard let uid, account.isActive, account.memberUids.contains(uid),
+              JointGoals.canMove(amount, to: goal, from: account, as: uid) else { return false }
+        let me = await myName(uid)
+        let accountRef = accountsRef.document(account.id)
+        let txRef = accountRef.collection("transactions").document()
+        let txId = txRef.documentID
+        let goalRef = db.collection("sharedGoals").document(goal.id)
+        let major = JointMoney.toMajor(amount, currency: account.currency)
+        let batch = db.batch()
+        batch.setData([
+            "uid": uid,
+            "displayName": me,
+            "amount": -amount,
+            "kind": JointTx.Kind.spend.rawValue,
+            "category": TxCategory.investment.rawValue,
+            "note": JointText.clip(goal.title, 120),
+            "goalId": goal.id,
+            "date": Timestamp(date: Date()),
+            "createdAt": FieldValue.serverTimestamp(),
+        ], forDocument: txRef)
+        batch.updateData(["balance": FieldValue.increment(-amount), "lastTxId": txId], forDocument: accountRef)
+        batch.setData([
+            "uid": uid,
+            "displayName": me,
+            "amount": major,
+            "currency": goal.currency,
+            "note": "",
+            "source": "joint",
+            "jointAccountId": account.id,
+            "jointTxId": txId,
+            "date": FieldValue.serverTimestamp(),
+        ], forDocument: goalRef.collection("contributions").document(txId))
+        batch.updateData(["savedAmount": FieldValue.increment(major)], forDocument: goalRef)
+        batch.setData(["contributedAmount": FieldValue.increment(major)],
+                      forDocument: goalRef.collection("members").document(uid), merge: true)
+        switch await commit(batch, waitingAtMost: 10) {
+        case .refused(let error):
+            print("[Joint] move to goal refused: \(error.localizedDescription)")
+            failure = loc("joint.err.not_saved")
+            return false
+        case .saved, .queued:
+            let accountId = account.id
+            Task { await notify(["type": "tx", "accountId": accountId, "txId": txId]) }
+            return true
+        }
     }
 
     private func budgetLevel(_ account: JointAccount, adding spend: Int64, on date: Date) -> Int? {
@@ -1003,6 +1071,8 @@ final class JointAccountService {
     /// Anyone but the owner can leave; the owner hands the account over first.
     func leave(_ account: JointAccount) async -> Bool {
         guard let uid, !account.isOwner(uid), account.memberUids.contains(uid) else { return false }
+        // Its goals first, while I can still read them as a member.
+        await UnitySavingsService.shared.leaveGoals(keptIn: account)
         let ok = await drop(uid, from: account.id)
         if ok { stopHistory(account.id) }
         return ok
