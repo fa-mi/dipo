@@ -181,7 +181,7 @@ final class DebtAffordabilityTests: XCTestCase {
                                 target: .debt(name: "Pinjol", annualRate: 36, balance: 10_000_000, minimum: 250_000))
         let p = try XCTUnwrap(a.faster())
         XCTAssertNil(p.slow)
-        XCTAssertEqual(p.fast.months, 15)
+        XCTAssertEqual(p.fast.months, 11, "Rp 250 rb minimum plus the Rp 850 rb rest of the share")
         let body = english { a.body(currency: "IDR") }
         XCTAssertTrue(body.contains("never be paid off"), body)
     }
