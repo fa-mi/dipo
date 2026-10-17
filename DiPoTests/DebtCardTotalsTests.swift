@@ -2,8 +2,7 @@ import XCTest
 import SwiftData
 @testable import DiPo
 
-/// The debt screen: a credit-card balance is money owed, and a posted
-/// recurring bill is not spending twice.
+/// The debt screen: a credit-card balance is money owed.
 @MainActor
 final class DebtCardTotalsTests: XCTestCase {
 
@@ -16,7 +15,7 @@ final class DebtCardTotalsTests: XCTestCase {
     }
 
     private func engine(cardOwed: Double = 0, cardMonthly: Double = 0) -> FinancialHealthEngine {
-        var e = FinancialHealthEngine(monthlyIncome: 10_000_000, debts: [], monthlyExpenses: 0)
+        var e = FinancialHealthEngine(monthlyIncome: 10_000_000, debts: [])
         e.cardOwed = cardOwed
         e.cardMonthly = cardMonthly
         return e
@@ -30,38 +29,25 @@ final class DebtCardTotalsTests: XCTestCase {
         XCTAssertEqual(e.totalEffectiveMinimums, 401_500, "pay each month")
         XCTAssertEqual(e.dtiRatio, 4.015, accuracy: 0.001)
         XCTAssertTrue(e.hasAnyDebt)
-        XCTAssertNotEqual(e.primaryAdvice, loc("debt.advice.no_active"))
+        let reading = DebtAffordability(monthlyIncome: 10_000_000, monthlySpending: 6_000_000,
+                                        monthlyPayments: e.totalEffectiveMinimums, hasDebt: e.hasAnyDebt)
+        XCTAssertNotEqual(reading.title(), loc("debt.advice.no_active"))
     }
 
     func testNothingOwedIsStillHealthy() {
         let e = engine()
         XCTAssertEqual(e.totalDebt, 0)
         XCTAssertFalse(e.hasAnyDebt)
-        XCTAssertEqual(e.primaryAdvice, loc("debt.advice.no_active"))
-    }
-
-    func testPostedRecurringBillsAndSavingsAreNotCountedAsSpendingAgain() {
-        func tx(_ amount: Double, _ cat: TxCategory, notes: String = "",
-                subtype: TxSubtype = .normal) -> TxRecord {
-            let t = TxRecord(name: "x", date: .now, amount: amount, type: "tx.type.purchase", icon: "X",
-                             iconBgHex: cat.iconBg, category: cat, currency: "IDR", notes: notes, subtype: subtype)
-            container.mainContext.insert(t)
-            return t
-        }
-        let rows = [tx(-2_100_000, .bills, notes: "tx.note.recurring_auto"),      // kos
-                    tx(-1_000_000, .commitment, notes: "tx.note.recurring_auto"), // transfer to Mom
-                    tx(-1_250_000, .health),                                      // dentist
-                    tx(-1_545_000, .food),
-                    tx(-300_000, .investment),
-                    tx(-1_882_381, .debtPayment),
-                    tx(-500_000, .other, subtype: .transfer)]
-        XCTAssertEqual(FinancialHealthEngine.planSpending(rows, from: .distantPast, currency: "IDR"),
-                       2_795_000, accuracy: 0.5)
+        let reading = DebtAffordability(monthlyIncome: 10_000_000, monthlySpending: 6_000_000,
+                                        monthlyPayments: 0, hasDebt: e.hasAnyDebt)
+        XCTAssertNil(reading.verdict)
+        XCTAssertEqual(reading.title(), loc("debt.advice.no_active"))
+        XCTAssertNil(reading.detail(currency: "IDR"))
     }
 
     func testStringsExist() {
-        for key in ["debt.total_cards_note", "debt.advice.card_carried", "debt.advice.card_recent",
-                    "debt.reduce_spending_plan"] {
+        for key in ["debt.total_cards_note", "debt.first.why_card", "debt.first.card_recent",
+                    "debt.afford.nopay_body"] {
             XCTAssertNotEqual(loc(key), key, "missing \(key)")
         }
     }

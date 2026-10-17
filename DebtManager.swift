@@ -211,16 +211,22 @@ enum DebtType: String, CaseIterable {
 
 // MARK: - Financial Health Engine
 
+/// What the Debts screen knows about the debts themselves: what is owed, what
+/// it asks for each month, which to pay first, and what Smart Budget advises
+/// doing with its savings & debt share.
+///
+/// It used to score "financial health" out of 100, and the score took points
+/// off for this pay period's spending. The screen showed "Very healthy" and,
+/// right under it, a warning that the period was Rp 1.175.718 over plan —
+/// and a four-way split of the salary that is Smart Budget's own screen. How
+/// a pay period is going is Statistics' question. Whether a usual month can
+/// carry these payments is `DebtAffordability`; this engine no longer reads
+/// spending at all.
 struct FinancialHealthEngine {
 
     // MARK: Inputs
     let monthlyIncome: Double
     let debts: [DebtRecord]
-    let monthlyExpenses: Double
-    /// Rent, subscriptions, standing transfers — money already spoken for
-    /// before any decision is made this month. Defaults to zero so existing
-    /// call sites keep their behaviour.
-    var fixedCommitments: Double = 0
     /// Smart Budget's Invest & Debt share, PASSED IN rather than read from the
     /// singleton — the ratio can be overridden per card, and reading the global
     /// one makes those overrides invisible exactly where they matter most.
@@ -258,44 +264,14 @@ struct FinancialHealthEngine {
         }
     }
 
-    /// Spending measured against `safeSpendingBudget`, from `start`.
-    ///
-    /// Left out, because the allowance already accounts for them: transfers,
-    /// debt payments, money put into savings (the set-aside), and posted
-    /// recurring bills (the plan total in `fixedCommitments`). Counting a
-    /// posted bill here as well told Fahmi to cut Rp 3.880.707 when kos, the
-    /// transfer to Mom and the subscriptions — Rp 3.805.000 posted — were
-    /// simply counted twice; the honest gap was about Rp 76.000.
-    static func planSpending(_ txs: [TxRecord], from start: Date, currency pref: String) -> Double {
-        txs.filter {
-            $0.amount < 0 &&
-            $0.txSubtype != .transfer &&
-            $0.category != .debtPayment &&
-            $0.category != .investment &&
-            $0.notes != "tx.note.recurring_auto" &&
-            $0.date >= start
-        }.reduce(0) { sum, tx in
-            let txCur = tx.currency.isEmpty ? pref : tx.currency
-            return sum + CurrencyManager.shared.convert(abs(tx.amount), from: txCur, to: pref)
-        }
-    }
-
     /// Anything owed at all — a recorded debt or a card balance.
     var hasAnyDebt: Bool { debts.contains(where: \.isActive) || cardOwed >= 0.5 }
-    var totalMonthlyInterest: Double {
-        let pref = CurrencyManager.shared.preferredCurrency
-        return debts.filter { $0.isActive }.reduce(0) {
-            $0 + CurrencyManager.shared.convert($1.monthlyInterestCost, from: $1.currency, to: pref)
-        }
-    }
 
     /// Sum of each active debt's *effective* minimum (the planning figure that
-    /// never collapses to 0 while a balance is still owed). This is what the
-    /// salary allocation recommendation is built on, so a debt with no user-set
-    /// minimum still gets a sensible payoff allocation that shrinks as the
-    /// balance is paid down. DTI deliberately keeps using `totalMinimumPayments`
-    /// (the *real* contractual obligation) — DTI measures what you must pay, not
-    /// what we advise.
+    /// never collapses to 0 while a balance is still owed) — "Pay each month"
+    /// on the screen, and the payments `DebtAffordability` weighs. DTI
+    /// deliberately keeps using `totalMinimumPayments` (the *real* contractual
+    /// obligation).
     var totalEffectiveMinimums: Double {
         let pref = CurrencyManager.shared.preferredCurrency
         return debts.filter { $0.isActive }.reduce(cardMonthly) {
@@ -309,47 +285,6 @@ struct FinancialHealthEngine {
         return (totalMinimumPayments / monthlyIncome) * 100
     }
 
-    /// Remaining after minimum debt payments + expenses
-    var discretionaryIncome: Double {
-        monthlyIncome - totalMinimumPayments - monthlyExpenses
-    }
-
-    /// SMART FORMULA: Recommended % of salary to allocate to debt
-    /// Based on: DTI severity + interest cost + payoff acceleration
-    var recommendedDebtAllocationPercent: Double {
-        guard monthlyIncome > 0 else { return 0 }
-
-        // Base = effective minimum payments percentage. Using the *effective*
-        // total (not the raw one) is what makes the plan recommend real
-        // progress on debts whose minimum is 0 — and makes the recommendation
-        // respond as the balance is paid down.
-        let minPct = (totalEffectiveMinimums / monthlyIncome) * 100
-
-        // Add buffer based on DTI severity
-        let buffer: Double
-        switch dtiRatio {
-        case 0..<20:  buffer = 0       // Healthy — minimums are fine
-        case 20..<35: buffer = 5       // Moderate — add 5% extra
-        case 35..<50: buffer = 12      // Stressed — add 12% extra
-        default:      buffer = 20      // Danger — add 20% extra
-        }
-
-        // Extra weight if high interest is eating income
-        let interestWeight = min((totalMonthlyInterest / monthlyIncome) * 100 * 1.5, 15)
-
-        return min(minPct + buffer + interestWeight, 70) // cap at 70%
-    }
-
-    /// Actual recommended monthly debt payment in currency
-    var recommendedMonthlyDebtPayment: Double {
-        (recommendedDebtAllocationPercent / 100) * monthlyIncome
-    }
-
-    /// Extra payment above minimums available to accelerate debt
-    var extraPaymentAvailable: Double {
-        max(recommendedMonthlyDebtPayment - totalEffectiveMinimums, 0)
-    }
-
     /// AVALANCHE ORDER: highest interest rate first (saves most money)
     var avalancheOrder: [DebtRecord] {
         debts.filter { $0.isActive }.sorted { $0.annualInterestRate > $1.annualInterestRate }
@@ -360,190 +295,33 @@ struct FinancialHealthEngine {
         debts.filter { $0.isActive }.sorted { $0.currentBalance < $1.currentBalance }
     }
 
-    /// Recommended safe spending budget (after debt allocation)
-    /// Smart Budget's Invest & Debt share. Debt payments come OUT of this
-    /// bucket — they do not sit beside it.
-    var investDebtAllowance: Double { monthlyIncome * investDebtRatio }
+    // MARK: - Smart Budget: debt before saving
 
-    /// Money that must leave the "spendable" pile before anything is called
-    /// free: the whole Invest & Debt allocation, or the debt minimums if those
-    /// are larger (a minimum has to be paid whatever the plan says).
-    var setAside: Double { max(investDebtAllowance, recommendedMonthlyDebtPayment) }
+    /// Smart Budget's savings & debt share of the month. Debt payments come
+    /// OUT of it — they do not sit beside it.
+    var savingsAndDebtShare: Double { monthlyIncome * investDebtRatio }
 
-    /// The part of the set-aside that isn't going to debt — savings and
-    /// investing. With no debt this is the entire 20%, and it is emphatically
-    /// not spending money.
-    var toSaveOrInvest: Double { max(setAside - recommendedMonthlyDebtPayment, 0) }
-
-    /// What is genuinely free to spend.
-    ///
-    /// Two things used to be missing here, and the second was the worse one.
-    /// Fixed commitments were treated as discretionary, so a user with Rp 3,7jt
-    /// of rent and subscriptions was told the whole Rp 10jt was theirs. And the
-    /// Invest & Debt allocation was never set aside at all: with no active debt
-    /// `recommendedMonthlyDebtPayment` is zero, so the 20% meant for saving and
-    /// investing silently became spending money. The plan said 20% to the
-    /// future and the number underneath handed it back.
-    var safeSpendingBudget: Double {
-        max(monthlyIncome - fixedCommitments - setAside, 0)
+    /// The debt to clear before saving or investing, by the Financial
+    /// ladder's rule: the dearest debt at `FinancialLadder.costlyRate` a year
+    /// or more, else a card balance carried over from earlier bills. Nil when
+    /// nothing owed charges that much — then saving alongside is fine.
+    var payFirst: DebtFirstAdvice.Target? {
+        let cm = CurrencyManager.shared
+        let pref = cm.preferredCurrency
+        if let d = avalancheOrder.first(where: { !$0.manuallyClosed && $0.currentBalance > 0
+                                                 && $0.annualInterestRate >= FinancialLadder.costlyRate }) {
+            return .debt(name: d.name, annualRate: d.annualInterestRate,
+                         balance: cm.convert(d.currentBalance, from: d.currency, to: pref),
+                         minimum: cm.convert(d.effectiveMinimumPayment, from: d.currency, to: pref))
+        }
+        return cardCarried >= 0.5 ? .card(carried: cardCarried) : nil
     }
 
-    /// Share of income left free, for the allocation bar.
-    var safeSpendingPercent: Double {
-        guard monthlyIncome > 0 else { return 0 }
-        return safeSpendingBudget / monthlyIncome * 100
-    }
-
-    var setAsidePercent: Double {
-        guard monthlyIncome > 0 else { return 0 }
-        return min(toSaveOrInvest / monthlyIncome * 100, 100)
-    }
-
-    /// Share of income taken by fixed commitments.
-    var commitmentPercent: Double {
-        guard monthlyIncome > 0 else { return 0 }
-        return min(fixedCommitments / monthlyIncome * 100, 100)
-    }
-
-    /// Safe expense threshold (warning if expenses exceed this)
-    /// Extra income that landed this cycle beyond the salary — a bonus, THR,
-    /// a freelance payment. It funds spending as surely as salary does, so
-    /// judging a cycle without it calls a bonus month a blowout.
-    var extraIncomeThisCycle: Double = 0
-
-    /// What was actually available to spend this cycle.
-    var effectiveAllowance: Double { safeSpendingBudget + extraIncomeThisCycle }
-
-    var isOverspending: Bool { monthlyExpenses > effectiveAllowance }
-
-    /// How much over the safe budget
-    var overspendAmount: Double { max(monthlyExpenses - effectiveAllowance, 0) }
-
-    // MARK: - Financial Health Score (0-100)
-
-    var healthScore: Int {
-        let activeDebts = debts.filter { $0.isActive }
-
-        // If no income data at all, use a debt-only score
-        // based purely on total debt load and interest rates
-        if monthlyIncome <= 0 {
-            if activeDebts.isEmpty && cardOwed < 0.5 { return 100 }
-            // Score based on average interest rate and number of debts
-            let avgAPR = activeDebts.isEmpty ? 0
-                : activeDebts.reduce(0.0) { $0 + $1.annualInterestRate } / Double(activeDebts.count)
-            let totalDebt = totalDebt
-            var score = 100.0
-            // Heavy penalty for high interest (e.g. 24% APR → -48 pts capped at -50)
-            score -= min(avgAPR * 2.0, 50)
-            // Penalty for having multiple debts
-            score -= min(Double(max(activeDebts.count - 1, 0)) * 5, 20)
-            // Penalty for large absolute debt (rough heuristic: Rp 10M+ is significant)
-            if totalDebt > 10_000_000 { score -= 10 }
-            else if totalDebt > 1_000_000 { score -= 5 }
-            return max(Int(score), 0)
-        }
-
-        var score = 100.0
-
-        // DTI component (max -40 pts)
-        let dtiPenalty = min(dtiRatio * 0.8, 40)
-        score -= dtiPenalty
-
-        // Overspending component (max -25 pts)
-        if isOverspending && monthlyIncome > 0 {
-            let overspendPct = (overspendAmount / monthlyIncome) * 100
-            score -= min(overspendPct * 0.5, 25)
-        }
-
-        // High interest cost penalty (max -20 pts)
-        if monthlyIncome > 0 {
-            let interestPct = (totalMonthlyInterest / monthlyIncome) * 100
-            score -= min(interestPct * 2, 20)
-        }
-
-        // No savings penalty (max -15 pts)
-        if discretionaryIncome < 0 { score -= 15 }
-        else if monthlyIncome > 0 {
-            let savingsRate = (discretionaryIncome / monthlyIncome) * 100
-            if savingsRate < 10 { score -= 8 }
-        }
-
-        return max(Int(score), 0)
-    }
-
-    var healthLabel: String {
-        switch healthScore {
-        case 80...100: return loc("debt.health.excellent")
-        case 60..<80:  return loc("debt.health.good")
-        case 40..<60:  return loc("debt.health.fair")
-        case 20..<40:  return loc("debt.health.poor")
-        default:       return loc("debt.health.critical")
-        }
-    }
-
-    var healthColor: Color {
-        switch healthScore {
-        // Two reds for "poor" and "critical" were indistinguishable at a
-        // glance; the label already says which. One red, adaptive hues.
-        case 80...100: return AppTheme.accent
-        case 60..<80:  return AppTheme.blue
-        case 40..<60:  return AppTheme.orange
-        default:       return AppTheme.red
-        }
-    }
-
-    var healthIcon: String {
-        switch healthScore {
-        case 80...100: return "checkmark.seal.fill"
-        case 60..<80:  return "chart.line.uptrend.xyaxis"
-        case 40..<60:  return "exclamationmark.triangle.fill"
-        default:       return "xmark.seal.fill"
-        }
-    }
-
-    // MARK: - Smart Advice
-
-    var primaryAdvice: String {
-        if debts.filter({ $0.isActive }).isEmpty {
-            // A card balance is still money owed. Only the part carried over
-            // from earlier bills is charged interest, so that is the figure
-            // named here — the same one the Financial ladder shows.
-            if cardOwed >= 0.5 {
-                return cardCarried >= 0.5
-                    ? String(format: loc("debt.advice.card_carried"),
-                             CurrencyManager.shared.formatted(cardCarried, currency: CurrencyManager.shared.preferredCurrency))
-                    : loc("debt.advice.card_recent")
-            }
-            return loc("debt.advice.no_active")
-        }
-        if monthlyIncome <= 0 {
-            if let highestInterest = avalancheOrder.first {
-                return String(format: loc("debt.advice.no_salary_focus"),
-                              highestInterest.name,
-                              String(format: "%.1f", highestInterest.annualInterestRate))
-            }
-            return loc("debt.advice.no_salary")
-        }
-        if dtiRatio > 50 {
-            return loc("debt.advice.dti_too_high")
-        }
-        if isOverspending {
-            return String(format: loc("debt.advice.overspending"),
-                          CurrencyManager.shared.formatted(overspendAmount, currency: CurrencyManager.shared.preferredCurrency))
-        }
-        if let highestInterest = avalancheOrder.first {
-            // "Save the most interest" is meaningless when nothing charges
-            // interest — give 0% APR debts a payoff-pace nudge instead.
-            if highestInterest.annualInterestRate <= 0 {
-                return String(format: loc("debt.advice.zero_interest_focus"),
-                              highestInterest.name)
-            }
-            return String(format: loc("debt.advice.focus_extra"),
-                          highestInterest.name,
-                          String(format: "%.1f", highestInterest.annualInterestRate))
-        }
-        return String(format: loc("debt.advice.on_track"),
-                      String(format: "%.0f", recommendedDebtAllocationPercent))
+    /// What Smart Budget advises doing with its savings & debt share.
+    var debtFirst: DebtFirstAdvice {
+        DebtFirstAdvice(share: savingsAndDebtShare, ratio: investDebtRatio,
+                        minimums: totalEffectiveMinimums, target: payFirst,
+                        cardRecentOnly: cardOwed >= 0.5 && cardCarried < 0.5)
     }
 
     var urgentDebts: [DebtRecord] {
