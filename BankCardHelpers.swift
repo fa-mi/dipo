@@ -76,22 +76,20 @@ extension BankCard {
     // MARK: - Credit card math
     //
     // For a credit card, "balance" isn't cash you have — it's what you OWE.
-    // owed = openingOwed − Σ(transactions since creditSince). A purchase (amount
-    // < 0) raises owed; a payment (amount > 0, from a transfer) lowers it. Only
-    // transactions on/after `creditSince` count, so converting a card with
-    // history doesn't retroactively recompute the debt.
+    // owed = openingOwed − Σ(transactions since creditSince) + instalments
+    // billed since. A purchase (amount < 0) raises owed; a payment (amount > 0,
+    // from a transfer) lowers it. Only transactions on/after `creditSince`
+    // count, so converting a card with history doesn't retroactively
+    // recompute the debt. See `bill(_:asOf:)` for the split.
 
-    /// Amount currently owed on this credit card, in its own currency. Clamped
-    /// at 0 — overpaying leaves a zero balance, not a negative "debt".
+    /// What paying this credit card off today would take, in its own currency:
+    /// purchases and the opening balance, plus instalments billed and not yet
+    /// paid. Instalment principal not billed yet is not in it — that is
+    /// `totalOwed(_:)`. Clamped at 0 — overpaying leaves a zero balance, not a
+    /// negative "debt".
     func owedBalance() -> Double {
         guard isCreditCard else { return 0 }
-        let since = creditSince ?? .distantPast
-        let movement = transactions
-            .filter { $0.date >= since }
-            .reduce(0.0) { sum, tx in
-                sum + CurrencyManager.shared.convert(tx.amount, from: tx.currency, to: resolvedCurrency)
-            }
-        return max(openingOwed - movement, 0)
+        return bill().bill
     }
 
     /// Credit still available to spend (limit − owed), never below 0.

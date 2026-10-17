@@ -408,7 +408,10 @@ struct CreditCardFormSheet: View {
 // So two transactions are written, both `.transfer`:
 //   • negative on the cash account the money leaves
 //   • positive on the credit card, which reduces `owedBalance()` — that figure
-//     is openingOwed minus the sum of movements, so a credit lowers it
+//     is openingOwed minus the sum of movements plus billed instalments, so a
+//     credit lowers it, settling billed instalments first
+// (The part covering billed instalments or a carried balance is written as a
+// debt payment instead; see `record()`.)
 struct CreditCardPaymentSheet: View {
     let creditCard: BankCard
     let cards: [BankCard]
@@ -418,6 +421,7 @@ struct CreditCardPaymentSheet: View {
     @State private var amountText = ""
     @State private var fromCardID: UUID? = nil
 
+    /// The whole bill, billed instalments included — what "Pay in full" fills.
     private var owed: Double { creditCard.owedBalance() }
     private var cashCards: [BankCard] { cards.filter { !$0.isCreditCard } }
 
@@ -500,13 +504,17 @@ struct CreditCardPaymentSheet: View {
         // The part paying off a balance carried from before is a debt payment
         // (Invest & Debt); the part covering recent purchases stays a
         // transfer, as those were counted when they were made (CardPaymentDebt).
+        // A billed instalment is a debt payment too: the purchase was never
+        // counted as spending, so this is where it is counted.
         let inCard = { (tx: TxRecord) in cm.convert(tx.amount, from: tx.currency, to: creditCard.resolvedCurrency) }
         let paidInCard = cm.convert(abs(amount), from: source.resolvedCurrency, to: creditCard.resolvedCurrency)
+        let before = creditCard.bill()
         let debtInCard = CardPaymentDebt.debtPortion(
             payment: paidInCard,
-            owedBefore: creditCard.owedBalance(),
+            owedBefore: before.revolving,
             recentCharges: CardPaymentDebt.recentCharges(transactions: creditCard.transactions,
-                                                         before: now, convert: inCard))
+                                                         before: now, convert: inCard),
+            installmentDue: before.installmentDue)
         let debt = min(cm.convert(debtInCard, from: creditCard.resolvedCurrency, to: source.resolvedCurrency),
                        abs(amount))
         let settled = abs(amount) - debt
