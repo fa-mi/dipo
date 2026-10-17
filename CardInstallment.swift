@@ -93,6 +93,20 @@ extension CardInstallment {
 
     var isFinished: Bool { remainingCount() <= 0 }
 
+    /// What this instalment has put on the card's bills between `since` and
+    /// `date`, interest included: each billed month after `since`. A month
+    /// billed before DiPo knew of the instalment — or before the card's owed
+    /// figure was last set — is already in that figure, paid or not.
+    func billed(after since: Date, upTo date: Date, cal: Calendar = .current) -> Double {
+        guard isActive else { return 0 }
+        let count = billedCount(asOf: date)
+        guard count > 0 else { return 0 }
+        let afterSince = (1...count).filter {
+            (cal.date(byAdding: .month, value: $0, to: startDate) ?? startDate) > since
+        }.count
+        return monthlyAmount * Double(afterSince)
+    }
+
     /// Month-by-month view used by the simulator.
     struct ScheduleRow: Identifiable {
         let id = UUID()
@@ -127,6 +141,24 @@ extension CardInstallment {
 
 // MARK: - Card-level aggregation
 
+/// A credit card's debt the way its statement reads.
+struct CardBill: Equatable {
+    /// Instalments billed and not yet paid. Fixed and interest-free on a 0%
+    /// plan — never part of the balance that is carried and charged interest.
+    let installmentDue: Double
+    /// Everything else owed: the opening balance and purchases, less what
+    /// payments left over after the instalments.
+    let revolving: Double
+    /// Instalment principal not billed yet: it holds the limit but is on no
+    /// bill.
+    let locked: Double
+
+    /// What paying the card off today would take.
+    var bill: Double { installmentDue + revolving }
+    /// What the card owes, the figure the limit is measured against.
+    var total: Double { bill + locked }
+}
+
 extension BankCard {
 
     private func myInstallments(_ all: [CardInstallment]) -> [CardInstallment] {
@@ -150,11 +182,58 @@ extension BankCard {
         }
     }
 
-    /// Total owed including instalment principal. `owedBalance()` alone only
-    /// sees logged transactions, so a card carrying a 12-month instalment would
-    /// otherwise report far less owed than the bank does.
+    /// Total owed including instalment principal. Logged transactions alone
+    /// would leave out the instalments, so a card carrying a 12-month
+    /// instalment would report far less owed than the bank does.
     func totalOwed(_ installments: [CardInstallment]) -> Double {
-        owedBalance() + installmentPrincipal(installments)
+        bill(installments).total
+    }
+
+    /// This card's instalments, read from the store the card lives in — for
+    /// the figures shown where no list of instalments is at hand. Empty for a
+    /// card that was never saved.
+    var storedInstallments: [CardInstallment] {
+        guard let context = modelContext else { return [] }
+        let cardID = id
+        let descriptor = FetchDescriptor<CardInstallment>(predicate: #Predicate { $0.cardID == cardID })
+        return (try? context.fetch(descriptor)) ?? []
+    }
+
+    /// What the card owes, split the way the bank's statement splits it.
+    ///
+    /// An instalment used to leave the limit by the calendar alone: each month
+    /// its billed part dropped out of "locked" and went nowhere, as though it
+    /// had been paid. Then the payment that really covered it came off the
+    /// rest of the balance as well — the same Rp 854.167 taken off twice, the
+    /// total owed reading too low by one instalment for every month paid, and
+    /// the balance "carried over and charged interest" with it.
+    ///
+    /// Now a billed instalment moves from `locked` onto the bill, and only a
+    /// payment takes it off. Payments settle billed instalments first — they
+    /// are the fixed part of every statement — and the rest goes to the other
+    /// balance. `installments` defaults to the card's own; `date` to now, with
+    /// every logged transaction counted.
+    func bill(_ installments: [CardInstallment]? = nil, asOf date: Date? = nil) -> CardBill {
+        guard isCreditCard else { return CardBill(installmentDue: 0, revolving: 0, locked: 0) }
+        let cm = CurrencyManager.shared
+        let now = date ?? .now
+        let since = creditSince ?? .distantPast
+        var charges = 0.0, credits = 0.0
+        for tx in transactions where tx.date >= since && (date == nil || tx.date <= now) {
+            let v = cm.convert(tx.amount, from: tx.currency, to: resolvedCurrency)
+            if v < 0 { charges -= v } else { credits += v }
+        }
+        let mine = (installments ?? storedInstallments).filter { $0.cardID == id && $0.isActive }
+        let billedTotal = mine.reduce(0.0) {
+            $0 + cm.convert($1.billed(after: max($1.createdAt, since), upTo: now),
+                            from: $1.currency, to: resolvedCurrency)
+        }
+        let unbilled = mine.reduce(0.0) {
+            $0 + cm.convert($1.outstandingPrincipal(asOf: now), from: $1.currency, to: resolvedCurrency)
+        }
+        return CardBill(installmentDue: max(billedTotal - credits, 0),
+                        revolving: max(openingOwed + charges - max(credits - billedTotal, 0), 0),
+                        locked: unbilled)
     }
 
     /// What you can actually still spend.
@@ -248,6 +327,18 @@ struct InstallmentSection: View {
                     Spacer()
                     Text(money(card.installmentMonthlyCharge(installments)))
                         .font(.system(.caption, weight: .bold)).foregroundStyle(AppTheme.orange)
+                }
+                // Billed and waiting for a payment: it left "locked" when it
+                // was billed, and only paying the bill clears it.
+                let due = card.bill(installments).installmentDue
+                if due >= 0.5 {
+                    HStack {
+                        Text(loc("inst.due"))
+                            .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
+                        Spacer()
+                        Text(money(due))
+                            .font(.system(.caption, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
+                    }
                 }
                 ForEach(running) { inst in
                     row(inst)
@@ -433,6 +524,12 @@ struct InstallmentFormSheet: View {
         }
     }
 
+    /// What the card already owes without the instalment in this form — the
+    /// one being edited would otherwise be counted twice.
+    private var limitUsedByOthers: Double {
+        card.bill(card.storedInstallments.filter { $0.id != editing?.id }).total
+    }
+
     /// Shows the limit hit up front. Someone converting a purchase to
     /// instalments is usually looking at the small monthly figure; the number
     /// that changes what they can do next is the whole amount leaving the limit.
@@ -449,7 +546,7 @@ struct InstallmentFormSheet: View {
             row(loc("inst.limit_hit"), "− " + cm.formatted(i.totalAmount, currency: cur),
                 tint: AppTheme.orange)
             row(loc("inst.limit_after"),
-                cm.formatted(max(card.creditLimit - card.owedBalance() - i.totalAmount, 0), currency: cur))
+                cm.formatted(max(card.creditLimit - limitUsedByOthers - i.totalAmount, 0), currency: cur))
             Text(loc("inst.limit_note"))
                 .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -519,7 +616,7 @@ struct InstallmentSimulatorSheet: View {
 
     /// Charges on the card that are NOT part of an instalment — the revolving
     /// balance, where the expensive interest actually lives.
-    private var revolving: Double { max(card.owedBalance(), 0) }
+    private var revolving: Double { card.bill(installments).revolving }
     private var statement: Double {
         card.installmentMonthlyCharge(installments) + revolving
     }

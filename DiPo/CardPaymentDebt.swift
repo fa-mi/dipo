@@ -21,9 +21,15 @@ import SwiftData
 
 enum CardPaymentDebt {
 
-    /// How much of `payment` pays down debt rather than recent purchases.
-    static func debtPortion(payment: Double, owedBefore: Double, recentCharges: Double) -> Double {
-        min(max(payment, 0), FinancialLadder.carriedOver(owed: owedBefore, recentCharges: recentCharges))
+    /// How much of `payment` pays down debt rather than recent purchases:
+    /// instalments billed and not yet paid — settled first, and never counted
+    /// as spending when the purchase was made — then the balance carried over.
+    /// `owedBefore` is the rest of what the card owed, without those
+    /// instalments.
+    static func debtPortion(payment: Double, owedBefore: Double, recentCharges: Double,
+                            installmentDue: Double = 0) -> Double {
+        min(max(payment, 0),
+            max(installmentDue, 0) + FinancialLadder.carriedOver(owed: owedBefore, recentCharges: recentCharges))
     }
 
     /// What the card owed just before `date`, in the card's currency: the

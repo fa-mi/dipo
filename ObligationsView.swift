@@ -127,13 +127,14 @@ struct ObligationLoad {
     }
 
     /// The balance a card carries from before this month and last, in the
-    /// card's currency — the part that is being charged interest.
+    /// card's currency — the part that is being charged interest. Billed
+    /// instalments are not part of it: they are fixed, and on a 0% plan free.
     static func carried(on card: BankCard, since lastMonth: Date) -> Double {
         let cm = CurrencyManager.shared
         let recent = card.transactions
             .filter { $0.date >= lastMonth && $0.amount < 0 && $0.txSubtype != .transfer }
             .reduce(0.0) { $0 + abs(cm.convert($1.amount, from: $1.currency, to: card.resolvedCurrency)) }
-        return FinancialLadder.carriedOver(owed: card.owedBalance(), recentCharges: recent)
+        return FinancialLadder.carriedOver(owed: card.bill().revolving, recentCharges: recent)
     }
 
     /// Every credit card's carried balance, in `currency`.
