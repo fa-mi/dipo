@@ -45,7 +45,10 @@ struct DebtView: View {
     /// Max debts shown inline before collapsing behind "See all".
     private let debtPreviewLimit = 5
 
-    /// Monthly income in the preferred currency.
+    /// Monthly income in the preferred currency — the income Smart Budget
+    /// budgets, which its savings & debt share is a share of. Whether a usual
+    /// month carries the payments is weighed on the Financial ladder's
+    /// figures instead (see `affordability`).
     ///
     /// Priority:
     ///   1. Active salary schedule(s) — the user's STATED monthly income. This
@@ -57,7 +60,7 @@ struct DebtView: View {
     ///      excluding the salary category to avoid double-counting once the
     ///      scheduled salary is auto-credited.
     ///   3. No schedule → fall back to all income transactions this month.
-    /// Every figure on this screen is read from the main card.
+    /// Read from the main card.
     ///
     /// It used to sum every account while taking its RATIOS from the main card
     /// — an allowance computed on one account's income compared against
@@ -101,43 +104,6 @@ struct DebtView: View {
         return scheduled
     }
 
-    private var monthlyExpenses: Double {
-        let allTx = scopedTx
-        let cal = Calendar.current
-        let now = Date()
-        let pref = CurrencyManager.shared.preferredCurrency
-        // Exclude debt payments — they are already factored into safeSpendingBudget
-        // via recommendedMonthlyDebtPayment, so including them would double-count
-        // The PAY CYCLE, not the calendar month.
-        //
-        // Everything else on this screen — the budget, the ratios, the health
-        // score — is measured per pay cycle. This one filtered by calendar
-        // month, so for a payday on the 25th it summed parts of TWO cycles and
-        // compared that against one cycle's budget. On this user's data that
-        // read Rp 25,4jt of "monthly" spending against a Rp 6,3jt allowance and
-        // announced Rp 19,1jt of overspending, for a cycle that actually
-        // finished Rp 748k ahead.
-        let cycleStart: Date = {
-            guard let day = MainCard.payDay(salaries) else {
-                return cal.safeDate(from: cal.dateComponents([.year, .month], from: now))
-            }
-            return StatPeriod.cycle(payDay: day,
-                                    salaryDates: StatPeriod.salaryDates(on: MainCard.resolve(in: cards))).start
-        }()
-        return FinancialHealthEngine.planSpending(allTx, from: cycleStart, currency: pref)
-    }
-    
-    /// Total cash on hand right now across all cards, in preferred currency.
-    /// Used as a fallback context: if recommended debt payment exceeds this
-    /// month's salary, the user needs to know whether they can cover it from
-    /// existing balance — paying debt isn't only a salary game.
-    private var totalBalance: Double {
-        let pref = CurrencyManager.shared.preferredCurrency
-        return cards.reduce(0) { sum, card in
-            sum + CurrencyManager.shared.convert(card.balance, from: card.resolvedCurrency, to: pref)
-        }
-    }
-
     /// Declared recurring outgoings — the same set the obligation card counts.
     private var monthlyCommitments: Double {
         let cm = CurrencyManager.shared
@@ -153,20 +119,6 @@ struct DebtView: View {
         SmartBudgetManager.shared.ratio(for: .investDebt,
                                         cardID: SmartBudgetManager.shared.budgetCardID,
                                         configs: budgetConfigs)
-    }
-
-    /// Non-salary income received in the current cycle.
-    private var extraIncomeThisCycle: Double {
-        let cm = CurrencyManager.shared
-        let pref = cm.preferredCurrency
-        guard let day = MainCard.payDay(salaries) else { return 0 }
-        let start = StatPeriod.cycle(payDay: day,
-                                     salaryDates: StatPeriod.salaryDates(on: MainCard.resolve(in: cards))).start
-        return scopedTx
-            .filter { $0.date >= start && $0.amount > 0 && $0.txSubtype != .transfer
-                      && $0.category != .salary
-                      && $0.category != .investment && $0.category != .debtPayment }
-            .reduce(0.0) { $0 + cm.convert($1.amount, from: $1.currency.isEmpty ? pref : $1.currency, to: pref) }
     }
 
     /// A credit-card debt recorded by hand is the same balance the card
@@ -187,16 +139,23 @@ struct DebtView: View {
     private var engine: FinancialHealthEngine {
         var e = FinancialHealthEngine(monthlyIncome: monthlyIncome,
                                       debts: debts,
-                                      monthlyExpenses: monthlyExpenses,
-                                      fixedCommitments: monthlyCommitments,
-                                      investDebtRatio: liveInvestDebtRatio,
-                                      extraIncomeThisCycle: extraIncomeThisCycle)
+                                      investDebtRatio: liveInvestDebtRatio)
         e.cardOwed = cardOwed
         e.cardCarried = cardDebtRecorded ? 0
             : ObligationLoad.cardCarried(cards: cards, currency: CurrencyManager.shared.preferredCurrency)
         e.cardMonthly = ObligationLoad.cardPayments(cards: cards, installments: installments, debts: debts,
                                                     currency: CurrencyManager.shared.preferredCurrency)
         return e
+    }
+
+    /// Whether a usual month carries `e`'s payments. Read from the Financial
+    /// ladder's figures — every account, the income that keeps coming, the
+    /// median of the last complete months — so the two screens agree, and
+    /// never from how this pay period is going, which is Statistics' question.
+    private func affordability(_ e: FinancialHealthEngine) -> DebtAffordability {
+        DebtAffordability.usualMonth(cards: cards, debts: debts, salaries: salaries, installments: installments,
+                                     commitments: monthlyCommitments, payments: e.totalEffectiveMinimums,
+                                     hasDebt: e.hasAnyDebt, currency: CurrencyManager.shared.preferredCurrency)
     }
     
     /// Recomputes each debt's `currentBalance` from its linked payment transactions.
@@ -260,10 +219,13 @@ struct DebtView: View {
         return dates.max()
     }
 
-    // The screen reads top to bottom as: how much do I owe and is it OK, what
-    // is due now, each debt, which to pay first, and where the salary goes.
+    // The screen reads top to bottom as: how much do I owe and can a usual
+    // month carry it, what is due now, each debt, which to pay first, and
+    // what Smart Budget's savings & debt share should do meanwhile.
     // It opened on a score out of 100, a four-way allocation, a warning, an
     // urgent list and then the debts — five verdicts before the thing itself.
+    // Later it said "Very healthy" above a pay-period overspending warning;
+    // how a pay period is going is Statistics' to say, not this screen's.
     private var debtContent: some View {
         ZStack { AppTheme.bg.ignoresSafeArea()
             ScrollView(showsIndicators: false) {
@@ -275,20 +237,12 @@ struct DebtView: View {
                             .padding(.top, 30)
                     } else {
                         DebtSummaryCard(engine: engine,
-                                        monthlyIncome: monthlyIncome,
+                                        affordability: affordability(engine),
                                         cardOwed: cardOwed,
                                         debtFreeDate: debtFreeDate,
                                         showSimulator: !embedded && !activeDebts.isEmpty,
                                         onAdd: { HapticManager.shared.tap(); vm.resetForm(); vm.showAddSheet = true },
                                         onSimulate: { HapticManager.shared.tap(); simulatorDebt = activeDebts.first })
-
-                        if engine.isOverspending {
-                            InlineBanner(tone: .warning,
-                                         message: String(format: loc(engine.hasAnyDebt ? "debt.reduce_expenses"
-                                                                                       : "debt.reduce_spending_plan"),
-                                                         CurrencyManager.shared.formatted(engine.overspendAmount,
-                                                                                          currency: CurrencyManager.shared.preferredCurrency)))
-                        }
 
                         if !engine.urgentDebts.isEmpty {
                             DueSoonCard(debts: engine.urgentDebts) { payingDebt = $0 }
@@ -325,9 +279,13 @@ struct DebtView: View {
                             PayoffStrategyCard(engine: engine)
                         }
 
-                        // Everything below needs an income to be measured against.
+                        // Smart Budget's part on this screen: what its savings
+                        // & debt share does while something is owed. Its share
+                        // is of the income it budgets.
                         if monthlyIncome > 0 {
-                            AllocationCard(engine: engine, monthlyIncome: monthlyIncome, totalBalance: totalBalance)
+                            if engine.hasAnyDebt {
+                                DebtFirstCard(advice: engine.debtFirst)
+                            }
                         } else if !activeDebts.isEmpty {
                             SalarySetupCTA(message: loc("salary.cta.debt")) { showSalarySetup = true }
                         }

@@ -94,7 +94,8 @@ struct SalarySetupCTA: View {
 /// a scale before it told them anything.
 struct DebtSummaryCard: View {
     let engine: FinancialHealthEngine
-    let monthlyIncome: Double
+    /// Whether a usual month carries the payments — the one verdict here.
+    let affordability: DebtAffordability
     /// Of the total: what credit cards carry. Said under the figure so the
     /// total can be traced to the cards listed further down.
     var cardOwed: Double = 0
@@ -107,11 +108,14 @@ struct DebtSummaryCard: View {
         CurrencyManager.shared.formatted(v, currency: CurrencyManager.shared.preferredCurrency)
     }
 
-    private var verdict: String {
-        monthlyIncome > 0
-            ? String(format: loc("debt.verdict_dti"), engine.healthLabel,
-                     String(format: "%.0f", engine.dtiRatio))
-            : engine.healthLabel
+    private var tone: (icon: String, tint: Color) {
+        guard affordability.hasDebt else { return ("checkmark.seal.fill", AppTheme.accent) }
+        switch affordability.verdict {
+        case .safe?:  return ("checkmark.seal.fill", AppTheme.accent)
+        case .tight?: return ("exclamationmark.triangle.fill", AppTheme.orange)
+        case .heavy?: return ("xmark.octagon.fill", AppTheme.red)
+        case nil:     return ("info.circle.fill", AppTheme.textSecondary)
+        }
     }
 
     var body: some View {
@@ -153,23 +157,25 @@ struct DebtSummaryCard: View {
             }
 
             HStack(alignment: .top, spacing: 10) {
-                Image(systemName: engine.healthIcon)
+                Image(systemName: tone.icon)
                     .font(.system(.subheadline, weight: .semibold))
-                    .foregroundStyle(engine.healthColor)
+                    .foregroundStyle(tone.tint)
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(verdict)
+                    Text(affordability.title())
                         .font(.system(.subheadline, weight: .semibold))
                         .foregroundStyle(AppTheme.textPrimary)
                         .fixedSize(horizontal: false, vertical: true)
-                    Text(monthlyIncome > 0 ? engine.primaryAdvice : loc("debt.health_sub"))
-                        .font(.system(.caption))
-                        .foregroundStyle(AppTheme.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                    if let detail = affordability.detail(currency: CurrencyManager.shared.preferredCurrency) {
+                        Text(detail)
+                            .font(.system(.caption))
+                            .foregroundStyle(AppTheme.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
                 Spacer(minLength: 0)
             }
             .padding(12)
-            .background(engine.healthColor.opacity(0.10), in: RoundedRectangle(cornerRadius: AppRadius.md))
+            .background(tone.tint.opacity(0.10), in: RoundedRectangle(cornerRadius: AppRadius.md))
 
             if showSimulator {
                 Button(action: onSimulate) {
@@ -265,137 +271,109 @@ struct DueSoonCard: View {
     }
 }
 
-// MARK: - Allocation Card
+// MARK: - Smart Budget: debt before saving
 
-struct AllocationCard: View {
-    let engine: FinancialHealthEngine
-    let monthlyIncome: Double
-    let totalBalance: Double
-    
-    /// Months of debt coverage if user paid only from current balance (no salary).
-    /// Helps user see they have a safety net beyond just monthly salary.
-    private var balanceCoversMonths: Double {
-        guard engine.recommendedMonthlyDebtPayment > 0 else { return 0 }
-        return totalBalance / engine.recommendedMonthlyDebtPayment
+/// What Smart Budget advises doing with its savings & debt share while
+/// something is owed. It replaces "Where your salary goes", a four-way split
+/// of the salary that is Smart Budget's own screen, and a pay-period warning
+/// that is Statistics'. Here Smart Budget answers one thing: the minimums come
+/// out of its share — does the rest go to a dear debt, or to saving?
+struct DebtFirstCard: View {
+    let advice: DebtFirstAdvice
+
+    private var currency: String { CurrencyManager.shared.preferredCurrency }
+    private func money(_ v: Double) -> String { CurrencyManager.shared.formatted(v, currency: currency) }
+
+    private var extraLabel: String {
+        switch advice.target {
+        case .card:                    return loc("debt.first.row_extra_card")
+        case .debt(let name, _, _, _): return String(format: loc("debt.first.row_extra_debt"), name)
+        case nil:                      return loc("debt.first.row_save")
+        }
     }
 
+    private var minimumTint: Color { AppTheme.red.opacity(0.8) }
+    /// The rest of the share: towards the dear debt, or saved.
+    private var extraTint: Color { advice.target == nil ? AppTheme.blue.opacity(0.8) : AppTheme.red.opacity(0.4) }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(loc("salary.allocation")).font(.system(.body, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
-                Spacer()
-                Text(loc("salary.per_month")).font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
+        VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(loc("debt.first.header").uppercased(with: LanguageManager.shared.currentLocale))
+                    .font(.system(.caption2, weight: .heavy))
+                    .tracking(1)
+                    .foregroundStyle(AppTheme.textSecondary)
+                Text(advice.title())
+                    .font(.system(.body, weight: .bold))
+                    .foregroundStyle(AppTheme.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            
-            // Explainer — clarifies that this allocation is based on monthly
-            // salary (not balance), and what the recommended split means.
-            Text(loc("salary.allocation.explainer"))
+
+            if let line = advice.shareLine(currency: currency) {
+                Text(line)
+                    .font(.system(.caption))
+                    .foregroundStyle(AppTheme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            if !advice.noRoom {
+                split
+                VStack(spacing: 6) {
+                    row(minimumTint, loc("debt.first.row_min"), money(advice.minimums))
+                    row(extraTint, extraLabel, money(advice.extra))
+                    if advice.target != nil {
+                        row(AppTheme.blue.opacity(0.4), loc("debt.first.row_save"),
+                            loc("debt.first.row_save_later"), muted: true)
+                    }
+                }
+            }
+
+            Text(advice.body(currency: currency))
                 .font(.system(.caption))
-                .foregroundStyle(AppTheme.textSecondary)
+                .foregroundStyle(AppTheme.textPrimary)
+                .lineSpacing(2)
                 .fixedSize(horizontal: false, vertical: true)
-
-            // Three parts, not two. Committed money was previously folded into
-            // "safe to spend", which is how a user with Rp 3,7jt of rent and
-            // subscriptions was told 100% of income was free.
-            GeometryReader { g in
-                let debtPct = CGFloat(engine.recommendedDebtAllocationPercent / 100)
-                let savePct = CGFloat(engine.setAsidePercent / 100)
-                let commitPct = CGFloat(engine.commitmentPercent / 100)
-                let spendPct = max(0, 1 - debtPct - savePct - commitPct)
-                HStack(spacing: 2) {
-                    if debtPct > 0 {
-                        RoundedRectangle(cornerRadius: 4)
-                            .fill(AppTheme.red.opacity(0.8))
-                            .frame(width: g.size.width * debtPct, height: 12)
-                    }
-                    // The share the plan reserves for the future. Without this
-                    // segment the 20% was invisible AND unspent-for.
-                    if savePct > 0 {
-                        RoundedRectangle(cornerRadius: 4)
-                            .fill(AppTheme.blue.opacity(0.8))
-                            .frame(width: g.size.width * savePct, height: 12)
-                    }
-                    if commitPct > 0 {
-                        RoundedRectangle(cornerRadius: 4)
-                            .fill(AppTheme.orange.opacity(0.8))
-                            .frame(width: g.size.width * commitPct, height: 12)
-                    }
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(AppTheme.accent.opacity(0.6))
-                        .frame(width: g.size.width * spendPct, height: 12)
-                }
-                .animation(.spring(response: 0.8, dampingFraction: 0.8), value: engine.recommendedDebtAllocationPercent)
-            }
-            .frame(height: 12)
-
-            LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)],
-                      alignment: .leading, spacing: 12) {
-                if engine.recommendedMonthlyDebtPayment > 0 {
-                    AllocationRow(color: AppTheme.red.opacity(0.8),
-                                  label: loc("debt.allocation.debt"),
-                                  percent: engine.recommendedDebtAllocationPercent,
-                                  amount: engine.recommendedMonthlyDebtPayment,
-                                  currency: CurrencyManager.shared.preferredCurrency)
-                }
-                AllocationRow(color: AppTheme.blue.opacity(0.8),
-                              label: loc("debt.allocation.save"),
-                              percent: engine.setAsidePercent,
-                              amount: engine.toSaveOrInvest,
-                              currency: CurrencyManager.shared.preferredCurrency)
-                AllocationRow(color: AppTheme.orange.opacity(0.8),
-                              label: loc("debt.allocation.committed"),
-                              percent: engine.commitmentPercent,
-                              amount: engine.fixedCommitments,
-                              currency: CurrencyManager.shared.preferredCurrency)
-                AllocationRow(color: AppTheme.accent.opacity(0.6),
-                              label: loc("debt.allocation.safe"),
-                              percent: engine.safeSpendingPercent,
-                              amount: engine.safeSpendingBudget,
-                              currency: CurrencyManager.shared.preferredCurrency)
-            }
-            
-            // Balance context — small chip showing how many months of debt
-            // payments the user could cover from current cash if salary stopped.
-            // Reframes the allocation in terms users actually relate to.
-            if balanceCoversMonths > 0 && totalBalance > 0 {
-                HStack(spacing: 8) {
-                    Image(systemName: "wallet.pass.fill").font(.system(.caption2)).foregroundStyle(AppTheme.accent)
-                    Text(String(format: loc("debt.balance_coverage"),
-                                CurrencyManager.shared.formatted(totalBalance, currency: CurrencyManager.shared.preferredCurrency),
-                                String(format: "%.1f", balanceCoversMonths)))
-                        .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary).lineSpacing(2)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .padding(.top, 2)
-            }
-
-            if engine.extraPaymentAvailable > 0 {
-                HStack(spacing: 8) {
-                    Image(systemName: "arrow.up.circle.fill").font(.system(.caption)).foregroundStyle(AppTheme.accent)
-                    Text(String(format: loc("debt.extra_recommended"),
-                                CurrencyManager.shared.formatted(engine.extraPaymentAvailable, currency: CurrencyManager.shared.preferredCurrency)))
-                        .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary).lineSpacing(2)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
+                .padding(10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(AppTheme.cardMid.opacity(0.5), in: RoundedRectangle(cornerRadius: AppRadius.md))
         }
         .padding(16)
         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.xl))
     }
-}
 
-struct AllocationRow: View {
-    let color: Color; let label: String
-    let percent: Double; let amount: Double; let currency: String
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 5) {
-                Circle().fill(color).frame(width: 7, height: 7)
-                Text(label).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
+    /// The share, split into the minimums and the rest.
+    private var split: some View {
+        GeometryReader { g in
+            let total = max(advice.share, 1)
+            let minShare = CGFloat(min(advice.minimums / total, 1))
+            HStack(spacing: 2) {
+                if minShare > 0 {
+                    RoundedRectangle(cornerRadius: 4).fill(minimumTint)
+                        .frame(width: max(g.size.width * minShare - 1, 0), height: 10)
+                }
+                RoundedRectangle(cornerRadius: 4).fill(extraTint)
+                    .frame(height: 10)
             }
-            Text("\(String(format: "%.0f", percent))%").font(.system(.callout, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
-            Text(CurrencyManager.shared.formatted(amount, currency: currency)).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
         }
+        .frame(height: 10)
+        .accessibilityHidden(true)
+    }
+
+    private func row(_ tint: Color, _ label: String, _ value: String, muted: Bool = false) -> some View {
+        // Label wraps, figure never does.
+        HStack(spacing: 8) {
+            Circle().fill(tint).frame(width: 7, height: 7)
+            Text(label)
+                .font(.system(.caption))
+                .foregroundStyle(AppTheme.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 8)
+            Text(value)
+                .font(.system(.caption, weight: muted ? .medium : .semibold))
+                .foregroundStyle(muted ? AppTheme.textSecondary : AppTheme.textPrimary)
+                .fixedSize()
+        }
+        .accessibilityElement(children: .combine)
     }
 }
 

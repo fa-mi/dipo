@@ -86,17 +86,21 @@ final class DebtFiguresAgreeTests: XCTestCase {
         XCTAssertTrue(line.contains("8.000.000") && !line.contains(" of "), line)
     }
 
-    func testTheDebtsAdviceNamesTheCarriedPartToo() {
-        var e = FinancialHealthEngine(monthlyIncome: 10_100_000, debts: [], monthlyExpenses: 0)
+    func testSmartBudgetsAdviceNamesTheCarriedPartToo() {
+        var e = FinancialHealthEngine(monthlyIncome: 10_100_000, debts: [])
         e.cardOwed = 8_500_000
         e.cardCarried = 8_000_000
-        let advice = english { e.primaryAdvice }
+        XCTAssertEqual(e.debtFirst.target, .card(carried: 8_000_000))
+        let advice = english { e.debtFirst.body(currency: "IDR") }
         XCTAssertTrue(advice.contains("8.000.000"), advice)
         XCTAssertEqual(e.totalDebt, 8_500_000)
 
         // Only new shopping on the card: nothing is charged interest yet.
         e.cardCarried = 0
-        XCTAssertEqual(e.primaryAdvice, loc("debt.advice.card_recent"))
+        XCTAssertNil(e.debtFirst.target)
+        XCTAssertTrue(e.debtFirst.cardRecentOnly)
+        let recent = english { e.debtFirst.body(currency: "IDR") }
+        XCTAssertTrue(recent.hasSuffix(english { loc("debt.first.card_recent") }), recent)
     }
 
     func testOnlyNewShoppingIsNotCostlyDebt() {
@@ -141,8 +145,8 @@ final class DebtFiguresAgreeTests: XCTestCase {
     // MARK: Words
 
     func testTheStringsExistInBothLanguages() {
-        let keys = ["ladder.debt.card_carried", "ladder.debt.card_part", "debt.advice.card_carried",
-                    "debt.advice.card_recent", "debt.verdict_dti", "debt.reduce_expenses"]
+        let keys = ["ladder.debt.card_carried", "ladder.debt.card_part", "debt.first.why_card",
+                    "debt.first.card_recent", "debt.verdict_dti", "debt.afford.heavy_body"]
         for language in [LanguageManager.Language.english, .indonesian] {
             LanguageManager.shared.withLanguage(language) {
                 for key in keys { XCTAssertNotEqual(loc(key), key, "missing \(key) in \(language)") }
