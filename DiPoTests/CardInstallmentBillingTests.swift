@@ -1,0 +1,216 @@
+import XCTest
+import SwiftData
+@testable import DiPo
+
+/// A billed instalment goes onto the bill, and only a payment takes it off.
+///
+/// Fahmi's Tokopedia CC (17 Oct): limit Rp 40 jt, Rp 5.750.000 owed besides,
+/// and an iPad on 12× at 0% — Rp 10.250.000, Rp 854.167 a month. The
+/// instalment used to leave "locked" by the calendar alone, as though paid,
+/// and the payment that really covered it came off the rest of the balance
+/// too: Rp 854.167 short for every month paid.
+@MainActor
+final class CardInstallmentBillingTests: XCTestCase {
+
+    private var container: ModelContainer!
+    private var context: ModelContext { container.mainContext }
+    private let cal = Calendar.current
+
+    override func setUpWithError() throws {
+        let schema = Schema(versionedSchema: DiPoSchemaCurrent.self)
+        container = try ModelContainer(for: schema,
+                                       configurations: ModelConfiguration(schema: schema, isStoredInMemoryOnly: true))
+    }
+
+    private func day(_ m: Int, _ d: Int) -> Date {
+        cal.date(from: DateComponents(year: 2026, month: m, day: d, hour: 12))!
+    }
+
+    private func tokopediaCC() -> BankCard {
+        let c = BankCard(holderName: "Tokopedia CC", cardNumber: "5221845086220969", balance: 0, expireDate: "11/29",
+                         gradientStart: "#000000", gradientEnd: "#111111", sortOrder: 0, currency: "IDR")
+        c.isCreditCard = true
+        c.creditLimit = 40_000_000
+        c.openingOwed = 5_750_000
+        c.creditSince = .distantPast
+        context.insert(c)
+        return c
+    }
+
+    @discardableResult
+    private func iPad(on card: BankCard, start: Date, recorded: Date? = nil) -> CardInstallment {
+        let i = CardInstallment(cardID: card.id, merchant: "iPad Air M3", totalAmount: 10_250_000, tenorMonths: 12,
+                                startDate: start, currency: "IDR")
+        i.createdAt = recorded ?? start
+        context.insert(i)
+        return i
+    }
+
+    private func pay(_ amount: Double, on card: BankCard, at date: Date) {
+        let t = TxRecord(name: "Payment received — Tokopedia CC", date: date, amount: amount, type: "tx.type.income",
+                         icon: "CC", iconBgHex: TxCategory.other.iconBg, category: .other, currency: "IDR",
+                         notes: "tx.note.cc_payment", subtype: .transfer)
+        context.insert(t)
+        card.transactions.append(t)
+    }
+
+    private let monthly = 10_250_000.0 / 12
+
+    // MARK: The bill
+
+    func testBeforeTheFirstBillTheWholeInstalmentIsLocked() {
+        let card = tokopediaCC()
+        let ipad = iPad(on: card, start: day(10, 9))
+        let b = card.bill([ipad], asOf: day(10, 20))
+        XCTAssertEqual(b.installmentDue, 0)
+        XCTAssertEqual(b.revolving, 5_750_000, accuracy: 0.5)
+        XCTAssertEqual(b.locked, 10_250_000, accuracy: 0.5)
+        XCTAssertEqual(b.total, 16_000_000, accuracy: 0.5)
+    }
+
+    /// The month turns: Rp 854.167 moves from locked onto the bill, and the
+    /// total stays where it was until something is paid.
+    func testABilledInstalmentMovesOntoTheBillAndTheTotalHolds() {
+        let card = tokopediaCC()
+        let ipad = iPad(on: card, start: day(10, 9))
+        let b = card.bill([ipad], asOf: day(11, 12))
+        XCTAssertEqual(b.installmentDue, monthly, accuracy: 0.5)
+        XCTAssertEqual(b.locked, 10_250_000 - monthly, accuracy: 0.5)
+        XCTAssertEqual(b.revolving, 5_750_000, accuracy: 0.5)
+        XCTAssertEqual(b.bill, 6_604_167, accuracy: 0.5)
+        XCTAssertEqual(b.total, 16_000_000, accuracy: 0.5, "nothing paid, nothing less owed")
+        XCTAssertEqual(card.totalOwed([ipad]), card.bill([ipad]).total, accuracy: 0.5)
+    }
+
+    /// Paying the instalment settles the instalment — and only it. The rest of
+    /// the balance used to drop by the same Rp 854.167 as well.
+    func testPayingTheInstalmentLeavesTheRestOfTheBalanceAlone() {
+        let card = tokopediaCC()
+        let ipad = iPad(on: card, start: day(10, 9))
+        pay(854_167, on: card, at: day(11, 13))
+        let b = card.bill([ipad], asOf: day(11, 14))
+        XCTAssertEqual(b.installmentDue, 0)
+        XCTAssertEqual(b.revolving, 5_750_000, accuracy: 1, "not Rp 4.895.833")
+        XCTAssertEqual(b.total, 15_145_833, accuracy: 1)
+        XCTAssertEqual(card.creditLimit - b.total, 24_854_167, accuracy: 1, "the limit comes back by what was paid")
+    }
+
+    func testAPaymentSettlesTheInstalmentFirstThenTheRest() {
+        let card = tokopediaCC()
+        let ipad = iPad(on: card, start: day(10, 9))
+        pay(1_000_000, on: card, at: day(11, 13))
+        let b = card.bill([ipad], asOf: day(11, 14))
+        XCTAssertEqual(b.installmentDue, 0)
+        XCTAssertEqual(b.revolving, 5_750_000 - (1_000_000 - monthly), accuracy: 0.5)
+    }
+
+    func testPayingTheWholeBillLeavesOnlyTheLockedPrincipal() {
+        let card = tokopediaCC()
+        let ipad = iPad(on: card, start: day(10, 9))
+        pay(6_604_167, on: card, at: day(11, 13))
+        let b = card.bill([ipad], asOf: day(11, 14))
+        XCTAssertEqual(b.bill, 0, accuracy: 0.5)
+        XCTAssertEqual(b.total, 10_250_000 - monthly, accuracy: 0.5)
+    }
+
+    func testAnUnpaidInstalmentStaysOnTheBillMonthAfterMonth() {
+        let card = tokopediaCC()
+        let ipad = iPad(on: card, start: day(10, 9))
+        let b = card.bill([ipad], asOf: cal.date(from: DateComponents(year: 2027, month: 1, day: 12, hour: 12))!)
+        XCTAssertEqual(b.installmentDue, 3 * monthly, accuracy: 0.5)
+        XCTAssertEqual(b.total, 16_000_000, accuracy: 0.5)
+    }
+
+    /// Months billed before DiPo knew of the instalment are already in the
+    /// owed figure the user typed in, paid or not.
+    func testMonthsBilledBeforeTheInstalmentWasRecordedAreNotAddedAgain() {
+        let card = tokopediaCC()
+        let ipad = iPad(on: card, start: day(7, 9), recorded: day(10, 9))
+        let b = card.bill([ipad], asOf: day(10, 20))
+        XCTAssertEqual(b.installmentDue, 0)
+        XCTAssertEqual(b.locked, 10_250_000 * 9 / 12, accuracy: 0.5)
+        XCTAssertEqual(b.total, 5_750_000 + 10_250_000 * 9 / 12, accuracy: 0.5)
+    }
+
+    /// Editing the card's owed figure re-bases it: what was billed before is
+    /// in the new figure.
+    func testMonthsBilledBeforeTheOwedFigureWasLastSetAreNotAddedAgain() {
+        let card = tokopediaCC()
+        let ipad = iPad(on: card, start: day(10, 9))
+        card.openingOwed = 6_604_167
+        card.creditSince = day(11, 20)
+        let b = card.bill([ipad], asOf: day(11, 25))
+        XCTAssertEqual(b.installmentDue, 0)
+        XCTAssertEqual(b.bill, 6_604_167, accuracy: 0.5)
+    }
+
+    func testWithoutInstalmentsTheBillIsTheLoggedBalance() {
+        let card = tokopediaCC()
+        pay(250_000, on: card, at: day(10, 17))
+        let b = card.bill([], asOf: day(10, 18))
+        XCTAssertEqual(b, CardBill(installmentDue: 0, revolving: 5_500_000, locked: 0))
+    }
+
+    // MARK: From the card's own store, as the screens read it
+
+    /// Dated from today, since these read the calendar themselves.
+    private func billedOnceAgo(_ card: BankCard) {
+        let start = cal.date(byAdding: .day, value: -2, to: cal.date(byAdding: .month, value: -1, to: .now)!)!
+        iPad(on: card, start: start)
+    }
+
+    func testTheOwedFigureEveryScreenShowsIncludesTheBilledInstalment() {
+        let card = tokopediaCC()
+        billedOnceAgo(card)
+        XCTAssertEqual(card.storedInstallments.count, 1)
+        XCTAssertEqual(card.owedBalance(), 5_750_000 + monthly, accuracy: 0.5)
+        XCTAssertEqual(card.totalOwed(card.storedInstallments), 16_000_000, accuracy: 0.5)
+    }
+
+    /// The balance charged interest is the carried one — the instalment is
+    /// neither carried nor charged, and paying it does not shrink the carried
+    /// balance.
+    func testABilledInstalmentIsNotCarriedAndPayingItKeepsTheCarriedBalance() {
+        let card = tokopediaCC()
+        billedOnceAgo(card)
+        let thisMonth = cal.date(from: cal.dateComponents([.year, .month], from: .now))!
+        let lastMonth = cal.date(byAdding: .month, value: -1, to: thisMonth)!
+        XCTAssertEqual(ObligationLoad.carried(on: card, since: lastMonth), 5_750_000, accuracy: 0.5)
+        pay(854_167, on: card, at: cal.date(byAdding: .minute, value: -5, to: .now)!)
+        XCTAssertEqual(ObligationLoad.carried(on: card, since: lastMonth), 5_750_000, accuracy: 1)
+        XCTAssertEqual(ObligationLoad.cardCarried(cards: [card], currency: "IDR"), 5_750_000, accuracy: 1)
+    }
+
+    // MARK: Recording a payment
+
+    /// The instalment part of a payment is a debt payment: the iPad was never
+    /// counted as spending when it was bought, so this is where it is counted.
+    func testTheInstalmentPartOfAPaymentIsADebtPayment() {
+        XCTAssertEqual(CardPaymentDebt.debtPortion(payment: 854_167, owedBefore: 5_750_000,
+                                                   recentCharges: 470_000, installmentDue: monthly),
+                       854_167, accuracy: 0.5)
+        // The whole bill: the instalment and the carried balance are debt;
+        // the Rp 470.000 bought this month is the transfer.
+        let debt = CardPaymentDebt.debtPortion(payment: 6_604_167, owedBefore: 5_750_000,
+                                               recentCharges: 470_000, installmentDue: monthly)
+        XCTAssertEqual(debt, monthly + 5_280_000, accuracy: 0.5)
+        XCTAssertEqual(6_604_167 - debt, 470_000, accuracy: 1)
+        // Without instalments, as before.
+        XCTAssertEqual(CardPaymentDebt.debtPortion(payment: 2_000_000, owedBefore: 5_750_000, recentCharges: 470_000),
+                       2_000_000)
+    }
+
+    // MARK: Words
+
+    func testTheCounterSaysBilledNotPaid() {
+        LanguageManager.shared.withLanguage(.english) {
+            XCTAssertEqual(String(format: loc("inst.progress"), 1, 12), "1 of 12 billed")
+            XCTAssertNotEqual(loc("inst.due"), "inst.due")
+        }
+        LanguageManager.shared.withLanguage(.indonesian) {
+            XCTAssertEqual(String(format: loc("inst.progress"), 1, 12), "1 dari 12 sudah ditagih")
+            XCTAssertNotEqual(loc("inst.due"), "inst.due")
+            XCTAssertTrue(loc("cc.pay_hint").contains("cicilan"))
+        }
+    }
+}
