@@ -28,6 +28,8 @@ struct DebtView: View {
     @State private var payingDebt: DebtRecord? = nil
     @Query private var installments: [CardInstallment]
     @Query private var recurrings: [RecurringExpense]
+    @Query private var receivables: [Receivable]
+    @Query private var goals: [SavingsGoal]
     @Query private var budgetConfigs: [CardBudgetConfig]
     /// Inside ObligationsView the hub owns the header and the Simulate tab, so
     /// this view drops its own duplicate simulator button.
@@ -148,6 +150,36 @@ struct DebtView: View {
         return e
     }
 
+    /// What others still owe the user, in the preferred currency.
+    private var owedToYou: Double {
+        let cm = CurrencyManager.shared
+        let pref = cm.preferredCurrency
+        return receivables.filter { !$0.isSettled }.reduce(0.0) {
+            $0 + cm.convert($1.outstanding(from: allTransactions), from: $1.currency, to: pref)
+        }
+    }
+
+    /// Smart Budget's advice, told how a usual month really goes and what is
+    /// owed back.
+    private func advice(_ e: FinancialHealthEngine, _ reading: DebtAffordability) -> DebtFirstAdvice {
+        var a = e.debtFirst
+        a.monthLeft = reading.verdict == nil ? nil : reading.left
+        a.owedToYou = owedToYou
+        return a
+    }
+
+    /// The figures DiPo AI's debt analysis is written from — the ones this
+    /// screen shows, computed the same way.
+    private func analysisSnapshot(_ e: FinancialHealthEngine, _ reading: DebtAffordability) -> String {
+        let sb = SmartBudgetManager.shared
+        return DebtAnalysisSnapshot.build(.init(
+            cards: cards, installments: installments, debts: debts, receivables: receivables,
+            salaries: salaries, recurrings: recurrings, goals: goals,
+            reading: reading, advice: advice(e, reading),
+            budget: sb.ratios(forCardID: sb.budgetCardID, configs: budgetConfigs),
+            currency: CurrencyManager.shared.preferredCurrency))
+    }
+
     /// Whether a usual month carries `e`'s payments. Read from the Financial
     /// ladder's figures — every account, the income that keeps coming, the
     /// median of the last complete months — so the two screens agree, and
@@ -236,8 +268,9 @@ struct DebtView: View {
                             .frame(maxWidth: .infinity)
                             .padding(.top, 30)
                     } else {
+                        let reading = affordability(engine)
                         DebtSummaryCard(engine: engine,
-                                        affordability: affordability(engine),
+                                        affordability: reading,
                                         cardOwed: cardOwed,
                                         debtFreeDate: debtFreeDate,
                                         showSimulator: !embedded && !activeDebts.isEmpty,
@@ -284,7 +317,8 @@ struct DebtView: View {
                         // is of the income it budgets.
                         if monthlyIncome > 0 {
                             if engine.hasAnyDebt {
-                                DebtFirstCard(advice: engine.debtFirst)
+                                DebtFirstCard(advice: advice(engine, reading))
+                                DebtAnalysisCard { analysisSnapshot(engine, reading) }
                             }
                         } else if !activeDebts.isEmpty {
                             SalarySetupCTA(message: loc("salary.cta.debt")) { showSalarySetup = true }

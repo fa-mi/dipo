@@ -316,7 +316,17 @@ struct DebtFirstCard: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            if !advice.noRoom {
+            if advice.closeTheGapFirst {
+                // No bar: the share it would split is not there yet.
+                VStack(spacing: 6) {
+                    row(minimumTint, loc("debt.first.row_min"), money(advice.minimums))
+                    row(extraTint, extraLabel, loc("debt.first.row_after_gap"), muted: true)
+                    if advice.target != nil {
+                        row(AppTheme.blue.opacity(0.4), loc("debt.first.row_save"),
+                            loc("debt.first.row_save_later"), muted: true)
+                    }
+                }
+            } else if !advice.noRoom {
                 split
                 VStack(spacing: 6) {
                     row(minimumTint, loc("debt.first.row_min"), money(advice.minimums))
@@ -344,7 +354,8 @@ struct DebtFirstCard: View {
     /// The share, split into the minimums and the rest.
     private var split: some View {
         GeometryReader { g in
-            let total = max(advice.share, 1)
+            // The minimums and what can really go on top of them.
+            let total = max(advice.minimums + advice.extra, 1)
             let minShare = CGFloat(min(advice.minimums / total, 1))
             HStack(spacing: 2) {
                 if minShare > 0 {

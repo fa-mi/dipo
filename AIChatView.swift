@@ -299,6 +299,8 @@ struct AIChatView: View {
     @Query private var goals: [SavingsGoal]
     @Query private var recurrings: [RecurringExpense]
     @Query private var cycleIntents: [CycleIntent]
+    @Query private var salaries: [SalarySchedule]
+    @Query private var receivables: [Receivable]
 
     @State private var vm = AIChatViewModel()
     @State private var selectedCardID: UUID? = nil
@@ -953,6 +955,7 @@ struct AIChatView: View {
                                                          custom: DiPoInterestStore.custom) {
             lines.append(interests)
         }
+        lines += debtPicture(allTx: allTx, monthStart: monthStart)
         if !topCats.isEmpty { lines.append("Top expense categories: \(topCats).") }
         if !recent.isEmpty  { lines.append("Recent transactions: \(recent).") }
 
@@ -1010,9 +1013,77 @@ struct AIChatView: View {
         }
 
         var ctx = lines.joined(separator: "\n")
-        // Cap sized so the recurring-plan and duplicate-warning lines never
-        // push debts/goals off the end (they truncate last).
-        if ctx.count > 2600 { ctx = String(ctx.prefix(2600)) }
+        // Below the server's own cut (4000 in ai.js), which used to be 2000
+        // under this 2600 — so the tail this cap meant to keep, debts and
+        // goals, was cut off on the server anyway. The debt picture sits near
+        // the top so neither cut reaches it.
+        if ctx.count > 3800 { ctx = String(ctx.prefix(3800)) }
         return ctx
+    }
+
+    /// Credit cards, money owed back, and whether a usual month carries the
+    /// payments — the figures the Debts screen shows. The assistant saw none
+    /// of them: a card carrying Rp 16 jt read as "no debts", money lent out —
+    /// the readiest way to clear one — was invisible, and "this month so far"
+    /// stood in for what a month usually costs.
+    ///
+    /// Totals only for money owed back: the people who owe it are not named.
+    private func debtPicture(allTx: [TxRecord], monthStart: Date) -> [String] {
+        let cm = CurrencyManager.shared
+        let pref = cm.preferredCurrency
+        let cal = Calendar.current
+        let lastMonth = cal.date(byAdding: .month, value: -1, to: monthStart) ?? monthStart
+        func toPref(_ amount: Double, _ cur: String) -> Double {
+            cm.convert(amount, from: cur.isEmpty ? pref : cur, to: pref)
+        }
+        var lines: [String] = []
+
+        var cardsOwed = 0.0
+        for card in cards where card.isCreditCard {
+            let b = card.bill(installments)
+            guard b.total >= 0.5 else { continue }
+            let cur = card.resolvedCurrency
+            let money = { (v: Double) in cm.formatted(v, currency: cur) }
+            cardsOwed += toPref(b.total, cur)
+            var parts = ["owes \(money(b.total)) in total"]
+            let carried = ObligationLoad.carried(on: card, since: lastMonth)
+            if carried >= 0.5 { parts.append("\(money(carried)) of it carried over from earlier bills and charged interest") }
+            if b.installmentDue >= 0.5 { parts.append("\(money(b.installmentDue)) of instalments billed and not paid yet") }
+            if b.locked >= 0.5 { parts.append("\(money(b.locked)) of instalment principal not billed yet") }
+            let monthly = card.installmentMonthlyCharge(installments)
+            if monthly >= 0.5 { parts.append("instalments \(money(monthly)) a month") }
+            if card.creditLimit > 0 { parts.append("limit \(money(card.creditLimit))") }
+            let name = card.holderName.isEmpty ? "credit card" : card.holderName
+            lines.append("Credit card '\(name)': " + parts.joined(separator: "; ") + ".")
+        }
+
+        let open = receivables.filter { !$0.isSettled }
+        let owedBack = open.reduce(0.0) { $0 + toPref($1.outstanding(from: allTx), $1.currency) }
+        if owedBack >= 0.5 {
+            let late = open.filter(\.isOverdue).count
+            lines.append("Owed to the user by others: \(cm.formatted(owedBack, currency: pref)) across \(open.count) loan(s)"
+                         + (late > 0 ? ", \(late) past the agreed date" : "")
+                         + ". One-off money when repaid — not income.")
+        }
+
+        let commitments = recurrings.filter(\.isActive).reduce(0.0) { $0 + toPref($1.amount, $1.currency) }
+        let payments = ObligationLoad.cardPayments(cards: cards, installments: installments, debts: debts, currency: pref)
+            + debts.filter(\.isActive).reduce(0.0) { $0 + toPref($1.effectiveMinimumPayment, $1.currency) }
+        let hasDebt = debts.contains(where: \.isActive) || cardsOwed >= 0.5
+        let usual = DebtAffordability.usualMonth(cards: cards, debts: debts, salaries: salaries,
+                                                 installments: installments, commitments: commitments,
+                                                 payments: payments, hasDebt: hasDebt, currency: pref)
+        if usual.monthlyIncome > 0 {
+            let money = { (v: Double) in cm.formatted(v, currency: pref) }
+            var line = "A usual month (median of recent complete months): income \(money(usual.monthlyIncome)), living costs \(money(usual.monthlySpending))"
+            if hasDebt {
+                line += ", debt payments \(money(payments))"
+                line += usual.left >= 0 ? "; \(money(usual.left)) left after all three." : "; \(money(-usual.left)) short after all three."
+            } else {
+                line += "."
+            }
+            lines.append(line)
+        }
+        return lines
     }
 }
