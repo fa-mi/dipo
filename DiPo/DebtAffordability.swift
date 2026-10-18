@@ -129,12 +129,40 @@ struct DebtFirstAdvice: Equatable {
     let target: Target?
     /// A card is owed only this month's and last month's shopping.
     var cardRecentOnly: Bool = false
+    /// What a usual month leaves once it is spent and the minimums are paid —
+    /// `DebtAffordability.left`; nil without an income to weigh it against.
+    /// Below zero the month runs short, and Smart Budget's share is a plan,
+    /// not money: the card used to advise an extra Rp 383.333 on the card
+    /// right under a verdict saying the month was Rp 2,1 jt short.
+    var monthLeft: Double? = nil
+    /// Owed to the user and not yet paid back. It comes once, when it comes —
+    /// never income — and it is the readiest money to clear a dear debt with.
+    var owedToYou: Double = 0
 
-    /// What is left of the share once the minimums are paid.
-    var extra: Double { max(share - minimums, 0) }
-    var noRoom: Bool { extra < 0.5 }
+    /// What the plan leaves of the share once the minimums are paid.
+    var plannedExtra: Double { max(share - minimums, 0) }
+    /// How short a usual month runs, if it does.
+    var shortfall: Double { max(-(monthLeft ?? 0), 0) }
+    /// Spending has to come down before any extra payment is real.
+    var closeTheGapFirst: Bool { shortfall >= 0.5 }
+    /// What can really go on top of the minimums: the plan's rest, but never
+    /// more than a usual month leaves.
+    var extra: Double {
+        guard let left = monthLeft else { return plannedExtra }
+        return max(min(plannedExtra, left), 0)
+    }
+    /// A usual month leaves less than the plan's rest.
+    var extraCapped: Bool { !closeTheGapFirst && extra < plannedExtra - 0.5 }
+    var noRoom: Bool { plannedExtra < 0.5 }
 
     func title() -> String {
+        if closeTheGapFirst {
+            switch target {
+            case .card:                    return loc("debt.first.title_gap_card")
+            case .debt(let name, _, _, _): return String(format: loc("debt.first.title_gap_debt"), name)
+            case nil:                      return loc("debt.first.title_gap")
+            }
+        }
         switch target {
         case .card:
             return loc("debt.first.title_card")
@@ -145,49 +173,86 @@ struct DebtFirstAdvice: Equatable {
         }
     }
 
-    /// The share and, while a debt is dear, where all of it goes. Nil when the
+    /// The share and, while a debt is dear, where all of it goes — or, when a
+    /// usual month runs short, that the share is not there yet. Nil when the
     /// minimums take all of it — the body says so instead.
     func shareLine(currency: String) -> String? {
+        let m = { (v: Double) in CurrencyManager.shared.formatted(v, currency: currency) }
+        if closeTheGapFirst {
+            return String(format: loc("debt.first.gap"), m(shortfall), m(share))
+        }
         guard !noRoom else { return nil }
-        let line = String(format: loc("debt.first.share"),
-                          CurrencyManager.shared.formatted(share, currency: currency),
-                          String(format: "%.0f%%", ratio * 100))
+        let line = String(format: loc("debt.first.share"), m(share), String(format: "%.0f%%", ratio * 100))
         return target == nil ? line : line + " " + loc("debt.first.share_costly")
     }
 
     func body(currency: String, now: Date = .now, cal: Calendar = .current) -> String {
         let m = { (v: Double) in CurrencyManager.shared.formatted(v, currency: currency) }
-        let recent = cardRecentOnly ? " " + loc("debt.first.card_recent") : ""
-        switch target {
-        case nil:
-            return noRoom
-                ? String(format: loc("debt.first.full"), m(minimums), m(share)) + recent
-                : String(format: loc("debt.first.ok"), String(format: "%.0f%%", FinancialLadder.costlyRate)) + recent
-        case .some(let target) where noRoom:
-            let noun: String
+        var parts: [String] = []
+        let recent = cardRecentOnly ? loc("debt.first.card_recent") : nil
+
+        guard let target = self.target else {
+            if closeTheGapFirst {
+                parts.append(loc("debt.first.gap_cheap"))
+                if owedToYou >= 0.5 { parts.append(String(format: loc("debt.first.owed_buffer"), m(owedToYou))) }
+            } else if noRoom {
+                parts.append(String(format: loc("debt.first.full"), m(minimums), m(share)))
+            } else {
+                parts.append(String(format: loc("debt.first.ok"), String(format: "%.0f%%", FinancialLadder.costlyRate)))
+            }
+            if let recent { parts.append(recent) }
+            return parts.joined(separator: " ")
+        }
+
+        if !closeTheGapFirst && noRoom {
+            parts.append(String(format: loc("debt.first.no_room"), m(minimums), m(share), Self.noun(target)))
+        } else {
             switch target {
-            case .card:                  noun = loc("debt.first.card_noun")
-            case .debt(let name, _, _, _): noun = name
-            }
-            return String(format: loc("debt.first.no_room"), m(minimums), m(share), noun)
-        case .card(let carried):
-            return String(format: loc("debt.first.why_card"), m(carried))
-                + " " + String(format: loc("debt.first.back_to_saving"), m(extra))
-        case .debt(let name, let rate, _, _):
-            var out = String(format: loc("debt.first.why_debt"), name, Self.rate(rate))
-            if let p = faster() {
-                let date = { (months: Int) in
-                    (cal.date(byAdding: .month, value: months, to: now) ?? now)
-                        .formatted(.dateTime.month(.abbreviated).year())
-                }
-                if let slow = p.slow {
-                    out += " " + String(format: loc("debt.first.faster"), date(p.fast.months), date(slow.months),
-                                        m(slow.interest - p.fast.interest))
-                } else {
-                    out += " " + String(format: loc("debt.first.faster_never"), date(p.fast.months))
+            case .card(let carried):
+                parts.append(String(format: loc("debt.first.why_card"), m(carried)))
+            case .debt(let name, let rate, _, _):
+                parts.append(String(format: loc("debt.first.why_debt"), name, Self.rate(rate)))
+                if !closeTheGapFirst, let p = faster() {
+                    let date = { (months: Int) in
+                        (cal.date(byAdding: .month, value: months, to: now) ?? now)
+                            .formatted(.dateTime.month(.abbreviated).year())
+                    }
+                    if let slow = p.slow {
+                        parts.append(String(format: loc("debt.first.faster"), date(p.fast.months),
+                                            date(slow.months), m(slow.interest - p.fast.interest)))
+                    } else {
+                        parts.append(String(format: loc("debt.first.faster_never"), date(p.fast.months)))
+                    }
                 }
             }
-            return out + " " + String(format: loc("debt.first.back_to_saving"), m(extra))
+            if !closeTheGapFirst {
+                if extraCapped { parts.append(String(format: loc("debt.first.capped"), m(extra))) }
+                if extra >= 0.5 { parts.append(String(format: loc("debt.first.back_to_saving"), m(extra))) }
+            }
+        }
+        parts += owedLines(target, m)
+        return parts.joined(separator: " ")
+    }
+
+    /// Money owed back, pointed at the dear debt — and no more lending while
+    /// it is charged interest.
+    private func owedLines(_ target: Target, _ m: (Double) -> String) -> [String] {
+        guard owedToYou >= 0.5 else { return [] }
+        let balance: Double
+        switch target {
+        case .card(let carried):          balance = carried
+        case .debt(_, _, let owed, _):    balance = owed
+        }
+        let line = owedToYou >= balance - 0.5
+            ? String(format: loc("debt.first.owed_clears"), m(owedToYou), Self.noun(target))
+            : String(format: loc("debt.first.owed_part"), m(owedToYou), Self.noun(target), m(balance))
+        return [line, loc("debt.first.no_lending")]
+    }
+
+    private static func noun(_ target: Target) -> String {
+        switch target {
+        case .card:                    return loc("debt.first.card_noun")
+        case .debt(let name, _, _, _): return name
         }
     }
 
@@ -225,7 +290,7 @@ struct DebtFirstAdvice: Equatable {
     /// clears it. Nil when there is no recorded debt to clear, no rest to add,
     /// or it would not end any sooner.
     func faster() -> (fast: Payoff, slow: Payoff?)? {
-        guard case .debt(_, let rate, let balance, let minimum) = target, !noRoom,
+        guard case .debt(_, let rate, let balance, let minimum) = target, !noRoom, extra >= 0.5,
               let fast = Self.payoff(balance: balance, annualRate: rate, payment: minimum + extra) else { return nil }
         let slow = Self.payoff(balance: balance, annualRate: rate, payment: minimum)
         if let slow, slow.months <= fast.months { return nil }
