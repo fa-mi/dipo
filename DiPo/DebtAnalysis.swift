@@ -280,8 +280,24 @@ final class DebtAnalysisClient {
     /// The last plan this account received on this phone.
     func loadLast() {
         guard let userId = UserSession.shared.userID,
-              let data = UserDefaults.standard.data(forKey: Self.storeKey(userId)) else { last = nil; return }
-        last = try? JSONDecoder().decode(DebtAnalysis.self, from: data)
+              let sealed = UserDefaults.standard.string(forKey: Self.storeKey(userId)) else { last = nil; return }
+        last = Self.open(sealed)
+    }
+
+    /// A plan names the person's debts and what they owe, and UserDefaults
+    /// is a plain file in the app's container and its backups — so it is
+    /// kept sealed with the app's Keychain key, like card numbers are.
+    static func seal(_ analysis: DebtAnalysis) -> String? {
+        guard let json = try? JSONEncoder().encode(analysis),
+              let text = String(data: json, encoding: .utf8) else { return nil }
+        let sealed = CryptoManager.shared.encrypt(text)
+        return sealed.isEmpty ? nil : sealed
+    }
+
+    static func open(_ sealed: String) -> DebtAnalysis? {
+        let text = CryptoManager.shared.decrypt(sealed)
+        guard !text.isEmpty else { return nil }
+        return try? JSONDecoder().decode(DebtAnalysis.self, from: Data(text.utf8))
     }
 
     private func request(_ url: URL, body: Data?) async -> URLRequest {
@@ -321,8 +337,8 @@ final class DebtAnalysisClient {
             let reply = try JSONDecoder().decode(AnalyzeReply.self, from: data)
             var analysis = reply.analysis
             analysis.createdAt = .now
-            if let stored = try? JSONEncoder().encode(analysis) {
-                UserDefaults.standard.set(stored, forKey: Self.storeKey(userId))
+            if let sealed = Self.seal(analysis) {
+                UserDefaults.standard.set(sealed, forKey: Self.storeKey(userId))
             }
             last = analysis
             quota = Quota(used: reply.analysesUsed, cap: reply.analysesCap, nextCost: reply.nextCost,

@@ -124,6 +124,19 @@ final class DebtAnalysisTests: XCTestCase {
         XCTAssertEqual(again, plan, "kept on the phone as received")
     }
 
+    /// Kept on the phone sealed: the stored text names no debt and no amount.
+    func testTheKeptPlanIsSealed() throws {
+        let plan = DebtAnalysis(headline: "Lunasi Tokopedia CC dulu.", summary: "Kartu membawa Rp 5.250.000.",
+                                steps: [.init(title: "Bayar kartu", detail: "Mulai bulan ini.",
+                                              amount: "Rp 5.250.000", when: "bulan ini")],
+                                watchOut: [], question: "", createdAt: date(2026, 10, 18))
+        let sealed = try XCTUnwrap(DebtAnalysisClient.seal(plan))
+        XCTAssertFalse(sealed.contains("Tokopedia"))
+        XCTAssertFalse(sealed.contains("5.250.000"))
+        XCTAssertEqual(DebtAnalysisClient.open(sealed), plan)
+        XCTAssertNil(DebtAnalysisClient.open("{\"headline\":\"plain\"}"), "plaintext is not taken as a plan")
+    }
+
     func testEachRefusalTellsThePersonWhatHappened() {
         let body = { (error: String) in Data("{\"error\":\"\(error)\"}".utf8) }
         XCTAssertEqual(DebtAnalysisClient.failure(status: 402, body: body("analysis_limit")), .limit)
@@ -132,6 +145,7 @@ final class DebtAnalysisTests: XCTestCase {
         XCTAssertEqual(DebtAnalysisClient.failure(status: 401, body: body("unauthorized")), .signIn)
         XCTAssertEqual(DebtAnalysisClient.failure(status: 422, body: body("declined")), .declined)
         XCTAssertEqual(DebtAnalysisClient.failure(status: 502, body: Data()), .generic)
+        XCTAssertEqual(DebtAnalysisClient.failure(status: 429, body: body("rate_limited")), .generic)
     }
 
     // MARK: Words
