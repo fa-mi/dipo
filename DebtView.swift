@@ -29,6 +29,7 @@ struct DebtView: View {
     @Query private var installments: [CardInstallment]
     @Query private var recurrings: [RecurringExpense]
     @Query private var receivables: [Receivable]
+    @Query private var goals: [SavingsGoal]
     @Query private var budgetConfigs: [CardBudgetConfig]
     /// Inside ObligationsView the hub owns the header and the Simulate tab, so
     /// this view drops its own duplicate simulator button.
@@ -165,6 +166,18 @@ struct DebtView: View {
         a.monthLeft = reading.verdict == nil ? nil : reading.left
         a.owedToYou = owedToYou
         return a
+    }
+
+    /// The figures DiPo AI's debt analysis is written from — the ones this
+    /// screen shows, computed the same way.
+    private func analysisSnapshot(_ e: FinancialHealthEngine, _ reading: DebtAffordability) -> String {
+        let sb = SmartBudgetManager.shared
+        return DebtAnalysisSnapshot.build(.init(
+            cards: cards, installments: installments, debts: debts, receivables: receivables,
+            salaries: salaries, recurrings: recurrings, goals: goals,
+            reading: reading, advice: advice(e, reading),
+            budget: sb.ratios(forCardID: sb.budgetCardID, configs: budgetConfigs),
+            currency: CurrencyManager.shared.preferredCurrency))
     }
 
     /// Whether a usual month carries `e`'s payments. Read from the Financial
@@ -305,6 +318,7 @@ struct DebtView: View {
                         if monthlyIncome > 0 {
                             if engine.hasAnyDebt {
                                 DebtFirstCard(advice: advice(engine, reading))
+                                DebtAnalysisCard { analysisSnapshot(engine, reading) }
                             }
                         } else if !activeDebts.isEmpty {
                             SalarySetupCTA(message: loc("salary.cta.debt")) { showSalarySetup = true }
