@@ -11,9 +11,6 @@ import SwiftUI
 /// Home's preferences. Kept on this device, like the appearance mode: they
 /// are choices about one screen, not records worth a backup.
 enum HomePrefs {
-    /// DiPo's face on Home: his row and the header's stand-in avatar. Off, a
-    /// plain icon and the user's initial take his places.
-    static let showDiPoKey = "home_show_dipo"
     /// Every figure on Home behind dots, from the eye on the total row.
     static let hideBalancesKey = "home_hide_balances"
 }

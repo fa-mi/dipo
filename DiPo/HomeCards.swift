@@ -19,17 +19,6 @@ struct HomeHeader: View {
     @State private var name: String = ""
     /// Observed so the ring changes the moment the plan does.
     @State private var premium = PremiumManager.shared
-    /// Without a photo the header wore DiPo's face. Switched off in Profile,
-    /// it wears the user's initial instead.
-    @AppStorage(HomePrefs.showDiPoKey) private var showDiPo = true
-
-    /// The first letter of the name, for the stand-in avatar. "User" is the
-    /// placeholder for no name at all, so it gets the silhouette instead.
-    static func initial(of name: String) -> String? {
-        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, trimmed != "User", let first = trimmed.first else { return nil }
-        return String(first).uppercased()
-    }
 
     private var isRoyal: Bool { premium.plan == .royal }
 
@@ -90,21 +79,14 @@ struct HomeHeader: View {
                                 .scaledToFill()
                                 .frame(width: 45, height: 45)
                                 .clipShape(Circle())
-                        } else if showDiPo {
+                        } else {
+                            // Without a photo, the header wears DiPo's face.
                             Image("DiPoMascot")
                                 .resizable()
                                 .scaledToFill()
                                 .frame(width: 49, height: 49)
                                 .frame(width: 45, height: 45)
                                 .clipShape(Circle())
-                        } else if let initial = Self.initial(of: name) {
-                            Text(initial)
-                                .font(.system(.title3, weight: .bold))
-                                .foregroundStyle(AppTheme.textSecondary)
-                        } else {
-                            Image(systemName: "person.fill")
-                                .font(.system(.title3))
-                                .foregroundStyle(AppTheme.textSecondary)
                         }
                         avatarRing
                     }

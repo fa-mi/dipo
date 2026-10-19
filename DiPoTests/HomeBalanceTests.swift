@@ -42,19 +42,10 @@ final class HomeBalanceTests: XCTestCase {
         XCTAssertEqual(MonthFlowCard.remaining(income: 5_000_000, expense: 6_250_000, putAway: 0, extra: 0), -1_250_000)
     }
 
-    /// With DiPo off, the header shows the user's initial; the "User"
-    /// placeholder is no name, so it gets the silhouette.
-    func testHeaderInitialIsTheNameNotThePlaceholder() {
-        XCTAssertEqual(HomeHeader.initial(of: "fahmi"), "F")
-        XCTAssertEqual(HomeHeader.initial(of: "  ana "), "A")
-        XCTAssertNil(HomeHeader.initial(of: "User"))
-        XCTAssertNil(HomeHeader.initial(of: "   "))
-    }
-
     func testHomeStringsExistInBothLanguages() {
         let keys = ["home.total_balance", "home.total_accounts",
                     "home.hero.payday_today", "home.hero.payday_tomorrow", "home.hero.payday_in",
-                    "home.hide_all", "home.show_all", "profile.home_dipo", "profile.home_dipo_sub"]
+                    "home.hide_all", "home.show_all"]
         for lang in LanguageManager.Language.allCases {
             LanguageManager.shared.withLanguage(lang) {
                 for k in keys { XCTAssertNotEqual(loc(k), k, "\(k) in \(lang)") }
