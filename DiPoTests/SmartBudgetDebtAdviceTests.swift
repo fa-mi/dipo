@@ -82,7 +82,7 @@ final class SmartBudgetDebtAdviceTests: XCTestCase {
     func testMoneyOwedBackGoesOnTheCardBalanceFirst() {
         let all = english { fahmi(monthLeft: -2_102_467, owed: 6_000_000).body(currency: "IDR") }
         XCTAssertTrue(all.contains("6.000.000") && all.contains("covers all of it"), all)
-        XCTAssertTrue(all.contains("When it comes back"), all, "money owed is used once it is back, never before")
+        XCTAssertTrue(all.contains("When it comes back"), "money owed is used once it is back, never before: \(all)")
         XCTAssertTrue(all.hasSuffix(english { loc("debt.first.no_lending") }), all)
 
         let part = english { fahmi(monthLeft: 1_000_000, owed: 2_000_000).body(currency: "IDR") }
