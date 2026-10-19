@@ -83,7 +83,7 @@ final class DebtAnalysisTests: XCTestCase {
             "Food & Drinks Rp 3.000.000",
             "Shopping Rp 2.000.000",
             "Smart Budget plan: daily needs 50%, lifestyle 35%, savings & debt 15%",
-            "\"Close the gap first, then the card\"",
+            "\"First spend less, then pay the card\"",
             "Savings goal 'Dana darurat'",
         ] {
             XCTAssertTrue(s.contains(expected), "missing: \(expected)\n\(s)")
