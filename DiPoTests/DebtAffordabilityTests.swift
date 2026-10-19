@@ -28,7 +28,7 @@ final class DebtAffordabilityTests: XCTestCase {
         XCTAssertEqual(r.verdict, .safe)
         XCTAssertEqual(r.left, 2_370_833, accuracy: 0.5)
         let title = english { r.title() }
-        XCTAssertEqual(title, "Debt: Safe · payments take 11% of income")
+        XCTAssertEqual(title, "Safe · payments are 11% of your income")
         let detail = english { r.detail(currency: "IDR") } ?? ""
         XCTAssertTrue(detail.contains("6.500.000") && detail.contains("1.129.167")
                       && detail.contains("2.370.833") && detail.contains("10.000.000"), detail)
@@ -57,7 +57,7 @@ final class DebtAffordabilityTests: XCTestCase {
         XCTAssertEqual(r.verdict, .tight)
         let detail = english { r.detail(currency: "IDR") } ?? ""
         XCTAssertTrue(detail.contains("30%") && detail.contains("1.200.000"), detail)
-        XCTAssertEqual(english { r.title() }, "Debt: Tight · payments take 34% of income")
+        XCTAssertEqual(english { r.title() }, "Tight · payments are 34% of your income")
     }
 
     /// Spending and payments together past income: the payments come out of
@@ -151,7 +151,7 @@ final class DebtAffordabilityTests: XCTestCase {
         XCTAssertEqual(a.extra, 370_833, accuracy: 0.5)
         XCTAssertFalse(a.noRoom)
         english {
-            XCTAssertEqual(a.title(), "Clear the card balance first, then save")
+            XCTAssertEqual(a.title(), "Pay off the card first, then save")
             let share = a.shareLine(currency: "IDR") ?? ""
             XCTAssertTrue(share.contains("1.500.000") && share.contains("15%")
                           && share.hasSuffix(loc("debt.first.share_costly")), share)
@@ -169,7 +169,7 @@ final class DebtAffordabilityTests: XCTestCase {
         XCTAssertEqual(p.fast.interest, 1_853_763, accuracy: 1)
         XCTAssertEqual(p.slow?.interest ?? 0, 5_499_464, accuracy: 1)
         english {
-            XCTAssertEqual(a.title(), "Clear Kredivo first, then save")
+            XCTAssertEqual(a.title(), "Pay off Kredivo first, then save")
             let body = a.body(currency: "IDR")
             XCTAssertTrue(body.contains("36%") && body.contains("3.645.701") && body.contains("600.000"), body)
         }
@@ -183,7 +183,7 @@ final class DebtAffordabilityTests: XCTestCase {
         XCTAssertNil(p.slow)
         XCTAssertEqual(p.fast.months, 11, "Rp 250 rb minimum plus the Rp 850 rb rest of the share")
         let body = english { a.body(currency: "IDR") }
-        XCTAssertTrue(body.contains("never be paid off"), body)
+        XCTAssertTrue(body.contains("it never ends"), body)
     }
 
     func testInterestFreePayoffIsJustTheBalanceOverThePayment() {
@@ -198,14 +198,14 @@ final class DebtAffordabilityTests: XCTestCase {
         XCTAssertNil(a.shareLine(currency: "IDR"))
         XCTAssertNil(a.faster())
         let body = english { a.body(currency: "IDR") }
-        XCTAssertTrue(body.contains("1.700.000") && body.contains("1.500.000") && body.contains("the card balance"), body)
+        XCTAssertTrue(body.contains("1.700.000") && body.contains("1.500.000") && body.contains("your card"), body)
     }
 
     func testCheapDebtIsPaidOnScheduleAndTheRestSaved() {
         let a = DebtFirstAdvice(share: 1_500_000, ratio: 0.15, minimums: 1_129_167, target: nil)
         english {
             XCTAssertEqual(a.title(), "Saving alongside is fine")
-            XCTAssertEqual(a.shareLine(currency: "IDR"), "Smart Budget sets aside Rp 1.500.000 a month (15%) for savings & debt.")
+            XCTAssertEqual(a.shareLine(currency: "IDR"), "Your savings & debt budget: Rp 1.500.000 a month (15%).")
             XCTAssertTrue(a.body(currency: "IDR").contains("under 10% a year"))
         }
         let full = DebtFirstAdvice(share: 1_500_000, ratio: 0.15, minimums: 2_000_000, target: nil)

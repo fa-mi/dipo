@@ -99,7 +99,7 @@ final class WebPeriodViewTests: XCTestCase {
         let id = words(v, "id"), en = words(v, "en")
         XCTAssertEqual(id["pill"] as? String, "Aman sampai gajian 25 Okt")
         XCTAssertEqual(id["debt"] as? String,
-                       "Kamu juga bayar utang & kartu kredit Rp 3.882.381 — itu melunasi utang, bukan belanja baru. "
+                       "Kamu juga bayar utang & kartu Rp 3.882.381. Itu mengurangi utang, bukan belanja baru. "
                        + "Dibantu Rp 482.381 dari Repaid by Mom.")
         XCTAssertEqual(en["living"] as? String,
                        "Spending & bills Rp 6.600.000 — still Rp 3.400.000 under your income.")
