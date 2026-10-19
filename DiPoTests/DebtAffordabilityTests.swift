@@ -40,8 +40,8 @@ final class DebtAffordabilityTests: XCTestCase {
         XCTAssertEqual(r.verdict, .tight)
         XCTAssertTrue(r.marginIsThin)
         let detail = english { r.detail(currency: "IDR") } ?? ""
-        XCTAssertTrue(detail.contains("470.833") && detail.contains("no new debt"), detail)
-        XCTAssertTrue(english { r.title() }.hasPrefix("Debt: Tight"))
+        XCTAssertTrue(detail.contains("470.833") && detail.contains("new debt"), detail)
+        XCTAssertTrue(english { r.title() }.hasPrefix("Tight"))
     }
 
     func testExactlyATenthLeftIsNotThin() {
@@ -66,14 +66,14 @@ final class DebtAffordabilityTests: XCTestCase {
         let r = reading(spending: 9_500_000)
         XCTAssertEqual(r.verdict, .heavy)
         let detail = english { r.detail(currency: "IDR") } ?? ""
-        XCTAssertTrue(detail.contains("629.167") && detail.contains("savings or more borrowing"), detail)
+        XCTAssertTrue(detail.contains("629.167") && detail.contains("debt will grow"), detail)
     }
 
     func testOnlyNewShoppingOnACardAsksForNothingEachMonth() {
         let r = reading(spending: 4_000_000, payments: 0)
         XCTAssertEqual(r.verdict, .safe)
         let detail = english { r.detail(currency: "IDR") } ?? ""
-        XCTAssertTrue(detail.contains("6.000.000") && !detail.contains("in payments"), detail)
+        XCTAssertTrue(detail.contains("6.000.000") && !detail.contains("in debt each month"), detail)
         let over = reading(spending: 10_400_000, payments: 0)
         XCTAssertEqual(over.verdict, .heavy)
         XCTAssertTrue((english { over.detail(currency: "IDR") } ?? "").contains("400.000"))
