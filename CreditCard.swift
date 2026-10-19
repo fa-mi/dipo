@@ -416,6 +416,10 @@ struct CreditCardPaymentSheet: View {
     let creditCard: BankCard
     let cards: [BankCard]
     let context: ModelContext
+    /// Filled in by whoever opened the sheet: money owed back, just received
+    /// into `presetFromID`, in that account's currency.
+    var presetAmount: Double? = nil
+    var presetFromID: UUID? = nil
     @Environment(\.dismiss) private var dismiss
 
     @State private var amountText = ""
@@ -489,7 +493,10 @@ struct CreditCardPaymentSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(AppTheme.bg, for: .navigationBar)
             .doneToolbar { dismiss() }
-            .onAppear { if fromCardID == nil { fromCardID = cashCards.first?.id } }
+            .onAppear {
+                if fromCardID == nil { fromCardID = presetFromID ?? cashCards.first?.id }
+                if amountText.isEmpty, let presetAmount { amountText = NumberInput.text(presetAmount) }
+            }
         }
     }
 

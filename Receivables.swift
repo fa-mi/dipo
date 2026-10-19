@@ -563,14 +563,31 @@ struct ReceivableFormSheet: View {
 
 // MARK: - Repayment
 
+/// After money owed comes back while something dear is owed: where Smart
+/// Budget would put it, and how much — the repayment, up to that balance.
+struct RepaymentOffer: Identifiable, Equatable {
+    let payoff: OwedBackPlan.Payoff
+    /// What came back, in the receivable's currency.
+    let received: Double
+    /// The account it went into, and the payment in that account's currency.
+    let fromID: UUID
+    let fromName: String
+    let amount: Double
+    let currency: String
+    var id: UUID { payoff.debt.id }
+}
+
 struct RepaymentSheet: View {
     let receivable: Receivable
     let cards: [BankCard]
     let allTx: [TxRecord]
     let context: ModelContext
+    @Query private var debts: [DebtRecord]
     @Environment(\.dismiss) private var dismiss
     @State private var amountText = ""
     @State private var cardID: UUID? = nil
+    @State private var offer: RepaymentOffer?
+    @State private var paying: RepaymentOffer?
 
     private var remaining: Double { receivable.outstanding(from: allTx) }
 
@@ -578,49 +595,10 @@ struct RepaymentSheet: View {
         NavigationStack {
             ZStack {
                 AppTheme.bg.ignoresSafeArea()
-                ScrollView(showsIndicators: false) {
-                    VStack(spacing: 18) {
-                        VStack(spacing: 4) {
-                            Text(loc("receivable.remaining"))
-                                .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
-                            Text(CurrencyManager.shared.formatted(remaining, currency: receivable.currency))
-                                .font(.system(.title, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
-                        }
-                        .padding(.top, 8)
-
-                        TextField("0", text: $amountText)
-                            .font(.system(.title2, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
-                            .keyboardType(.decimalPad).multilineTextAlignment(.center)
-                            .padding(.vertical, 14)
-                            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
-                            .padding(.horizontal, 22)
-
-                        Button {
-                            amountText = NumberInput.text(remaining)
-                        } label: {
-                            Text(loc("receivable.pay_full")).font(.system(.caption, weight: .semibold))
-                                .foregroundStyle(AppTheme.accent)
-                        }
-                        .buttonStyle(.plain)
-
-                        CardPickerSection(selectedCardID: $cardID, titleKey: "receivable.to_card")
-                            .padding(.horizontal, 22)
-
-                        Button {
-                            record()
-                        } label: {
-                            Text(loc("receivable.record_repayment"))
-                                .font(.system(.callout, weight: .bold)).foregroundStyle(canSave ? AppTheme.onVividFill : AppTheme.textSecondary)
-                                .frame(maxWidth: .infinity).padding(.vertical, 15)
-                                .background(canSave ? AppTheme.accentFill : AppTheme.cardMid,
-                                            in: RoundedRectangle(cornerRadius: AppRadius.md))
-                        }
-                        .buttonStyle(ScaleButtonStyle())
-                        .disabled(!canSave)
-                        .padding(.horizontal, 22)
-                        Spacer(minLength: 20)
-                    }
-                    .containerRelativeFrame(.horizontal)
+                if let offer {
+                    offerView(offer)
+                } else {
+                    form
                 }
             }
             .navigationTitle(receivable.personName)
@@ -628,12 +606,178 @@ struct RepaymentSheet: View {
             .toolbarBackground(AppTheme.bg, for: .navigationBar)
             .doneToolbar { dismiss() }
             .onAppear { if cardID == nil { cardID = cards.first?.id } }
+            // Paid or not, the repayment is done once that sheet closes.
+            .sheet(item: $paying, onDismiss: { dismiss() }) { o in
+                paymentSheet(o)
+            }
+        }
+    }
+
+    private var form: some View {
+        ScrollView(showsIndicators: false) {
+            VStack(spacing: 18) {
+                VStack(spacing: 4) {
+                    Text(loc("receivable.remaining"))
+                        .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
+                    Text(CurrencyManager.shared.formatted(remaining, currency: receivable.currency))
+                        .font(.system(.title, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
+                }
+                .padding(.top, 8)
+
+                TextField("0", text: $amountText)
+                    .font(.system(.title2, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
+                    .keyboardType(.decimalPad).multilineTextAlignment(.center)
+                    .padding(.vertical, 14)
+                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+                    .padding(.horizontal, 22)
+
+                Button {
+                    amountText = NumberInput.text(remaining)
+                } label: {
+                    Text(loc("receivable.pay_full")).font(.system(.caption, weight: .semibold))
+                        .foregroundStyle(AppTheme.accent)
+                }
+                .buttonStyle(.plain)
+
+                CardPickerSection(selectedCardID: $cardID, titleKey: "receivable.to_card")
+                    .padding(.horizontal, 22)
+
+                Button {
+                    record()
+                } label: {
+                    Text(loc("receivable.record_repayment"))
+                        .font(.system(.callout, weight: .bold)).foregroundStyle(canSave ? AppTheme.onVividFill : AppTheme.textSecondary)
+                        .frame(maxWidth: .infinity).padding(.vertical, 15)
+                        .background(canSave ? AppTheme.accentFill : AppTheme.cardMid,
+                                    in: RoundedRectangle(cornerRadius: AppRadius.md))
+                }
+                .buttonStyle(ScaleButtonStyle())
+                .disabled(!canSave)
+                .padding(.horizontal, 22)
+                Spacer(minLength: 20)
+            }
+            .containerRelativeFrame(.horizontal)
         }
     }
 
     private var canSave: Bool {
         guard NumberInput.amount(amountText) > 0, cardID != nil else { return false }
         return true
+    }
+
+    // MARK: Putting it where Smart Budget would
+
+    /// The dearest debt in Smart Budget's order, offered the money that just
+    /// came in. None when it went onto a credit card — that already paid the
+    /// card — or nothing owed is dear.
+    private func offerFor(_ amount: Double, into card: BankCard) -> RepaymentOffer? {
+        guard !card.isCreditCard else { return nil }
+        let cm = CurrencyManager.shared
+        let pref = cm.preferredCurrency
+        let costly = OwedBackPlan.costly(debts: debts, cards: cards, currency: pref)
+        guard let payoff = OwedBackPlan.firstPayoff(of: cm.convert(amount, from: receivable.currency, to: pref),
+                                                    costly: costly) else { return nil }
+        let currency = card.resolvedCurrency
+        return RepaymentOffer(payoff: payoff, received: amount, fromID: card.id,
+                              fromName: card.holderName.isEmpty ? loc("card.untitled") : card.holderName,
+                              amount: cm.convert(payoff.paid, from: pref, to: currency).rounded(),
+                              currency: currency)
+    }
+
+    private func offerView(_ o: RepaymentOffer) -> some View {
+        let money = { (v: Double, c: String) in CurrencyManager.shared.formatted(v, currency: c) }
+        let why: String
+        switch o.payoff.debt.kind {
+        case .card:
+            why = String(format: loc("receivable.offer.why_card"), money(o.payoff.debt.balance, CurrencyManager.shared.preferredCurrency))
+        case .loan(let rate):
+            why = String(format: loc("receivable.offer.why_loan"), DebtFirstAdvice.rate(rate))
+        }
+        return ScrollView(showsIndicators: false) {
+            VStack(spacing: 18) {
+                Image(systemName: "checkmark")
+                    .font(.system(.title2, weight: .bold))
+                    .foregroundStyle(AppTheme.accent)
+                    .frame(width: 56, height: 56)
+                    .background(AppTheme.accent.opacity(0.15), in: Circle())
+                    .padding(.top, 8)
+                VStack(spacing: 4) {
+                    Text(String(format: loc("receivable.offer.recorded"), money(o.received, receivable.currency)))
+                        .font(.system(.title3, weight: .bold))
+                        .foregroundStyle(AppTheme.textPrimary)
+                        .multilineTextAlignment(.center)
+                    Text(String(format: loc("receivable.offer.into"), receivable.personName, o.fromName))
+                        .font(.system(.footnote))
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .multilineTextAlignment(.center)
+                }
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(String(format: loc("receivable.offer.title"), o.payoff.debt.name))
+                        .font(.system(.callout, weight: .semibold))
+                        .foregroundStyle(AppTheme.textPrimary)
+                    Text(why)
+                        .font(.system(.footnote))
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(16)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+                .padding(.horizontal, 22)
+
+                VStack(spacing: 6) {
+                    Button {
+                        HapticManager.shared.tap()
+                        paying = o
+                    } label: {
+                        Text(String(format: loc("receivable.offer.pay"), money(o.amount, o.currency), o.payoff.debt.name))
+                            .font(.system(.callout, weight: .bold))
+                            .foregroundStyle(AppTheme.onVividFill)
+                            .multilineTextAlignment(.center)
+                            .frame(maxWidth: .infinity).padding(.vertical, 15)
+                            .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: AppRadius.md))
+                    }
+                    .buttonStyle(ScaleButtonStyle())
+                    Button { dismiss() } label: {
+                        Text(loc("receivable.offer.later"))
+                            .font(.system(.callout, weight: .semibold))
+                            .foregroundStyle(AppTheme.textSecondary)
+                            .frame(maxWidth: .infinity).padding(.vertical, 12)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, 22)
+
+                Text(loc("receivable.offer.hint"))
+                    .font(.system(.caption))
+                    .foregroundStyle(AppTheme.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 22)
+                Spacer(minLength: 20)
+            }
+            .containerRelativeFrame(.horizontal)
+        }
+    }
+
+    @ViewBuilder
+    private func paymentSheet(_ o: RepaymentOffer) -> some View {
+        switch o.payoff.debt.kind {
+        case .card:
+            if let card = cards.first(where: { $0.id == o.payoff.debt.id }) {
+                CreditCardPaymentSheet(creditCard: card, cards: cards, context: context,
+                                       presetAmount: o.amount, presetFromID: o.fromID)
+                    .presentationDetents([.large]).presentationDragIndicator(.visible)
+                    .presentationBackground(AppTheme.bg).preferredColorScheme(appColorScheme())
+            }
+        case .loan:
+            if let debt = debts.first(where: { $0.id == o.payoff.debt.id }) {
+                DebtPaymentSheet(debt: debt, presetAmount: o.amount, presetFromID: o.fromID)
+                    .presentationDetents([.medium, .large])
+                    .presentationDragIndicator(.visible)
+                    .presentationBackground(AppTheme.bg)
+                    .preferredColorScheme(appColorScheme())
+            }
+        }
     }
 
     private func record() {
@@ -663,7 +807,11 @@ struct RepaymentSheet: View {
 
         try? context.save()
         HapticManager.shared.success()
-        dismiss()
+        if let next = offerFor(amount, into: card) {
+            withAnimation(.easeInOut(duration: 0.25)) { offer = next }
+        } else {
+            dismiss()
+        }
     }
 }
 
