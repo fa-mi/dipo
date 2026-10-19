@@ -284,6 +284,10 @@ struct DebtFormSheet: View {
 
 struct DebtPaymentSheet: View {
     @Bindable var debt: DebtRecord
+    /// Filled in by whoever opened the sheet: money owed back, just received
+    /// into `presetFromID`, in that account's currency.
+    var presetAmount: Double? = nil
+    var presetFromID: UUID? = nil
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
     @Query(sort: \BankCard.sortOrder) private var cards: [BankCard]
@@ -292,6 +296,9 @@ struct DebtPaymentSheet: View {
     @State private var selectedCardIndex = 0
     @State private var note         = ""
     @State private var errorMsg: String? = nil
+    /// The preset picks the account and the amount together; picking the
+    /// account must not then clear the amount.
+    @State private var keepPresetAmount = false
 
     private var amount: Double { NumberInput.amount(amountText) }
 
@@ -551,7 +558,16 @@ struct DebtPaymentSheet: View {
         .animation(.spring(response: 0.3), value: selectedCardIndex)
         .animation(.spring(response: 0.3), value: amount)
         // When user switches card, reset amount so they don't accidentally pay wrong amount in wrong currency
-        .onChange(of: selectedCardIndex) { _, _ in amountText = "" }
+        .onChange(of: selectedCardIndex) { _, _ in
+            if keepPresetAmount { keepPresetAmount = false } else { amountText = "" }
+        }
+        .onAppear {
+            if let id = presetFromID, let i = cards.firstIndex(where: { $0.id == id }), i != selectedCardIndex {
+                keepPresetAmount = true
+                selectedCardIndex = i
+            }
+            if amountText.isEmpty, let presetAmount { amountText = NumberInput.text(presetAmount) }
+        }
     }
 
     private func makePayment() {

@@ -148,6 +148,20 @@ struct ObligationLoad {
         }
     }
 
+    /// Each credit card carrying a balance from earlier bills, with that
+    /// balance in `currency`.
+    static func carriedByCard(cards: [BankCard], currency: String,
+                              now: Date = .now) -> [(card: BankCard, carried: Double)] {
+        let cm = CurrencyManager.shared
+        let cal = Calendar.current
+        let thisMonth = cal.date(from: cal.dateComponents([.year, .month], from: now)) ?? now
+        let lastMonth = cal.date(byAdding: .month, value: -1, to: thisMonth) ?? thisMonth
+        return cards.filter(\.isCreditCard).compactMap { card -> (card: BankCard, carried: Double)? in
+            let amount = cm.convert(Self.carried(on: card, since: lastMonth), from: card.resolvedCurrency, to: currency)
+            return amount >= 0.5 ? (card: card, carried: amount) : nil
+        }
+    }
+
     static func build(debts: [DebtRecord],
                       recurrings: [RecurringExpense],
                       salaries: [SalarySchedule],

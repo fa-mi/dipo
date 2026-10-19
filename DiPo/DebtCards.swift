@@ -99,6 +99,9 @@ struct DebtSummaryCard: View {
     /// Of the total: what credit cards carry. Said under the figure so the
     /// total can be traced to the cards listed further down.
     var cardOwed: Double = 0
+    /// What the money owed back would clear, when there is any and something
+    /// dear to clear.
+    var owedBack: OwedBackPlan? = nil
     let debtFreeDate: Date?
     var showSimulator: Bool
     let onAdd: () -> Void
@@ -177,6 +180,10 @@ struct DebtSummaryCard: View {
             .padding(12)
             .background(tone.tint.opacity(0.10), in: RoundedRectangle(cornerRadius: AppRadius.md))
 
+            if let owedBack {
+                OwedBackBlock(plan: owedBack)
+            }
+
             if showSimulator {
                 Button(action: onSimulate) {
                     Label(loc("debt.simulate"), systemImage: "chart.line.uptrend.xyaxis")
@@ -207,6 +214,136 @@ struct DebtSummaryCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(12)
         .background(AppTheme.cardMid.opacity(0.5), in: RoundedRectangle(cornerRadius: AppRadius.md))
+    }
+}
+
+// MARK: - When the money owed to you comes back
+
+/// Under the verdict: what the money others owe would clear, and the month
+/// before and after. The verdict above stays today's (see OwedBackPlan).
+struct OwedBackBlock: View {
+    let plan: OwedBackPlan
+
+    private var currency: String { CurrencyManager.shared.preferredCurrency }
+    private func money(_ v: Double) -> String { CurrencyManager.shared.formatted(v, currency: currency) }
+
+    private func tint(_ reading: DebtAffordability) -> Color {
+        switch reading.verdict {
+        case .heavy?: return AppTheme.red
+        case .tight?: return AppTheme.orange
+        default:      return AppTheme.accent
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Image(systemName: "arrow.uturn.backward")
+                    .font(.system(.caption, weight: .bold))
+                    .foregroundStyle(AppTheme.accent)
+                    .frame(width: 26, height: 26)
+                    .background(AppTheme.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: AppRadius.sm))
+                Text(String(format: loc("debt.owed_back.title"), money(plan.owedBack)))
+                    .font(.system(.footnote, weight: .semibold))
+                    .foregroundStyle(AppTheme.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            VStack(spacing: 0) {
+                ForEach(Array(plan.payoffs.enumerated()), id: \.offset) { n, payoff in
+                    if n > 0 { Divider() }
+                    payoffRow(payoff)
+                }
+                if plan.leftOver >= 0.5 {
+                    Divider()
+                    row(loc("debt.owed_back.left_over"), loc("debt.owed_back.buffer"), money(plan.leftOver), chip: nil)
+                }
+            }
+
+            VStack(spacing: 6) {
+                change(loc("debt.monthly_payments_label"),
+                       money(plan.before.monthlyPayments), money(plan.after.monthlyPayments), AppTheme.textPrimary)
+                if let was = plan.before.verdictLabel, let will = plan.after.verdictLabel {
+                    change(loc("debt.owed_back.verdict"), was, will, tint(plan.after))
+                }
+            }
+            .padding(.horizontal, 12).padding(.vertical, 10)
+            .background(AppTheme.cardMid.opacity(0.5), in: RoundedRectangle(cornerRadius: AppRadius.sm))
+
+            Text(plan.note(currency: currency))
+                .font(.system(.caption))
+                .foregroundStyle(AppTheme.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(14)
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.cardMid, lineWidth: 1))
+    }
+
+    private func payoffRow(_ payoff: OwedBackPlan.Payoff) -> some View {
+        let detail: String
+        switch payoff.debt.kind {
+        case .card:              detail = loc("debt.owed_back.carried")
+        case .loan(let rate):    detail = String(format: loc("debt.owed_back.rate"), DebtFirstAdvice.rate(rate))
+        }
+        let chip = payoff.cleared
+            ? (loc("debt.owed_back.cleared"), AppTheme.accent)
+            : (String(format: loc("debt.owed_back.of"), money(payoff.debt.balance)), AppTheme.textSecondary)
+        return row(payoff.debt.name, detail, money(payoff.paid), chip: chip)
+    }
+
+    private func row(_ title: String, _ detail: String, _ amount: String, chip: (String, Color)?) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(.footnote))
+                    .foregroundStyle(AppTheme.textPrimary)
+                    .lineLimit(1)
+                Text(detail)
+                    .font(.system(.caption))
+                    .foregroundStyle(AppTheme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 6)
+            VStack(alignment: .trailing, spacing: 3) {
+                Text(amount)
+                    .font(.system(.footnote, weight: .semibold))
+                    .foregroundStyle(AppTheme.textPrimary)
+                    .lineLimit(1)
+                if let chip {
+                    Text(chip.0)
+                        .font(.system(.caption2, weight: .bold))
+                        .foregroundStyle(chip.1)
+                        .lineLimit(1)
+                        .padding(.horizontal, 7).padding(.vertical, 2)
+                        .background(chip.1.opacity(0.12), in: Capsule())
+                }
+            }
+            .fixedSize()
+        }
+        .padding(.vertical, 8)
+    }
+
+    private func change(_ label: String, _ was: String, _ will: String, _ color: Color) -> some View {
+        HStack(spacing: 6) {
+            Text(label)
+                .font(.system(.caption))
+                .foregroundStyle(AppTheme.textSecondary)
+                .lineLimit(1)
+            Spacer(minLength: 6)
+            Text(was)
+                .font(.system(.caption))
+                .strikethrough()
+                .foregroundStyle(AppTheme.textSecondary)
+                .lineLimit(1)
+            Image(systemName: "arrow.right")
+                .font(.system(.caption2, weight: .semibold))
+                .foregroundStyle(AppTheme.textSecondary)
+            Text(will)
+                .font(.system(.caption, weight: .semibold))
+                .foregroundStyle(color)
+                .lineLimit(1)
+        }
+        .minimumScaleFactor(0.85)
     }
 }
 

@@ -159,6 +159,13 @@ struct DebtView: View {
         }
     }
 
+    /// What the money owed back would clear if it came back and went where
+    /// Smart Budget says, and what the month would look like then.
+    private func owedBack(_ e: FinancialHealthEngine, _ reading: DebtAffordability) -> OwedBackPlan? {
+        let costly = OwedBackPlan.costly(debts: debts, cards: cards, currency: CurrencyManager.shared.preferredCurrency)
+        return OwedBackPlan.make(owedBack: owedToYou, costly: costly, totalDebt: e.totalDebt, reading: reading)
+    }
+
     /// Smart Budget's advice, told how a usual month really goes and what is
     /// owed back.
     private func advice(_ e: FinancialHealthEngine, _ reading: DebtAffordability) -> DebtFirstAdvice {
@@ -272,6 +279,7 @@ struct DebtView: View {
                         DebtSummaryCard(engine: engine,
                                         affordability: reading,
                                         cardOwed: cardOwed,
+                                        owedBack: owedBack(engine, reading),
                                         debtFreeDate: debtFreeDate,
                                         showSimulator: !embedded && !activeDebts.isEmpty,
                                         onAdd: { HapticManager.shared.tap(); vm.resetForm(); vm.showAddSheet = true },
