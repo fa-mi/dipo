@@ -218,12 +218,15 @@ final class DebtAnalysisClient {
     private static let creditsURL = URL(string: "https://dipo-receipt-scanner.fahmi-aquinas.workers.dev/api/credits")!
 
     enum Failure: Error, Equatable {
-        case offline, signIn, royal, limit, credits, declined, generic
+        /// `confirm`: logged in, but the Firebase account on this phone
+        /// doesn't carry that login (see AccountReconnect.bind).
+        case offline, signIn, confirm, royal, limit, credits, declined, generic
 
         var messageKey: String {
             switch self {
             case .offline:  return "analysis.err.offline"
             case .signIn:   return "analysis.err.signin"
+            case .confirm:  return "analysis.err.confirm"
             case .royal:    return "analysis.err.royal"
             case .limit:    return "analysis.err.limit"
             case .credits:  return "analysis.err.credits"
@@ -246,6 +249,10 @@ final class DebtAnalysisClient {
     var quota: Quota?
     private(set) var isRunning = false
     private(set) var last: DebtAnalysis?
+    /// Logged in, but this phone's Firebase account doesn't carry the login
+    /// yet, so the Worker would refuse: the card asks for one confirmation.
+    private(set) var needsAccount = false
+    private(set) var isConfirming = false
 
     /// Its own session. The shared one gives up after 30 seconds and tries
     /// again up to three times — fine for a chat message, but here each
@@ -276,6 +283,22 @@ final class DebtAnalysisClient {
     private struct ErrorReply: Decodable { let error: String? }
 
     private static func storeKey(_ userId: String) -> String { "debt_analysis_last.\(userId)" }
+
+    /// Royal first: for anyone else, confirming the account would only lead
+    /// to "the analysis is part of Royal".
+    func checkAccount() {
+        needsAccount = UserSession.shared.isLoggedIn && PremiumManager.shared.plan == .royal
+            && !AccountReconnect.isBound
+    }
+
+    func confirmAccount() async -> AccountReconnect.BindOutcome {
+        guard !isConfirming else { return .cancelled }
+        isConfirming = true
+        defer { isConfirming = false }
+        let outcome = await AccountReconnect.bind()
+        if outcome == .bound { needsAccount = false }
+        return outcome
+    }
 
     /// The last plan this account received on this phone.
     func loadLast() {
@@ -333,7 +356,15 @@ final class DebtAnalysisClient {
         do {
             let (data, response) = try await session.data(for: req)
             let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-            guard status == 200 else { return .failure(Self.failure(status: status, body: data)) }
+            guard status == 200 else {
+                let failure = Self.failure(status: status, body: data)
+                if failure == .confirm {
+                    // The Worker checks the account before the plan.
+                    guard PremiumManager.shared.plan == .royal else { return .failure(.royal) }
+                    needsAccount = true
+                }
+                return .failure(failure)
+            }
             let reply = try JSONDecoder().decode(AnalyzeReply.self, from: data)
             var analysis = reply.analysis
             analysis.createdAt = .now
@@ -357,7 +388,7 @@ final class DebtAnalysisClient {
     static func failure(status: Int, body: Data) -> Failure {
         let error = (try? JSONDecoder().decode(ErrorReply.self, from: body))?.error
         switch status {
-        case 401: return .signIn
+        case 401: return .confirm
         case 403: return .royal
         case 402: return error == "analysis_limit" ? .limit : .credits
         case 422: return .declined
@@ -374,7 +405,8 @@ struct DebtAnalysisCard: View {
 
     @State private var client = DebtAnalysisClient.shared
     @State private var showingPlan = false
-    @State private var failure: DebtAnalysisClient.Failure?
+    /// What went wrong, as a string key.
+    @State private var problem: String?
     @State private var confirmingCost: Int?
 
     private var capped: Bool {
@@ -434,34 +466,26 @@ struct DebtAnalysisCard: View {
                 .buttonStyle(ScaleButtonStyle())
             }
 
-            Button(action: start) {
-                HStack(spacing: 8) {
-                    if client.isRunning {
-                        ProgressView().tint(AppTheme.onVividFill)
-                    } else {
-                        Image(systemName: "wand.and.stars").font(.system(.subheadline, weight: .bold))
-                    }
-                    Text(loc(client.isRunning ? "analysis.working_short"
-                             : (client.last == nil ? "analysis.run" : "analysis.run_again")))
-                        .font(.system(.subheadline, weight: .bold))
-                }
-                .foregroundStyle(capped ? AppTheme.textSecondary : AppTheme.onVividFill)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 13)
-                .background(capped ? AppTheme.cardMid : AppTheme.accentFill, in: RoundedRectangle(cornerRadius: AppRadius.md))
+            if client.needsAccount {
+                confirmButton
+            } else {
+                runButton
             }
-            .buttonStyle(ScaleButtonStyle())
-            .disabled(client.isRunning || capped)
 
             if client.isRunning {
                 Text(loc("analysis.working"))
                     .font(.system(.caption))
                     .foregroundStyle(AppTheme.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
-            } else if let failure {
-                Label(loc(failure.messageKey), systemImage: "exclamationmark.circle.fill")
+            } else if let problem {
+                Label(loc(problem), systemImage: "exclamationmark.circle.fill")
                     .font(.system(.caption, weight: .medium))
                     .foregroundStyle(AppTheme.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else if client.needsAccount {
+                Text(loc("analysis.confirm_why"))
+                    .font(.system(.caption))
+                    .foregroundStyle(AppTheme.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             } else if let quotaLine {
                 Text(quotaLine)
@@ -479,6 +503,7 @@ struct DebtAnalysisCard: View {
         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.xl))
         .task {
             client.loadLast()
+            client.checkAccount()
             await client.refreshQuota()
         }
         .alert(String(format: loc("analysis.confirm_title"), confirmingCost ?? 0),
@@ -499,6 +524,72 @@ struct DebtAnalysisCard: View {
         }
     }
 
+    private var runButton: some View {
+        Button(action: start) {
+            HStack(spacing: 8) {
+                if client.isRunning {
+                    ProgressView().tint(AppTheme.onVividFill)
+                } else {
+                    Image(systemName: "wand.and.stars").font(.system(.subheadline, weight: .bold))
+                }
+                Text(loc(client.isRunning ? "analysis.working_short"
+                         : (client.last == nil ? "analysis.run" : "analysis.run_again")))
+                    .font(.system(.subheadline, weight: .bold))
+            }
+            .foregroundStyle(capped ? AppTheme.textSecondary : AppTheme.onVividFill)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 13)
+            .background(capped ? AppTheme.cardMid : AppTheme.accentFill, in: RoundedRectangle(cornerRadius: AppRadius.md))
+        }
+        .buttonStyle(ScaleButtonStyle())
+        .disabled(client.isRunning || capped)
+    }
+
+    /// One sign-in with the same Apple ID or Google account, linked to this
+    /// phone's account in place; then the analysis carries on.
+    private var confirmButton: some View {
+        let google = UserSession.shared.provider == .google
+        return Button(action: confirm) {
+            HStack(spacing: 8) {
+                if client.isConfirming {
+                    ProgressView().tint(AppTheme.onVividFill)
+                } else {
+                    Image(systemName: google ? "g.circle.fill" : "apple.logo")
+                        .font(.system(.subheadline, weight: .bold))
+                }
+                Text(loc(client.isConfirming ? "analysis.confirming"
+                         : (google ? "analysis.confirm_google" : "analysis.confirm_apple")))
+                    .font(.system(.subheadline, weight: .bold))
+            }
+            .foregroundStyle(AppTheme.onVividFill)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 13)
+            .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: AppRadius.md))
+        }
+        .buttonStyle(ScaleButtonStyle())
+        .disabled(client.isConfirming)
+    }
+
+    private func confirm() {
+        HapticManager.shared.tap()
+        problem = nil
+        Task {
+            let outcome = await client.confirmAccount()
+            switch outcome {
+            case .bound:
+                await client.refreshQuota()
+                start()
+                return
+            case .cancelled:
+                return
+            case .otherAccount:  problem = "analysis.err.other_account"
+            case .heldElsewhere: problem = "analysis.err.held_elsewhere"
+            case .failed:        problem = "analysis.err.confirm_failed"
+            }
+            HapticManager.shared.warning()
+        }
+    }
+
     private func start() {
         HapticManager.shared.tap()
         if let cost = client.quota?.nextCost, cost > 0 {
@@ -509,7 +600,7 @@ struct DebtAnalysisCard: View {
     }
 
     private func go() {
-        failure = nil
+        problem = nil
         let snapshot = makeSnapshot()
         Task {
             switch await client.run(snapshot: snapshot) {
@@ -518,7 +609,8 @@ struct DebtAnalysisCard: View {
                 showingPlan = true
             case .failure(let f):
                 HapticManager.shared.warning()
-                failure = f
+                // Asked for by the confirm button and its line instead.
+                problem = f == .confirm ? nil : f.messageKey
             }
         }
     }

@@ -65,6 +65,112 @@ enum AccountReconnect {
         return .reconnected
     }
 
+    // MARK: Binding the identity in place
+
+    enum BindOutcome: Equatable {
+        /// The Firebase account on this phone carries the login's identity.
+        case bound
+        /// Signed into a different Apple ID or Google account than DiPo's.
+        case otherAccount
+        /// The sign-in sheet was closed.
+        case cancelled
+        /// The identity belongs to another Firebase account, and this phone's
+        /// DiPo ID leads here: moving would strand what is keyed to this uid.
+        case heldElsewhere
+        /// Network or Firebase said no.
+        case failed
+    }
+
+    /// Whether a Firebase account with these providers carries the identity
+    /// DiPo is logged in with. The Worker checks the same thing in the ID
+    /// token (`firebase.identities`) before it spends a Royal account's
+    /// credits or analyses.
+    static func identityMatches(_ socialID: String?, providers: [(providerID: String, uid: String)]) -> Bool {
+        guard let socialID, !socialID.isEmpty else { return false }
+        return providers.contains { ($0.providerID == "apple.com" || $0.providerID == "google.com") && $0.uid == socialID }
+    }
+
+    static var isBound: Bool {
+        identityMatches(UserSession.shared.userID,
+                providers: Auth.auth().currentUser?.providerData.map { (providerID: $0.providerID, uid: $0.uid) } ?? [])
+    }
+
+    /// One sign-in with the same Apple ID or Google account, linked to the
+    /// Firebase account this phone is on now — the same uid, so joint
+    /// accounts, shared goals and the DiPo ID stay exactly where they are.
+    ///
+    /// A phone can be logged into DiPo while Firebase holds only the anonymous
+    /// account from launch: a login from before Firebase sign-in was added,
+    /// or one whose Firebase step failed. Nothing else notices; the Worker
+    /// does, because it reads whose account a request may spend from the
+    /// token.
+    ///
+    /// When the identity is already on another Firebase account, that
+    /// account is the one to return to only if the DiPo ID leads there (a
+    /// reinstall, which `run()` handles too). Otherwise this one holds the
+    /// history, and nothing is moved.
+    static func bind() async -> BindOutcome {
+        let session = UserSession.shared
+        guard let socialID = session.userID, !socialID.isEmpty,
+              let provider = session.provider else { return .failed }
+        if isBound { return await refreshed() }
+
+        let credential: AuthCredential
+        switch await freshCredential(provider, expecting: socialID) {
+        case .credential(let c): credential = c
+        case .outcome(.cancelled): return .cancelled
+        case .outcome(.otherAccount): return .otherAccount
+        case .outcome: return .failed
+        }
+
+        guard let current = Auth.auth().currentUser else {
+            return await signIn(credential) ? await refreshed() : .failed
+        }
+        switch await link(credential, to: current) {
+        case .linked:
+            return await refreshed()
+        case .failed:
+            return .failed
+        case .inUse(let recovery):
+            if await indexLeadsHere() { return .heldElsewhere }
+            guard await signIn(recovery ?? credential) else { return .failed }
+            var leadsHere = await indexLeadsHere()
+            if !leadsHere, await reclaim(socialID: socialID) { leadsHere = await indexLeadsHere() }
+            if leadsHere { await FirebaseSupportService.shared.registerUserProfile() }
+            return await refreshed()
+        }
+    }
+
+    private enum LinkResult {
+        case linked, failed
+        /// Already on another Firebase account. Firebase may hand back a
+        /// credential to recover with; that is the one to sign in with.
+        case inUse(AuthCredential?)
+    }
+
+    private static func link(_ credential: AuthCredential, to user: FirebaseAuth.User) async -> LinkResult {
+        // Only the error crosses the continuation: it is Sendable, the
+        // credential inside it is read back here.
+        let failure: Error? = await withCheckedContinuation { continuation in
+            user.link(with: credential) { _, error in continuation.resume(returning: error) }
+        }
+        guard let error = failure as NSError? else { return .linked }
+        let code = AuthErrorCode(rawValue: error.code)
+        guard code == .credentialAlreadyInUse || code == .emailAlreadyInUse else {
+            print("[Reconnect] link failed: \(error.localizedDescription)")
+            return .failed
+        }
+        return .inUse(error.userInfo[AuthErrors.userInfoUpdatedCredentialKey] as? AuthCredential)
+    }
+
+    /// The cached ID token can predate the link, and the Worker reads the
+    /// identity out of the token itself.
+    private static func refreshed() async -> BindOutcome {
+        guard let user = Auth.auth().currentUser,
+              (try? await user.getIDTokenResult(forcingRefresh: true)) != nil else { return .failed }
+        return isBound ? .bound : .failed
+    }
+
     // MARK: Sign-in, without touching the app's own login
 
     private enum Fresh {

@@ -65,9 +65,11 @@ enum FirebaseAccountLinker {
                 let code = AuthErrorCode(rawValue: error.code)
                 if code == .credentialAlreadyInUse || code == .emailAlreadyInUse {
                     // Their real account already exists — join it rather than
-                    // stranding them on an anonymous one.
+                    // stranding them on an anonymous one. Firebase may hand back
+                    // a credential to recover with; sign in with that one if so.
                     print("[DiPo] Firebase (\(label)) already linked elsewhere; signing into it")
-                    Auth.auth().signIn(with: credential, completion: completion)
+                    let recovery = error.userInfo[AuthErrors.userInfoUpdatedCredentialKey] as? AuthCredential
+                    Auth.auth().signIn(with: recovery ?? credential, completion: completion)
                     return
                 }
                 print("[DiPo] Firebase (\(label)) link failed: \(error.localizedDescription)")

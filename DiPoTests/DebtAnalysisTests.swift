@@ -142,10 +142,28 @@ final class DebtAnalysisTests: XCTestCase {
         XCTAssertEqual(DebtAnalysisClient.failure(status: 402, body: body("analysis_limit")), .limit)
         XCTAssertEqual(DebtAnalysisClient.failure(status: 402, body: body("out_of_credits")), .credits)
         XCTAssertEqual(DebtAnalysisClient.failure(status: 403, body: body("royal_required")), .royal)
-        XCTAssertEqual(DebtAnalysisClient.failure(status: 401, body: body("unauthorized")), .signIn)
+        XCTAssertEqual(DebtAnalysisClient.failure(status: 401, body: body("unauthorized")), .confirm,
+                       "logged in, but the phone's Firebase account doesn't carry the login: confirm it, don't log in again")
         XCTAssertEqual(DebtAnalysisClient.failure(status: 422, body: body("declined")), .declined)
         XCTAssertEqual(DebtAnalysisClient.failure(status: 502, body: Data()), .generic)
         XCTAssertEqual(DebtAnalysisClient.failure(status: 429, body: body("rate_limited")), .generic)
+    }
+
+    // MARK: Whose account the request may spend
+
+    /// The Worker reads the Apple/Google identity out of the token; this is
+    /// the same check made on the phone, to ask before the Worker refuses.
+    func testTheLoginMustBeOnTheFirebaseAccount() {
+        let apple = "001234.abcdef0123456789.0042"
+        XCTAssertTrue(AccountReconnect.identityMatches(apple, providers: [("apple.com", apple)]))
+        XCTAssertTrue(AccountReconnect.identityMatches("10987654321", providers: [("google.com", "10987654321")]))
+        XCTAssertFalse(AccountReconnect.identityMatches(apple, providers: []), "the anonymous account from launch")
+        XCTAssertFalse(AccountReconnect.identityMatches(apple, providers: [("apple.com", "001234.other.0042")]),
+                       "another Apple ID")
+        XCTAssertFalse(AccountReconnect.identityMatches(apple, providers: [("password", apple)]),
+                       "only Apple and Google identities count, as on the Worker")
+        XCTAssertFalse(AccountReconnect.identityMatches(nil, providers: [("apple.com", apple)]))
+        XCTAssertFalse(AccountReconnect.identityMatches("", providers: [("apple.com", "")]))
     }
 
     // MARK: Words
@@ -156,8 +174,12 @@ final class DebtAnalysisTests: XCTestCase {
                     "analysis.view", "analysis.confirm_title", "analysis.confirm_msg", "analysis.confirm_go",
                     "analysis.privacy", "analysis.steps", "analysis.watch", "analysis.question", "analysis.footer",
                     "analysis.err.offline", "analysis.err.signin", "analysis.err.royal", "analysis.err.limit",
-                    "analysis.err.credits", "analysis.err.declined", "analysis.err.generic"]
-        let failures: [DebtAnalysisClient.Failure] = [.offline, .signIn, .royal, .limit, .credits, .declined, .generic]
+                    "analysis.err.credits", "analysis.err.declined", "analysis.err.generic",
+                    "analysis.err.confirm", "analysis.err.other_account", "analysis.err.held_elsewhere",
+                    "analysis.err.confirm_failed", "analysis.confirm_apple", "analysis.confirm_google",
+                    "analysis.confirming", "analysis.confirm_why"]
+        let failures: [DebtAnalysisClient.Failure] = [.offline, .signIn, .confirm, .royal, .limit, .credits,
+                                                      .declined, .generic]
         for language in [LanguageManager.Language.english, .indonesian] {
             LanguageManager.shared.withLanguage(language) {
                 for k in keys { XCTAssertNotEqual(loc(k), k, "\(k) in \(language)") }
