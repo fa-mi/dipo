@@ -120,8 +120,6 @@ struct DiPoHomeSection: View {
     var assetCheck: [String] = []
     var onAskDiPo: () -> Void
     var onAction: (DiPoNudge.Action) -> Void
-    /// His face on the row, or a plain icon (Profile → Show DiPo on Home).
-    var showsDiPo = true
     /// Royal gets to know DiPo better: interest guesses and ideas.
     var isRoyal = false
 
@@ -153,10 +151,9 @@ struct DiPoHomeSection: View {
     @State private var quest = QuestStore.shared
 
     init(unread: Int, bill: DiPoNudge.Bill?, daysToPayday: Int?, payDate: Date?,
-         assetCheck: [String] = [], showsDiPo: Bool = true, isRoyal: Bool = false,
+         assetCheck: [String] = [], isRoyal: Bool = false,
          onAskDiPo: @escaping () -> Void, onAction: @escaping (DiPoNudge.Action) -> Void) {
         self.assetCheck = assetCheck
-        self.showsDiPo = showsDiPo
         self.isRoyal = isRoyal
         self.unread = unread
         self.bill = bill
@@ -197,7 +194,6 @@ struct DiPoHomeSection: View {
                                   assetCheck: assetCheck,
                                   questWaiting: questWaiting),
             status: status,
-            showsDiPo: showsDiPo,
             onAskDiPo: onAskDiPo,
             onNudge: { action in
                 switch action {

@@ -320,13 +320,10 @@ struct DiPoNudge: Equatable, Identifiable {
 /// He used to stand above the balance, a 3D figure beside a thought cloud,
 /// and took the top of the screen before any money did. The figure lives on
 /// in Ask DiPo and Quest, where a character helps; here he is an assistant.
-/// Switched off in Profile, a plain icon takes his place and Home reads like
-/// a bank's.
 struct DiPoHomeRow: View {
     let nudges: [DiPoNudge]
     /// Today in a few words ("Today is logged"), when there is no reminder.
     var status: String? = nil
-    var showsDiPo = true
     var onAskDiPo: () -> Void
     var onNudge: (DiPoNudge.Action) -> Void
 
@@ -349,35 +346,24 @@ struct DiPoHomeRow: View {
         .animation(.spring(response: 0.35), value: current?.id)
     }
 
-    @ViewBuilder
     private var leading: some View {
-        if showsDiPo {
-            Button {
-                HapticManager.shared.tap()
-                onAskDiPo()
-            } label: {
-                Image("DiPoMascot")
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: 48, height: 48)
-                    .frame(width: 42, height: 42)
-                    .background(RadialGradient(colors: [AppTheme.accent.opacity(0.24), AppTheme.cardDark],
-                                               center: UnitPoint(x: 0.5, y: 0.4), startRadius: 0, endRadius: 26))
-                    .clipShape(Circle())
-                    .overlay(Circle().stroke(AppTheme.accent.opacity(0.45), lineWidth: 1))
-            }
-            .buttonStyle(ScaleButtonStyle())
-            .accessibilityLabel(loc("mascot.a11y"))
-            .accessibilityHint(loc("dipo.a11y_ask"))
-        } else {
-            let tint = Self.tint(for: current)
-            Image(systemName: current?.symbol ?? "sparkles")
-                .font(.system(.body, weight: .semibold))
-                .foregroundStyle(tint)
+        Button {
+            HapticManager.shared.tap()
+            onAskDiPo()
+        } label: {
+            Image("DiPoMascot")
+                .resizable()
+                .scaledToFill()
+                .frame(width: 48, height: 48)
                 .frame(width: 42, height: 42)
-                .background(tint.opacity(0.14), in: RoundedRectangle(cornerRadius: AppRadius.sm, style: .continuous))
-                .accessibilityHidden(true)
+                .background(RadialGradient(colors: [AppTheme.accent.opacity(0.24), AppTheme.cardDark],
+                                           center: UnitPoint(x: 0.5, y: 0.4), startRadius: 0, endRadius: 26))
+                .clipShape(Circle())
+                .overlay(Circle().stroke(AppTheme.accent.opacity(0.45), lineWidth: 1))
         }
+        .buttonStyle(ScaleButtonStyle())
+        .accessibilityLabel(loc("mascot.a11y"))
+        .accessibilityHint(loc("dipo.a11y_ask"))
     }
 
     private var words: some View {
@@ -431,18 +417,6 @@ struct DiPoHomeRow: View {
                 .padding(.trailing, 20)
                 .accessibilityLabel(loc("dipo.next"))
             }
-        }
-    }
-
-    /// The icon's colour when DiPo is off: what kind of thing it is about.
-    static func tint(for nudge: DiPoNudge?) -> Color {
-        guard let nudge else { return AppTheme.accent }
-        switch nudge.action {
-        case .bills, .streak:                                   return AppTheme.orange
-        case .checkIn, .assetCheck:                             return AppTheme.blue
-        case .quest:                                            return AppTheme.purple
-        case .interestGuess, .interestTip, .customInterestTip:  return AppTheme.royalGoldText
-        case .notifications, .salary:                           return AppTheme.accent
         }
     }
 }

@@ -70,8 +70,6 @@ struct HomeView: View {
     /// inline inside a computed property registers no dependency, so the net
     /// worth chip would linger after a subscription lapsed until a redraw.
     @State private var premiumMgr = PremiumManager.shared
-    /// Profile → Show DiPo on Home.
-    @AppStorage(HomePrefs.showDiPoKey) private var showDiPo = true
     /// The eye on the total row: every figure on Home behind dots.
     @AppStorage(HomePrefs.hideBalancesKey) private var hideBalances = false
     /// DiPo's asset price reminder, left for a month once seen.
@@ -594,7 +592,6 @@ struct HomeView: View {
                                     daysToPayday: nearestSalary.map { SalaryDateEngine.daysUntilPay(dayOfMonth: $0.dayOfMonth) },
                                     payDate: nearestSalary.map { SalaryDateEngine.nextPayDate(dayOfMonth: $0.dayOfMonth) },
                                     assetCheck: dipoAssetCheck,
-                                    showsDiPo: showDiPo,
                                     isRoyal: dipoIsRoyal,
                                     onAskDiPo: { askDiPoPrompt = nil; showAskDiPo = true },
                                     onAction: { action in
