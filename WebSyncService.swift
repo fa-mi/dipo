@@ -257,7 +257,9 @@ final class WebSyncService {
             state = .failure(loc("websync.reconnect_other"))
             HapticManager.shared.error()
         case .failed:
-            state = .failure(loc("websync.reconnect_failed"))
+            // Which step failed, and its code, for support.
+            let step = AccountReconnect.lastFailure.map { " (\($0))" } ?? ""
+            state = .failure(loc("websync.reconnect_failed") + step)
             HapticManager.shared.error()
         }
     }
