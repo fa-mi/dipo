@@ -43,11 +43,27 @@ enum AccountReconnect {
 
     static let reclaimURL = URL(string: "https://dipo-receipt-scanner.fahmi-aquinas.workers.dev/api/dipo-id/reclaim")!
 
-    /// Which step failed last, and its code ("firebase 17004", "reclaim 403"):
-    /// shown after "Couldn't reconnect" so a screenshot says where it broke.
-    private(set) static var lastFailure: String?
+    /// Which step failed last, and its code ("firebase 17004", "reclaim 403").
+    /// Never shown: a failed run reports it to Crashlytics (see `report`).
+    private static var lastFailure: String?
 
     static func run() async -> Outcome {
+        let outcome = await attempt()
+        if outcome == .failed { report("reconnect") }
+        return outcome
+    }
+
+    /// Behind the scenes: the step that failed and its code go to Crashlytics
+    /// as a non-fatal, beside the user id it already carries. The person sees
+    /// only "Couldn't reconnect".
+    private static func report(_ flow: String) {
+        let what = "\(flow) failed: \(lastFailure ?? "unknown")"
+        CrashReporter.log("[Reconnect] \(what)")
+        CrashReporter.record(NSError(domain: "DiPo.AccountReconnect", code: 1,
+                                     userInfo: [NSLocalizedDescriptionKey: what]))
+    }
+
+    private static func attempt() async -> Outcome {
         lastFailure = nil
         let session = UserSession.shared
         guard let socialID = session.userID, !socialID.isEmpty,
@@ -119,6 +135,12 @@ enum AccountReconnect {
     /// reinstall, which `run()` handles too). Otherwise this one holds the
     /// history, and nothing is moved.
     static func bind() async -> BindOutcome {
+        let outcome = await bindAttempt()
+        if outcome == .failed { report("confirm") }
+        return outcome
+    }
+
+    private static func bindAttempt() async -> BindOutcome {
         lastFailure = nil
         let session = UserSession.shared
         guard let socialID = session.userID, !socialID.isEmpty,
