@@ -43,10 +43,31 @@ enum AccountReconnect {
 
     static let reclaimURL = URL(string: "https://dipo-receipt-scanner.fahmi-aquinas.workers.dev/api/dipo-id/reclaim")!
 
+    /// Which step failed last, and its code ("firebase 17004", "reclaim 403").
+    /// Never shown: a failed run reports it to Crashlytics (see `report`).
+    private static var lastFailure: String?
+
     static func run() async -> Outcome {
+        let outcome = await attempt()
+        if outcome == .failed { report("reconnect") }
+        return outcome
+    }
+
+    /// Behind the scenes: the step that failed and its code go to Crashlytics
+    /// as a non-fatal, beside the user id it already carries. The person sees
+    /// only "Couldn't reconnect".
+    private static func report(_ flow: String) {
+        let what = "\(flow) failed: \(lastFailure ?? "unknown")"
+        CrashReporter.log("[Reconnect] \(what)")
+        CrashReporter.record(NSError(domain: "DiPo.AccountReconnect", code: 1,
+                                     userInfo: [NSLocalizedDescriptionKey: what]))
+    }
+
+    private static func attempt() async -> Outcome {
+        lastFailure = nil
         let session = UserSession.shared
         guard let socialID = session.userID, !socialID.isEmpty,
-              let provider = session.provider else { return .failed }
+              let provider = session.provider else { lastFailure = "no login"; return .failed }
 
         let credential: AuthCredential
         switch await freshCredential(provider, expecting: socialID) {
@@ -60,7 +81,11 @@ enum AccountReconnect {
             await FirebaseSupportService.shared.registerUserProfile()
             return .reconnected
         }
-        guard await reclaim(socialID: socialID), await indexLeadsHere() else { return .failed }
+        guard await reclaim(socialID: socialID) else { return .failed }
+        guard await indexLeadsHere() else {
+            if lastFailure == nil { lastFailure = "index unchanged" }
+            return .failed
+        }
         await FirebaseSupportService.shared.registerUserProfile()
         return .reconnected
     }
@@ -110,6 +135,13 @@ enum AccountReconnect {
     /// reinstall, which `run()` handles too). Otherwise this one holds the
     /// history, and nothing is moved.
     static func bind() async -> BindOutcome {
+        let outcome = await bindAttempt()
+        if outcome == .failed { report("confirm") }
+        return outcome
+    }
+
+    private static func bindAttempt() async -> BindOutcome {
+        lastFailure = nil
         let session = UserSession.shared
         guard let socialID = session.userID, !socialID.isEmpty,
               let provider = session.provider else { return .failed }
@@ -158,6 +190,7 @@ enum AccountReconnect {
         let code = AuthErrorCode(rawValue: error.code)
         guard code == .credentialAlreadyInUse || code == .emailAlreadyInUse else {
             print("[Reconnect] link failed: \(error.localizedDescription)")
+            lastFailure = "link \(error.code)"
             return .failed
         }
         return .inUse(error.userInfo[AuthErrors.userInfoUpdatedCredentialKey] as? AuthCredential)
@@ -183,13 +216,17 @@ enum AccountReconnect {
         case .apple:
             let apple = await appleSignIn()
             if apple.cancelled { return .outcome(.cancelled) }
-            guard let user = apple.user, let token = apple.idToken else { return .outcome(.failed) }
+            guard let user = apple.user, let token = apple.idToken else {
+                lastFailure = apple.code.map { "apple \($0)" } ?? "apple no token"
+                return .outcome(.failed)
+            }
             guard user == socialID else { return .outcome(.otherAccount) }
-            return .credential(OAuthProvider.appleCredential(withIDToken: token, rawNonce: nil, fullName: nil))
+            return .credential(OAuthProvider.appleCredential(withIDToken: token, rawNonce: apple.nonce, fullName: nil))
         case .google:
             let google = await googleSignIn()
             if google.cancelled { return .outcome(.cancelled) }
             guard let user = google.user, let idToken = google.idToken, let access = google.accessToken else {
+                lastFailure = "google no token"
                 return .outcome(.failed)
             }
             guard user == socialID else {
@@ -204,23 +241,24 @@ enum AccountReconnect {
     /// Kept alive while Apple's sheet is up: the controller holds its delegate weakly.
     private static var appleCoordinator: AppleSignInCoordinator?
 
-    /// Apple's user id and identity token — strings, so nothing non-Sendable
-    /// crosses the continuation.
-    private static func appleSignIn() async -> (user: String?, idToken: String?, cancelled: Bool) {
+    /// Apple's user id, identity token and the request's raw nonce — strings,
+    /// so nothing non-Sendable crosses the continuation.
+    private static func appleSignIn() async -> (user: String?, idToken: String?, nonce: String?, code: Int?,
+                                               cancelled: Bool) {
         await withCheckedContinuation { continuation in
             let coordinator = AppleSignInCoordinator()
             appleCoordinator = coordinator
-            coordinator.onSuccess = { credential in
+            coordinator.onSuccess = { credential, nonce in
                 appleCoordinator = nil
                 let token = credential.identityToken.flatMap { String(data: $0, encoding: .utf8) }
-                continuation.resume(returning: (credential.user, token, false))
+                continuation.resume(returning: (credential.user, token, nonce, nil, false))
             }
             coordinator.onError = { error in
                 appleCoordinator = nil
                 // 1001 is "canceled"; the login screen also treats 1000 as a
                 // dismissal, so the same here.
                 let code = (error as NSError).code
-                continuation.resume(returning: (nil, nil, code == 1001 || code == 1000))
+                continuation.resume(returning: (nil, nil, nil, code, code == 1001 || code == 1000))
             }
             coordinator.signIn()
         }
@@ -255,11 +293,13 @@ enum AccountReconnect {
     }
 
     private static func signIn(_ credential: AuthCredential) async -> Bool {
-        await withCheckedContinuation { continuation in
+        let code: Int? = await withCheckedContinuation { continuation in
             FirebaseAccountLinker.signInPreservingAccount(credential, label: "Reconnect") { result, error in
-                continuation.resume(returning: error == nil && result != nil)
+                continuation.resume(returning: error.map { ($0 as NSError).code } ?? (result == nil ? -1 : nil))
             }
         }
+        if let code { lastFailure = "firebase \(code)" }
+        return code == nil
     }
 
     // MARK: The index, and the Worker
@@ -283,6 +323,7 @@ enum AccountReconnect {
             return (snap.data()?["uid"] as? String) == uid
         } catch {
             print("[Reconnect] dipoIndex check failed: \(error.localizedDescription)")
+            lastFailure = "index \((error as NSError).code)"
             return false
         }
     }
@@ -291,7 +332,10 @@ enum AccountReconnect {
         // Forced: the cached token may predate the link, and the Worker reads
         // the Apple/Google identity out of the token itself.
         guard let user = Auth.auth().currentUser,
-              let token = try? await user.getIDTokenResult(forcingRefresh: true).token else { return false }
+              let token = try? await user.getIDTokenResult(forcingRefresh: true).token else {
+            lastFailure = "token"
+            return false
+        }
         var request = URLRequest(url: reclaimURL)
         request.httpMethod = "POST"
         request.timeoutInterval = 20
@@ -305,11 +349,14 @@ enum AccountReconnect {
             let body = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
             guard status == 200, body?["status"] as? String == "ok" else {
                 print("[Reconnect] reclaim refused: HTTP \(status)")
+                let reason = (body?["error"] as? String).map { " \($0)" } ?? ""
+                lastFailure = "reclaim \(status)\(reason)"
                 return false
             }
             return true
         } catch {
             print("[Reconnect] reclaim failed: \(error.localizedDescription)")
+            lastFailure = "reclaim \((error as NSError).code)"
             return false
         }
     }

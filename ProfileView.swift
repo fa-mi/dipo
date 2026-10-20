@@ -1495,8 +1495,8 @@ struct ProfileView: View {
 
     private func doSignInWithApple() {
         isSigningIn = true; loginError = nil
-        appleCoordinator.onSuccess = { credential in
-            session.handleAppleCredential(credential)
+        appleCoordinator.onSuccess = { credential, nonce in
+            session.handleAppleCredential(credential, rawNonce: nonce)
             if let uid = session.userID { PremiumManager.shared.onLogin(userID: uid) }
             HapticManager.shared.success()
             isSigningIn = false

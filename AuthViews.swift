@@ -165,10 +165,10 @@ struct SocialLoginView: View {
                         guard !isLoading else { return }
                         isLoading = true
                         errorMsg  = nil
-                        appleCoordinator.onSuccess = { credential in
+                        appleCoordinator.onSuccess = { credential, nonce in
                             isLoading = false
                             // handleAppleCredential now calls PremiumManager.onLogin internally
-                            session.handleAppleCredential(credential)
+                            session.handleAppleCredential(credential, rawNonce: nonce)
                             authVM.completeSocialLogin()
                         }
                         appleCoordinator.onError = { error in

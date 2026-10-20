@@ -136,7 +136,7 @@ final class UserSession {
 
     // MARK: - Apple Sign-In
 
-    func handleAppleCredential(_ credential: ASAuthorizationAppleIDCredential) {
+    func handleAppleCredential(_ credential: ASAuthorizationAppleIDCredential, rawNonce: String?) {
         let id = credential.user
 
         if let fn = credential.fullName {
@@ -161,7 +161,7 @@ final class UserSession {
            let tokenString   = String(data: identityToken, encoding: .utf8) {
             let firebaseCredential = OAuthProvider.appleCredential(
                 withIDToken: tokenString,
-                rawNonce: nil,
+                rawNonce: rawNonce,
                 fullName: credential.fullName
             )
             FirebaseAccountLinker.signInPreservingAccount(firebaseCredential, label: "Apple") { [weak self] result, error in
@@ -346,16 +346,46 @@ final class UserSession {
     }
 }
 
+// MARK: - Sign in with Apple's nonce
+//
+// Firebase's Sign in with Apple expects a nonce: a random string made per
+// request, whose SHA-256 goes to Apple (which signs it into the token) and
+// whose raw value goes to Firebase (which checks the two match), so a token
+// can't be replayed. DiPo sent none. The likely result: a login, or a
+// reconnect, that left the Apple ID off the Firebase account while DiPo
+// itself looked logged in.
+
+enum AppleNonce {
+    private static let charset = Array("0123456789ABCDEFGHIJKLMNOPQRSTUVXYZabcdefghijklmnopqrstuvwxyz-._")
+
+    /// `randomElement()` draws from SystemRandomNumberGenerator, which is
+    /// cryptographically secure on Apple platforms.
+    static func make(length: Int = 32) -> String {
+        String((0..<length).map { _ in charset.randomElement()! })
+    }
+
+    /// Lowercase hex, as Apple and Firebase expect it.
+    static func sha256(_ input: String) -> String {
+        SHA256.hash(data: Data(input.utf8)).map { String(format: "%02x", $0) }.joined()
+    }
+}
+
 // MARK: - Apple Sign-In Button Coordinator
 
 final class AppleSignInCoordinator: NSObject, ASAuthorizationControllerDelegate, ASAuthorizationControllerPresentationContextProviding {
-    var onSuccess: ((ASAuthorizationAppleIDCredential) -> Void)?
+    /// The credential, and the raw nonce its request carried: Firebase needs
+    /// both to accept Apple's token (see AppleNonce).
+    var onSuccess: ((ASAuthorizationAppleIDCredential, String?) -> Void)?
     var onError:   ((Error) -> Void)?
+    private var rawNonce: String?
 
     func signIn() {
         let provider = ASAuthorizationAppleIDProvider()
         let request  = provider.createRequest()
         request.requestedScopes = [.fullName, .email]
+        let nonce = AppleNonce.make()
+        rawNonce = nonce
+        request.nonce = AppleNonce.sha256(nonce)
 
         let controller = ASAuthorizationController(authorizationRequests: [request])
         controller.delegate                    = self
@@ -373,7 +403,7 @@ final class AppleSignInCoordinator: NSObject, ASAuthorizationControllerDelegate,
     func authorizationController(controller: ASAuthorizationController,
                                  didCompleteWithAuthorization authorization: ASAuthorization) {
         guard let credential = authorization.credential as? ASAuthorizationAppleIDCredential else { return }
-        onSuccess?(credential)
+        onSuccess?(credential, rawNonce)
     }
 
     func authorizationController(controller: ASAuthorizationController,
