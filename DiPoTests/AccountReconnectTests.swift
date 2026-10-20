@@ -36,6 +36,27 @@ final class AccountReconnectTests: XCTestCase {
         XCTAssertEqual(AccountReconnect.reclaimURL.scheme, "https")
     }
 
+    /// Firebase takes an Apple credential's nonce once. Sending it again
+    /// after a failed link fails as "Duplicate credential received" (17094)
+    /// and hides why the link failed — what build 122 reported. Google's
+    /// credential can be retried.
+    func testOnlyAppleCredentialsAreSingleUse() {
+        XCTAssertTrue(FirebaseAccountLinker.isSingleUse("apple.com"))
+        XCTAssertFalse(FirebaseAccountLinker.isSingleUse("google.com"))
+    }
+
+    /// Crashlytics titles a non-fatal by its domain and code, so both carry
+    /// the step: the failing step reads off the issue list.
+    func testAFailureNamesItsStepAndCode() {
+        let firebase = AccountReconnect.Failure(step: "firebase", code: 17007)
+        XCTAssertEqual(firebase.text, "firebase 17007")
+        XCTAssertEqual(firebase.domain, "DiPo.AccountReconnect.firebase")
+        XCTAssertEqual(AccountReconnect.Failure(step: "reclaim", code: 403, detail: "identity_mismatch").text,
+                       "reclaim 403 identity_mismatch")
+        XCTAssertEqual(AccountReconnect.Failure(step: "index", detail: "unchanged").text, "index unchanged")
+        XCTAssertEqual(AccountReconnect.Failure(step: "login").text, "login")
+    }
+
     func testNoReconnectIsOfferedBeforeAnySync() {
         XCTAssertFalse(WebSyncService.shared.isReconnecting)
     }
