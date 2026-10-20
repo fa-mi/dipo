@@ -49,6 +49,11 @@ enum SocialProvider: String {
 // to another Firebase user (a returning user on a fresh device), linking fails
 // with `credentialAlreadyInUse` and the right move is to sign into THAT
 // account — it is the one holding their history.
+//
+// An Apple credential can't be sent twice: Firebase takes its nonce once, and
+// a second try fails as "Duplicate credential received" (17094), hiding why
+// the link failed. Only the credential Firebase hands back is retried for
+// Apple; when there is none, the link's own error is the answer.
 @MainActor
 enum FirebaseAccountLinker {
     static func signInPreservingAccount(
@@ -65,20 +70,33 @@ enum FirebaseAccountLinker {
                 let code = AuthErrorCode(rawValue: error.code)
                 if code == .credentialAlreadyInUse || code == .emailAlreadyInUse {
                     // Their real account already exists — join it rather than
-                    // stranding them on an anonymous one. Firebase may hand back
-                    // a credential to recover with; sign in with that one if so.
+                    // stranding them on an anonymous one.
                     print("[DiPo] Firebase (\(label)) already linked elsewhere; signing into it")
-                    let recovery = error.userInfo[AuthErrors.userInfoUpdatedCredentialKey] as? AuthCredential
-                    Auth.auth().signIn(with: recovery ?? credential, completion: completion)
+                } else {
+                    print("[DiPo] Firebase (\(label)) link failed: \(error.localizedDescription)")
+                }
+                let recovery = error.userInfo[AuthErrors.userInfoUpdatedCredentialKey] as? AuthCredential
+                guard let fallback = retry(after: credential, recovery: recovery) else {
+                    completion(nil, error)
                     return
                 }
-                print("[DiPo] Firebase (\(label)) link failed: \(error.localizedDescription)")
-                Auth.auth().signIn(with: credential, completion: completion)
+                Auth.auth().signIn(with: fallback, completion: completion)
                 return
             }
             print("[DiPo] Firebase (\(label)) linked in place, uid preserved: \(result?.user.uid ?? "")")
             completion(result, nil)
         }
+    }
+
+    /// What to sign in with after a failed link: the credential Firebase
+    /// handed back, else the original one — unless it is single-use.
+    nonisolated static func retry(after original: AuthCredential, recovery: AuthCredential?) -> AuthCredential? {
+        recovery ?? (isSingleUse(original.provider) ? nil : original)
+    }
+
+    /// Apple's token is bound to a nonce Firebase accepts once.
+    nonisolated static func isSingleUse(_ providerID: String) -> Bool {
+        providerID == "apple.com"
     }
 }
 
