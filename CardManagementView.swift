@@ -82,32 +82,76 @@ enum WalletProvider: String, CaseIterable, Identifiable {
     }
 }
 
+/// The card's principal, read from the first digits of its number (the IIN).
+///
+/// Reading only the first digit made every 5 a Mastercard and left GPN, JCB
+/// and UnionPay, which Indonesian banks issue widely, as an unnamed card.
+/// The ranges are the networks' own: Mastercard took 2221–2720 in 2017, JCB
+/// is 3528–3589, UnionPay is 62. GPN debit cards start 60, 61, 63 or (BNI)
+/// 1946. Ranges that two networks claim and that a card here could carry
+/// either way (50, 56 and 58 are Maestro's and GPN's both) stay unknown: a
+/// wrong logo on someone's card is worse than none.
 enum CardNetwork {
-    case visa, mastercard, unknown
+    case visa, mastercard, gpn, jcb, unionpay, amex, unknown
 
     static func detect(from number: String) -> CardNetwork {
-        let digits = number.replacingOccurrences(of: " ", with: "")
-        guard let first = digits.first else { return .unknown }
-        switch first {
-        case "4": return .visa
-        case "5": return .mastercard
-        default:  return .unknown
+        // Digits only, so a stored number reads straight past its mask:
+        // "522184••••••0969" still starts 522184.
+        let digits = number.filter(\.isNumber)
+        func within(_ low: Int, _ high: Int, first count: Int) -> Bool {
+            guard digits.count >= count, let n = Int(digits.prefix(count)) else { return false }
+            return (low...high).contains(n)
         }
+        if digits.hasPrefix("4") { return .visa }
+        if within(51, 55, first: 2) || within(2221, 2720, first: 4) { return .mastercard }
+        if digits.hasPrefix("34") || digits.hasPrefix("37") { return .amex }
+        if within(3528, 3589, first: 4) { return .jcb }
+        if digits.hasPrefix("62") { return .unionpay }
+        if digits.hasPrefix("1946") || within(60, 61, first: 2) || digits.hasPrefix("63") { return .gpn }
+        return .unknown
     }
 
     var name: String {
         switch self {
         case .visa:       return "VISA"
         case .mastercard: return "Mastercard"
+        case .gpn:        return "GPN"
+        case .jcb:        return "JCB"
+        case .unionpay:   return "UnionPay"
+        case .amex:       return "American Express"
         case .unknown:    return "Card"
         }
     }
+
+    /// The lengths a card number on this principal comes in. The form used to
+    /// insist on 16, which turned away a 15-digit American Express and the
+    /// 18- and 19-digit GPN and UnionPay cards.
+    var lengths: [Int] {
+        switch self {
+        case .visa:             return [13, 16, 19]
+        case .mastercard:       return [16]
+        case .amex:             return [15]
+        case .jcb, .unionpay:   return [16, 17, 18, 19]
+        case .gpn:              return [16, 18, 19]
+        case .unknown:          return [16]
+        }
+    }
+
+    /// The length to count towards while typing: the next one this principal
+    /// issues, or its longest once past them all.
+    func target(for count: Int) -> Int {
+        lengths.first { $0 >= count } ?? lengths.last ?? 16
+    }
+
+    /// The longest number any principal issues.
+    static let maxLength = 19
 
     var gradientStart: String {
         switch self {
         case .visa:       return "#1A3A8F"   // Visa royal blue
         case .mastercard: return "#1A1A1A"   // Mastercard near-black
-        case .unknown:    return "#2A3330"
+        case .gpn, .jcb, .unionpay, .amex,
+             .unknown:    return "#2A3330"
         }
     }
 
@@ -115,7 +159,8 @@ enum CardNetwork {
         switch self {
         case .visa:       return "#0D2461"   // Visa deep blue
         case .mastercard: return "#0D0D0D"
-        case .unknown:    return "#1A2028"
+        case .gpn, .jcb, .unionpay, .amex,
+             .unknown:    return "#1A2028"
         }
     }
 
@@ -123,7 +168,8 @@ enum CardNetwork {
         switch self {
         case .visa:       return Color(hex: "#4D8EFF")   // Visa blue accent
         case .mastercard: return Color(hex: "#F79E1B")   // Mastercard orange
-        case .unknown:    return Color(hex: "#8A9693")
+        case .gpn, .jcb, .unionpay, .amex,
+             .unknown:    return Color(hex: "#8A9693")
         }
     }
 }
@@ -449,6 +495,17 @@ struct CardNetworkLogo: View {
                     .frame(width: 24, height: 24)
             }
 
+        case .gpn, .jcb, .amex:
+            Text(network == .amex ? "AMEX" : network.name)
+                .font(.system(size: 18, weight: .black, design: .default))
+                .foregroundStyle(.white)
+                .tracking(0.5)
+
+        case .unionpay:
+            Text(network.name)
+                .font(.system(size: 15, weight: .heavy, design: .default))
+                .foregroundStyle(.white)
+
         case .unknown:
             Image(systemName: "creditcard")
                 .font(.system(.body))
@@ -487,6 +544,8 @@ struct CardFormSheet: View {
 
     private var isEditing: Bool { editCard != nil }
     private var detectedNetwork: CardNetwork { CardNetwork.detect(from: cardNumber) }
+    /// The typed number is a length its principal issues.
+    private var numberIsComplete: Bool { detectedNetwork.lengths.contains(cardNumber.count) }
 
     /// Network dipakai untuk warna UI. Saat mode edit dengan field kosong (user
     /// tidak mengganti nomor), fallback ke network dari nomor kartu yang sudah ada
@@ -594,7 +653,7 @@ struct CardFormSheet: View {
     }
 
     private var formattedCardNumber: String {
-        let digits = cardNumber.replacingOccurrences(of: " ", with: "").prefix(16)
+        let digits = cardNumber.replacingOccurrences(of: " ", with: "").prefix(CardNetwork.maxLength)
         var result = ""
         for (i, ch) in digits.enumerated() {
             if i > 0 && i % 4 == 0 { result += " " }
@@ -753,11 +812,11 @@ struct CardFormSheet: View {
                             TextField(isEditing ? loc("cards.card_number_blank") : loc("cards.card_number"),
                                       text: $displayText)
                             .font(.system(.body, weight: .semibold))
-                            .foregroundStyle(cardNumber.count == 16 ? AppTheme.accent : AppTheme.textPrimary)
+                            .foregroundStyle(numberIsComplete ? AppTheme.accent : AppTheme.textPrimary)
                             .keyboardType(.numberPad)
                             .onChange(of: displayText) { _, newVal in
-                                // Strip non-digits, hard cap at 16
-                                let digits = String(newVal.filter { $0.isNumber }.prefix(16))
+                                // Strip non-digits, cap at the longest any principal issues
+                                let digits = String(newVal.filter { $0.isNumber }.prefix(CardNetwork.maxLength))
                                 cardNumber = digits
                                 // Rebuild formatted display with spaces
                                 var formatted = ""
@@ -780,12 +839,13 @@ struct CardFormSheet: View {
                                         Text(loc("cards.leave_blank")).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                                     }
                                 } else {
-                                    Text(String(format: loc("cards.digit_count"), cardNumber.count))
+                                    Text(String(format: loc("cards.digit_count"), cardNumber.count,
+                                                detectedNetwork.target(for: cardNumber.count)))
                                         .font(.system(.caption2))
-                                        .foregroundStyle(cardNumber.count == 16 ? AppTheme.accent : AppTheme.textSecondary)
+                                        .foregroundStyle(numberIsComplete ? AppTheme.accent : AppTheme.textSecondary)
                                 }
                                 Spacer()
-                                if cardNumber.count == 16 {
+                                if numberIsComplete {
                                     Image(systemName: "checkmark.circle.fill").font(.system(.footnote)).foregroundStyle(AppTheme.accent)
                                 }
                             }
@@ -1129,7 +1189,7 @@ struct CardFormSheet: View {
             }
             let num = finalNum
             let numDigits = num.replacingOccurrences(of: " ", with: "").count
-            guard numDigits == 16 else { errorMsg = loc("cards.error_digits"); return }
+            guard CardNetwork.detect(from: num).lengths.contains(numDigits) else { errorMsg = loc("cards.error_digits"); return }
             guard !expireMonth.isEmpty && !expireYear.isEmpty else { errorMsg = loc("cards.error_expired_blank"); return }
             guard let monthInt = Int(expireMonth), monthInt >= 1 && monthInt <= 12 else { errorMsg = loc("cards.error_expired_month"); return }
             guard let yearInt = Int(expireYear), yearInt > 0 else { errorMsg = loc("cards.error_expired_year"); return }

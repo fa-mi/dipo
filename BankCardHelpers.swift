@@ -10,7 +10,7 @@ extension BankCard {
     /// Formatted card number with spaces every 4 digits.
     /// e.g. "1234567812345678" → "1234 5678 1234 5678"
     var formattedNumber: String {
-        let digits = cardNumber.replacingOccurrences(of: " ", with: "").prefix(16)
+        let digits = cardNumber.replacingOccurrences(of: " ", with: "").prefix(CardNetwork.maxLength)
         var result = ""
         for (i, ch) in digits.enumerated() {
             if i > 0 && i % 4 == 0 { result += " " }

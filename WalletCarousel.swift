@@ -8,10 +8,12 @@ import SwiftUI
 // them up also buys the thing a stacked list never had — several cards visible
 // at once, swipeable, with the neighbours peeking in to say there are more.
 //
-// The glass is real material, not a painted gradient: `.ultraThinMaterial` over
-// the card's own colour, so the blur picks up what is behind it and the surface
-// shifts as the carousel moves. A static translucent fill looks like glass in a
-// screenshot and like plastic in motion.
+// The face is a passbook, not a piece of plastic. DiPo never holds the card, so
+// the chip, the contactless waves, the engraved arcs and the glass sheen it
+// used to wear said nothing: five layers of decoration over a face that left
+// out the one thing that tells two cards apart, the bank. The cover now says
+// which bank, which card and what is in it; the page below it, like the inside
+// of a buku tabungan, shows the last two entries on that card.
 struct WalletCard: View {
     let card: BankCard
     /// 0 = fully scrolled away, 1 = centred. Drives the depth cues.
@@ -23,21 +25,27 @@ struct WalletCard: View {
     /// thumbnail, where it stopped reading as a card at all and became a blob.
     /// Radius has to scale with the card or the shape stops being a card's.
     var width: CGFloat = 208
-    /// Strips everything but the identity — brand mark and holder name.
+    /// Strips everything but the identity — the bank and the principal.
     ///
-    /// The full face carries a balance, a grouped PAN, a name, an expiry and a
-    /// network badge. At the ~100pt used in the transfer picker there is not
-    /// room for any of it: every field truncated at once ("Rp 7.529….",
-    /// "SeaBan k", "E-WAL LET"). A card that small is an ICON — it only has to
-    /// say which card this is, and the figures belong in the label beneath it.
+    /// At the ~100pt used in the transfer picker there is not room for a
+    /// balance or a page of entries: every field truncated at once. A card that
+    /// small is an ICON — it only has to say which card this is, and the
+    /// figures belong in the label beneath it.
     var compact: Bool = false
 
     @Environment(\.colorScheme) private var colorScheme
+    /// Observed so the main-card mark moves the moment the choice changes.
+    @State private var sb = SmartBudgetManager.shared
 
     /// Real card proportions, standing up.
     static let aspect: CGFloat = 53.98 / 85.6
     /// 3.18 mm corner on a 53.98 mm width — the ISO/IEC 7810 ID-1 radius.
     static let cornerRatio: CGFloat = 3.18 / 53.98
+    /// The cover's share of the height; the page takes the rest.
+    static let coverShare: CGFloat = 0.63
+    /// Entries on the page. Two fit at every text size up to the largest
+    /// non-accessibility one; a third pushed the balance off the cover.
+    static let pageRows = 2
 
     private var radius: CGFloat { max(width * Self.cornerRatio, 3) }
     /// Below this the card is an icon: a name would only truncate.
@@ -48,200 +56,234 @@ struct WalletCard: View {
                        startPoint: .topLeading, endPoint: .bottomTrailing)
     }
 
-    private var balanceText: String {
-        card.isCreditCard ? card.formattedOwed : card.formattedBalance
-    }
-    private var balanceLabel: String {
-        loc(card.isCreditCard ? "cc.owed" : "wallet.balance")
+    private var network: CardNetwork { CardNetwork.detect(from: card.cardNumber) }
+
+    private var isMain: Bool {
+        let _ = sb.budgetCardID
+        return !card.isCreditCard && MainCard.isMain(card)
     }
 
     var body: some View {
-        ZStack(alignment: .topLeading) {
-            gradient
+        Group {
+            if compact { icon } else { passbook }
+        }
+        .aspectRatio(Self.aspect, contentMode: .fit)
+        .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
+        // A hairline so the page, which is the colour of any other card in the
+        // app, still has an edge against the screen behind it.
+        .overlay(
+            RoundedRectangle(cornerRadius: radius, style: .continuous)
+                .strokeBorder(Color.white.opacity(colorScheme == .dark ? 0.10 : 0.0), lineWidth: 0.5)
+        )
+        .shadow(color: .black.opacity((compact ? 0.18 : (colorScheme == .dark ? 0.35 : 0.14)) * prominence),
+                radius: compact ? 3 : 10, y: (compact ? 2 : 6) * prominence)
+    }
 
-            // Two different objects, two different surfaces.
-            //
-            // A bank card is engraved: concentric arcs, a chip, a grouped PAN.
-            // An e-wallet is an APP — no chip, no embossing, no expiry; it has a
-            // phone number and a brand. Dressing one as the other is why a
-            // LinkAja balance read like a Mastercard.
-            GeometryReader { g in
-                let w = g.size.width, h = g.size.height
-                if card.isDigitalWallet {
-                    // Soft bloom, the way an app icon catches light.
-                    RadialGradient(colors: [.white.opacity(0.24), .clear],
-                                   center: .init(x: 0.18, y: 0.12),
-                                   startRadius: 2, endRadius: w * 1.05)
-                } else {
-                    ZStack {
-                        ForEach(0..<14, id: \.self) { i in
-                            Circle()
-                                .stroke(Color.white.opacity(0.10), lineWidth: 1.2)
-                                .frame(width: w * (0.5 + Double(i) * 0.22))
-                                .position(x: w * 0.92, y: h * 0.22)
-                        }
+    // MARK: Full face
+
+    private var passbook: some View {
+        GeometryReader { g in
+            VStack(spacing: 0) {
+                cover
+                    .frame(height: g.size.height * Self.coverShare)
+                page
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    .background(AppTheme.cardDark)
+            }
+        }
+    }
+
+    private var cover: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .top, spacing: 6) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(Self.title(for: card))
+                        .font(.system(.title3, weight: .bold))
+                        .lineLimit(1).minimumScaleFactor(0.7)
+                    let sub = Self.subtitle(for: card)
+                    if !sub.isEmpty {
+                        Text(sub)
+                            .font(.system(.footnote))
+                            .foregroundStyle(.white.opacity(0.78))
+                            .lineLimit(1).minimumScaleFactor(0.8)
                     }
-                    .clipped()
+                }
+                Spacer(minLength: 0)
+                // The principal, where a real card prints it. A wallet has none.
+                if !card.isDigitalWallet && network != .unknown {
+                    CardNetworkLogo(network: network)
+                        .scaleEffect(0.8, anchor: .topTrailing)
+                        .accessibilityLabel(network.name)
                 }
             }
 
-            VStack(alignment: .leading, spacing: 0) {
-                HStack(alignment: .top) {
-                    // A wallet has no chip. It has an app.
-                    if card.isDigitalWallet { providerTile } else { chip }
-                    Spacer()
-                    Image(systemName: card.isDigitalWallet ? "qrcode" : "wave.3.right")
-                        .font(.system(.subheadline, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.75))
+            Spacer(minLength: 4)
+
+            HStack(alignment: .firstTextBaseline) {
+                Text(loc(card.isCreditCard ? "cc.owed" : "wallet.balance"))
+                    .font(.system(.footnote))
+                    .foregroundStyle(.white.opacity(0.75))
+                Spacer(minLength: 6)
+                if isMain {
+                    Label(loc("main.badge"), systemImage: "star.fill")
+                        .font(.system(.caption, weight: .semibold))
+                        .labelStyle(.titleAndIcon)
+                        .padding(.horizontal, 7).padding(.vertical, 3)
+                        .background(.white.opacity(0.2), in: Capsule())
+                        .lineLimit(1).fixedSize()
                 }
+            }
+            Text(card.isHidden ? "••••••" : (card.isCreditCard ? card.formattedOwed : card.formattedBalance))
+                .font(.system(.title, weight: .bold))
+                .monospacedDigit()
+                .lineLimit(1).minimumScaleFactor(0.5)
+                .padding(.top, 2)
+        }
+        .foregroundStyle(.white)
+        .padding(.horizontal, 16).padding(.top, 16).padding(.bottom, 14)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(gradient)
+    }
 
-                Spacer(minLength: 0)
+    private var page: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if card.isCreditCard && card.creditLimit > 0 {
+                limitBar
+            } else {
+                Text(loc("wallet.recent"))
+                    .font(.system(.caption))
+                    .foregroundStyle(AppTheme.textSecondary)
+            }
+            if card.isHidden {
+                Text(loc("wallet.recent_hidden"))
+                    .font(.system(.footnote))
+                    .foregroundStyle(AppTheme.textSecondary)
+            } else {
+                let rows = Self.latest(card.transactions, limit: Self.pageRows)
+                if rows.isEmpty {
+                    Text(loc("wallet.no_recent"))
+                        .font(.system(.footnote))
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    ForEach(rows) { tx in entry(tx) }
+                }
+            }
+        }
+        .padding(.horizontal, 14).padding(.vertical, 10)
+    }
 
-                if compact && isThumbnail {
-                    EmptyView()
-                } else if compact {
-                    Text(card.holderName.isEmpty
-                         ? (card.walletProvider.isEmpty ? loc("wallet.untitled") : card.walletProvider)
-                         : card.holderName)
+    /// One printed line of the passbook, signed the way TxRow signs it.
+    private func entry(_ tx: TxRecord) -> some View {
+        VStack(spacing: 6) {
+            Rectangle().fill(AppTheme.textSecondary.opacity(0.15)).frame(height: 0.5)
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(tx.name)
+                    .foregroundStyle(AppTheme.textPrimary)
+                    .lineLimit(1)
+                Spacer(minLength: 4)
+                Text(tx.amount >= 0
+                     ? "+\(CurrencyManager.shared.formatted(tx.amount, currency: tx.currency))"
+                     : CurrencyManager.shared.formatted(tx.amount, currency: tx.currency))
+                    .monospacedDigit()
+                    .foregroundStyle(tx.amount >= 0 ? AppTheme.green : AppTheme.textPrimary)
+                    .lineLimit(1).fixedSize()
+            }
+            .font(.system(.footnote))
+        }
+    }
+
+    /// How much of the limit is used — the number a credit card's owed figure
+    /// means nothing without.
+    private var limitBar: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            GeometryReader { g in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(AppTheme.textSecondary.opacity(0.2))
+                    // The instalment simulator's rule: past 70% the bar turns red.
+                    Capsule().fill(card.creditUtilization > 0.7 ? AppTheme.red : AppTheme.accent)
+                        .frame(width: g.size.width * card.creditUtilization)
+                }
+            }
+            .frame(height: 6)
+            Text(String(format: loc("wallet.limit_share"),
+                        Int((card.creditUtilization * 100).rounded()),
+                        CurrencyManager.shared.formatted(card.creditLimit, currency: card.resolvedCurrency)))
+                .font(.system(.caption))
+                .foregroundStyle(AppTheme.textPrimary)
+                .lineLimit(1).minimumScaleFactor(0.8)
+        }
+    }
+
+    // MARK: Icon (transfer picker)
+
+    private var icon: some View {
+        ZStack(alignment: .topLeading) {
+            gradient
+            if !isThumbnail {
+                VStack(alignment: .leading, spacing: 0) {
+                    HStack {
+                        Spacer(minLength: 0)
+                        if !card.isDigitalWallet && network != .unknown {
+                            CardNetworkLogo(network: network)
+                                .scaleEffect(0.55, anchor: .topTrailing)
+                        }
+                    }
+                    Spacer(minLength: 0)
+                    Text(Self.title(for: card))
                         .font(.system(.caption2, weight: .semibold))
                         .foregroundStyle(.white)
                         .lineLimit(2).minimumScaleFactor(0.75)
                         .multilineTextAlignment(.leading)
-                } else {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(balanceLabel)
-                        .font(.system(.caption, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.65))
-                    Text(balanceText)
-                        .font(.system(.title2, weight: .bold))
-                        .foregroundStyle(.white)
-                        .minimumScaleFactor(0.55)
-                        .lineLimit(1)
                 }
-
-                Spacer(minLength: 0)
-
-                VStack(alignment: .leading, spacing: 6) {
-                    // Monospaced grouping reads as an embossed PAN. A phone
-                    // number is not embossed and shouldn't pretend to be.
-                    Text(card.isHidden ? maskedIdentifier : displayNumber)
-                        .font(.system(size: 12,
-                                      weight: card.isDigitalWallet ? .semibold : .medium,
-                                      design: card.isDigitalWallet ? .rounded : .monospaced))
-                        .foregroundStyle(.white.opacity(0.8))
-                        .lineLimit(1).minimumScaleFactor(0.7)
-                    HStack(alignment: .bottom) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(card.holderName.isEmpty ? loc("wallet.untitled") : card.holderName)
-                                .font(.system(.caption, weight: .semibold))
-                                .foregroundStyle(.white)
-                                .lineLimit(1).minimumScaleFactor(0.7)
-                            if card.isDigitalWallet && !card.walletProvider.isEmpty {
-                                Text(card.walletProvider)
-                                    .font(.system(.caption2)).foregroundStyle(.white.opacity(0.7))
-                            } else if !card.expireDate.isEmpty {
-                                Text(card.expireDate)
-                                    .font(.system(.caption2)).foregroundStyle(.white.opacity(0.7))
-                            }
-                        }
-                        Spacer(minLength: 6)
-                        networkMark
-                    }
-                }
-                }
+                .padding(10)
             }
-            .padding(isThumbnail ? 6 : (compact ? 10 : 16))
-
-            // Glass sheen — a diagonal highlight that only reads as glass when
-            // it sits ON the material, not under it.
-            LinearGradient(colors: [.white.opacity(0.28), .clear, .white.opacity(0.06)],
-                           startPoint: .topLeading, endPoint: .bottomTrailing)
-                .blendMode(.softLight)
-                .allowsHitTesting(false)
-        }
-        .aspectRatio(Self.aspect, contentMode: .fit)
-        .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
-        .overlay(
-            // A hairline that catches the light, like the Home card's edge, so
-            // the two surfaces read as one family.
-            RoundedRectangle(cornerRadius: radius, style: .continuous)
-                .stroke(LinearGradient(colors: [.white.opacity(0.5), .white.opacity(0.08), .white.opacity(0.2)],
-                                       startPoint: .topLeading, endPoint: .bottomTrailing),
-                        lineWidth: 0.8)
-        )
-        // Depth as a glow in the card's OWN colours — the neon lift the Home
-        // card has — instead of a flat black shadow. The small thumbnail keeps
-        // a plain contact shadow so its glow can't bleed past its neighbours.
-        .background {
-            RoundedRectangle(cornerRadius: radius, style: .continuous)
-                .fill(compact ? AnyShapeStyle(Color.black) : AnyShapeStyle(gradient))
-                .scaleEffect(compact ? 1 : 0.94)
-                .offset(y: (compact ? 3 : 12) * prominence)
-                .blur(radius: (compact ? 6 : 20) * prominence)
-                .opacity((compact ? 0.18 : (colorScheme == .dark ? 0.6 : 0.45)) * prominence)
         }
     }
 
-    private var displayNumber: String {
-        if card.isDigitalWallet && !card.phoneNumber.isEmpty { return card.phoneNumber }
-        let digits = card.cardNumber.filter(\.isNumber)
-        guard digits.count >= 4 else { return card.cardNumber }
-        return stride(from: 0, to: digits.count, by: 4)
-            .map { String(digits.dropFirst($0).prefix(4)) }
-            .joined(separator: " ")
-    }
+    // MARK: Words on the face
 
-    private var maskedIdentifier: String {
-        card.isDigitalWallet ? "+•• ••••••••" : "•••• •••• •••• ••••"
-    }
-
-    /// The wallet's brand mark, shaped like an app icon rather than a chip.
-    private var providerTile: some View {
-        RoundedRectangle(cornerRadius: AppRadius.xs, style: .continuous)
-            .fill(.white.opacity(0.22))
-            .frame(width: 30, height: 30)
-            .overlay(
-                Text(String((card.walletProvider.isEmpty ? "W" : card.walletProvider).prefix(1)).uppercased())
-                    .font(.system(.subheadline, design: .rounded, weight: .heavy))
-                    .foregroundStyle(.white)
-            )
-            .overlay(RoundedRectangle(cornerRadius: AppRadius.xs).stroke(.white.opacity(0.3), lineWidth: 0.7))
-    }
-
-    private var chip: some View {
-        RoundedRectangle(cornerRadius: 4, style: .continuous)
-            .fill(LinearGradient(colors: [Color(white: 0.86), Color(white: 0.62)],
-                                 startPoint: .topLeading, endPoint: .bottomTrailing))
-            .frame(width: 32, height: 24)
-            .overlay(
-                VStack(spacing: 3) {
-                    ForEach(0..<3, id: \.self) { _ in
-                        Rectangle().fill(.black.opacity(0.18)).frame(height: 0.8)
-                    }
-                }
-                .padding(.horizontal, 5)
-            )
-            .overlay(RoundedRectangle(cornerRadius: 4).stroke(.white.opacity(0.35), lineWidth: 0.6))
-    }
-
-    @ViewBuilder
-    private var networkMark: some View {
+    /// The bank, when DiPo knows it: the holder's name is the same person on
+    /// every card and told none of them apart.
+    static func title(for card: BankCard) -> String {
         if card.isDigitalWallet {
-            Text(loc("wallet.ewallet"))
-                .font(.system(.caption2, weight: .bold))
-                .foregroundStyle(.white.opacity(0.85))
-                .padding(.horizontal, 6).padding(.vertical, 3)
-                .background(.white.opacity(0.18), in: Capsule())
-        } else if card.isCreditCard {
-            Text(loc("cc.badge"))
-                .font(.system(.caption2, weight: .bold))
-                .foregroundStyle(.white.opacity(0.85))
-                .padding(.horizontal, 6).padding(.vertical, 3)
-                .background(.white.opacity(0.18), in: Capsule())
-        } else {
-            CardNetworkLogo(network: CardNetwork.detect(from: card.cardNumber))
-                .frame(height: 18)
+            return card.walletProvider.isEmpty ? loc("wallet.untitled") : card.walletProvider
         }
+        if let bank = BankIssuer.find(card.issuerID)?.name { return bank }
+        return card.holderName.isEmpty ? loc("wallet.untitled") : card.holderName
+    }
+
+    /// The card's own name and its last four digits, or a wallet's phone
+    /// number with the middle hidden.
+    static func subtitle(for card: BankCard) -> String {
+        if card.isDigitalWallet {
+            let digits = card.phoneNumber.filter(\.isNumber)
+            guard digits.count >= 8 else { return "" }
+            let local = digits.hasPrefix("62") ? "0" + digits.dropFirst(2) : digits
+            return "\(local.prefix(4)) ••• \(local.suffix(4))"
+        }
+        let last4 = String(card.cardNumber.filter(\.isNumber).suffix(4))
+        let tail = last4.count == 4 ? "•• " + last4 : ""
+        // Without a known bank the holder name is already the title.
+        guard BankIssuer.find(card.issuerID) != nil, !card.holderName.isEmpty else { return tail }
+        return tail.isEmpty ? card.holderName : "\(card.holderName) \(tail)"
+    }
+
+    /// The newest `limit` entries, newest first, in one pass: this runs for
+    /// every card in the carousel and a card can hold years of entries.
+    static func latest(_ txs: [TxRecord], limit: Int) -> [TxRecord] {
+        guard limit > 0 else { return [] }
+        var top: [TxRecord] = []
+        for tx in txs {
+            if top.count < limit {
+                top.append(tx)
+                top.sort { $0.date > $1.date }
+            } else if let last = top.last, tx.date > last.date {
+                top[top.count - 1] = tx
+                top.sort { $0.date > $1.date }
+            }
+        }
+        return top
     }
 }
 
@@ -434,9 +476,6 @@ struct WalletCardActions: View {
         }
     }
 
-    private var subtitle: String {
-        if card.isDigitalWallet && !card.walletProvider.isEmpty { return card.walletProvider }
-        if card.isCreditCard { return loc("cc.title") }
-        return CardNetwork.detect(from: card.cardNumber).name
-    }
+    /// The same name the card's face carries, so the row and the card agree.
+    private var subtitle: String { WalletCard.title(for: card) }
 }

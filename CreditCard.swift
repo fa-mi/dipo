@@ -287,7 +287,7 @@ struct CreditCardFormSheet: View {
                             TextField("•••• •••• •••• ••••", text: $displayNumber)
                                 .keyboardType(.numberPad)
                                 .onChange(of: displayNumber) { _, v in
-                                    let digits = String(v.filter(\.isNumber).prefix(16))
+                                    let digits = String(v.filter(\.isNumber).prefix(CardNetwork.maxLength))
                                     cardNumber = digits
                                     displayNumber = digits.enumerated().map { $0.offset > 0 && $0.offset % 4 == 0 ? " \($0.element)" : String($0.element) }.joined()
                                 }
