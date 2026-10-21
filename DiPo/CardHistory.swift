@@ -86,7 +86,7 @@ struct CardHistorySection: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text(loc("cc.history"))
-                    .font(.system(.caption2, weight: .semibold))
+                    .font(.system(.footnote, weight: .semibold))
                     .foregroundStyle(AppTheme.textSecondary)
                 Spacer()
                 if txs.count > Self.preview {

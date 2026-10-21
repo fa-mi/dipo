@@ -1024,7 +1024,6 @@ struct NotificationCenterView: View {
                         if item.isTicketReply {
                             Text(loc("notif.tag.support"))
                                 .font(.system(.caption2, weight: .bold))
-                                .tracking(0.4)
                                 .foregroundStyle(item.iconColor)
                                 .padding(.horizontal, 6).padding(.vertical, 2)
                                 .background(item.iconColor.opacity(0.15), in: Capsule())

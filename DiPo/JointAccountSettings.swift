@@ -229,9 +229,8 @@ struct JointSettingsSheet: View {
 
     private func section<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(title.uppercased())
-                .font(.system(.caption, weight: .bold))
-                .tracking(0.6)
+            Text(title)
+                .font(.system(.footnote, weight: .semibold))
                 .foregroundStyle(AppTheme.textSecondary)
             content()
         }

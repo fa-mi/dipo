@@ -57,7 +57,6 @@ struct QuestCTA: View {
         Button(action: action) {
             Text(title)
                 .font(.quest(17, .heavy))
-                .tracking(0.6)
                 .frame(maxWidth: .infinity, minHeight: 52)
         }
         .buttonStyle(ChunkyButtonStyle(fill: enabled ? fill : AppTheme.cardMid,

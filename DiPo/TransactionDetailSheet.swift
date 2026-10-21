@@ -471,9 +471,8 @@ struct TransactionDetailSheet: View {
 
                 VStack(alignment: .leading, spacing: 10) {
                     Text(loc("tx.rhythm_title"))
-                        .font(.system(.caption2, weight: .bold))
+                        .font(.system(.footnote, weight: .semibold))
                         .foregroundStyle(AppTheme.textSecondary)
-                        .tracking(0.6)
 
                     Text(loc(explanationKey(for: auto)))
                         .font(.system(.caption))

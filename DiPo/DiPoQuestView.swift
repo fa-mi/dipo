@@ -346,8 +346,8 @@ struct DiPoQuestView: View {
                     .resizable().scaledToFit()
                     .frame(width: 52, height: 52)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(loc("quest.bonus").uppercased())
-                        .font(.quest(11, .heavy))
+                    Text(loc("quest.bonus"))
+                        .font(.quest(12, .heavy))
                         .foregroundStyle(AppTheme.textSecondary)
                     Text(loc("game.title"))
                         .font(.quest(17, .heavy))
@@ -463,7 +463,7 @@ struct QuestLessonView: View {
             if let q = lesson.question {
                 ScrollView(showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 16) {
-                        Label(q.title.uppercased(), systemImage: q.kind.icon)
+                        Label(q.title, systemImage: q.kind.icon)
                             .font(.quest(13, .heavy))
                             .foregroundStyle(q.kind.tint)
                         HStack(alignment: .bottom, spacing: 6) {

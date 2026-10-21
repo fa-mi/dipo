@@ -109,10 +109,9 @@ struct WalletCard: View {
                         .multilineTextAlignment(.leading)
                 } else {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(balanceLabel.uppercased())
-                        .font(.system(.caption2, weight: .semibold))
+                    Text(balanceLabel)
+                        .font(.system(.caption, weight: .semibold))
                         .foregroundStyle(.white.opacity(0.65))
-                        .tracking(0.8)
                     Text(balanceText)
                         .font(.system(.title2, weight: .bold))
                         .foregroundStyle(.white)
@@ -228,7 +227,7 @@ struct WalletCard: View {
     @ViewBuilder
     private var networkMark: some View {
         if card.isDigitalWallet {
-            Text(loc("wallet.ewallet").uppercased())
+            Text(loc("wallet.ewallet"))
                 .font(.system(.caption2, weight: .bold))
                 .foregroundStyle(.white.opacity(0.85))
                 .padding(.horizontal, 6).padding(.vertical, 3)
