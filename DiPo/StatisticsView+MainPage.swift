@@ -119,9 +119,12 @@ extension StatisticsView {
                              dayMonth(outlook.payday)),
                       systemImage: outlook.end >= 0.5 ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
                     .font(.system(.footnote, weight: .bold))
-                    .foregroundStyle(outlook.end >= 0.5 ? AppTheme.accent : AppTheme.red)
+                    .foregroundStyle(outlook.end >= 0.5 ? AppTheme.flowPillInk : AppTheme.red)
                     .padding(.horizontal, 11).padding(.vertical, 6)
-                    .background((outlook.end >= 0.5 ? AppTheme.accent : AppTheme.red).opacity(0.14), in: Capsule())
+                    .background((outlook.end >= 0.5 ? AppTheme.flowPine.opacity(0.20) : AppTheme.red.opacity(0.14)),
+                                in: Capsule())
+                    .overlay(Capsule().stroke(outlook.end >= 0.5 ? AppTheme.flowWillow.opacity(0.25)
+                                                                 : AppTheme.flowPeach.opacity(0.30), lineWidth: 1))
             }
 
             VStack(alignment: .leading, spacing: 4) {
@@ -131,7 +134,7 @@ extension StatisticsView {
                     .foregroundStyle(AppTheme.textSecondary)
                 Text(book.map { signedMoney($0.end) } ?? money(filteredExpenses))
                     .font(.system(size: 40, weight: .bold))
-                    .foregroundStyle(danger ? AppTheme.red : AppTheme.textPrimary)
+                    .foregroundStyle(heroFigure(danger: danger))
                     .contentTransition(.numericText())
                     .minimumScaleFactor(0.5).lineLimit(1)
                 if let outlook {
@@ -192,8 +195,7 @@ extension StatisticsView {
                 }
                 .padding(12)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background((line.ok ? AppTheme.accent : AppTheme.orange).opacity(0.10),
-                            in: RoundedRectangle(cornerRadius: AppRadius.md))
+                .heroPanel(line.ok ? AppTheme.flowPine.opacity(0.13) : AppTheme.orange.opacity(0.12))
             } else if livingFunds <= 0 {
                 Label(loc("stats.no_income_hint"), systemImage: "info.circle")
                     .font(.system(.caption))
@@ -204,12 +206,29 @@ extension StatisticsView {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(18)
         .background {
-            // The one gradient on the screen: a soft field behind the
-            // headline, peach when the balance is heading below zero.
-            RoundedRectangle(cornerRadius: AppRadius.xl).fill(AppTheme.cardDark)
+            // The one gradient on the screen: the web hero's field, peach
+            // when the balance is heading below zero. Dark in both themes,
+            // as a card face is, so everything on it reads as in dark mode.
+            RoundedRectangle(cornerRadius: AppRadius.xl).fill(AppTheme.flowGround)
                 .overlay { FlowField(danger: danger) }
                 .clipShape(RoundedRectangle(cornerRadius: AppRadius.xl))
+                .overlay(RoundedRectangle(cornerRadius: AppRadius.xl)
+                    .stroke(danger ? AppTheme.flowPeach.opacity(0.28) : AppTheme.flowMint.opacity(0.16), lineWidth: 1))
+                .shadow(color: (danger ? AppTheme.flowPeach : AppTheme.flowPine).opacity(0.22), radius: 18, y: 10)
         }
+        .environment(\.colorScheme, .dark)
+    }
+
+    /// White fading to frost, or blush to peach when the balance runs out —
+    /// the web's balance figure.
+    func heroFigure(danger: Bool) -> LinearGradient {
+        danger
+            ? LinearGradient(stops: [.init(color: AppTheme.flowBlush, location: 0.2),
+                                     .init(color: AppTheme.flowPeach, location: 1)],
+                             startPoint: .top, endPoint: .bottom)
+            : LinearGradient(stops: [.init(color: AppTheme.textPrimary, location: 0.3),
+                                     .init(color: AppTheme.flowFrost, location: 1)],
+                             startPoint: .top, endPoint: .bottom)
     }
 
     func signedMoney(_ v: Double) -> String {
@@ -276,7 +295,7 @@ extension StatisticsView {
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(tint.opacity(0.10), in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .heroPanel(!over ? AppTheme.flowPine.opacity(0.13) : tint.opacity(0.12))
     }
 
     /// Debt paid down and money put away — named as what they are, in blue,
@@ -293,7 +312,7 @@ extension StatisticsView {
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(AppTheme.blue.opacity(0.09), in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .heroPanel(AppTheme.flowCobalt.opacity(0.18))
     }
 
     // MARK: The period as a cash book
@@ -379,7 +398,7 @@ extension StatisticsView {
             }
         }
         .padding(12)
-        .background(AppTheme.bg.opacity(0.55), in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .heroPanel(AppTheme.flowGround.opacity(0.46), edge: 0.09)
     }
 
     /// The moves between own cards, one line per other card. See OwnMoves.
@@ -977,5 +996,14 @@ extension StatisticsView {
                 .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
         }
         .buttonStyle(ScaleButtonStyle())
+    }
+}
+
+private extension View {
+    /// A panel on the hero's field: a tinted fill and a hairline that
+    /// catches the light, as the web's frosted boxes.
+    func heroPanel(_ fill: Color, edge: Double = 0.06) -> some View {
+        background(fill, in: RoundedRectangle(cornerRadius: AppRadius.md))
+            .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(Color.white.opacity(edge), lineWidth: 1))
     }
 }

@@ -326,6 +326,17 @@ final class WebSyncService {
         )
     }
 
+    /// Which money the dashboard is about. Home adds up every card; the
+    /// figures here — like Statistics — are the main card and the cards it
+    /// pays bills from, so the page names them, or its balance reads as a
+    /// different total from Home's. Labels as the card picker shows them
+    /// ("BRI ·· 0969"); nil without a main card, when every card is read.
+    static func scope(cards: [BankCard]) -> [String: Any]? {
+        guard let main = MainCard.resolve(in: cards) else { return nil }
+        return ["label": main.pickerLabel,
+                "billCards": MainCard.billCards(in: cards).map(\.pickerLabel)]
+    }
+
     private func buildPayload(from source: Source, now: Date) -> [String: Any] {
         let cm = CurrencyManager.shared
         let base = cm.preferredCurrency
@@ -537,6 +548,7 @@ final class WebSyncService {
             "recurrings":   recurringRows,
             "salaries":     salaryRows,
         ]
+        if let scope = Self.scope(cards: cards) { out["mainCard"] = scope }
 
         if let f = figures {
             out["cycleStartISO"] = iso.string(from: f.start)
