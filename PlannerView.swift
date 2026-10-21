@@ -517,7 +517,7 @@ struct CalculatorSheet: View {
         if let load, load.monthlyIncome > 0 {
             VStack(alignment: .leading, spacing: 8) {
                 Text(loc("planner.impact_title"))
-                    .font(.system(.caption2, weight: .semibold))
+                    .font(.system(.footnote, weight: .semibold))
                     .foregroundStyle(AppTheme.textSecondary)
                     .padding(.horizontal, 22)
                 ObligationLoadCard(load: load, projected: load.adding(instalment: instalment))
@@ -554,7 +554,7 @@ struct CalculatorSheet: View {
             let ceiling = pct(a.lenderRuleBinds ? LoanAffordability.lenderCeiling : ObligationLoad.healthyCeiling)
             VStack(alignment: .leading, spacing: 8) {
                 Text(loc("afford.title"))
-                    .font(.system(.caption2, weight: .semibold))
+                    .font(.system(.footnote, weight: .semibold))
                     .foregroundStyle(AppTheme.textSecondary)
                     .padding(.horizontal, 22)
                 VStack(alignment: .leading, spacing: 12) {

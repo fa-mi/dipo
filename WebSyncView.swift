@@ -118,7 +118,7 @@ struct WebSyncView: View {
         let code = liveAccessCode
         return VStack(alignment: .leading, spacing: 10) {
             Text(loc("websync.login_title"))
-                .font(.system(.caption, weight: .bold))
+                .font(.system(.footnote, weight: .semibold))
                 .foregroundStyle(AppTheme.textSecondary)
             // Side by side, the same height; stacked at the accessibility
             // text sizes, where two columns can't hold an eight-letter ID.

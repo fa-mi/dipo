@@ -300,7 +300,7 @@ struct InstallmentSection: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text(loc("inst.section"))
-                    .font(.system(.caption2, weight: .semibold))
+                    .font(.system(.footnote, weight: .semibold))
                     .foregroundStyle(AppTheme.textSecondary)
                 Spacer()
                 Button {
@@ -647,7 +647,7 @@ struct InstallmentSimulatorSheet: View {
         let locked = installment.outstandingPrincipal()
         let util = card.utilisation(installments)
         return VStack(alignment: .leading, spacing: 10) {
-            Text(loc("inst.sim_limit")).font(.system(.caption2, weight: .semibold))
+            Text(loc("inst.sim_limit")).font(.system(.footnote, weight: .semibold))
                 .foregroundStyle(AppTheme.textSecondary)
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(String(format: "%.0f%%", util * 100))
@@ -687,7 +687,7 @@ struct InstallmentSimulatorSheet: View {
         df.dateFormat = DateFormatter.dateFormat(fromTemplate: "MMM yy", options: 0,
                                                  locale: LanguageManager.shared.currentLocale)
         return VStack(alignment: .leading, spacing: 10) {
-            Text(loc("inst.sim_schedule")).font(.system(.caption2, weight: .semibold))
+            Text(loc("inst.sim_schedule")).font(.system(.footnote, weight: .semibold))
                 .foregroundStyle(AppTheme.textSecondary)
             HStack {
                 Text(loc("inst.col_month")).frame(width: 54, alignment: .leading)
@@ -723,7 +723,7 @@ struct InstallmentSimulatorSheet: View {
         let extra = InstallmentAdvice.Extra(statement: statement, paying: paying,
                                             revolvingBalance: revolving)
         return VStack(alignment: .leading, spacing: 10) {
-            Text(loc("inst.sim_overpay")).font(.system(.caption2, weight: .semibold))
+            Text(loc("inst.sim_overpay")).font(.system(.footnote, weight: .semibold))
                 .foregroundStyle(AppTheme.textSecondary)
             row(loc("inst.statement_this_month"), money(statement), bold: true)
             TextField(loc("inst.if_i_pay"), text: $payingText)

@@ -215,7 +215,7 @@ struct ReceivablesView: View {
 
                             if !settledList.isEmpty {
                                 Text(loc("receivable.settled_section"))
-                                    .font(.system(.caption2, weight: .semibold))
+                                    .font(.system(.footnote, weight: .semibold))
                                     .foregroundStyle(AppTheme.textSecondary)
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                     .padding(.horizontal, 22).padding(.top, 8)

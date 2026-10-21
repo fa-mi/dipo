@@ -591,9 +591,8 @@ struct LockedFeaturePlaceholder: View {
                     HStack(spacing: 6) {
                         Image(systemName: feature.requiredPlan.icon)
                             .font(.system(.caption, weight: .bold))
-                        Text(feature.requiredPlan.label.uppercased())
-                            .font(.system(.caption2, weight: .bold))
-                            .tracking(1.5)
+                        Text(feature.requiredPlan.label)
+                            .font(.system(.caption, weight: .bold))
                     }
                     .foregroundStyle(feature.requiredPlan.color)
                     .padding(.horizontal, 12).padding(.vertical, 5)

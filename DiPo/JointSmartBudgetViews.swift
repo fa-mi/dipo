@@ -298,9 +298,8 @@ struct JointSmartBudgetSheet: View {
     }
 
     private func caption(_ text: String) -> some View {
-        Text(text.uppercased())
-            .font(.system(.caption, weight: .bold))
-            .tracking(0.6)
+        Text(text)
+            .font(.system(.footnote, weight: .semibold))
             .foregroundStyle(AppTheme.textSecondary)
     }
 

@@ -26,9 +26,8 @@ struct JointAccountsSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(loc("joint.section").uppercased())
-                .font(.system(.caption, weight: .bold))
-                .tracking(0.6)
+            Text(loc("joint.section"))
+                .font(.system(.footnote, weight: .semibold))
                 .foregroundStyle(AppTheme.textSecondary)
                 .padding(.leading, 4)
 

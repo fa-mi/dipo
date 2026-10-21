@@ -85,9 +85,8 @@ struct MainCardGate: View {
     private var reasons: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text(loc("main.gate_why"))
-                .font(.system(.caption2, weight: .bold))
+                .font(.system(.footnote, weight: .semibold))
                 .foregroundStyle(AppTheme.textSecondary)
-                .tracking(0.7)
                 .padding(.bottom, 12)
 
             ForEach(Array(MainCard.dependents.enumerated()), id: \.element.id) { idx, dep in
@@ -123,9 +122,8 @@ struct MainCardGate: View {
     private var picker: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(loc("main.gate_choose"))
-                .font(.system(.caption2, weight: .bold))
+                .font(.system(.footnote, weight: .semibold))
                 .foregroundStyle(AppTheme.textSecondary)
-                .tracking(0.7)
 
             ForEach(cards) { card in
                 Button {

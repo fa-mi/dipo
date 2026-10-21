@@ -1403,10 +1403,9 @@ struct CardTransferSheet: View {
             HapticManager.shared.tap(); tap()
         } label: {
             VStack(spacing: 8) {
-                Text(title.uppercased())
-                    .font(.system(.caption2, weight: .bold))
+                Text(title)
+                    .font(.system(.footnote, weight: .semibold))
                     .foregroundStyle(AppTheme.textSecondary)
-                    .tracking(0.7)
                 if let card {
                     WalletCard(card: card, width: 96, compact: true)
                         .frame(width: 96)
@@ -1658,9 +1657,8 @@ private struct TransferCardTile: View {
                 Spacer()
                 // A credit card shows what's OWED + available (paying it reduces
                 // owed), not a cash balance.
-                Text((card.isCreditCard ? loc("cc.owed") : loc("transfer.available_label")).uppercased())
-                    .font(.system(.caption2, weight: .semibold))
-                    .tracking(0.5)
+                Text(card.isCreditCard ? loc("cc.owed") : loc("transfer.available_label"))
+                    .font(.system(.caption, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.7))
                 Text(card.isCreditCard ? card.formattedOwed : card.formattedBalance)
                     .font(.system(.title, weight: .heavy))

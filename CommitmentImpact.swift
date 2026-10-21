@@ -105,9 +105,8 @@ struct CommitmentImpactPreview: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(loc("impact.title"))
-                .font(.system(.caption2, weight: .bold))
+                .font(.system(.footnote, weight: .semibold))
                 .foregroundStyle(AppTheme.textSecondary)
-                .tracking(0.6)
 
             // The before → after, which is the whole point. A single "after"
             // figure tells you where you'd land but not what this choice moved.

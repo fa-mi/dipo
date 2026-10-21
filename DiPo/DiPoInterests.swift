@@ -288,9 +288,8 @@ struct DiPoInterestsView: View {
                         }
 
                         Text(loc("interest.custom_title"))
-                            .font(.system(.caption, weight: .bold))
+                            .font(.system(.footnote, weight: .semibold))
                             .foregroundStyle(AppTheme.textSecondary)
-                            .textCase(.uppercase)
                             .padding(.top, 6)
 
                         if !custom.isEmpty {
