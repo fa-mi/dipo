@@ -126,6 +126,18 @@ struct AppTheme {
     static let flowPeach  = Color(hex: "#F09199")   // Peach Pink
     static let flowPlum   = Color(hex: "#895B8A")   // Ancient Purple
 
+    // Added to match the dashboard's hero at dipo.info, which lays the same
+    // field over a near-black ground with a mint glow and a cobalt corner.
+    // The headline is that ground in both themes, as a card face is, so the
+    // phone and the web open on the same picture.
+    static let flowGround = Color(hex: "#05100D")   // the hero's ground
+    static let flowMint   = Color(hex: "#4BE8A0")   // the glow across the middle
+    static let flowCobalt = Color(hex: "#1E50A2")   // the top-left corner
+    static let flowEmber  = Color(hex: "#7F1D1D")   // the low corner when the balance runs out
+    static let flowFrost  = Color(hex: "#C8F3DC")   // the balance figure fades to this
+    static let flowBlush  = Color(hex: "#FFD5D9")   // the balance figure, top, when it runs out
+    static let flowPillInk = Color(hex: "#B9F6D6")  // "Safe until payday" on the field
+
     // The Rekening Bersama card face: the brand emerald running into a deep
     // teal, so a shared account reads as DiPo's own and never as one of the
     // bank cards beside it. Fixed in both themes, like every card face.

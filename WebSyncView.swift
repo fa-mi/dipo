@@ -31,6 +31,7 @@ struct WebSyncView: View {
     @State private var codeCopied = false
     @State private var showRevokeConfirm = false
     @State private var appeared = false
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     private var dipoID: String { session.dipoID ?? "—" }
 
@@ -39,13 +40,12 @@ struct WebSyncView: View {
             ZStack {
                 AppTheme.bg.ignoresSafeArea()
                 ScrollView(showsIndicators: false) {
-                    VStack(spacing: 18) {
+                    VStack(spacing: 14) {
                         header
-                        idCard
-                        steps
                         statusCard
                         if service.needsReconnect { reconnectCard }
-                        if let code = liveAccessCode { codeCard(code) }
+                        keysCard
+                        howCard
                         syncButton
                         if service.lastSyncedAt != nil { revokeLink }
                         Spacer(minLength: 28)
@@ -84,74 +84,28 @@ struct WebSyncView: View {
     // MARK: Header
 
     private var header: some View {
-        VStack(spacing: 10) {
+        HStack(spacing: 12) {
             ZStack {
-                Circle().fill(AppTheme.accent.opacity(0.12)).frame(width: 66, height: 66)
+                Circle().fill(AppTheme.accent.opacity(0.12)).frame(width: 44, height: 44)
                 Image(systemName: "laptopcomputer.and.iphone")
-                    .font(.system(.title, weight: .medium))
+                    .font(.system(.callout, weight: .medium))
                     .foregroundStyle(AppTheme.accent)
             }
             Text(loc("websync.header"))
                 .font(.system(.subheadline)).foregroundStyle(AppTheme.textSecondary)
-                .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
                 .lineSpacing(2)
+            Spacer(minLength: 0)
         }
         .padding(.bottom, 2)
     }
 
-    // MARK: DiPo ID
-
-    private var idCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Label(loc("websync.your_id"), systemImage: "number")
-                .font(.system(.caption, weight: .semibold))
-                .foregroundStyle(AppTheme.textSecondary)
-
-            HStack(spacing: 12) {
-                Text(dipoID)
-                    .font(.system(.title, design: .monospaced, weight: .bold))
-                    .tracking(3)
-                    .foregroundStyle(AppTheme.textPrimary)
-                    .lineLimit(1).minimumScaleFactor(0.7)
-                Spacer(minLength: 8)
-                Button {
-                    HapticManager.shared.tap()
-                    UIPasteboard.general.string = dipoID
-                    withAnimation(.spring(response: 0.3)) { idCopied = true }
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) {
-                        withAnimation(.easeOut) { idCopied = false }
-                    }
-                } label: {
-                    HStack(spacing: 5) {
-                        Image(systemName: idCopied ? "checkmark" : "doc.on.doc")
-                            .font(.system(.caption2, weight: .bold))
-                        Text(idCopied ? loc("common.copied") : loc("common.copy"))
-                            .font(.system(.caption, weight: .semibold))
-                    }
-                    .foregroundStyle(idCopied ? AppTheme.bg : AppTheme.accent)
-                    .padding(.horizontal, 13).padding(.vertical, 8)
-                    .background(idCopied ? AnyShapeStyle(AppTheme.accent)
-                                         : AnyShapeStyle(AppTheme.accent.opacity(0.14)), in: Capsule())
-                }
-                .buttonStyle(ScaleButtonStyle())
-                .disabled(session.dipoID == nil)
-            }
-
-            Text("dipo.info")
-                .font(.system(.caption, weight: .semibold))
-                .foregroundStyle(AppTheme.accent)
-            Text(loc("websync.id_hint"))
-                .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary.opacity(0.85))
-                .fixedSize(horizontal: false, vertical: true).lineSpacing(1.5)
-        }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
-        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.accent.opacity(0.22), lineWidth: 1))
-    }
-
-    // MARK: Access code
+    // MARK: The two keys
+    //
+    // People asked why there are two codes. They are the account number and
+    // the PIN: the DiPo ID never changes and is shared with friends for
+    // invites, so on its own it opens nothing; the code is new every sync
+    // and is what proves it's them. Side by side, each says which it is.
 
     /// The code for the snapshot that is still readable, if any.
     private var liveAccessCode: String? {
@@ -160,96 +114,121 @@ struct WebSyncView: View {
         return code
     }
 
-    private func codeCard(_ code: String) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Label(loc("websync.code_label"), systemImage: "lock.fill")
-                .font(.system(.caption, weight: .semibold))
+    private var keysCard: some View {
+        let code = liveAccessCode
+        return VStack(alignment: .leading, spacing: 10) {
+            Text(loc("websync.login_title"))
+                .font(.system(.caption, weight: .bold))
                 .foregroundStyle(AppTheme.textSecondary)
-            HStack(spacing: 12) {
-                Text(code)
-                    .font(.system(.title, design: .monospaced, weight: .bold))
-                    .tracking(4)
-                    .foregroundStyle(AppTheme.textPrimary)
-                    .lineLimit(1).minimumScaleFactor(0.7)
-                    .accessibilityLabel(code.map(String.init).joined(separator: " "))
-                Spacer(minLength: 8)
-                Button {
-                    HapticManager.shared.tap()
-                    UIPasteboard.general.string = code
-                    withAnimation(.spring(response: 0.3)) { codeCopied = true }
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) {
-                        withAnimation(.easeOut) { codeCopied = false }
-                    }
-                } label: {
-                    HStack(spacing: 5) {
-                        Image(systemName: codeCopied ? "checkmark" : "doc.on.doc")
-                            .font(.system(.caption2, weight: .bold))
-                        Text(codeCopied ? loc("common.copied") : loc("common.copy"))
-                            .font(.system(.caption, weight: .semibold))
-                    }
-                    .foregroundStyle(codeCopied ? AppTheme.bg : AppTheme.accent)
-                    .padding(.horizontal, 13).padding(.vertical, 8)
-                    .background(codeCopied ? AnyShapeStyle(AppTheme.accent)
-                                           : AnyShapeStyle(AppTheme.accent.opacity(0.14)), in: Capsule())
-                }
-                .buttonStyle(ScaleButtonStyle())
+            // Side by side, the same height; stacked at the accessibility
+            // text sizes, where two columns can't hold an eight-letter ID.
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(spacing: 10) { idTile; codeTile(code) }
+            } else {
+                HStack(alignment: .top, spacing: 10) { idTile; codeTile(code) }
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            Text(loc("websync.code_hint"))
-                .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary.opacity(0.85))
-                .fixedSize(horizontal: false, vertical: true).lineSpacing(1.5)
+            Label(loc("websync.code_hint"), systemImage: "lock.fill")
+                .font(.system(.caption))
+                .foregroundStyle(AppTheme.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(16)
+        .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
-        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.accent.opacity(0.22), lineWidth: 1))
     }
 
-    // MARK: Steps
+    private var idTile: some View {
+        keyTile(label: loc("websync.id_label"), icon: "number", value: dipoID, caption: loc("websync.id_like"),
+                copied: $idCopied, copyable: session.dipoID != nil)
+    }
 
-    private var steps: some View {
-        VStack(spacing: 0) {
-            stepRow(1, "safari.fill",            AppTheme.blue,   "websync.step1t", "websync.step1d")
-            stepDivider
-            stepRow(2, "keyboard.fill",          AppTheme.purple, "websync.step2t", "websync.step2d")
-            stepDivider
-            stepRow(3, "arrow.up.circle.fill",   AppTheme.accent, "websync.step3t", "websync.step3d")
+    private func codeTile(_ code: String?) -> some View {
+        keyTile(label: loc("websync.code_label"), icon: "lock.fill", value: code ?? "••••••",
+                caption: loc(code == nil ? "websync.code_pending" : "websync.code_like"),
+                copied: $codeCopied, copyable: code != nil)
+    }
+
+    private func keyTile(label: String, icon: String, value: String, caption: String,
+                         copied: Binding<Bool>, copyable: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Label(label, systemImage: icon)
+                .font(.system(.caption, weight: .bold))
+                .foregroundStyle(AppTheme.textSecondary)
+            Text(value)
+                .font(.system(.title3, design: .monospaced, weight: .bold))
+                .tracking(copyable ? 1.5 : 3)
+                .foregroundStyle(copyable ? AppTheme.textPrimary : AppTheme.textSecondary.opacity(0.45))
+                .lineLimit(1).minimumScaleFactor(0.6)
+                .accessibilityLabel(copyable ? value.map(String.init).joined(separator: " ") : caption)
+            Text(caption)
+                .font(.system(.caption))
+                .foregroundStyle(AppTheme.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+            copyButton(value, copied: copied)
+                .disabled(!copyable)
+                .opacity(copyable ? 1 : 0.35)
         }
-        .padding(.vertical, 4)
+        .padding(12)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(AppTheme.bg.opacity(0.7), in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.accent.opacity(0.18), lineWidth: 1))
+    }
+
+    private func copyButton(_ value: String, copied: Binding<Bool>) -> some View {
+        Button {
+            HapticManager.shared.tap()
+            UIPasteboard.general.string = value
+            withAnimation(.spring(response: 0.3)) { copied.wrappedValue = true }
+            Task {
+                try? await Task.sleep(for: .seconds(1.6))
+                withAnimation(.easeOut) { copied.wrappedValue = false }
+            }
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: copied.wrappedValue ? "checkmark" : "doc.on.doc")
+                    .font(.system(.caption2, weight: .bold))
+                Text(copied.wrappedValue ? loc("common.copied") : loc("common.copy"))
+                    .font(.system(.caption, weight: .semibold))
+            }
+            .foregroundStyle(copied.wrappedValue ? AppTheme.bg : AppTheme.accent)
+            .padding(.horizontal, 12).padding(.vertical, 7)
+            .background(copied.wrappedValue ? AnyShapeStyle(AppTheme.accent)
+                                            : AnyShapeStyle(AppTheme.accent.opacity(0.14)), in: Capsule())
+        }
+        .buttonStyle(ScaleButtonStyle())
+    }
+
+    // MARK: How
+
+    /// Three short lines, in the order they're done. The first names the
+    /// button as it reads right now, Sync Now or Sync Again.
+    private var howCard: some View {
+        let action = loc(service.lastSyncedAt == nil ? "websync.action" : "websync.action_again")
+        return VStack(alignment: .leading, spacing: 10) {
+            howRow(1, String(format: loc("websync.how1"), action))
+            howRow(2, loc("websync.how2"))
+            howRow(3, loc("websync.how3"))
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
     }
 
-    private var stepDivider: some View {
-        Divider().background(AppTheme.cardMid).padding(.leading, 62)
-    }
-
-    private func stepRow(_ n: Int, _ icon: String, _ tint: Color,
-                         _ titleKey: String, _ bodyKey: String) -> some View {
-        HStack(alignment: .top, spacing: 13) {
-            ZStack {
-                RoundedRectangle(cornerRadius: AppRadius.sm).fill(tint.opacity(0.14))
-                    .frame(width: 36, height: 36)
-                Image(systemName: icon)
-                    .font(.system(.callout, weight: .semibold))
-                    .foregroundStyle(tint)
-            }
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 6) {
-                    Text("\(n)")
-                        .font(.system(.caption2, weight: .bold))
-                        .foregroundStyle(tint)
-                        .frame(width: 16, height: 16)
-                        .background(tint.opacity(0.16), in: Circle())
-                    Text(loc(titleKey))
-                        .font(.system(.subheadline, weight: .semibold))
-                        .foregroundStyle(AppTheme.textPrimary)
-                }
-                Text(loc(bodyKey))
-                    .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true).lineSpacing(1.5)
-            }
-            Spacer(minLength: 0)
+    private func howRow(_ n: Int, _ text: String) -> some View {
+        HStack(spacing: 10) {
+            Text("\(n)")
+                .font(.system(.caption, weight: .heavy))
+                .foregroundStyle(AppTheme.accent)
+                .frame(width: 22, height: 22)
+                .background(AppTheme.accent.opacity(0.14), in: Circle())
+            // **bold** in the string marks what to look for on screen.
+            Text((try? AttributedString(markdown: text)) ?? AttributedString(text))
+                .font(.system(.subheadline))
+                .foregroundStyle(AppTheme.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(.horizontal, 13).padding(.vertical, 12)
     }
 
     // MARK: Status
@@ -262,17 +241,13 @@ struct WebSyncView: View {
                       title: loc("websync.failed"), detail: message)
         case .success:
             if let at = service.lastSyncedAt {
-                // Syncing before opening the page is not a mistake — the web
-                // reads whatever snapshot exists, so the order genuinely does
-                // not matter. But the 24-hour clock starts HERE, not when the
-                // page is opened, so a snapshot nobody visits quietly burns its
-                // whole window. Naming the remaining step turns a report into
-                // an instruction, which is what the user needs at this moment.
+                // The 24-hour clock starts here, not when the page is opened,
+                // so the line says by when to open it.
                 statusBox(icon: "checkmark.circle.fill", tint: AppTheme.accent,
                           title: loc("websync.synced"),
                           detail: String(format: loc("websync.valid_until"),
                                          Self.stamp(at.addingTimeInterval(WebSyncService.snapshotLifetime))),
-                          nextStep: String(format: loc("websync.next_step"), dipoID))
+                          inline: true)
             }
         default:
             if let at = service.lastSyncedAt {
@@ -283,25 +258,25 @@ struct WebSyncView: View {
         }
     }
 
+    /// `inline`: title and detail on one line, for a short success.
     private func statusBox(icon: String, tint: Color, title: String, detail: String,
-                          nextStep: String? = nil) -> some View {
-        HStack(alignment: .top, spacing: 11) {
-            Image(systemName: icon).font(.system(.subheadline)).foregroundStyle(tint).padding(.top, 1)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.system(.footnote, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
-                Text(detail).font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true).lineSpacing(1.5)
-                if let nextStep {
-                    Text(nextStep)
-                        .font(.system(.caption, weight: .medium))
-                        .foregroundStyle(tint)
+                           inline: Bool = false) -> some View {
+        HStack(alignment: inline ? .center : .top, spacing: 10) {
+            Image(systemName: icon).font(.system(.subheadline)).foregroundStyle(tint)
+                .padding(.top, inline ? 0 : 1)
+            if inline {
+                Text(Self.oneLine(title, detail))
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title).font(.system(.footnote, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                    Text(detail).font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                         .fixedSize(horizontal: false, vertical: true).lineSpacing(1.5)
-                        .padding(.top, 4)
                 }
             }
             Spacer(minLength: 0)
         }
-        .padding(13)
+        .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(tint.opacity(0.08), in: RoundedRectangle(cornerRadius: AppRadius.md))
         .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(tint.opacity(0.2), lineWidth: 1))
@@ -382,6 +357,17 @@ struct WebSyncView: View {
                 .foregroundStyle(AppTheme.red.opacity(0.9))
         }
         .padding(.top, 2)
+    }
+
+    /// "Sent · open it before 22 Oct, 11:29", the first part bold.
+    private static func oneLine(_ title: String, _ detail: String) -> AttributedString {
+        var head = AttributedString(title)
+        head.font = .system(.footnote, weight: .semibold)
+        head.foregroundColor = AppTheme.textPrimary
+        var tail = AttributedString(" · " + detail)
+        tail.font = .system(.footnote)
+        tail.foregroundColor = AppTheme.textSecondary
+        return head + tail
     }
 
     private static func stamp(_ date: Date) -> String {
