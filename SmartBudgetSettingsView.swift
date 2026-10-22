@@ -55,7 +55,6 @@ struct SmartBudgetSettingsSheet: View {
 
     private var totalPct: Int { dailyPct + lifestylePct + investPct }
     private var isBalanced: Bool { totalPct == 100 }
-    private var primary: String { CurrencyManager.shared.preferredCurrency }
     
     /// Existing per-card config for the currently selected card (nil if none yet).
     private var selectedCardConfig: CardBudgetConfig? {
@@ -95,21 +94,16 @@ struct SmartBudgetSettingsSheet: View {
     }
 
     private var cardCurrency: String {
-        selectedCard?.currency ?? CurrencyManager.shared.preferredCurrency
+        selectedCard?.resolvedCurrency ?? CurrencyManager.shared.preferredCurrency
+    }
+
+    private func money(_ v: Double) -> String {
+        CurrencyManager.shared.formatted(v.rounded(), currency: cardCurrency)
     }
 
     /// True when income is derived from transactions rather than a salary schedule
-    private var incomeIsFromTransactions: Bool {
-        // Only count schedules linked to the SELECTED card
-        schedules.filter { $0.isActive && $0.cardID == selectedCard?.id }.isEmpty
-    }
+    private var incomeIsFromTransactions: Bool { !income.fromSchedule }
 
-    /// Monthly income in the selected card's currency.
-    ///
-    /// Priority:
-    ///   1. Salary schedules explicitly linked to the selected card (converted to card currency)
-    ///   2. Income transactions on the selected card this month (jobless / irregular income)
-    ///   3. Zero — budget structure still shows, just without monetary amounts
     /// Income plus the money in the person chose to add to this period.
     private var monthlyIncome: Double { statedIncome + extraFunds }
 
@@ -120,28 +114,16 @@ struct SmartBudgetSettingsSheet: View {
         return ExtraFunds.total(in: budgetTx, from: periodStart, to: periodEnd, currency: cardCurrency)
     }
 
-    private var statedIncome: Double {
-        let mgr = CurrencyManager.shared
-
-        // 1. Salary schedules linked to this card
-        let cardSchedules = schedules.filter { $0.isActive && $0.cardID == selectedCard?.id }
-        if !cardSchedules.isEmpty {
-            return cardSchedules.reduce(0.0) { sum, s in
-                sum + mgr.convert(s.amount, from: s.currency, to: cardCurrency)
-            }
-        }
-
-        // 2. Income transactions on the selected card this period (pay cycle
-        //    when a schedule exists, else calendar month).
-        // Real income only — a refund gives back an expense, it isn't pay.
-        return budgetTx
-            .filter { $0.amount > 0 && $0.txSubtype == TxSubtype.normal && $0.date >= periodStart }
-            .reduce(0.0) { sum, tx in
-                sum + mgr.convert(tx.amount, from: tx.currency, to: cardCurrency)
-            }
-        // If this is also 0 (jobless / no income yet), monthlyIncome = 0.
-        // The UI handles this gracefully by hiding percentage amounts.
+    /// The salary landing on the main card, or the income logged this period
+    /// when there is none — `MainCard.budgetIncome`, the rule Home, the
+    /// purchase warning and the alerts use. Zero hides the amounts and asks
+    /// for income instead.
+    private var income: (amount: Double, fromSchedule: Bool) {
+        MainCard.budgetIncome(schedules: schedules, transactions: budgetTx,
+                              from: periodStart, to: periodEnd, currency: cardCurrency)
     }
+
+    private var statedIncome: Double { income.amount }
 
     /// Transactions filtered to the selected main card (or all cards if nil)
     private var budgetTx: [TxRecord] {
@@ -179,13 +161,11 @@ struct SmartBudgetSettingsSheet: View {
         return cards.first(where: { $0.id.uuidString == id })
     }
 
-    /// Day-of-month the salary lands on (selected card's schedule, else any
-    /// active schedule). Anchors the budget period to the pay cycle.
-    private var payCycleDay: Int? {
-        let onCard = schedules.filter { $0.isActive && $0.cardID == selectedCard?.id }
-        if let s = MainCard.anchor(among: onCard) { return s.dayOfMonth }
-        return MainCard.payDay(schedules)
-    }
+    /// Day-of-month the salary lands on. Anchors the budget period to the pay
+    /// cycle — the payday Home, Statistics and the alerts anchor on, so the
+    /// period here is theirs. Picking among schedules linked to this card by id
+    /// first could anchor on a different salary from the one Home used.
+    private var payCycleDay: Int? { MainCard.payDay(schedules) }
 
     /// Whether spending is measured over the pay cycle (a salary schedule exists).
     private var usesPayCycle: Bool { payCycleDay != nil }
@@ -384,9 +364,6 @@ struct SmartBudgetSettingsSheet: View {
                     if isEnabled && (!overGroups.isEmpty || investAhead != nil) {
                         VStack(spacing: 8) {
                             ForEach(overGroups, id: \.group.rawValue) { item in
-                                let actualPct = BudgetGroup.pct(item.spent, of: monthlyIncome)
-                                let targetPct = BudgetGroup.pct(item.ratio)
-                                let overPct   = max(actualPct - targetPct, 0)
                                 HStack(spacing: 12) {
                                     ZStack {
                                         Circle().fill(AppTheme.red.opacity(0.15)).frame(width: 36, height: 36)
@@ -395,7 +372,11 @@ struct SmartBudgetSettingsSheet: View {
                                     VStack(alignment: .leading, spacing: 3) {
                                         Text(String(format: loc("budget.over_budget"), item.group.label))
                                             .font(.system(.footnote, weight: .bold)).foregroundStyle(AppTheme.red)
-                                        Text(String(format: loc("budget.over_detail"), actualPct, overPct, targetPct))
+                                        // In money. "62% of your pay used, 12% past the 50%
+                                        // limit" asked the reader to tell a share of income
+                                        // from a share of the limit.
+                                        Text(String(format: loc("budget.over_detail"),
+                                                    money(item.spent), money(item.limit), money(item.spent - item.limit)))
                                             .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                                             .fixedSize(horizontal: false, vertical: true)
                                     }
@@ -406,8 +387,7 @@ struct SmartBudgetSettingsSheet: View {
                                 .overlay(RoundedRectangle(cornerRadius: AppRadius.sm).stroke(AppTheme.red.opacity(0.22), lineWidth: 1))
                             }
                             if let ahead = investAhead {
-                                let actualPct = BudgetGroup.pct(ahead.spent, of: monthlyIncome)
-                                let targetPct = BudgetGroup.pct(ahead.ratio)
+                                let goal = monthlyIncome * ahead.ratio
                                 HStack(spacing: 12) {
                                     ZStack {
                                         Circle().fill(AppTheme.accent.opacity(0.15)).frame(width: 36, height: 36)
@@ -416,9 +396,10 @@ struct SmartBudgetSettingsSheet: View {
                                     VStack(alignment: .leading, spacing: 3) {
                                         Text(String(format: loc("budget.ahead_title"), BudgetGroup.investDebt.label))
                                             .font(.system(.footnote, weight: .bold)).foregroundStyle(AppTheme.accent)
-                                        Text(actualPct > targetPct
-                                             ? String(format: loc("budget.ahead_detail"), actualPct, actualPct - targetPct, targetPct)
-                                             : String(format: loc("budget.met_detail"), actualPct))
+                                        Text(ahead.spent - goal >= 0.5
+                                             ? String(format: loc("budget.ahead_detail"),
+                                                      money(ahead.spent), money(ahead.spent - goal), money(goal))
+                                             : String(format: loc("budget.met_detail"), money(ahead.spent)))
                                             .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                                             .fixedSize(horizontal: false, vertical: true)
                                     }
@@ -647,11 +628,13 @@ struct SmartBudgetSettingsSheet: View {
             if monthlyIncome > 0 {
                 VStack(alignment: .trailing, spacing: 2) {
                     Text(incomeIsFromTransactions ? loc("budget.from_tx") : loc("budget.from_salary")).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
-                    Text(CurrencyManager.shared.formatted(monthlyIncome, currency: primary))
+                    // The card's currency, which the income is in. The app's
+                    // own currency printed a dollar card's $1.000 as "Rp 1.000".
+                    Text(CurrencyManager.shared.formatted(monthlyIncome, currency: cardCurrency))
                         .font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.accent)
                     if extraFunds >= 0.5 {
                         Text(String(format: loc("budget.extra_included"),
-                                    CurrencyManager.shared.formatted(extraFunds, currency: primary)))
+                                    CurrencyManager.shared.formatted(extraFunds, currency: cardCurrency)))
                             .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                             .multilineTextAlignment(.trailing)
                     }
@@ -1061,7 +1044,6 @@ struct BudgetGroupCard: View {
     private var isOver: Bool   { group.isCeiling && spent > limit && limit > 0 }
     /// Savings & debt at or past its target.
     private var isAhead: Bool  { !group.isCeiling && spent >= limit && limit > 0 }
-    private var actualPct: Int { BudgetGroup.pct(spent, of: income) }
     private var targetPct: Int { BudgetGroup.pct(ratio) }
 
     var body: some View {
@@ -1073,15 +1055,19 @@ struct BudgetGroupCard: View {
                         Text(group.label).font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
                     }
                     Spacer()
+                    // What happened, in words: "62% / 50%" was two shares of
+                    // income side by side with nothing saying which was which.
                     if isOver {
-                        Text("\(actualPct)% / \(targetPct)%")
+                        Text(String(format: loc("budget.over_short"),
+                                    CurrencyManager.shared.formatted((spent - limit).rounded(), currency: currency)))
                             .font(.system(.caption2, weight: .bold)).foregroundStyle(AppTheme.red)
+                            .lineLimit(1)
                             .padding(.horizontal, 8).padding(.vertical, 3)
                             .background(AppTheme.red.opacity(0.12), in: Capsule())
                     } else if isAhead {
                         HStack(spacing: 3) {
                             Image(systemName: "checkmark").font(.system(.caption2, weight: .heavy))
-                            Text("\(actualPct)% / \(targetPct)%")
+                            Text(loc("budget.on_target"))
                         }
                         .font(.system(.caption2, weight: .bold)).foregroundStyle(AppTheme.accent)
                         .padding(.horizontal, 8).padding(.vertical, 3)
@@ -1132,7 +1118,7 @@ struct BudgetGroupCard: View {
                 } else {
                     HStack(spacing: 6) {
                         Image(systemName: "checkmark.circle").font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
-                        Text(loc("tx.no_spending")).font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
+                        Text(loc("budget.none_yet")).font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                     }
                 }
             }
@@ -1186,7 +1172,7 @@ struct BudgetGroupDetailView: View {
     private var overAmt: Double  { max(spent - limit, 0) }
     private var actualPct: Int   { BudgetGroup.pct(spent, of: income) }
     private var targetPct: Int   { BudgetGroup.pct(ratio) }
-    private var overPct: Int     { max(actualPct - targetPct, 0) }
+    private var overPct: Int     { BudgetGroup.pct(overAmt, of: income) }
     /// Everything spent this period, every group — Statistics' figure.
     private var totalSpent: Double {
         BudgetGroup.allCases.reduce(0.0) {
@@ -1205,24 +1191,30 @@ struct BudgetGroupDetailView: View {
         for tx in groupTx { let d = cal.startOfDay(for: tx.date); dict[d, default: []].append(tx) }
         return dict.keys.sorted(by: >).map { d in
             let lbl = cal.isDateInToday(d) ? loc("common.today")
-                    : cal.isDateInYesterday(d) ? loc("search.period.yesterday")
-                    : d.formatted(.dateTime.weekday(.wide).day().month(.abbreviated))
+                    : cal.isDateInYesterday(d) ? loc("common.yesterday")
+                    // The app's language, not the phone's: `formatted` printed
+                    // "Wednesday, 21 Oct" on an Indonesian screen.
+                    : DateFormatterCache.template("EEEEdMMM").string(from: d)
             return (lbl, d, (dict[d] ?? []).sorted { $0.date > $1.date })
         }
     }
 
-    /// The sentence under the bar.
+    /// The sentence under the bar, in money. It was three percentages —
+    /// "62% of your pay used, 12% past the 50% limit" — two of them shares of
+    /// income and one a share of the limit, with nothing saying which.
     private var statusLine: String {
-        if isOver { return String(format: loc("budget.over_detail"), actualPct, overPct, targetPct) }
+        if isOver { return String(format: loc("budget.over_detail"), fmt(spent), fmt(limit), fmt(overAmt)) }
         if isAhead {
             // Ahead of target is good — unless everything spent this period has
             // already run past the pay, when the extra came out of the balance.
-            let base = String(format: loc("budget.ahead_detail"), actualPct, overPct, targetPct)
+            let base = overAmt >= 0.5
+                ? String(format: loc("budget.ahead_detail"), fmt(spent), fmt(overAmt), fmt(limit))
+                : String(format: loc("budget.met_detail"), fmt(spent))
             guard income > 0, totalSpent > income else { return base }
             return base + " " + String(format: loc("budget.ahead_but_over"), fmt(totalSpent), fmt(income))
         }
-        if !group.isCeiling { return String(format: loc("budget.goal_progress"), actualPct, targetPct) }
-        return String(format: loc("budget.under_detail"), actualPct, targetPct)
+        if !group.isCeiling { return String(format: loc("budget.goal_progress"), fmt(spent), fmt(limit)) }
+        return String(format: loc("budget.under_detail"), fmt(spent), fmt(limit))
     }
 
     private var thirdLabelKey: String {
@@ -1237,9 +1229,9 @@ struct BudgetGroupDetailView: View {
         guard limit > 0, remaining > 0, daysLeft > 0 else { return nil }
         if group.isCeiling {
             guard !isOver else { return nil }
-            return String(format: loc("budget.pace_hint"), fmt(remaining / Double(daysLeft)), daysLeft, targetPct)
+            return String(format: loc("budget.pace_hint"), fmt(remaining / Double(daysLeft)), daysLeft)
         }
-        return String(format: loc("budget.goal_pace"), fmt(remaining), daysLeft, targetPct)
+        return String(format: loc("budget.goal_pace"), fmt(remaining), daysLeft)
     }
 
     // MARK: - Budget Bar
@@ -1345,13 +1337,15 @@ struct BudgetGroupDetailView: View {
                             }
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(group.label).font(.system(.body, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
-                                Text(SmartBudgetManager.shared.categories(for: group).map { $0.rawValue }.joined(separator: " · ")).font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
+                                // Category names in the app's language. `rawValue` is the stored English
+                                // key, so the Indonesian screen read "Food & Drinks · Transport · Bills".
+                                Text(SmartBudgetManager.shared.categories(for: group).map(\.displayLabel).joined(separator: ", ")).font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                             }
                             Spacer()
                             if isOver {
                                 VStack(spacing: 2) {
                                     Image(systemName: "exclamationmark.triangle.fill").font(.system(.caption)).foregroundStyle(AppTheme.red)
-                                    Text(loc("debt.over")).font(.system(.caption2, weight: .bold)).foregroundStyle(AppTheme.red)
+                                    Text(loc("budget.over_badge")).font(.system(.caption2, weight: .bold)).foregroundStyle(AppTheme.red)
                                 }
                                 .padding(.horizontal, 10).padding(.vertical, 6)
                                 .background(AppTheme.red.opacity(0.1), in: RoundedRectangle(cornerRadius: AppRadius.sm))
@@ -1406,7 +1400,7 @@ struct BudgetGroupDetailView: View {
                             }.frame(maxWidth: .infinity).padding(.vertical, 4)
                             Rectangle().fill(AppTheme.cardMid).frame(width: 1, height: 52)
                             VStack(spacing: 5) {
-                                HStack(spacing: 4) { Circle().fill(group.color).frame(width: 6, height: 6); Text(loc(group.isCeiling ? "debt.budget" : "budget.target")).font(.system(.caption2, weight: .medium)).foregroundStyle(AppTheme.textSecondary) }
+                                HStack(spacing: 4) { Circle().fill(group.color).frame(width: 6, height: 6); Text(loc(group.isCeiling ? "budget.limit_marker" : "budget.target")).font(.system(.caption2, weight: .medium)).foregroundStyle(AppTheme.textSecondary) }
                                 Text(limit > 0 ? fmt(limit) : "—").font(.system(.subheadline, weight: .bold)).foregroundStyle(group.color).minimumScaleFactor(0.6).lineLimit(1)
                                 Text(String(format: loc("budget.pct_income"), targetPct)).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                             }.frame(maxWidth: .infinity).padding(.vertical, 4)
@@ -1414,7 +1408,9 @@ struct BudgetGroupDetailView: View {
                             VStack(spacing: 5) {
                                 HStack(spacing: 4) { Circle().fill(isOver ? AppTheme.red : AppTheme.accent).frame(width: 6, height: 6); Text(loc(thirdLabelKey)).font(.system(.caption2, weight: .medium)).foregroundStyle(AppTheme.textSecondary) }
                                 Text(isOver || isAhead ? fmt(overAmt) : fmt(remaining)).font(.system(.subheadline, weight: .bold)).foregroundStyle(isOver ? AppTheme.red : AppTheme.accent).minimumScaleFactor(0.6).lineLimit(1)
-                                Text(isOver || isAhead ? "+\(overPct)%" : String(format: loc("budget.pct_income"), BudgetGroup.pct(remaining, of: income))).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
+                                // A share of income like the two columns beside it.
+                                // "+12%" read as 12% of the limit.
+                                Text(String(format: loc("budget.pct_income"), isOver || isAhead ? overPct : BudgetGroup.pct(remaining, of: income))).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                             }.frame(maxWidth: .infinity).padding(.vertical, 4)
                         }
                         .padding(.horizontal, 10).padding(.bottom, 14)
@@ -1452,7 +1448,7 @@ struct BudgetGroupDetailView: View {
                                         }
                                         VStack(alignment: .leading, spacing: 6) {
                                             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                                                Text(item.cat.rawValue).font(.system(.footnote, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                                                Text(item.cat.displayLabel).font(.system(.footnote, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
                                                 Text("\(Int((share * 100).rounded()))%")
                                                     .font(.system(.caption2, weight: .bold)).foregroundStyle(item.cat.color)
                                                 Spacer(minLength: 6)
@@ -1503,7 +1499,7 @@ struct BudgetGroupDetailView: View {
                                                         Text(tx.name).font(.system(.subheadline, weight: .medium)).foregroundStyle(AppTheme.textPrimary)
                                                         HStack(spacing: 6) {
                                                             Text(tx.date.formatted(date: .omitted, time: .shortened)).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
-                                                            Text(tx.category.rawValue).font(.system(.caption2, weight: .semibold)).foregroundStyle(tx.category.color)
+                                                            Text(tx.category.displayLabel).font(.system(.caption2, weight: .semibold)).foregroundStyle(tx.category.color)
                                                                 .padding(.horizontal, 7).padding(.vertical, 2).background(tx.category.color.opacity(0.12), in: Capsule())
                                                         }
                                                     }
@@ -1531,7 +1527,7 @@ struct BudgetGroupDetailView: View {
                     } else {
                         VStack(spacing: 12) {
                             Image(systemName: "tray").font(.system(size: 36)).foregroundStyle(AppTheme.textSecondary)
-                            Text(String(format: loc("budget.no_spending"), group.label.lowercased())).font(.system(.subheadline)).foregroundStyle(AppTheme.textSecondary)
+                            Text(loc("budget.no_spending")).font(.system(.subheadline)).foregroundStyle(AppTheme.textSecondary)
                         }.padding(.top, 32)
                     }
                     Spacer(minLength: 40)

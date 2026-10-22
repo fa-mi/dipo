@@ -187,6 +187,33 @@ enum MainCard {
         return here.isEmpty ? active : here
     }
 
+    /// What a period's budget is sized from, in `currency`: the salary landing
+    /// here when there is one (`salaries`), otherwise the income logged from
+    /// `start` (and before `end`, when given). One rule for the Smart Budget
+    /// screen, Home's insights, the warning when adding a purchase and the
+    /// over-budget notification.
+    ///
+    /// The screen read only schedules linked to the main card by id, while the
+    /// others read `salaries`. A schedule with no card — every one made before
+    /// cards were linked — therefore sized Home's limits from the salary and
+    /// the screen's from whatever income was logged, and the two disagreed
+    /// about the same budget with nothing on either saying why.
+    static func budgetIncome(schedules: [SalarySchedule], transactions: [TxRecord],
+                             from start: Date, to end: Date? = nil,
+                             currency: String) -> (amount: Double, fromSchedule: Bool) {
+        let cm = CurrencyManager.shared
+        let stated = salaries(schedules).reduce(0.0) { $0 + cm.convert($1.amount, from: $1.currency, to: currency) }
+        if stated > 0 { return (stated, true) }
+        // Real income only: a refund gives an expense back and a transfer is
+        // money moving between pockets.
+        let logged = transactions.reduce(0.0) { sum, tx in
+            guard tx.amount > 0, tx.txSubtype == .normal, tx.date >= start,
+                  end.map({ tx.date < $0 }) ?? true else { return sum }
+            return sum + cm.convert(tx.amount, from: tx.currency.isEmpty ? currency : tx.currency, to: currency)
+        }
+        return (logged, false)
+    }
+
     /// Active salary landing on some other account. Disclosed rather than
     /// silently dropped — a second job missing from the plan with no
     /// explanation looks like the app lost it.

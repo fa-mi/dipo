@@ -58,33 +58,6 @@ struct AddTransactionSheet: View {
     /// menu stuck in its locked state — user has to dismiss and re-open.
     @State private var pm = PremiumManager.shared
 
-    private var monthlyIncome: Double {
-        // Budget limits are based on STATED monthly income, exactly like the
-        // Smart Budget screen ("From salary schedule"). This used to add any
-        // extra income logged this calendar month, which silently raised the
-        // limit here (Rp 5.057.500) while Smart Budget still showed Rp 5.000.000
-        // — two different "budget exceeded" thresholds for the same budget.
-        let cur = MainCard.resolve(in: vm.cards)?.resolvedCurrency ?? preferredCurrency
-        let scheduled = MainCard.salaries(salarySchedules).reduce(0.0) {
-            $0 + CurrencyManager.shared.convert($1.amount, from: $1.currency, to: cur)
-        }
-        if scheduled > 0 { return scheduled }
-        // No schedule → fall back to income actually received this month.
-        let cal = Calendar.current
-        let monthStart = cal.safeDate(from: cal.dateComponents([.year, .month], from: Date()))
-        let source: [TxRecord] = MainCard.potTransactions(in: vm.cards) ?? allCardTransactions
-        let received: [TxRecord] = source.filter { (tx: TxRecord) -> Bool in
-            tx.amount > 0 && tx.txSubtype == TxSubtype.normal && tx.date >= monthStart
-        }
-        return received.reduce(0.0) { (sum: Double, tx: TxRecord) -> Double in
-            sum + CurrencyManager.shared.convert(tx.amount, from: tx.currency, to: cur)
-        }
-    }
-
-    private var allCardTransactions: [TxRecord] {
-        vm.cards.flatMap { $0.transactions }
-    }
-
     private var preferredCurrency: String { CurrencyManager.shared.preferredCurrency }
 
     /// Mata uang dari kartu yang sedang dipilih — ini yang jadi acuan konversi,
@@ -764,17 +737,18 @@ struct AddTransactionSheet: View {
         .trackScreen(.addTransaction)
     }
 
+    /// In the main card's currency, which the amounts are in, and saying
+    /// what is left once this entry is saved rather than before it.
     private var budgetAlertMessage: String {
         guard let alert = pendingBudgetAlert else { return "" }
-        let pref = CurrencyManager.shared.preferredCurrency
-        if alert.isExceeded {
-            return String(format: loc("tx.budget_over_msg"), alert.displayLabel.lowercased(),
-                          CurrencyManager.shared.formatted(alert.over, currency: pref),
-                          CurrencyManager.shared.formatted(alert.limit, currency: pref))
+        let money = { (v: Double) in
+            CurrencyManager.shared.formatted(v.rounded(), currency: alert.currency.isEmpty
+                                             ? CurrencyManager.shared.preferredCurrency : alert.currency)
         }
-        return String(format: loc("tx.budget_approach_msg"), alert.displayLabel.lowercased(),
-                      CurrencyManager.shared.formatted(alert.limit, currency: pref),
-                      CurrencyManager.shared.formatted(alert.limit - alert.spent, currency: pref))
+        if alert.isExceeded {
+            return String(format: loc("tx.budget_over_msg"), alert.group.label, money(alert.over), money(alert.limit))
+        }
+        return String(format: loc("tx.budget_approach_msg"), alert.group.label, money(alert.leftAfter), money(alert.limit))
     }
 
     private var creditOverMessage: String {
@@ -820,22 +794,27 @@ struct AddTransactionSheet: View {
             // Pay-cycle scoped, the same window the Smart Budget screen uses — a
             // calendar month understates spend before payday, so the warning
             // wouldn't fire even when already over.
-            let cycleStart: Date? = MainCard.payDay(salarySchedules).map {
-                StatPeriod.cycle(payDay: $0, salaryDates: StatPeriod.salaryDates(on: main)).start
+            let cycle: (start: Date, end: Date)? = MainCard.payDay(salarySchedules).map {
+                StatPeriod.cycle(payDay: $0, salaryDates: StatPeriod.salaryDates(on: main))
             }
             let potTx: [TxRecord] = MainCard.budgetTransactions(in: vm.cards)
-            // Plus money in added to this period's budget, as Smart Budget shows it.
             let cal = Calendar.current
-            let extraFrom: Date = cycleStart ?? cal.safeDate(from: cal.dateComponents([.year, .month], from: Date()))
-            let extra: Double = ExtraFunds.total(in: potTx, from: extraFrom, currency: main.resolvedCurrency)
+            let from: Date = cycle?.start ?? cal.safeDate(from: cal.dateComponents([.year, .month], from: Date()))
+            let to: Date = cycle?.end ?? cal.safeDate(byAdding: .month, value: 1, to: from)
+            // The income the Smart Budget screen sizes this budget from, plus
+            // money in added to this period's budget, as that screen shows it.
+            let income = MainCard.budgetIncome(schedules: salarySchedules, transactions: potTx,
+                                               from: from, to: to, currency: main.resolvedCurrency).amount
+            let extra: Double = ExtraFunds.total(in: potTx, from: from, to: to, currency: main.resolvedCurrency)
             if let alert = SmartBudgetManager.shared.wouldExceed(
                 category: selectedCategory,
                 amount: CurrencyManager.shared.convert(abs(effectiveAmount), from: effectiveCurrency,
                                                        to: main.resolvedCurrency),
                 currency: main.resolvedCurrency,
+                date: selectedDate,
                 transactions: potTx,
-                income: monthlyIncome + extra,
-                periodStart: cycleStart,
+                income: income + extra,
+                periodStart: from, periodEnd: to,
                 cardID: main.id.uuidString,
                 configs: cardBudgetConfigs
             ) {

@@ -207,16 +207,11 @@ struct SmartRecommendationView: View {
         let start = judged.start
         let end: Date = judged.running ? now : judged.end
 
-        // Scope to the SAME transactions the Smart Budget screen measures: when a
-        // main budget card is set it counts only that card, so scoring across all
-        // cards would let the score contradict the budget screen it mirrors.
-        let scopedTx: [TxRecord] = {
-            if let id = SmartBudgetManager.shared.budgetCardID,
-               let card = cards.first(where: { $0.id.uuidString == id }) {
-                return card.transactions
-            }
-            return allTx
-        }()
+        // Scope to the SAME transactions the Smart Budget screen measures: the
+        // main card with the cards it pays bills from (`allTx`). Reading the
+        // main card alone left out the kos paid from another account, so the
+        // score could call a period healthy that the budget screen had over.
+        let scopedTx: [TxRecord] = allTx
         let windowTx = scopedTx.filter { $0.date >= start && $0.date < end && $0.amount < 0 && $0.txSubtype != .transfer }
         let mgr = SmartBudgetManager.shared
         // `periodStart` is required: without it `spent()` re-filters to the
