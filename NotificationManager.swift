@@ -317,9 +317,9 @@ final class NotificationManager {
         let cm = CurrencyManager.shared
         let title = String(format: loc("notif.budget_alert_title"), group)
         let body  = String(format: loc("notif.budget_alert_body"),
-                           cm.formatted(overAmount, currency: currency),
-                           group.lowercased(),
-                           cm.formatted(limit, currency: currency))
+                           cm.formatted(overAmount.rounded(), currency: currency),
+                           group,
+                           cm.formatted(limit.rounded(), currency: currency))
 
         let content   = UNMutableNotificationContent()
         content.title = title
@@ -1483,17 +1483,20 @@ enum NotificationScheduler {
         // Pay-cycle window + income from active salary schedules.
         let salaries: [SalarySchedule] = (try? context.fetch(FetchDescriptor<SalarySchedule>())) ?? []
         let budgetConfigs: [CardBudgetConfig] = (try? context.fetch(FetchDescriptor<CardBudgetConfig>())) ?? []
-        let active = MainCard.salaries(salaries)
         let allCards: [BankCard] = (try? context.fetch(FetchDescriptor<BankCard>())) ?? []
+        // The main card's currency, as the Smart Budget screen counts in it.
+        let currency = MainCard.resolve(in: allCards)?.resolvedCurrency ?? preferred
         // The period the Smart Budget screen measures: opened the day the
-        // salary landed on the main card.
-        let periodStart: Date = {
-            if let day = MainCard.anchor(among: active)?.dayOfMonth {
+        // salary landed on the main card, closed at the next payday.
+        let period: (start: Date, end: Date) = {
+            if let day = MainCard.payDay(salaries) {
                 return StatPeriod.cycle(payDay: day,
-                                        salaryDates: StatPeriod.salaryDates(on: MainCard.resolve(in: allCards))).start
+                                        salaryDates: StatPeriod.salaryDates(on: MainCard.resolve(in: allCards)))
             }
-            return cal.date(from: cal.dateComponents([.year, .month], from: Date())) ?? Date()
+            let start = cal.safeDate(from: cal.dateComponents([.year, .month], from: Date()))
+            return (start, cal.safeDate(byAdding: .month, value: 1, to: start))
         }()
+        let periodStart = period.start
 
         // Scope to the main card, exactly as the Smart Budget screen does.
         //
@@ -1503,18 +1506,17 @@ enum NotificationScheduler {
         // saying they were comfortably under — with no way to tell which number
         // was lying. An alert the user cannot reproduce is worse than no alert:
         // it teaches them to ignore the next one.
-        let scopedTx: [TxRecord] = MainCard.potTransactions(in: allCards) ?? txs
+        // With purchases made on a credit card, which count where they are made.
+        let scopedTx: [TxRecord] = MainCard.resolve(in: allCards) != nil
+            ? MainCard.budgetSpendingTransactions(in: allCards) : txs
 
         // Stated salary income first (the budget's signal even before payday);
-        // else income transactions logged within the window.
-        var income = active.reduce(0.0) { $0 + cm.convert($1.amount, from: $1.currency, to: preferred) }
-        if income <= 0 {
-            income = scopedTx.filter { $0.date >= periodStart && $0.amount > 0 && $0.txSubtype == TxSubtype.normal }
-                .reduce(0.0) { $0 + cm.convert($1.amount, from: ($1.currency.isEmpty ? preferred : $1.currency), to: preferred) }
-        }
+        // else income transactions logged within the window — the screen's rule.
+        var income = MainCard.budgetIncome(schedules: salaries, transactions: scopedTx,
+                                           from: period.start, to: period.end, currency: currency).amount
         // Money in the person added to this period's budget, as the screen counts it.
         if MainCard.resolve(in: allCards) != nil {
-            income += ExtraFunds.total(in: scopedTx, from: periodStart, currency: preferred)
+            income += ExtraFunds.total(in: scopedTx, from: period.start, to: period.end, currency: currency)
         }
         guard income > 0 else { return }
 
@@ -1531,7 +1533,7 @@ enum NotificationScheduler {
         for group in [BudgetGroup.daily, .lifestyle] {
             // periodStart required — otherwise spent() clips the cycle back to
             // the calendar month and the alert misses the pre-1st spending.
-            let spent = mgr.spent(in: group, transactions: windowTx, targetCurrency: preferred,
+            let spent = mgr.spent(in: group, transactions: windowTx, targetCurrency: currency,
                                   periodStart: periodStart)
             // Per-card ratios, not the globals: a user whose budget follows one
             // card has an override, and alerting against the global target
@@ -1548,29 +1550,31 @@ enum NotificationScheduler {
             let otherRatio = mgr.ratio(for: otherGroup, cardID: mgr.budgetCardID, configs: budgetConfigs)
             let otherLimit = income * otherRatio
             let otherSpent = mgr.spent(in: otherGroup, transactions: windowTx,
-                                       targetCurrency: preferred, periodStart: periodStart)
+                                       targetCurrency: currency, periodStart: periodStart)
             let otherHeadroom = max(otherLimit - otherSpent, 0)
 
-            let daysLeft = max((cal.dateComponents([.day], from: Date(),
-                                                   to: cal.date(byAdding: .month, value: 1, to: periodStart) ?? Date()).day ?? 0), 0)
+            // Counted as the screen counts them: today included, up to the real
+            // next payday. "Start plus one month" ran past a payday pulled
+            // forward off a weekend, and counting from this moment dropped today.
+            let daysLeft = StatPeriod.daysLeft(in: period)
 
             let advice: String = {
                 if otherHeadroom >= over {
                     // A shift covers it — no new money needed, just a decision.
                     return String(format: loc("notif.budget_advice_shift"),
-                                  cm.formatted(over, currency: preferred),
-                                  otherGroup.label.lowercased(),
-                                  cm.formatted(otherHeadroom, currency: preferred),
+                                  cm.formatted(over.rounded(), currency: currency),
+                                  otherGroup.label,
+                                  cm.formatted(otherHeadroom.rounded(), currency: currency),
                                   daysLeft)
                 }
                 // Nothing spare anywhere: the plan itself is the problem.
                 return String(format: loc("notif.budget_advice_replan"),
-                              cm.formatted(over, currency: preferred), daysLeft)
+                              cm.formatted(over.rounded(), currency: currency), daysLeft)
             }()
 
             NotificationManager.postBudgetGroupAlert(
                 group: group.label, overAmount: over, limit: limit,
-                currency: preferred, cycleKey: cycleKey, advice: advice)
+                currency: currency, cycleKey: cycleKey, advice: advice)
         }
     }
 }

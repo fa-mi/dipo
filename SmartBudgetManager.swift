@@ -39,7 +39,7 @@ final class SmartBudgetManager {
         didSet { save() }
     }
 
-    /// % of income allocated to lifestyle (shopping, health, travel, other)
+    /// % of income allocated to lifestyle (shopping, travel, other)
     var lifestyleRatio: Double = 0.30 {
         didSet { save() }
     }
@@ -79,7 +79,13 @@ final class SmartBudgetManager {
     // fixed cost, so it belongs with daily needs for budgeting purposes.
     static let dailyCategories: [TxCategory]   = [.food, .transport, .bills, .health, .commitment]
     static let lifestyleCategories: [TxCategory] = [.shopping, .travel, .other]
-    static let investDebtCategories: [TxCategory] = [.investment, .bonus, .debtPayment]
+    // Bonus was listed here too, so "What goes where" told people their bonus
+    // went into Savings & debt. It is money in, never offered as an expense.
+    static let investDebtCategories: [TxCategory] = [.investment, .debtPayment]
+    /// Day-to-day spending, the groups with a limit. A jump in investing or in
+    /// debt paid is not a spending spike.
+    static let spendingCategories: [TxCategory] = SmartBudgetManager.dailyCategories
+        + SmartBudgetManager.lifestyleCategories
 
     /// Categories that are typically FIXED (recurring, contractual, hard to
     /// change in-month). When the engine generates "you have Rp X left for
@@ -100,6 +106,18 @@ final class SmartBudgetManager {
     static func investingShortfall(invested: Double, consumed: Double, income: Double) -> Double? {
         let gap = consumed + invested - income
         return income > 0 && gap > 0 ? gap : nil
+    }
+
+    /// What Wants would run past its limit by the end of the period at the
+    /// pace so far, said in money rather than as "~47% over". nil when there
+    /// is nothing to warn about yet: under 40% or over 85% of the way through
+    /// the period, not a fifth ahead of the calendar, or already past the
+    /// limit, which has its own warning.
+    static func wantsOverspill(spent: Double, limit: Double, progress: Double) -> Double? {
+        guard limit > 0, progress >= 0.40, progress <= 0.85 else { return nil }
+        let used = spent / limit
+        guard used > progress + 0.20, used < 1 else { return nil }
+        return spent / progress - limit
     }
 
     // MARK: - Computed Budget Limits
@@ -297,8 +315,9 @@ final class SmartBudgetManager {
     /// Check if a new transaction would exceed the group limit.
     /// Pass the currency of the transaction being added so amounts are correctly converted.
     func wouldExceed(category: TxCategory, amount: Double, currency: String = "IDR",
+                     date: Date = .now,
                      transactions: [TxRecord], income: Double,
-                     periodStart: Date? = nil,
+                     periodStart: Date? = nil, periodEnd: Date? = nil,
                      cardID: String? = nil, configs: [CardBudgetConfig] = []) -> BudgetAlert? {
         // Defense-in-depth: bail on missing access too. Otherwise a logged-out
         // user with a stale `isEnabled = true` setting would get budget
@@ -311,6 +330,14 @@ final class SmartBudgetManager {
         guard let grp = group(for: category), grp.isCeiling else { return nil }
         let limit = monthlyLimit(for: grp, income: income, cardID: cardID, configs: configs)
         guard limit > 0 else { return nil }
+
+        // Only an entry dated inside this period spends this period's budget.
+        // A purchase backdated to last month was added to this month's total
+        // and warned "over your budget" about a period that had already closed.
+        let cal = Calendar.current
+        let start = periodStart ?? cal.safeDate(from: cal.dateComponents([.year, .month], from: Date()))
+        let end = periodEnd ?? cal.safeDate(byAdding: .month, value: 1, to: start)
+        guard date >= start, date < end else { return nil }
 
         // Use the SAME accounting as everywhere else. The old investDebt branch
         // hand-rolled a sum of investment+bonus that silently excluded debt
@@ -327,22 +354,13 @@ final class SmartBudgetManager {
         if newTotal > limit {
             let over = newTotal - limit
             return BudgetAlert(group: grp, limit: limit, spent: alreadySpent, newTotal: newTotal, over: over,
-                               categoryLabel: specificLabel(for: category))
+                               currency: currency)
         }
         if newTotal / limit > 0.9 && alreadySpent / limit <= 0.9 {
             return BudgetAlert(group: grp, limit: limit, spent: alreadySpent, newTotal: newTotal, over: 0,
-                               isWarning: true, categoryLabel: specificLabel(for: category))
+                               isWarning: true, currency: currency)
         }
         return nil
-    }
-
-    /// Human-readable label for a specific category in budget context
-    private func specificLabel(for category: TxCategory) -> String {
-        switch category {
-        case .debtPayment: return "Debt payment"
-        case .investment:  return "Investment"
-        default:           return group(for: category)?.label ?? category.rawValue
-        }
     }
 
     // MARK: - Smart Insights
@@ -658,14 +676,15 @@ final class SmartBudgetManager {
                         return sum + CurrencyManager.shared.convert(abs(tx.amount), from: txCur, to: target)
                     }
 
-                // Debt payments: only warn if they exceed 70% of total income (extreme overpayment)
+                // Debt payments: only warn if they exceed 70% of total income (extreme overpayment).
+                // Said as the share of income they took. "43% above the safe
+                // ceiling" was a percentage of a percentage nobody could place.
                 if debtSpent > income * 0.70 {
-                    let pct = Int((debtSpent / (income * 0.70) - 1) * 100)
                     return SmartInsight(
                         icon: "creditcard.fill",
                         color: AppTheme.orange,
                         title: loc("insight.debt_high_title"),
-                        body: String(format: loc("insight.debt_high_body"), pct),
+                        body: String(format: loc("insight.debt_high_body"), BudgetGroup.pct(debtSpent, of: income)),
                         action: SmartInsightAction(
                             label: loc("insight.action.view_debt"),
                             kind: .openDebt
@@ -711,7 +730,7 @@ final class SmartBudgetManager {
                             icon: "exclamationmark.triangle.fill",
                             color: AppTheme.red,
                             title: String(format: loc("insight.group_over_title"), grp.label),
-                            body: String(format: loc("insight.group_unbudgeted_body"), grp.label.lowercased()),
+                            body: String(format: loc("insight.group_unbudgeted_body"), grp.label),
                             action: SmartInsightAction(
                                 label: loc("insight.action.adjust_budget"),
                                 kind: .openBudgetSettings
@@ -799,7 +818,9 @@ final class SmartBudgetManager {
         // one restaurant bill can read as "+273%" against a baseline of a few
         // warung meals. Wait until the window is wide enough to describe a
         // habit rather than a single evening.
-        let cats = daysThis >= 5 ? TxCategory.allCases : []
+        // Spending categories only: paying more off a debt, or investing more,
+        // was announced as "Debt payment up Rp 1.500.000" in a warning voice.
+        let cats = daysThis >= 5 ? Self.spendingCategories : []
         // Amounts are carried alongside the percentage because the percentage
         // alone is what the user reads, and "244%" tells nobody whether that is
         // Rp 50k or Rp 5jt. The ratio still decides WHICH category is worth
@@ -842,33 +863,22 @@ final class SmartBudgetManager {
         // "smart" insight users praise — catches problems before they happen.
         // Progress through the BUDGET window (pay cycle when known), so the
         // pacing check compares like with like against cycle-scoped spend.
-        let monthProgress: Double = {
-            if let start = periodStart, let end = periodEnd ?? cal.date(byAdding: .month, value: 1, to: start) {
-                let total = max(cal.dateComponents([.day], from: start, to: end).day ?? 30, 1)
-                let done  = max(cal.dateComponents([.day], from: start, to: now).day ?? 0, 0)
-                return min(max(Double(done) / Double(total), 0), 1)
-            }
-            let dayOfMonth = cal.component(.day, from: now)
-            let daysInMonth = cal.range(of: .day, in: .month, for: now)?.count ?? 30
-            return Double(dayOfMonth) / Double(daysInMonth)
-        }()
-        if monthProgress >= 0.40 && monthProgress <= 0.85 {
-            let lifestyleLimit = income * r.lifestyle
-            let lifestyleSpent = self.spent(in: .lifestyle, transactions: allTransactions, targetCurrency: target,
-                                            periodStart: periodStart)
-            if lifestyleLimit > 0 {
-                let utilization = lifestyleSpent / lifestyleLimit
-                // Spent ratio outpacing month progress by 20%+ → on track to overspend
-                if utilization > monthProgress + 0.20 && utilization < 1.0 {
-                    let projected = Int((utilization / monthProgress) * 100) - 100
-                    return SmartInsight(
-                        icon: "speedometer",
-                        color: AppTheme.orange,
-                        title: loc("insight.lifestyle_pacing_title"),
-                        body: String(format: loc("insight.lifestyle_pacing_body"), projected)
-                    )
-                }
-            }
+        // Elapsed time, as the spike check above uses: whole days left today
+        // out while today's spending was in, which ran the pace a day fast.
+        let windowStart = periodStart ?? monthStart
+        let windowEnd = periodEnd ?? cal.safeDate(byAdding: .month, value: 1, to: windowStart)
+        let progress = min(max(now.timeIntervalSince(windowStart)
+                               / max(windowEnd.timeIntervalSince(windowStart), 1), 0), 1)
+        let wantsSpent = self.spent(in: .lifestyle, transactions: allTransactions, targetCurrency: target,
+                                    periodStart: periodStart)
+        if let overspill = Self.wantsOverspill(spent: wantsSpent, limit: income * r.lifestyle, progress: progress) {
+            return SmartInsight(
+                icon: "speedometer",
+                color: AppTheme.orange,
+                title: loc("insight.lifestyle_pacing_title"),
+                body: String(format: loc("insight.lifestyle_pacing_body"),
+                             CurrencyManager.shared.formatted(overspill.rounded(), currency: target))
+            )
         }
 
         // Ratio sanity check — warn user if their budget allocation looks risky.
@@ -969,7 +979,8 @@ final class SmartBudgetManager {
             allTransactions: allTransactions,
             income: income,
             goals: goals,
-            targetCurrency: target
+            targetCurrency: target,
+            periodStart: periodStart
         ) {
             return goalInsight
         }
@@ -1022,9 +1033,11 @@ final class SmartBudgetManager {
     func goalLinkedInsight(allTransactions: [TxRecord],
                            income: Double,
                            goals: [SavingsGoal],
-                           targetCurrency: String? = nil) -> SmartInsight? {
+                           targetCurrency: String? = nil,
+                           periodStart: Date? = nil) -> SmartInsight? {
         guard hasActiveBudget, income > 0 else { return nil }
         let target = targetCurrency ?? CurrencyManager.shared.preferredCurrency
+        let cm = CurrencyManager.shared
 
         // Pick the highest-priority active goal that's not yet complete.
         // Tie-break by largest remaining (= most meaningful tradeoff).
@@ -1032,61 +1045,77 @@ final class SmartBudgetManager {
         guard let goal = activeGoals
             .sorted(by: { ($0.priority, $1.remaining) < ($1.priority, $0.remaining) })
             .first else { return nil }
-
-        // How much would the user need to save monthly to hit `targetDate`?
-        // If no targetDate, fall back to monthlyContribution (their stated pace).
         // All amounts converted to a single currency for consistent math.
-        let goalRemaining = CurrencyManager.shared.convert(
-            goal.remaining, from: goal.currency, to: target)
+        let goalRemaining = cm.convert(goal.remaining, from: goal.currency, to: target)
         guard goalRemaining > 0 else { return nil }
 
-        // Current month's lifestyle spend — this is what we're inviting the
-        // user to potentially reclaim. We only suggest cutting from
-        // discretionary spend (lifestyle), never essentials (daily).
-        let lifestyleSpent = self.spent(in: .lifestyle,
-                                        transactions: allTransactions,
-                                        targetCurrency: target)
-        // Need a meaningful baseline. If lifestyle <Rp 100k equivalent
-        // (~$7), trade-off is too small to be motivating.
-        let minMeaningful = CurrencyManager.shared.convert(100_000, from: "IDR", to: target)
-        guard lifestyleSpent > minMeaningful else { return nil }
+        // This period's Wants — what we're inviting the user to reclaim. We
+        // only suggest cutting from Wants, never from Needs. Over the pay
+        // period like every figure beside it, not the calendar month.
+        let wantsSpent = self.spent(in: .lifestyle, transactions: allTransactions,
+                                    targetCurrency: target, periodStart: periodStart)
+        // Need a meaningful baseline. If Wants is under Rp 100k equivalent
+        // (~$7), the trade-off is too small to be motivating.
+        guard wantsSpent > cm.convert(100_000, from: "IDR", to: target) else { return nil }
 
-        // Hypothetical: what if user cut 15% of this month's lifestyle?
-        // 15% is the sweet spot — meaningful enough to matter, small enough
-        // to feel achievable (not "cut 50% of fun").
-        let cutPercent = 0.15
-        let monthlySaving = lifestyleSpent * cutPercent
+        // Hypothetical: 15% less on Wants each month. Meaningful enough to
+        // matter, small enough to feel achievable (not "cut 50% of fun").
+        // Rounded to the Rp 1.000 it is quoted at, so the sentence and the
+        // arithmetic behind it are the same number.
+        let extra = SmartRecommendationEngine.measuredValue(wantsSpent * 0.15, currency: target)
+        guard extra > 0, goalRemaining > extra,
+              let sooner = Self.goalSooner(remaining: goalRemaining,
+                                           pace: cm.convert(goal.monthlyContribution, from: goal.currency, to: target),
+                                           extra: extra)
+        else { return nil }
 
-        // How many months earlier does the goal land if user keeps this
-        // saving up? Avoid division by zero / nonsense for tiny amounts.
-        guard monthlySaving > 0, goalRemaining > monthlySaving else { return nil }
-        let monthsEarlier = goalRemaining / (goalRemaining / 1.0 + monthlySaving) // rough proxy
-        // Simpler model: if user already saving X/month toward goal, adding
-        // monthlySaving cuts time by `monthlySaving / X * weeks`.
-        // We use a flat conversion: 1 month saving = ~4.3 weeks earlier.
-        let weeksEarlier = Int((monthlySaving / goalRemaining) * 52)
-        guard weeksEarlier >= 1 else { return nil }
-        let _ = monthsEarlier  // silence unused (kept for future calibration)
-
-        let savingFmt = CurrencyManager.shared.formatted(monthlySaving, currency: target)
+        let amount = cm.formatted(extra, currency: target)
+        let body: String
+        switch sooner {
+        case .weeks(let n):     body = String(format: loc("insight.goal_linked_body"), amount, goal.name, n)
+        case .months(let n):    body = String(format: loc("insight.goal_linked_body_months"), amount, goal.name, n)
+        case .reachedIn(let n): body = String(format: loc("insight.goal_linked_body_new"), amount, goal.name, n)
+        }
         return SmartInsight(
             icon: "target",
             color: AppTheme.accent,
             title: String(format: loc("insight.goal_linked_title"),
                           goal.emoji.isEmpty ? "🎯" : goal.emoji,
                           goal.name),
-            // Format is "Cut %d%% of lifestyle (~%@) → reach \"%@\" %d weeks
-            // earlier." → order MUST be (Int pct, String amount, String goal
-            // name, Int weeks). The goal name and weeks were swapped, so the
-            // 3rd %@ received the Int `weeksEarlier` — when it was 1, that's a
-            // 0x1 pointer → EXC_BAD_ACCESS in String(format:). Correct order:
-            body: String(format: loc("insight.goal_linked_body"),
-                         Int(cutPercent * 100), savingFmt, goal.name, weeksEarlier),
+            body: body,
             action: SmartInsightAction(
                 label: loc("insight.action.view_goal"),
                 kind: .openSavingsGoals
             )
         )
+    }
+
+    /// What `extra` more each month does for a goal with `remaining` to go.
+    enum GoalSooner: Equatable {
+        /// Reached this many weeks sooner than at the pace already going in.
+        case weeks(Int)
+        /// The same, when it comes to two months or more.
+        case months(Int)
+        /// Nothing goes in yet, or so little it would take over ten years:
+        /// "sooner" has no date to count from, so this says how long `extra`
+        /// alone takes.
+        case reachedIn(months: Int)
+    }
+
+    /// Weeks sooner is the time at the current pace less the time at the new
+    /// one. It was `extra / remaining × 52` — right only for a goal exactly a
+    /// year away — so Rp 300.000 more on a Rp 10 jt goal filled at Rp 500.000
+    /// a month read "1 week earlier" where it is 7½ months. nil when the gain
+    /// is under two weeks, or when `extra` alone would take over five years.
+    static func goalSooner(remaining: Double, pace: Double, extra: Double) -> GoalSooner? {
+        guard remaining > 0, extra > 0 else { return nil }
+        if pace > 0, remaining / pace <= 120 {
+            let weeks = (remaining / pace - remaining / (pace + extra)) * 52 / 12
+            guard weeks >= 1.5 else { return nil }
+            return weeks < 8 ? .weeks(Int(weeks.rounded())) : .months(Int((weeks * 12 / 52).rounded()))
+        }
+        let months = Int((remaining / extra).rounded(.up))
+        return months >= 2 && months <= 60 ? .reachedIn(months: months) : nil
     }
 
     // MARK: - Auto Categorize
@@ -1742,7 +1771,9 @@ final class SmartBudgetManager {
 
         var insights: [SmartInsight] = []
 
-        for cat in TxCategory.allCases {
+        // Spending only. A month of paying a debt down faster came out as a red
+        // "Debt payment spike", which is the opposite of what happened.
+        for cat in Self.spendingCategories {
             let thisMonth = spend(cat, from: cycleStart, to: now)
             guard thisMonth > 0 else { continue }
 
@@ -2223,13 +2254,15 @@ struct BudgetAlert {
     let newTotal: Double
     let over: Double
     var isWarning: Bool = false
-    /// Specific label e.g. "Debt payment" or "Investment" instead of generic group label
-    var categoryLabel: String = ""
+    /// What every amount here is in: the main card's currency. The warning
+    /// printed them in the app's currency, so a dollar card read "Rp 300".
+    var currency: String = ""
 
     var isExceeded: Bool { over > 0 }
 
-    /// Display label — use specific category label if set, otherwise group label
-    var displayLabel: String { categoryLabel.isEmpty ? group.label : categoryLabel }
+    /// What the group has left once this entry is saved. The warning quoted
+    /// what was left before it, Rp 400.000 where Rp 250.000 would remain.
+    var leftAfter: Double { max(limit - newTotal, 0) }
 }
 
 /// Action attached to an insight — drives an optional CTA button below the

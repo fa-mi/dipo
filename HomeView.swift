@@ -278,50 +278,13 @@ struct HomeView: View {
         budgetCard?.resolvedCurrency ?? CurrencyManager.shared.preferredCurrency
     }
 
-    /// Total income this month, scoped to the budget card if set.
-    /// - When budget card is set → income from THIS card's tx (this month only).
-    /// - When unset → scheduled salary or all-card aggregate (legacy).
-    /// All amounts are converted to budgetCurrency for consistent comparison.
-    private var totalMonthlyIncome: Double {
-        let cal = Calendar.current
-        let monthStart = cal.safeDate(from: cal.dateComponents([.year, .month], from: Date()))
-        
-        // Per-card mode: income on the selected card. Prefer the SALARY SCHEDULE
-        // for that card — month-to-date income alone reads as near-zero for the
-        // whole stretch before payday (a late payday like the 24th), which
-        // collapsed the budget limit and produced absurd insights ("416% over").
-        if let card = budgetCard {
-            let active = MainCard.salaries(salarySchedules)
-            func conv(_ tx: TxRecord) -> Double {
-                CurrencyManager.shared.convert(tx.amount, from: tx.currency.isEmpty ? budgetCurrency : tx.currency,
-                                               to: budgetCurrency)
-            }
-            // Stated monthly income only — same rule as the Smart Budget screen,
-            // so Home's insight and that screen can't disagree about the limit.
-            if !active.isEmpty {
-                return active.reduce(0.0) {
-                    $0 + CurrencyManager.shared.convert($1.amount, from: $1.currency, to: budgetCurrency)
-                }
-            }
-            let source = MainCard.isMain(card) ? MainCard.budgetTransactions(in: queriedCards) : card.transactions
-            return source
-                .filter { $0.amount > 0 && $0.txSubtype == TxSubtype.normal && $0.date >= monthStart }
-                .reduce(0.0) { $0 + conv($1) }
-        }
-        
-        // Aggregate mode: prefer scheduled salary, otherwise sum all positive tx
-        // Convert — a USD freelance schedule beside an IDR salary was being
-        // added as a bare number, so budgets were sized off a nonsense income.
-        let scheduled = MainCard.salaries(salarySchedules)
-            .reduce(0.0) { $0 + CurrencyManager.shared.toPreferred($1.amount, from: $1.currency) }
-        if scheduled > 0 { return scheduled }
-        let everyTx: [TxRecord] = vm.cards.flatMap { $0.transactions }
-        let received: [TxRecord] = everyTx.filter { (tx: TxRecord) -> Bool in
-            tx.amount > 0 && tx.txSubtype == TxSubtype.normal && tx.date >= monthStart
-        }
-        return received.reduce(0.0) { (sum: Double, tx: TxRecord) -> Double in
-            sum + CurrencyManager.shared.toPreferred(tx.amount, from: tx.currency)
-        }
+    /// What the budget is sized from: the salary landing on the main card, or
+    /// the income logged in the window when there is none. `MainCard.budgetIncome`
+    /// is the rule the Smart Budget screen, the purchase warning and the alerts
+    /// use, so Home's insights and that screen agree about every limit.
+    private func budgetIncome(from start: Date, to end: Date?) -> Double {
+        MainCard.budgetIncome(schedules: salarySchedules, transactions: budgetTransactions,
+                              from: start, to: end, currency: budgetCurrency).amount
     }
 
     /// Transactions to feed into insight engines. When a budget card is set,
@@ -329,8 +292,9 @@ struct HomeView: View {
     /// the income computation above.
     private var budgetTransactions: [TxRecord] {
         if let card = budgetCard {
-            // The main card reads with the cards it pays bills from.
-            return MainCard.isMain(card) ? MainCard.budgetTransactions(in: queriedCards) : card.transactions
+            // The main card reads with the cards it pays bills from, and with
+            // what was bought on a credit card (MainCard.creditCardSpending).
+            return MainCard.isMain(card) ? MainCard.budgetSpendingTransactions(in: queriedCards) : card.transactions
         }
         return vm.cards.flatMap { $0.transactions }
     }
@@ -510,7 +474,7 @@ struct HomeView: View {
             ? ExtraFunds.total(in: tx, from: extraFrom, to: cycle?.end, currency: budgetCurrency)
             : 0
         cachedInsights = SmartBudgetManager.shared.evaluateAll(
-            allTransactions: tx, income: totalMonthlyIncome + extra,
+            allTransactions: tx, income: budgetIncome(from: extraFrom, to: cycle?.end) + extra,
             cardID: budgetCard?.id.uuidString, configs: cardBudgetConfigs,
             targetCurrency: budgetCurrency, goals: activeGoals,
             periodStart: cycleStart, periodEnd: cycle?.end,

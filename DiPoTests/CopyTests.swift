@@ -60,6 +60,35 @@ final class CopyTests: XCTestCase {
         }
     }
 
+    /// Everything Smart Budget says — the screen, DiPo's tips, the warning when
+    /// adding a purchase, the alert and DiPo's plan — names the three parts as
+    /// the screen does. DiPo said "Lifestyle" and "Invest & Debt" beside a
+    /// screen that says Wants and Savings & debt. One idea per sentence, too:
+    /// no clause hung off a spaced dash, no arrows.
+    func testSmartBudgetSpeaksWithTheScreensWords() throws {
+        let (en, id) = try tables()
+        let families = ["budget.", "insight.", "reco.", "notif.budget", "tx.budget"]
+        for (key, english) in en where families.contains(where: { key.hasPrefix($0) }) {
+            let indonesian = id[key, default: ""]
+            for old in ["Lifestyle", "lifestyle", "Invest & Debt", "Invest & debt", "Daily needs", " — ", "→"] {
+                XCTAssertFalse(english.contains(old), "EN \(key) says \"\(old)\"")
+            }
+            for old in ["Gaya hidup", "gaya hidup", "Gaya Hidup", "Invest & Debt", "Investasi & utang", " — ", "→"] {
+                XCTAssertFalse(indonesian.contains(old), "ID \(key) says \"\(old)\"")
+            }
+        }
+    }
+
+    /// Lines shown as they are, not through String(format:), keep a single
+    /// "%". "Pelan-pelan menabung 20%% dari pemasukan" was on screen.
+    func testPlainLinesKeepASinglePercentSign() throws {
+        let (en, id) = try tables()
+        for key in ["reco.item.save_sub", "reco.why.saverate", "reco.invest.note"] {
+            XCTAssertFalse(en[key, default: ""].contains("%%"), "EN \(key)")
+            XCTAssertFalse(id[key, default: ""].contains("%%"), "ID \(key)")
+        }
+    }
+
     /// Errors say what didn't work and what to do; they don't apologise.
     func testErrorsDoNotApologise() throws {
         let (en, id) = try tables()
