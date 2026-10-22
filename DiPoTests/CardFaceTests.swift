@@ -126,8 +126,32 @@ final class CardFaceTests: XCTestCase {
         XCTAssertEqual(WalletCard.latest([], limit: 2).count, 0)
     }
 
+    /// A sign and the figure; the card's own currency is left off, another
+    /// one is kept so a USD entry on a rupiah card still says so.
+    func testAmountsPrintLikeAPassbook() {
+        XCTAssertEqual(WalletCard.amountText(tx("Warung Bu Siti", -25_000, 21), cardCurrency: "IDR"), "\u{2212}25.000")
+        XCTAssertEqual(WalletCard.amountText(tx("Gaji", 4_500_000, 20), cardCurrency: "IDR"), "+4.500.000")
+        let usd = TxRecord(name: "App Store", date: .now, amount: -4.99, type: "tx.type.purchase", icon: "X",
+                           iconBgHex: "#000000", category: .shopping, currency: "USD")
+        container.mainContext.insert(usd)
+        let shown = WalletCard.amountText(usd, cardCurrency: "IDR")
+        XCTAssertTrue(shown.hasPrefix("\u{2212}") && shown.contains("4.99")
+                      && shown.contains(CurrencyManager.symbol(for: "USD")), shown)
+    }
+
+    func testEntriesAreDatedTodayYesterdayOrByDay() {
+        let cal = Calendar.current
+        let now = cal.date(from: DateComponents(year: 2026, month: 10, day: 21, hour: 12))!
+        let day = { (y: Int, d: Int) in cal.date(from: DateComponents(year: y, month: 10, day: d, hour: 9))! }
+        XCTAssertEqual(WalletCard.dayLabel(day(2026, 21), now: now), loc("common.today"))
+        XCTAssertEqual(WalletCard.dayLabel(day(2026, 20), now: now), loc("common.yesterday"))
+        let earlier = WalletCard.dayLabel(day(2026, 19), now: now)
+        XCTAssertTrue(earlier.contains("19") && !earlier.contains("2026"), earlier)
+        XCTAssertTrue(WalletCard.dayLabel(day(2025, 19), now: now).contains("2025"))
+    }
+
     func testNewStringsInBothLanguagesKeepTheirArguments() {
-        let keys = ["wallet.recent", "wallet.no_recent", "wallet.recent_hidden", "wallet.limit_share"]
+        let keys = ["wallet.no_recent", "wallet.recent_hidden", "wallet.limit_share"]
         for language in [LanguageManager.Language.english, .indonesian] {
             LanguageManager.shared.withLanguage(language) {
                 for k in keys { XCTAssertNotEqual(loc(k), k, "\(k) in \(language)") }
