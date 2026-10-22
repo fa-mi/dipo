@@ -62,7 +62,7 @@ struct CardHistoryList: View {
                             HapticManager.shared.tap()
                             onTap(tx)
                         } label: {
-                            TxRow(tx: tx, animateEntrance: false)
+                            TxRow(tx: tx)
                                 .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)

@@ -186,7 +186,6 @@ struct CardListView: View {
     @Query private var allBudgetConfigs: [CardBudgetConfig]
     @State private var showAddCard    = false
     @State private var editingCard: BankCard? = nil
-    @State private var appeared       = false
     @State private var showTransfer        = false
     @State private var showPaywall = false
     @State private var pm = PremiumManager.shared
@@ -307,7 +306,6 @@ struct CardListView: View {
                     }
                     .padding(.horizontal, 22)
                     .padding(.top, 20)
-                    .opacity(appeared ? 1 : 0)
 
                     // Cards, standing up and swipeable. The actions used to sit
                     // under every card in a long stack; now they follow the one
@@ -330,8 +328,6 @@ struct CardListView: View {
                                 .transition(.opacity)
                         }
                     }
-                    .opacity(appeared ? 1 : 0)
-                    .animation(.spring(response: 0.55, dampingFraction: 0.8), value: appeared)
                     .animation(.easeOut(duration: 0.2), value: carouselID)
                     .padding(.horizontal, 22)
                     .padding(.top, 24)
@@ -375,7 +371,6 @@ struct CardListView: View {
                         .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.accent.opacity(0.2), lineWidth: 1))
                         .padding(.horizontal, 22)
                         .padding(.top, 24)
-                        .opacity(appeared ? 1 : 0)
                     }
 
                     // Rekening Bersama: shared wallets, and invitations to one.
@@ -383,7 +378,6 @@ struct CardListView: View {
                         JointAccountsSection(vm: vm)
                             .padding(.horizontal, 22)
                             .padding(.top, 28)
-                            .opacity(appeared ? 1 : 0)
                     }
 
                     Spacer(minLength: 110)
@@ -417,9 +411,6 @@ struct CardListView: View {
                     .buttonStyle(ScaleButtonStyle())
                 }
             }
-        }
-        .onAppear {
-            withAnimation(.spring(response: 0.55, dampingFraction: 0.8)) { appeared = true }
         }
         .sheet(isPresented: $showAddCard) {
             CardFormSheet(vm: vm, editCard: nil)
@@ -531,7 +522,6 @@ struct CardFormSheet: View {
     @State private var isWallet    = false
     @State private var walletProvider: WalletProvider = .gopay
     @State private var phoneNumber = "+62"
-    @State private var appeared    = false
     @State private var errorMsg: String? = nil
     /// Chosen bank issuer id. nil = auto (BIN detect / deterministic fallback).
     @State private var selectedIssuerID: String? = nil
@@ -702,8 +692,6 @@ struct CardFormSheet: View {
                             .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: AppRadius.md))
                             .padding(.horizontal, 22)
                             .padding(.top, 8)
-                            .opacity(appeared ? 1 : 0)
-                            .animation(AppMotion.appear, value: appeared)
                         }
 
                         // ── Card preview ───────────────────────────────────────
@@ -718,8 +706,6 @@ struct CardFormSheet: View {
                             walletProvider: isWallet ? walletProvider : nil
                         )
                         .padding(.horizontal, 22)
-                        .opacity(appeared ? 1 : 0)
-                        .animation(AppMotion.appear, value: appeared)
 
                         // ── Network/wallet indicator ───────────────────────────
                         if isWallet {
@@ -733,7 +719,6 @@ struct CardFormSheet: View {
                                 Spacer()
                             }
                             .padding(.horizontal, 22)
-                            .opacity(appeared ? 1 : 0)
                         } else {
                             HStack(spacing: 8) {
                                 CardNetworkLogo(network: effectiveNetwork)
@@ -747,13 +732,11 @@ struct CardFormSheet: View {
                                 Spacer()
                             }
                             .padding(.horizontal, 22)
-                            .opacity(appeared ? 1 : 0)
                         }
 
                         // ── Bank issuer picker (physical cards only) ───────────
                         if !isWallet {
                             bankIssuerPicker
-                                .opacity(appeared ? 1 : 0)
                         }
 
                         // ── Wallet provider picker (wallets only) ──────────────
@@ -795,8 +778,6 @@ struct CardFormSheet: View {
                                     .padding(.horizontal, 22)
                                 }
                             }
-                            .opacity(appeared ? 1 : 0)
-                            .animation(AppMotion.appear, value: appeared)
                             .animation(.spring(response: 0.3), value: walletProvider)
                         }
 
@@ -851,16 +832,12 @@ struct CardFormSheet: View {
                             }
                             .padding(.horizontal, 22)
                         }
-                        .opacity(appeared ? 1 : 0)
-                        .animation(AppMotion.appear, value: appeared)
                         } // end if !isWallet (card number)
 
                         // Holder/account name
                         SheetField(label: isWallet ? loc("cards.wallet_holder") : loc("cards.card_holder"),
                                    placeholder: isWallet ? loc("cards.wallet_holder") : loc("cards.card_holder"),
                                    text: $holderName)
-                        .opacity(appeared ? 1 : 0)
-                        .animation(AppMotion.appear, value: appeared)
 
                         // Phone number (digital wallet only)
                         if isWallet {
@@ -917,8 +894,6 @@ struct CardFormSheet: View {
                                 }
                                 .padding(.horizontal, 22)
                             }
-                            .opacity(appeared ? 1 : 0)
-                            .animation(AppMotion.appear, value: appeared)
                         }
 
                         // Expiry (physical card only)
@@ -981,8 +956,6 @@ struct CardFormSheet: View {
                             }
                             .padding(.horizontal, 22)
                         }
-                        .opacity(appeared ? 1 : 0)
-                        .animation(AppMotion.appear, value: appeared)
                         } // end if !isWallet (expiry)
 
                         // Currency — shown for both wallet and physical, editable only when creating
@@ -1035,8 +1008,6 @@ struct CardFormSheet: View {
                                 }
                                 .buttonStyle(ScaleButtonStyle())
                             }
-                            .opacity(appeared ? 1 : 0)
-                            .animation(AppMotion.appear, value: appeared)
                         } else {
                             // Locked currency display when editing
                             HStack(spacing: 10) {
@@ -1070,7 +1041,6 @@ struct CardFormSheet: View {
                             .overlay(RoundedRectangle(cornerRadius: AppRadius.md)
                                 .stroke(AppTheme.cardMid.opacity(0.3), lineWidth: 1))
                             .padding(.horizontal, 22)
-                            .opacity(appeared ? 1 : 0)
                         }
 
                         if let err = errorMsg {
@@ -1090,8 +1060,6 @@ struct CardFormSheet: View {
                         }
                         .buttonStyle(ScaleButtonStyle())
                         .padding(.horizontal, 22)
-                        .opacity(appeared ? 1 : 0)
-                        .animation(AppMotion.appear, value: appeared)
 
                         Spacer(minLength: 40)
                     }
@@ -1128,7 +1096,6 @@ struct CardFormSheet: View {
                     issuerTouched = true
                 }
             }
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.1)) { appeared = true }
         }
         .onChange(of: displayText) { _, _ in
             // Auto-suggest the issuer from the BIN as the user types — but never

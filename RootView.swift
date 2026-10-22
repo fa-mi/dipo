@@ -634,7 +634,6 @@ struct RootView: View {
 struct MaintenanceView: View {
     let title: String
     let message: String
-    @State private var pulse = false
 
     private var resolvedTitle: String {
         title.isEmpty ? loc("maintenance.title") : title
@@ -657,8 +656,6 @@ struct MaintenanceView: View {
                         Circle()
                             .stroke(AppTheme.orange.opacity(0.08 - Double(i) * 0.02), lineWidth: 1)
                             .frame(width: CGFloat(120 + i * 44), height: CGFloat(120 + i * 44))
-                            .scaleEffect(pulse ? 1.06 : 1)
-                            .animation(.easeInOut(duration: 2.2).repeatForever(autoreverses: true).delay(Double(i) * 0.3), value: pulse)
                     }
                     Circle().fill(AppTheme.orange.opacity(0.12)).frame(width: 104, height: 104)
                     Image(systemName: "wrench.and.screwdriver.fill")
@@ -689,6 +686,5 @@ struct MaintenanceView: View {
                 .padding(.bottom, 40)
             }
         }
-        .onAppear { pulse = true }
     }
 }

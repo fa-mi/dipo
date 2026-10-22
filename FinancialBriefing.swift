@@ -582,7 +582,6 @@ struct FinancialBriefingView: View {
     @Query private var installments: [CardInstallment]
 
     @State private var briefing: FinancialBriefing? = nil
-    @State private var appeared = false
 
     var body: some View {
         NavigationStack {
@@ -697,7 +696,6 @@ struct FinancialBriefingView: View {
 
                             Spacer(minLength: 30)
                         }
-                        .opacity(appeared ? 1 : 0)
                         .containerRelativeFrame(.horizontal)
                     }
                 } else {
@@ -724,7 +722,6 @@ struct FinancialBriefingView: View {
                     intents: cycleIntents,
                     plan: plan, duplicates: duplicates,
                     projectedSpend: projected)
-                withAnimation(.spring(response: 0.5, dampingFraction: 0.85)) { appeared = true }
             }
         }
     }

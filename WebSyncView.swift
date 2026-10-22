@@ -30,7 +30,6 @@ struct WebSyncView: View {
     @State private var idCopied = false
     @State private var codeCopied = false
     @State private var showRevokeConfirm = false
-    @State private var appeared = false
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     private var dipoID: String { session.dipoID ?? "—" }
@@ -66,9 +65,6 @@ struct WebSyncView: View {
             .overlay {
                 if isUploading { SyncProgressOverlay(phase: service.phase) }
             }
-        }
-        .onAppear {
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.85)) { appeared = true }
         }
         .confirmSheet(isPresented: $showRevokeConfirm,
                       icon: "eye.slash.fill",
@@ -391,6 +387,7 @@ private struct SyncProgressOverlay: View {
 
     @State private var spin = false
     @State private var breathe = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         ZStack {
@@ -408,7 +405,10 @@ private struct SyncProgressOverlay: View {
         }
         .onAppear {
             withAnimation(.linear(duration: 1.1).repeatForever(autoreverses: false)) { spin = true }
-            withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) { breathe = true }
+            // The spinner says it's working; the breathing only decorated it.
+            if !reduceMotion {
+                withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) { breathe = true }
+            }
         }
         .transition(.opacity)
     }

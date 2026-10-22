@@ -161,7 +161,7 @@ extension StatisticsView {
                 VStack(spacing: 10) {
                     ForEach(rows) { tx in
                         TxRow(tx: tx, sourceCard: sourceCard(of: tx),
-                              showCard: false, animateEntrance: false)
+                              showCard: false)
                     }
                 }
                 .padding(.vertical, 12)
@@ -368,7 +368,7 @@ extension StatisticsView {
                                 VStack(spacing: 10) {
                                     ForEach(g.rows) { tx in
                                         TxRow(tx: tx, sourceCard: sourceCard(of: tx),
-                                              showCard: false, animateEntrance: false)
+                                              showCard: false)
                                     }
                                 }
                                 .padding(14)

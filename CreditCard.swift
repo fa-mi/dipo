@@ -255,7 +255,6 @@ struct CreditCardFormSheet: View {
     @State private var owedText = ""
     @State private var currency = CurrencyManager.shared.preferredCurrency
     @State private var showExplainer = false
-    @State private var appeared = false
 
     private var isEditing: Bool { editCard != nil }
     private var gradient: BankGradient {

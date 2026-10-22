@@ -16,7 +16,6 @@ struct ProfileView: View {
     /// cards are added/deleted without a full Profile re-mount.
     @Query(sort: \BankCard.sortOrder) private var liveCards: [BankCard]
 
-    @State private var appeared           = false
     @State private var showResetConfirm   = false
     @State private var isEditingName      = false
     @State private var editNameText       = ""
@@ -388,9 +387,6 @@ struct ProfileView: View {
             .presentationBackground(AppTheme.bg).preferredColorScheme(appColorScheme())
             .presentationCornerRadius(28)
         }
-        .onAppear {
-            withAnimation(.spring(response: 0.6, dampingFraction: 0.75).delay(0.1)) { appeared = true }
-        }
         .trackScreen(.profile)
     }
 
@@ -433,8 +429,6 @@ struct ProfileView: View {
             .buttonStyle(ScaleButtonStyle())
             .offset(x: 36, y: 36)
         }
-        .scaleEffect(appeared ? 1 : 0.7)
-        .opacity(appeared ? 1 : 0)
         .photosPicker(isPresented: $showPhotoOptions, selection: $photoItem,
                       matching: .images, photoLibrary: .shared())
         .onChange(of: photoItem) { _, item in
@@ -501,7 +495,6 @@ struct ProfileView: View {
             .padding(.vertical, premiumMgr.plan == .free ? 0 : 4)
             .background(premiumMgr.plan == .free ? .clear : premiumMgr.plan.color.opacity(0.12), in: Capsule())
         }
-        .opacity(appeared ? 1 : 0)
     }
 
     @ViewBuilder
@@ -541,7 +534,6 @@ struct ProfileView: View {
         .overlay(RoundedRectangle(cornerRadius: AppRadius.md)
             .stroke((hasEmail ? AppTheme.accent : AppTheme.orange).opacity(0.18), lineWidth: 1))
         .padding(.horizontal, 22)
-        .opacity(appeared ? 1 : 0)
         .alert(loc("profile.email_title"), isPresented: $showEmailEdit) {
             TextField("you@example.com", text: $emailText)
                 .keyboardType(.emailAddress)
@@ -606,7 +598,6 @@ struct ProfileView: View {
             in: RoundedRectangle(cornerRadius: AppRadius.md))
         .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(brandB.opacity(0.30), lineWidth: 1))
         .padding(.horizontal, 22)
-        .opacity(appeared ? 1 : 0)
     }
 
     @ViewBuilder
@@ -646,7 +637,6 @@ struct ProfileView: View {
         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
         .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.accent.opacity(0.18), lineWidth: 1))
         .padding(.horizontal, 22)
-        .opacity(appeared ? 1 : 0)
     }
 
     @ViewBuilder
@@ -697,8 +687,6 @@ struct ProfileView: View {
             in: RoundedRectangle(cornerRadius: AppRadius.lg))
         .overlay(RoundedRectangle(cornerRadius: AppRadius.lg).stroke(AppTheme.cardMid.opacity(0.6), lineWidth: 1))
         .padding(.horizontal, 22)
-        .opacity(appeared ? 1 : 0)
-        .animation(AppMotion.appear, value: appeared)
     }
 
     @ViewBuilder
@@ -748,8 +736,6 @@ struct ProfileView: View {
         }
         .buttonStyle(ScaleButtonStyle())
         .padding(.horizontal, 22)
-        .opacity(appeared ? 1 : 0)
-        .animation(AppMotion.appear, value: appeared)
     }
 
     @ViewBuilder
@@ -812,9 +798,6 @@ struct ProfileView: View {
         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
         .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.green.opacity(0.18), lineWidth: 1))
         .padding(.horizontal, 22)
-        .opacity(appeared ? 1 : 0)
-        .offset(y: appeared ? 0 : 20)
-        .animation(AppMotion.appear, value: appeared)
     }
 
     /// What the screen is actually showing right now. While the mode is
@@ -881,22 +864,13 @@ struct ProfileView: View {
         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
         .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.textSecondary.opacity(0.12), lineWidth: 1))
         .padding(.horizontal, 22)
-        .opacity(appeared ? 1 : 0)
-        .offset(y: appeared ? 0 : 20)
-        .animation(AppMotion.appear, value: appeared)
 
         // ── Language Toggle ──────────────────────────────────────────────
         languageSection
             .padding(.horizontal, 22)
-            .opacity(appeared ? 1 : 0)
-            .offset(y: appeared ? 0 : 20)
-            .animation(AppMotion.appear, value: appeared)
 
         voiceLanguageSection
             .padding(.horizontal, 22)
-            .opacity(appeared ? 1 : 0)
-            .offset(y: appeared ? 0 : 20)
-            .animation(AppMotion.appear, value: appeared)
     }
 
     @ViewBuilder
@@ -1035,7 +1009,6 @@ struct ProfileView: View {
             }
         }
         .padding(.horizontal, 22)
-        .opacity(appeared ? 1 : 0)
     }
 
     private func runDeleteAccount() {
@@ -1221,7 +1194,6 @@ struct ProfileView: View {
             }
         }
         .padding(.horizontal, 22)
-        .opacity(appeared ? 1 : 0)
     }
 
     @ViewBuilder
@@ -1235,7 +1207,7 @@ struct ProfileView: View {
             .background(AppTheme.red.opacity(0.08), in: RoundedRectangle(cornerRadius: AppRadius.md))
             .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.red.opacity(0.25), lineWidth: 1))
         }
-        .buttonStyle(ScaleButtonStyle()).padding(.horizontal, 22).opacity(appeared ? 1 : 0)
+        .buttonStyle(ScaleButtonStyle()).padding(.horizontal, 22)
     }
 
     @ViewBuilder
@@ -1286,9 +1258,6 @@ struct ProfileView: View {
             }
         }
         .padding(.horizontal, 22)
-        .opacity(appeared ? 1 : 0)
-        .offset(y: appeared ? 0 : 20)
-        .animation(AppMotion.appear, value: appeared)
     }
 
     // MARK: - Actions

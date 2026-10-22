@@ -464,7 +464,6 @@ struct RecurringExpensesView: View {
     /// credits — the credit engine carried the identical month-granular bug.
     @Query private var salarySchedules: [SalarySchedule]
     @State private var vm = RecurringExpenseViewModel()
-    @State private var appeared = false
     @State private var showOrphanCleanup = false
     @State private var showPhantomCleanup = false
     @State private var actionsFor: RecurringExpense? = nil
@@ -570,13 +569,10 @@ struct RecurringExpensesView: View {
                         Spacer(minLength: 100)
                     }
                     .padding(.horizontal, 22)
-                    .opacity(appeared ? 1 : 0)
-                    .offset(y: appeared ? 0 : 16)
                     .containerRelativeFrame(.horizontal)
                 }
             }
             .featureBar(pushed: pushed)
-            .onAppear { withAnimation(.spring(response: 0.55, dampingFraction: 0.85)) { appeared = true } }
             .sheet(isPresented: $vm.showAddSheet, onDismiss: { vm.resetForm() }) {
                 RecurringFormSheet(vm: vm, context: context)
                     .presentationDetents([.large])
@@ -1106,7 +1102,6 @@ struct RecurringFormSheet: View {
     @Query private var salarySchedules: [SalarySchedule]
     @Query private var savingsGoals: [SavingsGoal]
     @Query private var budgetConfigs: [CardBudgetConfig]
-    @State private var appeared = false
 
     private var isEditing: Bool { vm.editing != nil }
 
@@ -1189,9 +1184,6 @@ struct RecurringFormSheet: View {
                         Spacer(minLength: 30)
                     }
                     .padding(.top, 8)
-                    .opacity(appeared ? 1 : 0)
-                    .offset(y: appeared ? 0 : 16)
-                    .animation(AppMotion.appear, value: appeared)
                     .containerRelativeFrame(.horizontal)
                 }
             }
@@ -1235,7 +1227,6 @@ struct RecurringFormSheet: View {
                     vm.formCardID = first.id
                     if !isEditing { vm.formCurrency = first.currency }
                 }
-                withAnimation { appeared = true }
             }
             .onChange(of: vm.formCardID) { _, newID in
                 // Default only — a USD subscription paid from an IDR card is

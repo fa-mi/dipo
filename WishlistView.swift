@@ -190,7 +190,6 @@ struct WishlistView: View {
     /// Drives the "New Goal" flow: chooser → personal / shared create form.
     @State private var goalSheet: GoalSheet? = nil
     @State private var editingGoal: SavingsGoal? = nil
-    @State private var appeared       = false
     @State private var celebratingGoal: SavingsGoal? = nil
     @State private var completedActions: SavingsGoal? = nil
     @State private var deletingCompleted: SavingsGoal? = nil
@@ -303,8 +302,6 @@ struct WishlistView: View {
 
                     Spacer(minLength: 100)
                 }
-                .opacity(appeared ? 1 : 0)
-                .offset(y: appeared ? 0 : 16)
                 .containerRelativeFrame(.horizontal)
             }
 
@@ -317,9 +314,6 @@ struct WishlistView: View {
             }
         }
         .featureBar(pushed: pushed)
-        .onAppear {
-            withAnimation(.spring(response: 0.55, dampingFraction: 0.85)) { appeared = true }
-        }
         .sheet(item: $goalSheet) { which in
             switch which {
             case .chooser:
@@ -1119,7 +1113,6 @@ struct GoalFormSheet: View {
     @State private var currency     = CurrencyManager.shared.preferredCurrency
     @State private var priority     = 2
     @State private var notes        = ""
-    @State private var appeared     = false
     @State private var errorMsg: String? = nil
 
     let emojis = ["🎯","🚗","🏠","✈️","💻","📱","🎓","💍","⛵","🎸","🏋️","👶","🌏","💰","🏖️","🎮"]
@@ -1173,9 +1166,6 @@ struct GoalFormSheet: View {
                         Spacer(minLength: 30)
                     }
                     .padding(.top, 8)
-                    .opacity(appeared ? 1 : 0)
-                    .offset(y: appeared ? 0 : 16)
-                    .animation(AppMotion.appear, value: appeared)
                     .containerRelativeFrame(.horizontal)
                 }
             }
@@ -1198,7 +1188,6 @@ struct GoalFormSheet: View {
                 monthly      = SavingsNumber.edit(g.monthlyContribution, currency: g.currency)
                 currency = g.currency; priority = g.priority; notes = g.notes
             }
-            withAnimation { appeared = true }
         }
     }
 

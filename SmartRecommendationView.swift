@@ -26,7 +26,6 @@ struct SmartRecommendationView: View {
     /// Called after the user taps "Apply" so the parent can refresh its state.
     var onApply: () -> Void = {}
 
-    @State private var appeared = false
     @State private var animatedScore: Int = 0
     @State private var detailReco: SmartRecommendation? = nil
     @State private var scoreDetail: SmartRecommendation? = nil
@@ -365,8 +364,6 @@ struct SmartRecommendationView: View {
                     .padding(.horizontal, 20)
                     .padding(.top, 8)
                     .padding(.bottom, 30)
-                    .opacity(appeared ? 1 : 0)
-                    .offset(y: appeared ? 0 : 12)
                     .containerRelativeFrame(.horizontal)
                 }
             } else {
@@ -375,7 +372,6 @@ struct SmartRecommendationView: View {
         }
         .onAppear {
             if analysis == nil { refresh() }
-            withAnimation(.spring(response: 0.6, dampingFraction: 0.85)) { appeared = true }
         }
         .onChange(of: cycleIntents.count) { _, _ in refresh() }
         .sheet(isPresented: $showDuplicates, onDismiss: { refresh() }) {
@@ -464,10 +460,9 @@ struct SmartRecommendationView: View {
                 ZStack {
                     Circle().stroke(AppTheme.cardMid, lineWidth: 10)
                     Circle()
-                        .trim(from: 0, to: appeared ? CGFloat(r.smartScore) / 100 : 0)
+                        .trim(from: 0, to: CGFloat(r.smartScore) / 100)
                         .stroke(tint, style: StrokeStyle(lineWidth: 10, lineCap: .round))
                         .rotationEffect(.degrees(-90))
-                        .animation(.spring(response: 1.0, dampingFraction: 0.85), value: appeared)
                     VStack(spacing: -2) {
                         Text("\(animatedScore)")
                             .font(.system(.title, design: .rounded, weight: .bold))

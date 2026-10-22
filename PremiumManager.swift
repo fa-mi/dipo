@@ -563,7 +563,6 @@ struct PremiumGate<Content: View>: View {
 struct LockedFeaturePlaceholder: View {
     let feature: PremiumFeature
     @Binding var showPaywall: Bool
-    @State private var pulse = false
 
     var body: some View {
         ZStack {
@@ -576,8 +575,6 @@ struct LockedFeaturePlaceholder: View {
                         Circle()
                             .stroke(feature.requiredPlan.color.opacity(0.08 - Double(i) * 0.02), lineWidth: 1)
                             .frame(width: CGFloat(100 + i * 40), height: CGFloat(100 + i * 40))
-                            .scaleEffect(pulse ? 1.08 : 1)
-                            .animation(.easeInOut(duration: 2.2).repeatForever(autoreverses: true).delay(Double(i) * 0.35), value: pulse)
                     }
                     Circle()
                         .fill(feature.requiredPlan.color.opacity(0.12))
@@ -638,7 +635,6 @@ struct LockedFeaturePlaceholder: View {
                 Spacer()
             }
         }
-        .onAppear { pulse = true }
     }
 }
 
@@ -646,7 +642,6 @@ struct LockedFeaturePlaceholder: View {
 
 struct PaywallView: View {
     @Environment(\.dismiss) private var dismiss
-    @State private var appeared = false
     // Single-tier app — Royal is the only paid plan. `selectedPlan` is
     // kept as a constant rather than ripping it out everywhere because
     // many subviews below reference `selectedPlan.icon` / `.color` /
@@ -701,23 +696,16 @@ struct PaywallView: View {
                                 .foregroundStyle(selectedPlan.color)
                         }
                         .animation(.spring(response: 0.35), value: selectedPlan)
-                        .scaleEffect(appeared ? 1 : 0.6)
-                        .opacity(appeared ? 1 : 0)
-                        .animation(AppMotion.appear, value: appeared)
 
                         Text(loc("premium.upgrade"))
                             .font(.system(.title, weight: .bold))
                             .foregroundStyle(AppTheme.textPrimary)
-                            .opacity(appeared ? 1 : 0)
-                            .animation(AppMotion.appear, value: appeared)
 
                         Text(loc("premium.sub"))
                             .font(.system(.subheadline))
                             .foregroundStyle(AppTheme.textSecondary)
                             .multilineTextAlignment(.center)
                             .padding(.horizontal, 32)
-                            .opacity(appeared ? 1 : 0)
-                            .animation(AppMotion.appear, value: appeared)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     .padding(.top, 32)
@@ -731,8 +719,6 @@ struct PaywallView: View {
                     .padding(.horizontal, 14).padding(.vertical, 7)
                     .background(mgr.plan.color.opacity(0.12), in: Capsule())
                     .overlay(Capsule().stroke(mgr.plan.color.opacity(0.3), lineWidth: 1))
-                    .opacity(appeared ? 1 : 0)
-                    .animation(AppMotion.appear, value: appeared)
 
                     // Single Royal hero card (no tier comparison anymore —
                     // there's only one paid plan). Stretches full-width to
@@ -740,9 +726,6 @@ struct PaywallView: View {
                     // leftover half of a 2-up layout.
                     planCard(.royal, features: royalAllFeatures)
                         .padding(.horizontal, 22)
-                        .opacity(appeared ? 1 : 0)
-                        .offset(y: appeared ? 0 : 20)
-                        .animation(AppMotion.appear, value: appeared)
 
                     VStack(alignment: .leading, spacing: 12) {
                         Text(loc("premium.what_you_get"))
@@ -779,8 +762,6 @@ struct PaywallView: View {
                     .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
                     .overlay(RoundedRectangle(cornerRadius: AppRadius.lg).stroke(selectedPlan.color.opacity(0.25), lineWidth: 1))
                     .padding(.horizontal, 22)
-                    .opacity(appeared ? 1 : 0)
-                    .animation(AppMotion.appear, value: appeared)
 
                     VStack(spacing: 12) {
                         if !UserSession.shared.isLoggedIn {
@@ -970,8 +951,6 @@ struct PaywallView: View {
                         .padding(.top, 2)
                     }
                     .padding(.horizontal, 22)
-                    .opacity(appeared ? 1 : 0)
-                    .animation(AppMotion.appear, value: appeared)
 
                     Spacer(minLength: 40)
                 }
@@ -994,7 +973,6 @@ struct PaywallView: View {
             }
         }
         .onAppear {
-            withAnimation(.spring(response: 0.6).delay(0.1)) { appeared = true }
             // Pull live localized price + trial from StoreKit so the paywall
             // shows the REAL billed amount (Guideline 3.1.2c), not a hardcoded
             // string that can drift from App Store Connect.

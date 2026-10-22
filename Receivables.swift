@@ -159,7 +159,6 @@ struct ReceivablesView: View {
     @State private var vm = ReceivableViewModel()
     @State private var repaying: Receivable? = nil
     @State private var detail: Receivable? = nil
-    @State private var appeared = false
     /// True when shown as a segment inside ObligationsView, which already owns
     /// the navigation chrome. A nested NavigationStack there would give the
     /// screen two title bars and two Done buttons.
@@ -231,7 +230,6 @@ struct ReceivablesView: View {
                     .containerRelativeFrame(.horizontal)
                 }
             }
-            .onAppear { withAnimation(.spring(response: 0.5)) { appeared = true } }
             .sheet(isPresented: $vm.showAddSheet, onDismiss: { vm.resetForm() }) {
                 ReceivableFormSheet(vm: vm, cards: cards, context: context)
                     .presentationDetents([.large]).presentationDragIndicator(.visible)
@@ -267,7 +265,6 @@ struct ReceivablesView: View {
         .padding(.vertical, 20)
         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
         .padding(.horizontal, 22)
-        .opacity(appeared ? 1 : 0)
     }
 
     private var addButton: some View {

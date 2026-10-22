@@ -180,7 +180,6 @@ struct SearchView: View {
     /// Rows shown; "Show more" adds a page.
     @State private var limit = SearchView.pageSize
     static let pageSize = 200
-    @State private var appeared = false
     @FocusState private var focused: Bool
     @State private var selectedTx: TxRecord? = nil
     @State private var showCustomDateSheet = false

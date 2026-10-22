@@ -1161,7 +1161,6 @@ struct BudgetGroupDetailView: View {
     /// The next payday (or the 1st of next month). "Start plus one month" was
     /// the 25th when the salary lands on Friday the 23rd: two days too many.
     var periodEnd: Date? = nil
-    @State private var appeared = false
 
     private var cal: Calendar  { Calendar.current }
     private var monthStart: Date { periodStart }
@@ -1271,7 +1270,7 @@ struct BudgetGroupDetailView: View {
                             Capsule()
                                 .fill(LinearGradient(colors: [group.color.opacity(0.75), group.color],
                                                      startPoint: .leading, endPoint: .trailing))
-                                .frame(width: W * CGFloat(appeared ? withinFraction : 0))
+                                .frame(width: W * CGFloat(withinFraction))
                             if overFraction > 0 {
                                 // Past a limit warms to red; past a target is
                                 // more of the good thing, in the group's colour.
@@ -1279,12 +1278,11 @@ struct BudgetGroupDetailView: View {
                                     .fill(LinearGradient(colors: group.isCeiling ? [AppTheme.orange, AppTheme.red]
                                                                                  : [group.color, group.color.opacity(0.75)],
                                                          startPoint: .leading, endPoint: .trailing))
-                                    .frame(width: W * CGFloat(appeared ? overFraction : 0))
+                                    .frame(width: W * CGFloat(overFraction))
                             }
                         }
                         .frame(height: 12)
                         .clipShape(Capsule())
-                        .animation(AppMotion.appear, value: appeared)
 
                         // Limit tick — only drawn when spending has run past it.
                         if isOver || isAhead {
@@ -1330,8 +1328,6 @@ struct BudgetGroupDetailView: View {
                 }
             }
             .frame(height: 8)
-            .opacity(appeared ? 1 : 0)
-            .animation(AppMotion.appear, value: appeared)
         }
         .frame(height: 8)
     }
@@ -1437,8 +1433,6 @@ struct BudgetGroupDetailView: View {
                     .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
                     .overlay(RoundedRectangle(cornerRadius: AppRadius.lg).stroke(isOver ? AppTheme.red.opacity(0.3) : Color.clear, lineWidth: 1.5))
                     .padding(.horizontal, 22)
-                    .opacity(appeared ? 1 : 0).offset(y: appeared ? 0 : 20)
-                    .animation(AppMotion.appear, value: appeared)
 
                     // Category breakdown — every number here is a share of THIS
                     // group's spending, so the bars and the % labels agree.
@@ -1471,8 +1465,7 @@ struct BudgetGroupDetailView: View {
                                                     Capsule()
                                                         .fill(LinearGradient(colors: [item.cat.color.opacity(0.75), item.cat.color],
                                                                              startPoint: .leading, endPoint: .trailing))
-                                                        .frame(width: max(g.size.width * CGFloat(appeared ? share : 0), share > 0 ? 5 : 0), height: 5)
-                                                        .animation(AppMotion.appear, value: appeared)
+                                                        .frame(width: max(g.size.width * CGFloat(share), share > 0 ? 5 : 0), height: 5)
                                                 }
                                             }.frame(height: 5)
                                         }
@@ -1480,8 +1473,6 @@ struct BudgetGroupDetailView: View {
                                 }
                             }
                         }
-                        .opacity(appeared ? 1 : 0).offset(y: appeared ? 0 : 16)
-                        .animation(AppMotion.appear, value: appeared)
                     }
 
                     // Transactions
@@ -1537,8 +1528,6 @@ struct BudgetGroupDetailView: View {
                                 }
                             }
                         }
-                        .opacity(appeared ? 1 : 0).offset(y: appeared ? 0 : 16)
-                        .animation(AppMotion.appear, value: appeared)
                     } else {
                         VStack(spacing: 12) {
                             Image(systemName: "tray").font(.system(size: 36)).foregroundStyle(AppTheme.textSecondary)
@@ -1552,7 +1541,6 @@ struct BudgetGroupDetailView: View {
         }
         .navigationTitle(group.label).navigationBarTitleDisplayMode(.large)
         .toolbarBackground(AppTheme.bg, for: .navigationBar)
-        .onAppear { withAnimation { appeared = true } }
     }
 }
 
