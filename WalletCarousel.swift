@@ -12,8 +12,12 @@ import SwiftUI
 // the chip, the contactless waves, the engraved arcs and the glass sheen it
 // used to wear said nothing: five layers of decoration over a face that left
 // out the one thing that tells two cards apart, the bank. The cover now says
-// which bank, which card and what is in it; the page below it, like the inside
-// of a buku tabungan, shows the last two entries on that card.
+// which bank, which card and what is in it; the page, like the inside of a
+// buku tabungan, shows the last entries on that card with their dates.
+//
+// The page sits INSIDE the cover, framed by the bank's colour on three sides.
+// Run edge to edge, it was the colour of every other card in the app and in
+// dark mode it melted into the screen: the card read as cut in half.
 struct WalletCard: View {
     let card: BankCard
     /// 0 = fully scrolled away, 1 = centred. Drives the depth cues.
@@ -41,10 +45,12 @@ struct WalletCard: View {
     static let aspect: CGFloat = 53.98 / 85.6
     /// 3.18 mm corner on a 53.98 mm width — the ISO/IEC 7810 ID-1 radius.
     static let cornerRatio: CGFloat = 3.18 / 53.98
-    /// The cover's share of the height; the page takes the rest.
-    static let coverShare: CGFloat = 0.63
+    /// The page's share of the card's height.
+    static let pageShare: CGFloat = 0.345
+    /// The cover's colour showing around the page, as a share of the width.
+    static let pageInset: CGFloat = 7 / 208
     /// Entries on the page. Two fit at every text size up to the largest
-    /// non-accessibility one; a third pushed the balance off the cover.
+    /// non-accessibility one; a credit card's limit bar takes the room of one.
     static let pageRows = 2
 
     private var radius: CGFloat { max(width * Self.cornerRatio, 3) }
@@ -69,12 +75,6 @@ struct WalletCard: View {
         }
         .aspectRatio(Self.aspect, contentMode: .fit)
         .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
-        // A hairline so the page, which is the colour of any other card in the
-        // app, still has an edge against the screen behind it.
-        .overlay(
-            RoundedRectangle(cornerRadius: radius, style: .continuous)
-                .strokeBorder(Color.white.opacity(colorScheme == .dark ? 0.10 : 0.0), lineWidth: 0.5)
-        )
         .shadow(color: .black.opacity((compact ? 0.18 : (colorScheme == .dark ? 0.35 : 0.14)) * prominence),
                 radius: compact ? 3 : 10, y: (compact ? 2 : 6) * prominence)
     }
@@ -83,12 +83,19 @@ struct WalletCard: View {
 
     private var passbook: some View {
         GeometryReader { g in
-            VStack(spacing: 0) {
+            let inset = g.size.width * Self.pageInset
+            let pageHeight = g.size.height * Self.pageShare
+            let pageShape = RoundedRectangle(cornerRadius: radius * 0.65, style: .continuous)
+            ZStack(alignment: .bottom) {
+                gradient
                 cover
-                    .frame(height: g.size.height * Self.coverShare)
+                    .padding(.bottom, pageHeight + inset + 10)
                 page
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                    .background(AppTheme.cardDark)
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
+                    .frame(height: pageHeight, alignment: .top)
+                    .background(AppTheme.cardDark, in: pageShape)
+                    .clipShape(pageShape)
+                    .padding([.horizontal, .bottom], inset)
             }
         }
     }
@@ -137,59 +144,62 @@ struct WalletCard: View {
                 .font(.system(.title, weight: .bold))
                 .monospacedDigit()
                 .lineLimit(1).minimumScaleFactor(0.5)
-                .padding(.top, 2)
+                .padding(.top, 1)
         }
         .foregroundStyle(.white)
-        .padding(.horizontal, 16).padding(.top, 16).padding(.bottom, 14)
+        .padding(.horizontal, 16).padding(.top, 15)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(gradient)
     }
 
     private var page: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            if card.isCreditCard && card.creditLimit > 0 {
-                limitBar
-            } else {
-                Text(loc("wallet.recent"))
-                    .font(.system(.caption))
-                    .foregroundStyle(AppTheme.textSecondary)
-            }
+        // The dates say what these rows are; a "Latest entries" label above
+        // them only repeated it.
+        let showsLimit = card.isCreditCard && card.creditLimit > 0
+        return VStack(alignment: .leading, spacing: 7) {
+            if showsLimit { limitBar }
             if card.isHidden {
                 Text(loc("wallet.recent_hidden"))
                     .font(.system(.footnote))
                     .foregroundStyle(AppTheme.textSecondary)
             } else {
-                let rows = Self.latest(card.transactions, limit: Self.pageRows)
+                let rows = Self.latest(card.transactions, limit: showsLimit ? 1 : Self.pageRows)
                 if rows.isEmpty {
                     Text(loc("wallet.no_recent"))
                         .font(.system(.footnote))
                         .foregroundStyle(AppTheme.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 } else {
-                    ForEach(rows) { tx in entry(tx) }
+                    ForEach(Array(rows.enumerated()), id: \.element.id) { i, tx in
+                        if i > 0 {
+                            Rectangle().fill(AppTheme.textSecondary.opacity(0.18)).frame(height: 0.5)
+                        }
+                        entry(tx)
+                    }
                 }
             }
         }
-        .padding(.horizontal, 14).padding(.vertical, 10)
+        .padding(.horizontal, 11).padding(.vertical, 9)
     }
 
-    /// One printed line of the passbook, signed the way TxRow signs it.
+    /// One line of the passbook: what, when, and how much in or out.
     private func entry(_ tx: TxRecord) -> some View {
-        VStack(spacing: 6) {
-            Rectangle().fill(AppTheme.textSecondary.opacity(0.15)).frame(height: 0.5)
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(tx.name)
+                    .font(.system(.footnote, weight: .semibold))
                     .foregroundStyle(AppTheme.textPrimary)
                     .lineLimit(1)
-                Spacer(minLength: 4)
-                Text(tx.amount >= 0
-                     ? "+\(CurrencyManager.shared.formatted(tx.amount, currency: tx.currency))"
-                     : CurrencyManager.shared.formatted(tx.amount, currency: tx.currency))
-                    .monospacedDigit()
-                    .foregroundStyle(tx.amount >= 0 ? AppTheme.green : AppTheme.textPrimary)
-                    .lineLimit(1).fixedSize()
+                Text(Self.dayLabel(tx.date))
+                    .font(.system(.caption2))
+                    .foregroundStyle(AppTheme.textSecondary)
+                    .lineLimit(1)
             }
-            .font(.system(.footnote))
+            Spacer(minLength: 4)
+            Text(Self.amountText(tx, cardCurrency: card.resolvedCurrency))
+                .font(.system(.footnote, weight: .semibold))
+                .monospacedDigit()
+                .foregroundStyle(tx.amount >= 0 ? AppTheme.green : AppTheme.textPrimary)
+                .lineLimit(1).fixedSize()
         }
     }
 
@@ -267,6 +277,32 @@ struct WalletCard: View {
         // Without a known bank the holder name is already the title.
         guard BankIssuer.find(card.issuerID) != nil, !card.holderName.isEmpty else { return tail }
         return tail.isEmpty ? card.holderName : "\(card.holderName) \(tail)"
+    }
+
+    /// "Today", "Yesterday", or a short weekday and date ("Sen, 19 Okt"); the
+    /// year only when it isn't this one.
+    @MainActor
+    static func dayLabel(_ date: Date, now: Date = .now, calendar: Calendar = .current) -> String {
+        if calendar.isDate(date, inSameDayAs: now) { return loc("common.today") }
+        if let y = calendar.date(byAdding: .day, value: -1, to: now), calendar.isDate(date, inSameDayAs: y) {
+            return loc("common.yesterday")
+        }
+        let sameYear = calendar.component(.year, from: date) == calendar.component(.year, from: now)
+        return DateFormatterCache.template(sameYear ? "EEEdMMM" : "dMMMy").string(from: date)
+    }
+
+    /// The amount as a passbook prints it: a sign and the figure. The currency
+    /// is the card's and already stands beside the balance, so it is left off,
+    /// unless this entry was in another one.
+    @MainActor
+    static func amountText(_ tx: TxRecord, cardCurrency: String) -> String {
+        let sign = tx.amount >= 0 ? "+" : "\u{2212}"
+        let full = CurrencyManager.shared.formatted(Swift.abs(tx.amount), currency: tx.currency)
+        guard tx.currency.uppercased() == cardCurrency.uppercased() else { return sign + full }
+        // The same lookup `formatted` makes, so the prefix matches.
+        let symbol = CurrencyManager.symbol(for: tx.currency)
+        let figure = full.hasPrefix(symbol) ? String(full.dropFirst(symbol.count)) : full
+        return sign + figure.trimmingCharacters(in: .whitespaces)
     }
 
     /// The newest `limit` entries, newest first, in one pass: this runs for
