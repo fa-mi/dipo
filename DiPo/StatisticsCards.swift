@@ -13,7 +13,6 @@ struct SpendingTrendCard: View {
     let currency: String
     var byPayCycle: Bool = false
     @State private var showBreakdown = false
-    @State private var appeared = false
 
     private var finished: [CycleTrendPoint] { trend.filter { !$0.isRunning && $0.expense > 0 } }
     private var average: Double? {
@@ -89,9 +88,7 @@ struct SpendingTrendCard: View {
                         VStack(spacing: 6) {
                             RoundedRectangle(cornerRadius: 6)
                                 .fill(barColor(point, isLast: isLast))
-                                .frame(height: appeared ? h : 2)
-                                .animation(.spring(response: 0.6, dampingFraction: 0.8)
-                                    .delay(Double(i) * 0.05), value: appeared)
+                                .frame(height: h)
                         }
                         .frame(maxWidth: .infinity, maxHeight: chartH, alignment: .bottom)
                     }
@@ -112,7 +109,6 @@ struct SpendingTrendCard: View {
         }
         .padding(16)
         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.xl))
-        .onAppear { appeared = true }
     }
 }
 
@@ -310,7 +306,6 @@ struct SmartInsightsCard: View {
     /// traceable back to the transactions it did and did not use.
     var onAudit: (() -> Void)? = nil
 
-    @State private var appeared = false
     
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -415,11 +410,6 @@ struct SmartInsightsCard: View {
         }
         .padding(.vertical, 16).padding(.horizontal, 18)
         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
-        .onAppear {
-            withAnimation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.1)) {
-                appeared = true
-            }
-        }
     }
 }
 

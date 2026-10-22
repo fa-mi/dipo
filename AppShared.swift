@@ -962,32 +962,6 @@ struct CountUpText: View, Animatable {
     }
 }
 
-// MARK: - Gentle Float Modifier
-//
-// A slow, looping up-and-down drift. Used on empty-state icons so a "no
-// data yet" screen feels alive rather than dead — subtle enough that it
-// reads as polish, not distraction. ~2.4s per cycle, ±5pt travel.
-
-struct GentleFloat: ViewModifier {
-    @State private var lifted = false
-
-    func body(content: Content) -> some View {
-        content
-            .offset(y: lifted ? -5 : 5)
-            .animation(
-                .easeInOut(duration: 2.4).repeatForever(autoreverses: true),
-                value: lifted
-            )
-            .onAppear { lifted = true }
-    }
-}
-
-extension View {
-    /// Slow looping vertical drift — see `GentleFloat`. Apply to empty-state
-    /// icons / illustrations.
-    func gentleFloat() -> some View { modifier(GentleFloat()) }
-}
-
 // MARK: - Sheet Done Button
 //
 // Every dismissable sheet had its own idea of what "Done" looks like: 12 sat

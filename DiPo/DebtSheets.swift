@@ -10,7 +10,6 @@ struct DebtFormSheet: View {
     @Bindable var vm: DebtViewModel
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
-    @State private var appeared = false
 
     var body: some View {
         NavigationStack {
@@ -37,10 +36,8 @@ struct DebtFormSheet: View {
                                 }.padding(.horizontal, 22)
                             }
                         }
-                        .opacity(appeared ? 1 : 0).offset(y: appeared ? 0 : 20)
 
                         SheetField(label: loc("savings.description"), placeholder: loc("debt.description_placeholder"), text: $vm.formName)
-                            .opacity(appeared ? 1 : 0).animation(AppMotion.appear, value: appeared)
 
                         // Balance fields
                         HStack(spacing: 12) {
@@ -84,7 +81,6 @@ struct DebtFormSheet: View {
                             }
                         }
                         .padding(.horizontal, 22)
-                        .opacity(appeared ? 1 : 0).animation(AppMotion.appear, value: appeared)
 
                         // Interest + Due day
                         HStack(spacing: 12) {
@@ -139,7 +135,6 @@ struct DebtFormSheet: View {
                             }
                         }
                         .padding(.horizontal, 22)
-                        .opacity(appeared ? 1 : 0).animation(AppMotion.appear, value: appeared)
 
                         // Currency
                         VStack(spacing: 8) {
@@ -158,7 +153,6 @@ struct DebtFormSheet: View {
                                 }.padding(.horizontal, 22)
                             }
                         }
-                        .opacity(appeared ? 1 : 0).animation(AppMotion.appear, value: appeared)
 
                         // Payoff preview
                         if let previewDebt = payoffPreviewDebt {
@@ -180,7 +174,6 @@ struct DebtFormSheet: View {
                             }
                             .padding(14).background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
                             .padding(.horizontal, 22)
-                            .opacity(appeared ? 1 : 0)
                         }
 
                         if let err = vm.formError {
@@ -215,7 +208,6 @@ struct DebtFormSheet: View {
                         .buttonStyle(ScaleButtonStyle())
                         .disabled(!canSave)
                         .padding(.horizontal, 22)
-                        .opacity(appeared ? 1 : 0).animation(AppMotion.appear, value: appeared)
 
                         Spacer(minLength: 40)
                     }.padding(.top, 8)
@@ -232,7 +224,6 @@ struct DebtFormSheet: View {
 
             }
         }
-        .onAppear { withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.1)) { appeared = true } }
     }
 
     /// A throwaway record for the payoff preview, once balance, minimum

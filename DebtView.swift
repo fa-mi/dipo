@@ -16,7 +16,6 @@ struct DebtView: View {
     @Query private var allTransactions: [TxRecord]
 
     @State private var vm = DebtViewModel()
-    @State private var appeared = false
     @State private var simulatorDebt: DebtRecord? = nil
     @State private var showSalarySetup = false
     @State private var showAllDebts = false
@@ -341,14 +340,10 @@ struct DebtView: View {
                 }
                 .padding(.horizontal, 22)
                 .padding(.top, embedded ? 4 : 20)
-                .opacity(appeared ? 1 : 0)
-                .offset(y: appeared ? 0 : 16)
-                .animation(AppMotion.appear, value: appeared)
                 .containerRelativeFrame(.horizontal)
             }
         }
         .onAppear {
-            withAnimation(.spring(response: 0.55, dampingFraction: 0.8)) { appeared = true }
             DebtNotificationScheduler.scheduleAll(debts: debts)
             // Sync each debt's stored currentBalance against the actual linked
             // payment txs in the DB. This catches the case where a user deleted

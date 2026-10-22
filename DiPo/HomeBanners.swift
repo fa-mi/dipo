@@ -8,7 +8,6 @@ import SwiftData
 struct NoCardState: View {
     @Binding var showAddCard: Bool
     @Binding var showAddSalary: Bool
-    @State private var pulse = false
 
     // Progress: 0 of 3 steps done when no card
     private let steps: [(String, String, String)] = [
@@ -25,8 +24,6 @@ struct NoCardState: View {
                     Circle()
                         .stroke(AppTheme.accent.opacity(0.10 - Double(i) * 0.025), lineWidth: 1.5)
                         .frame(width: CGFloat(110 + i * 40), height: CGFloat(110 + i * 40))
-                        .scaleEffect(pulse ? 1.08 : 1)
-                        .animation(.easeInOut(duration: 2.2).repeatForever(autoreverses: true).delay(Double(i) * 0.35), value: pulse)
                 }
                 Circle()
                     .fill(Color.black)
@@ -86,7 +83,6 @@ struct NoCardState: View {
             .buttonStyle(ScaleButtonStyle())
         }
         .padding(.horizontal, 8)
-        .onAppear { pulse = true }
     }
 }
 
@@ -149,7 +145,6 @@ struct SmartInsightBanner: View {
     /// is responsible for routing (open settings, open goals, etc.) — the
     /// engine stays UI-free.
     var onAction: ((SmartInsightAction.Kind) -> Void)? = nil
-    @State private var appeared = false
     /// Local hide state — set when user dismisses via long-press menu.
     /// The engine's persistent dismissal kicks in next render via
     /// `notDismissed`; this state just removes the banner instantly.
@@ -267,10 +262,9 @@ struct SmartInsightBanner: View {
         .padding(12)
         .background(insight.color.opacity(0.06), in: RoundedRectangle(cornerRadius: AppRadius.md))
         .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(insight.color.opacity(0.2), lineWidth: 1))
-        .opacity(isDismissed ? 0 : (appeared ? 1 : 0))
+        .opacity(isDismissed ? 0 : 1)
         .frame(maxHeight: isDismissed ? 0 : nil)
         .onAppear {
-            withAnimation(.spring(response: 0.5)) { appeared = true }
             // Resolve coaching topic once on appear so the panel doesn't
             // flicker after user dismisses it (state persists for this view).
             coachingTopic = SmartBudgetManager.shared.coachingTopic(for: insight)
@@ -300,7 +294,6 @@ struct SmartInsightBanner: View {
 // certainty. It answers "why will my balance drop?" before it happens.
 struct DeclaredRecurringBanner: View {
     let expense: RecurringExpense
-    @State private var appeared = false
 
     private var days: Int { RecurringDateEngine.daysUntil(dayOfMonth: expense.dayOfMonth) }
     private var whenText: String {
@@ -342,8 +335,6 @@ struct DeclaredRecurringBanner: View {
         .padding(12)
         .background(expense.category.color.opacity(0.06), in: RoundedRectangle(cornerRadius: AppRadius.md))
         .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(expense.category.color.opacity(0.2), lineWidth: 1))
-        .opacity(appeared ? 1 : 0)
-        .onAppear { withAnimation(.spring(response: 0.5)) { appeared = true } }
     }
 }
 
@@ -351,7 +342,6 @@ struct RecurringReminderBanner: View {
     let pattern: SmartBudgetManager.RecurringPattern
     /// Called after the user hides this detected pattern, so Home can recompute.
     var onDismiss: (() -> Void)? = nil
-    @State private var appeared = false
 
     private var daysUntil: Int {
         max(Calendar.current.dateComponents([.day], from: Date(), to: pattern.nextExpected).day ?? 0, 0)
@@ -444,8 +434,6 @@ struct RecurringReminderBanner: View {
         .padding(12)
         .background(tint.opacity(0.06), in: RoundedRectangle(cornerRadius: AppRadius.md))
         .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(tint.opacity(0.2), lineWidth: 1))
-        .opacity(appeared ? 1 : 0)
-        .onAppear { withAnimation(.spring(response: 0.5)) { appeared = true } }
     }
 
     /// "14 Aug – 21 Aug" for the sightings this pattern was built from.
@@ -512,7 +500,6 @@ struct SetupSalaryBanner: View {
 struct PinnedGoalBanner: View {
     let goal: SavingsGoal
     var tappable: Bool = false
-    @State private var appeared = false
 
     private var progress: Double { goal.targetAmount > 0 ? min(goal.savedAmount / goal.targetAmount, 1.0) : 0 }
     private var remaining: Double { max(goal.targetAmount - goal.savedAmount, 0) }
@@ -526,11 +513,10 @@ struct PinnedGoalBanner: View {
                         .stroke(AppTheme.cardMid, lineWidth: 3)
                         .frame(width: 44, height: 44)
                     Circle()
-                        .trim(from: 0, to: appeared ? progress : 0)
+                        .trim(from: 0, to: progress)
                         .stroke(AppTheme.accent, style: StrokeStyle(lineWidth: 3, lineCap: .round))
                         .frame(width: 44, height: 44)
                         .rotationEffect(.degrees(-90))
-                        .animation(AppMotion.appear, value: appeared)
                     Text(goal.emoji).font(.system(.title3))
                 }
 
@@ -569,8 +555,7 @@ struct PinnedGoalBanner: View {
                     RoundedRectangle(cornerRadius: 3)
                         .fill(LinearGradient(colors: [AppTheme.accent, AppTheme.accent.opacity(0.6)],
                                              startPoint: .leading, endPoint: .trailing))
-                        .frame(width: g.size.width * (appeared ? progress : 0), height: 5)
-                        .animation(AppMotion.appear, value: appeared)
+                        .frame(width: g.size.width * progress, height: 5)
                 }
             }
             .frame(height: 5)
@@ -579,7 +564,6 @@ struct PinnedGoalBanner: View {
         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
         .overlay(RoundedRectangle(cornerRadius: AppRadius.md)
             .stroke(AppTheme.accent.opacity(0.2), lineWidth: 1))
-        .onAppear { appeared = true }
     }
 }
 
@@ -622,6 +606,7 @@ struct SalaryReminderBanner: View {
     let schedule: SalarySchedule
     var tappable: Bool = false
     @State private var pulsing = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var daysLeft: Int { SalaryDateEngine.daysUntilPay(dayOfMonth: schedule.dayOfMonth) }
     private var nextDate: Date { SalaryDateEngine.nextPayDate(dayOfMonth: schedule.dayOfMonth) }
@@ -722,7 +707,8 @@ struct SalaryReminderBanner: View {
         .padding(14)
         .background(urgency.color.opacity(0.06), in: RoundedRectangle(cornerRadius: AppRadius.md))
         .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(urgency.color.opacity(0.2), lineWidth: 1))
-        .onAppear { pulsing = true }
+        // The ring still marks payday when Reduce Motion is on; it just holds still.
+        .onAppear { pulsing = !reduceMotion }
     }
 }
 

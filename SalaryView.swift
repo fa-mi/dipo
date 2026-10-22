@@ -389,7 +389,6 @@ struct SalaryView: View {
     @Query(sort: \SalarySchedule.createdAt) private var schedules: [SalarySchedule]
     @Query(sort: \BankCard.sortOrder) private var cards: [BankCard]
     @State private var vm = SalaryViewModel()
-    @State private var appeared = false
     @State private var actionsFor: SalarySchedule? = nil
     @State private var deleteFor: SalarySchedule? = nil
 
@@ -434,15 +433,10 @@ struct SalaryView: View {
                         }
                         Spacer(minLength: 100)
                     }
-                    .opacity(appeared ? 1 : 0)
-                    .offset(y: appeared ? 0 : 16)
                     .containerRelativeFrame(.horizontal)
                 }
             }
             .featureBar(pushed: pushed)
-            .onAppear {
-                withAnimation(.spring(response: 0.55, dampingFraction: 0.85)) { appeared = true }
-            }
             .sheet(isPresented: $vm.showAddSheet, onDismiss: { vm.resetForm() }) {
                 SalaryFormSheet(vm: vm, context: context)
                     .presentationDetents([.large])
@@ -1151,7 +1145,6 @@ struct SalaryFormSheet: View {
     let context: ModelContext
     @Environment(\.dismiss) private var dismiss
     @Query(sort: \BankCard.sortOrder) private var cards: [BankCard]
-    @State private var appeared = false
 
     private var isEditing: Bool { vm.editingSchedule != nil }
 
@@ -1199,9 +1192,6 @@ struct SalaryFormSheet: View {
                         Spacer(minLength: 30)
                     }
                     .padding(.top, 8)
-                    .opacity(appeared ? 1 : 0)
-                    .offset(y: appeared ? 0 : 16)
-                    .animation(AppMotion.appear, value: appeared)
                     .containerRelativeFrame(.horizontal)
                 }
             }
@@ -1221,7 +1211,6 @@ struct SalaryFormSheet: View {
             // save because "no card was chosen".
             if vm.formCardID == nil, let first = cards.first { vm.formCardID = first.id }
             if let card = lockedCard { vm.formCurrency = card.currency }
-            withAnimation { appeared = true }
         }
         .onChange(of: vm.formCardID) { _, newID in
             if let id = newID, let card = cards.first(where: { $0.id == id }) {
@@ -1476,7 +1465,6 @@ struct CardPickerSection: View {
 struct SalaryDetailView: View {
     let schedule: SalarySchedule
     @Query(sort: \BankCard.sortOrder) private var cards: [BankCard]
-    @State private var appeared = false
 
     private var linkedCard: BankCard? { cards.first(where: { $0.id == schedule.cardID }) }
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 4)
@@ -1562,8 +1550,6 @@ struct SalaryDetailView: View {
                     Spacer(minLength: 40)
                 }
                 .padding(.top, 12)
-                .opacity(appeared ? 1 : 0)
-                .offset(y: appeared ? 0 : 16)
                 .containerRelativeFrame(.horizontal)
             }
         }
@@ -1573,6 +1559,5 @@ struct SalaryDetailView: View {
         // for its title and the way back.
         .toolbar(.visible, for: .navigationBar)
         .toolbarBackground(AppTheme.bg, for: .navigationBar)
-        .onAppear { withAnimation(.spring(response: 0.55, dampingFraction: 0.85)) { appeared = true } }
     }
 }

@@ -19,6 +19,7 @@ struct DiPoQuestView: View {
     @State private var toast: String?
     @State private var soundOn = QuestSound.shared.enabled
     @State private var pulse = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     init(isRoyal: Bool) {
         self.isRoyal = isRoyal
@@ -86,7 +87,10 @@ struct DiPoQuestView: View {
                 .presentationDetents([.large]).presentationDragIndicator(.visible)
                 .presentationBackground(AppTheme.bg).preferredColorScheme(appColorScheme())
         }
-        .onAppear { withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) { pulse = true } }
+        .onAppear {
+            guard !reduceMotion else { return }
+            withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) { pulse = true }
+        }
         .trackScreen(.quest)
     }
 

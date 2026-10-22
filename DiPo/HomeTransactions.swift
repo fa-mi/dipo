@@ -610,12 +610,6 @@ struct TxRow: View {
     let tx: TxRecord
     var sourceCard: BankCard? = nil
     var showCard: Bool = false
-    /// Entrance animation is nice on the short Home list, but in a long
-    /// scrolling history it re-fires on EVERY row as it scrolls into view
-    /// (LazyVStack re-runs `onAppear`), stacking dozens of springs → jank.
-    /// Long lists pass `false`.
-    var animateEntrance: Bool = true
-    @State private var appeared = false
 
     /// Reused across rows — allocating a DateFormatter per row (per render) was
     /// a measurable scroll cost with a long history.
@@ -715,12 +709,6 @@ struct TxRow: View {
                 }
             }
             .fixedSize()
-        }
-        .opacity(animateEntrance ? (appeared ? 1 : 0) : 1)
-        .offset(x: animateEntrance ? (appeared ? 0 : 20) : 0)
-        .onAppear {
-            guard animateEntrance, !appeared else { return }
-            withAnimation(.spring(response: 0.45, dampingFraction: 0.8)) { appeared = true }
         }
     }
 }

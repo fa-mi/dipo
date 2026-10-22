@@ -86,7 +86,6 @@ struct InvestmentView: View {
     @Environment(\.modelContext) private var context
     @Query(sort: \InvestmentHolding.sortOrder) private var holdings: [InvestmentHolding]
     @State private var showAdd = false
-    @State private var appeared = false
     @State private var didAutoRefresh = false
     @State private var refreshing = false
 
@@ -154,14 +153,11 @@ struct InvestmentView: View {
                         Spacer(minLength: 100)
                     }
                     .padding(.horizontal, 22)
-                    .opacity(appeared ? 1 : 0)
-                    .offset(y: appeared ? 0 : 16)
                     .containerRelativeFrame(.horizontal)
                 }
                 .refreshable { await doRefresh(announce: true) }
             }
             .featureBar(pushed: pushed)
-            .onAppear { withAnimation(.spring(response: 0.55, dampingFraction: 0.85)) { appeared = true } }
             // Pull the latest crypto/stock prices once when the menu opens.
             .task {
                 guard !didAutoRefresh else { return }

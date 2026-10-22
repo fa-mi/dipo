@@ -495,6 +495,7 @@ struct BiometricPulseIcon: View {
     @Bindable var authVM: AuthViewModel
     let appeared: Bool
     @State private var pulsing = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         Button {
@@ -532,7 +533,7 @@ struct BiometricPulseIcon: View {
         }
 .accessibilityLabel(String(format: loc("a11y.unlock_with"), authVM.biometricLabel))
         .buttonStyle(ScaleButtonStyle())
-        .onAppear { pulsing = true }
+        .onAppear { pulsing = !reduceMotion }
     }
 }
 

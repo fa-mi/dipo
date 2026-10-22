@@ -1076,7 +1076,6 @@ struct NotificationCenterView: View {
     private var emptyState: some View {
         VStack(spacing: 14) {
             Image(systemName: "bell.slash").font(.system(size: 40)).foregroundStyle(AppTheme.textSecondary)
-                .gentleFloat()
             Text(loc("notif.empty")).font(.system(.callout, weight: .medium)).foregroundStyle(AppTheme.textSecondary)
             Text(loc("notif.info"))
                 .font(.system(.footnote)).foregroundStyle(AppTheme.textSecondary.opacity(0.7))

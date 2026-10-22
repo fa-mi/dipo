@@ -266,7 +266,7 @@ struct DeleteTransactionSheet: View {
             .multilineTextAlignment(.center)
 
             // The row itself, exactly as it looked in the list.
-            TxRow(tx: tx, sourceCard: card, showCard: false, animateEntrance: false)
+            TxRow(tx: tx, sourceCard: card, showCard: false)
                 .padding(14)
                 .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
 

@@ -9,7 +9,6 @@ struct AssetsView: View {
     @Query private var goals: [SavingsGoal]
     @State private var showAdd = false
     @State private var editing: PhysicalAsset?
-    @State private var appeared = false
     @AppStorage(AssetMarketCheck.snoozeKey) private var checkSnoozedUntil: Double = 0
 
     private var currency: String { CurrencyManager.shared.preferredCurrency }
@@ -53,13 +52,11 @@ struct AssetsView: View {
                     }
                     .padding(.horizontal, 22)
                     .padding(.top, 12)
-                    .opacity(appeared ? 1 : 0)
                     .containerRelativeFrame(.horizontal)
                 }
             }
             .featureBar(pushed: pushed)
             .onAppear {
-                withAnimation(.easeOut(duration: 0.35)) { appeared = true }
                 // The rows here say which values are due a look, so DiPo's
                 // reminder on Home has been seen; he leaves it for a month.
                 if !AssetMarketCheck.due(assets).isEmpty { checkSnoozedUntil = AssetMarketCheck.snoozed() }
