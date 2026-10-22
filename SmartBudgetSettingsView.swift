@@ -128,17 +128,19 @@ struct SmartBudgetSettingsSheet: View {
     /// Transactions filtered to the selected main card (or all cards if nil)
     private var budgetTx: [TxRecord] {
         if let id = selectedCardID, let card = cards.first(where: { $0.id.uuidString == id }) {
-            // The main card brings the cards it pays bills from.
-            return MainCard.isMain(card) ? MainCard.budgetTransactions(in: cards) : card.transactions
+            // The main card brings the cards it pays bills from, and what was
+            // bought on a credit card (MainCard.creditCardSpending).
+            return MainCard.isMain(card) ? MainCard.budgetSpendingTransactions(in: cards) : card.transactions
         }
         return cards.flatMap { $0.transactions }
     }
 
-    /// The cards the rollup is read over: the main card and its bill cards.
-    /// nil for any other card, which is read on its own.
+    /// The cards the rollup is read over: the main card, its bill cards and
+    /// the credit cards whose purchases count here. nil for any other card,
+    /// which is read on its own.
     private var budgetCardIDs: Set<String>? {
         guard let id = selectedCardID, id == MainCard.id else { return nil }
-        return MainCard.budgetCardIDs(in: cards)
+        return MainCard.budgetSpendingCardIDs(in: cards)
     }
 
     /// The first active monthly bill charged to a card this budget does not
@@ -283,9 +285,9 @@ struct SmartBudgetSettingsSheet: View {
         rollupBuckets = RollupStore.shared.rebuildIfStale(context: context, txCount: totalTxCount)
     }
 
-    /// What each group has taken this period, refunds given back — the same
-    /// rule Statistics uses, so Needs + Wants + Savings & debt adds up to the
-    /// "spent" figure there.
+    /// What each group has taken this period, refunds given back — the rule
+    /// Statistics uses. Statistics counts the pot's cash, so purchases on a
+    /// credit card are here and not there until the bill is paid.
     private func groupSpent(_ grp: BudgetGroup) -> Double {
         SmartBudgetManager.shared.spent(in: grp, buckets: rollupBuckets,
                                         targetCurrency: cardCurrency,
@@ -775,6 +777,18 @@ struct SmartBudgetSettingsSheet: View {
             .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
             .padding(.horizontal, 22)
             .padding(.bottom, 4)
+
+            // Said where the budget's scope is named, for anyone with a credit
+            // card: its purchases count when made, and paying the bill doesn't
+            // count them again.
+            if cards.contains(where: \.isCreditCard) {
+                Label(loc("budget.credit_cards_counted"), systemImage: "creditcard")
+                    .font(.system(.caption))
+                    .foregroundStyle(AppTheme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 22)
+                    .padding(.bottom, 6)
+            }
 
             billCardsSection
         }

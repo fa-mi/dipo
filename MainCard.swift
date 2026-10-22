@@ -58,9 +58,9 @@ enum MainCard {
 
     /// Accounts that can be a bill card: any other debit account or e-wallet.
     ///
-    /// A credit card cannot. Its purchases already reach this budget through
-    /// the bill the main card pays, as a debt payment — counting them at the
-    /// till as well would count the same kos twice.
+    /// A credit card cannot: its purchases already count in the budget where
+    /// they are made (`creditCardSpending`), and its balance is debt, not money
+    /// in the pot.
     static func billEligible(_ cards: [BankCard]) -> [BankCard] {
         cards.filter { !$0.isCreditCard && !isMain($0) }
     }
@@ -108,6 +108,44 @@ enum MainCard {
     /// Ids of the pot's cards, for the per-card rollup buckets.
     static func budgetCardIDs(in cards: [BankCard]) -> Set<String> {
         Set(budgetCards(in: cards).map(\.id.uuidString))
+    }
+
+    // MARK: Credit-card purchases
+
+    /// Purchases on credit cards, which the budget counts where they are made.
+    ///
+    /// The bill paid from the main card is a transfer for its recent part,
+    /// because those purchases "were counted when they were made"
+    /// (CardPaymentDebt). Nothing counted them: the budget read only the pot,
+    /// so groceries on a card paid off on time never reached Needs at all and
+    /// never warned. They count here, in their own category, and the bill stays
+    /// out, so nothing is counted twice. A balance carried for months is still
+    /// paid as a debt payment, and instalment plans are not rows
+    /// (CardInstallment): both stay in Savings & debt when paid, as before.
+    ///
+    /// Spending and refunds only. The payment arriving on the card is a
+    /// transfer, and nothing on a credit card is income.
+    static func creditCardSpending(in cards: [BankCard]) -> [TxRecord] {
+        cards.filter(\.isCreditCard).flatMap(\.transactions).filter {
+            $0.txSubtype == .refund || ($0.amount < 0 && $0.txSubtype == .normal)
+        }
+    }
+
+    /// What the budget counts as spending: the pot's rows and credit-card
+    /// purchases. Empty without a main card, like `budgetTransactions`. Cash
+    /// views — Statistics, the period card on Home, the balance — keep reading
+    /// the pot alone, since a card purchase moves no money out of it.
+    static func budgetSpendingTransactions(in cards: [BankCard]) -> [TxRecord] {
+        guard resolve(in: cards) != nil else { return [] }
+        return budgetTransactions(in: cards) + creditCardSpending(in: cards)
+    }
+
+    /// `budgetCardIDs` and every credit card, for the budget's spending read
+    /// from the per-card rollups. A credit card's buckets hold its purchases
+    /// and refunds; the payment arriving is a transfer, which they leave out.
+    static func budgetSpendingCardIDs(in cards: [BankCard]) -> Set<String> {
+        guard resolve(in: cards) != nil else { return [] }
+        return budgetCardIDs(in: cards).union(cards.filter(\.isCreditCard).map(\.id.uuidString))
     }
 
     // MARK: Reconciliation

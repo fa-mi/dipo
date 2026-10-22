@@ -1,4 +1,5 @@
 import XCTest
+import SwiftData
 @testable import DiPo
 
 /// Smart Budget's arithmetic, pinned on what a check in October 2026 found
@@ -228,6 +229,49 @@ final class SmartBudgetMathTests: XCTestCase {
         XCTAssertNil(SmartBudgetManager.wantsOverspill(spent: 1_800_000, limit: 3_000_000, progress: 0.45), "not far ahead")
         XCTAssertNil(SmartBudgetManager.wantsOverspill(spent: 3_100_000, limit: 3_000_000, progress: 0.45), "already over")
         XCTAssertNil(SmartBudgetManager.wantsOverspill(spent: 100, limit: 0, progress: 0.45))
+    }
+
+    // MARK: Credit-card purchases
+
+    /// Groceries bought on a credit card count in Needs where they were made,
+    /// and paying the card from the main card doesn't count them again. The
+    /// budget used to read the main card alone, so they counted nowhere.
+    func testCreditCardPurchasesCountOnceWhereTheyAreMade() throws {
+        let schema = Schema(versionedSchema: DiPoSchemaCurrent.self)
+        let container = try ModelContainer(for: schema,
+                                           configurations: ModelConfiguration(schema: schema, isStoredInMemoryOnly: true))
+        let context = container.mainContext
+        let bri = card("BRI")
+        let visa = card("Visa")
+        visa.isCreditCard = true
+        context.insert(bri)
+        context.insert(visa)
+        MainCard.set(bri)
+        let p = period
+        let day = p.start.addingTimeInterval(86_400)
+        func add(_ row: TxRecord, to card: BankCard) {
+            context.insert(row)
+            card.transactions.append(row)
+        }
+        // Rp 900.000 of groceries on the card, Rp 100.000 of it refunded.
+        add(tx(-900_000, .food, day), to: visa)
+        add(tx(100_000, .food, day, subtype: .refund), to: visa)
+        // The bill paid from BRI: a transfer out of BRI, a transfer into the card.
+        add(tx(-800_000, .other, day.addingTimeInterval(3_600), subtype: .transfer), to: bri)
+        add(tx(800_000, .other, day.addingTimeInterval(3_600), subtype: .transfer), to: visa)
+
+        let cards = [bri, visa]
+        let spending = MainCard.budgetSpendingTransactions(in: cards)
+        XCTAssertEqual(sb.spent(in: .daily, transactions: spending, targetCurrency: "IDR", periodStart: p.start),
+                       800_000, accuracy: 0.5)
+        XCTAssertEqual(MainCard.creditCardSpending(in: cards).count, 2, "the payment arriving is not spending")
+        XCTAssertTrue(MainCard.budgetSpendingCardIDs(in: cards).contains(visa.id.uuidString))
+        XCTAssertEqual(MainCard.budgetIncome(schedules: [], transactions: spending, from: p.start,
+                                             currency: "IDR").amount, 0, "a refund on the card is not income")
+        // The pot alone, what Statistics reads as cash, holds no groceries.
+        XCTAssertEqual(sb.spent(in: .daily, transactions: MainCard.budgetTransactions(in: cards),
+                                targetCurrency: "IDR", periodStart: p.start), 0)
+        withExtendedLifetime(container) {}
     }
 
     // MARK: What goes where

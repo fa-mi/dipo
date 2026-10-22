@@ -1506,7 +1506,9 @@ enum NotificationScheduler {
         // saying they were comfortably under — with no way to tell which number
         // was lying. An alert the user cannot reproduce is worse than no alert:
         // it teaches them to ignore the next one.
-        let scopedTx: [TxRecord] = MainCard.potTransactions(in: allCards) ?? txs
+        // With purchases made on a credit card, which count where they are made.
+        let scopedTx: [TxRecord] = MainCard.resolve(in: allCards) != nil
+            ? MainCard.budgetSpendingTransactions(in: allCards) : txs
 
         // Stated salary income first (the budget's signal even before payday);
         // else income transactions logged within the window — the screen's rule.

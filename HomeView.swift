@@ -292,8 +292,9 @@ struct HomeView: View {
     /// the income computation above.
     private var budgetTransactions: [TxRecord] {
         if let card = budgetCard {
-            // The main card reads with the cards it pays bills from.
-            return MainCard.isMain(card) ? MainCard.budgetTransactions(in: queriedCards) : card.transactions
+            // The main card reads with the cards it pays bills from, and with
+            // what was bought on a credit card (MainCard.creditCardSpending).
+            return MainCard.isMain(card) ? MainCard.budgetSpendingTransactions(in: queriedCards) : card.transactions
         }
         return vm.cards.flatMap { $0.transactions }
     }

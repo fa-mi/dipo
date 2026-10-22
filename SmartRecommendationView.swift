@@ -116,6 +116,13 @@ struct SmartRecommendationView: View {
         MainCard.potTransactions(in: cards) ?? cards.flatMap { $0.transactions }
     }
 
+    /// `allTx` with what was bought on a credit card — the spending Smart
+    /// Budget measures (MainCard.creditCardSpending). Income, windfalls and the
+    /// data checks keep reading `allTx`.
+    private var spendingTx: [TxRecord] {
+        MainCard.resolve(in: cards) != nil ? MainCard.budgetSpendingTransactions(in: cards) : allTx
+    }
+
     /// Records whose shape suggests they don't describe what actually happened.
     /// Every ratio on this screen is built from them, so the caveat belongs
     /// here rather than buried in a settings screen.
@@ -208,10 +215,11 @@ struct SmartRecommendationView: View {
         let end: Date = judged.running ? now : judged.end
 
         // Scope to the SAME transactions the Smart Budget screen measures: the
-        // main card with the cards it pays bills from (`allTx`). Reading the
-        // main card alone left out the kos paid from another account, so the
-        // score could call a period healthy that the budget screen had over.
-        let scopedTx: [TxRecord] = allTx
+        // main card with the cards it pays bills from, and credit-card
+        // purchases. Reading the main card alone left out the kos paid from
+        // another account, so the score could call a period healthy that the
+        // budget screen had over.
+        let scopedTx: [TxRecord] = spendingTx
         let windowTx = scopedTx.filter { $0.date >= start && $0.date < end && $0.amount < 0 && $0.txSubtype != .transfer }
         let mgr = SmartBudgetManager.shared
         // `periodStart` is required: without it `spent()` re-filters to the
@@ -291,7 +299,7 @@ struct SmartRecommendationView: View {
 
     private var reco: SmartRecommendation {
         SmartRecommendationEngine.analyze(
-            transactions: allTx, monthlyIncome: monthlyIncome,
+            transactions: spendingTx, monthlyIncome: monthlyIncome,
             goals: goals, debts: debts, currency: currency,
             currentCycle: currentCycleSnapshot,
             recurringMonthly: activeRecurring.reduce(0) { $0 + $1.amount },

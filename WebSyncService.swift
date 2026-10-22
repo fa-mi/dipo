@@ -605,7 +605,11 @@ final class WebSyncService {
             let income = MainCard.salaries(salaries)
                 .reduce(0.0) { $0 + cm.convert($1.amount, from: $1.currency, to: base) }
                 + ExtraFunds.total(in: allTx, from: cycle.start, currency: base)
-            let windowTx = allTx.filter { $0.date >= cycle.start && $0.txSubtype != .transfer }
+            // What the budget counts as spending: the pot and credit-card
+            // purchases, as the phone's Smart Budget reads it.
+            let budgetTx = MainCard.resolve(in: cards) != nil
+                ? MainCard.budgetSpendingTransactions(in: cards) : allTx
+            let windowTx = budgetTx.filter { $0.date >= cycle.start && $0.txSubtype != .transfer }
 
             func group(_ g: BudgetGroup, _ ratio: Double) -> [String: Any] {
                 [
@@ -652,7 +656,7 @@ final class WebSyncService {
             func insights(in language: LanguageManager.Language) -> [[String: String]] {
                 LanguageManager.shared.withLanguage(language) {
                     sb.evaluateAll(
-                        allTransactions: allTx, income: income,
+                        allTransactions: budgetTx, income: income,
                         cardID: sb.budgetCardID, configs: configs,
                         targetCurrency: base, goals: goals, periodStart: cycle.start,
                         periodEnd: cycleEnd, projectedSpend: projected

@@ -788,16 +788,17 @@ struct AddTransactionSheet: View {
         // group past its limit. This used to sum every card against the main
         // card's pay, and the global split rather than the card's own.
         let budgetCard = MainCard.resolve(in: vm.cards)
-        // A bill card's spending is the main card's money too.
-        if txType == .expense, let main = budgetCard,
-           let picked = selectedCardOrNil, picked.id == main.id || MainCard.isBillCard(picked) {
+        // A bill card's spending is the main card's money too, and a purchase
+        // on a credit card counts in the budget where it is made.
+        if txType == .expense, let main = budgetCard, let picked = selectedCardOrNil,
+           picked.id == main.id || MainCard.isBillCard(picked) || picked.isCreditCard {
             // Pay-cycle scoped, the same window the Smart Budget screen uses — a
             // calendar month understates spend before payday, so the warning
             // wouldn't fire even when already over.
             let cycle: (start: Date, end: Date)? = MainCard.payDay(salarySchedules).map {
                 StatPeriod.cycle(payDay: $0, salaryDates: StatPeriod.salaryDates(on: main))
             }
-            let potTx: [TxRecord] = MainCard.budgetTransactions(in: vm.cards)
+            let potTx: [TxRecord] = MainCard.budgetSpendingTransactions(in: vm.cards)
             let cal = Calendar.current
             let from: Date = cycle?.start ?? cal.safeDate(from: cal.dateComponents([.year, .month], from: Date()))
             let to: Date = cycle?.end ?? cal.safeDate(byAdding: .month, value: 1, to: from)
