@@ -1528,6 +1528,19 @@ enum NotificationScheduler {
         }
         let cycleKey = ISO8601DateFormatter.dayString(from: periodStart)
 
+        // Monthly expenses still to come, which the screen takes out of what
+        // each group has left: the other group's room to cover an overspend
+        // is what remains after them.
+        let plans: [RecurringExpense] = (try? context.fetch(FetchDescriptor<RecurringExpense>())) ?? []
+        let bills: [ScheduledBill] = MainCard.resolve(in: allCards) != nil
+            ? ScheduledBills.upcoming(plans: plans, cards: allCards,
+                                      cardIDs: MainCard.budgetSpendingCardIDs(in: allCards),
+                                      periodStart: period.start, periodEnd: period.end, currency: currency)
+            : []
+        // The day before the next payday, named: a count of days left read as
+        // days after today.
+        let lastDay = StatPeriod.lastDayLabel(before: period.end)
+
         // Only spending groups can be "over budget". Invest & Debt being UNDER
         // its allocation is a savings shortfall, not an overspend — not alerted.
         for group in [BudgetGroup.daily, .lifestyle] {
@@ -1551,12 +1564,7 @@ enum NotificationScheduler {
             let otherLimit = income * otherRatio
             let otherSpent = mgr.spent(in: otherGroup, transactions: windowTx,
                                        targetCurrency: currency, periodStart: periodStart)
-            let otherHeadroom = max(otherLimit - otherSpent, 0)
-
-            // Counted as the screen counts them: today included, up to the real
-            // next payday. "Start plus one month" ran past a payday pulled
-            // forward off a weekend, and counting from this moment dropped today.
-            let daysLeft = StatPeriod.daysLeft(in: period)
+            let otherHeadroom = max(otherLimit - otherSpent - ScheduledBills.total(bills, in: otherGroup), 0)
 
             let advice: String = {
                 if otherHeadroom >= over {
@@ -1565,11 +1573,11 @@ enum NotificationScheduler {
                                   cm.formatted(over.rounded(), currency: currency),
                                   otherGroup.label,
                                   cm.formatted(otherHeadroom.rounded(), currency: currency),
-                                  daysLeft)
+                                  lastDay)
                 }
                 // Nothing spare anywhere: the plan itself is the problem.
                 return String(format: loc("notif.budget_advice_replan"),
-                              cm.formatted(over.rounded(), currency: currency), daysLeft)
+                              cm.formatted(over.rounded(), currency: currency), lastDay)
             }()
 
             NotificationManager.postBudgetGroupAlert(

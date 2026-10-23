@@ -144,6 +144,29 @@ final class SmartBudgetMathTests: XCTestCase {
         XCTAssertEqual(alert.currency, "USD")
     }
 
+    /// Monthly expenses still to come are out of what a group has left on the
+    /// Smart Budget screen, so the warning counts them too and keeps them in
+    /// the alert to say so. Rp 10 jt income, Needs 65%, Rp 3.936.000 of kos,
+    /// transfers and subscriptions due before payday.
+    func testTheWarningCountsMonthlyExpensesStillToCome() throws {
+        royal()
+        sb.dailyRatio = 0.65
+        sb.lifestyleRatio = 0.20
+        sb.investDebtRatio = 0.15
+        let p = period
+        func check(_ amount: Double, scheduled: Double) -> BudgetAlert? {
+            sb.wouldExceed(category: .food, amount: amount, currency: "IDR", date: .now, transactions: [],
+                           income: 10_000_000, periodStart: p.start, periodEnd: p.end, scheduled: scheduled)
+        }
+        XCTAssertNil(check(2_500_000, scheduled: 0), "Rp 2,5 jt of Rp 6,5 jt, with nothing else due")
+        let near = try XCTUnwrap(check(2_500_000, scheduled: 3_936_000))
+        XCTAssertFalse(near.isExceeded)
+        XCTAssertEqual(near.leftAfter, 64_000, accuracy: 0.5)
+        XCTAssertEqual(near.scheduled, 3_936_000)
+        let over = try XCTUnwrap(check(3_000_000, scheduled: 3_936_000))
+        XCTAssertEqual(over.over, 436_000, accuracy: 0.5)
+    }
+
     // MARK: What DiPo says
 
     /// Paying a debt down faster than last period is not a spending spike.

@@ -57,6 +57,10 @@ struct CreditCardLiabilityRow: View {
     }
 
     private var owed: Double { card.totalOwed(installments) }
+    /// Instalment principal not billed yet: in the total, on no bill. Said
+    /// under the total, which otherwise read as a different "owed" from the
+    /// bill on the pay screen.
+    private var unbilled: Double { card.bill(installments).locked }
     private var util: Double { card.utilisation(installments) }
     private var owedFmt: String {
         CurrencyManager.shared.formatted(owed, currency: card.resolvedCurrency)
@@ -116,9 +120,15 @@ struct CreditCardLiabilityRow: View {
             // Owed / limit
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(loc("cc.owed")).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
+                    Text(loc("cc.total_owed")).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                     Text(owedFmt).font(.system(.body, weight: .bold)).foregroundStyle(AppTheme.red)
                         .minimumScaleFactor(0.6).lineLimit(1)
+                    if unbilled >= 1 {
+                        Text(String(format: loc("cc.unbilled_instalments"),
+                                    CurrencyManager.shared.formatted(unbilled.rounded(), currency: card.resolvedCurrency)))
+                            .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
                 Spacer()
                 VStack(alignment: .trailing, spacing: 2) {
@@ -428,6 +438,47 @@ struct CreditCardPaymentSheet: View {
     private var owed: Double { creditCard.owedBalance() }
     private var cashCards: [BankCard] { cards.filter { !$0.isCreditCard } }
 
+    /// What the bill is made of, where it is more than one thing: the
+    /// instalments billed, and the older part charged interest.
+    private var billParts: [String] {
+        let cm = CurrencyManager.shared
+        let currency = creditCard.resolvedCurrency
+        let b = creditCard.bill()
+        var parts: [String] = []
+        if b.installmentDue >= 1 {
+            parts.append(String(format: loc("cc.bill_instalments"),
+                                cm.formatted(b.installmentDue.rounded(), currency: currency)))
+        }
+        let cal = Calendar.current
+        let thisMonth = cal.safeDate(from: cal.dateComponents([.year, .month], from: .now))
+        let carried = ObligationLoad.carried(on: creditCard,
+                                             since: cal.safeDate(byAdding: .month, value: -1, to: thisMonth))
+        if carried >= 1 {
+            parts.append(String(format: loc("cc.bill_interest"), cm.formatted(carried.rounded(), currency: currency)))
+        }
+        return parts
+    }
+
+    /// How the amount typed would be recorded if paid now.
+    private var preview: CardPaymentDebt.Split? {
+        let amount = NumberInput.amount(amountText)
+        guard amount > 0 else { return nil }
+        let from = cards.first(where: { $0.id == fromCardID })?.resolvedCurrency ?? creditCard.resolvedCurrency
+        let paid = CurrencyManager.shared.convert(amount, from: from, to: creditCard.resolvedCurrency)
+        return CardPaymentDebt.split(payment: paid, on: creditCard)
+    }
+
+    private func splitRow(_ amount: Double, _ text: String, tint: Color) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Text(CurrencyManager.shared.formatted(amount.rounded(), currency: creditCard.resolvedCurrency))
+                .font(.system(.footnote, weight: .bold)).foregroundStyle(tint)
+                .lineLimit(1).fixedSize()
+            Text(text).font(.system(.footnote)).foregroundStyle(AppTheme.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
+    }
+
     private var canSave: Bool {
         guard NumberInput.amount(amountText) > 0, fromCardID != nil else { return false }
         return true
@@ -444,8 +495,14 @@ struct CreditCardPaymentSheet: View {
                                 .foregroundStyle(AppTheme.textSecondary)
                             Text(creditCard.formattedOwed)
                                 .font(.system(.title, weight: .bold)).foregroundStyle(AppTheme.red)
+                            ForEach(billParts, id: \.self) { line in
+                                Text(line).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
+                                    .multilineTextAlignment(.center)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
                         }
                         .padding(.top, 8)
+                        .padding(.horizontal, 22)
 
                         TextField("0", text: $amountText)
                             .font(.system(.title2, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
@@ -462,6 +519,30 @@ struct CreditCardPaymentSheet: View {
 
                         CardPickerSection(selectedCardID: $fromCardID, titleKey: "cc.pay_from")
                             .padding(.horizontal, 22)
+
+                        // How the amount typed will be recorded, before Pay —
+                        // so the split never turns up in Smart Budget as a
+                        // surprise.
+                        if let p = preview {
+                            VStack(alignment: .leading, spacing: 7) {
+                                Text(loc("cc.split_title")).font(.system(.caption, weight: .semibold))
+                                    .foregroundStyle(AppTheme.textSecondary)
+                                if p.purchases >= 1 {
+                                    splitRow(p.purchases, loc("cc.split_purchases"), tint: AppTheme.textPrimary)
+                                }
+                                if p.debt >= 1 {
+                                    splitRow(p.debt, String(format: loc("cc.split_debt"), BudgetGroup.investDebt.label),
+                                             tint: AppTheme.accent)
+                                }
+                                if p.extra >= 1 {
+                                    splitRow(p.extra, loc("cc.split_extra"), tint: AppTheme.textPrimary)
+                                }
+                            }
+                            .padding(.horizontal, 14).padding(.vertical, 12)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+                            .padding(.horizontal, 22)
+                        }
 
                         HStack(alignment: .top, spacing: 8) {
                             Image(systemName: "info.circle.fill").font(.system(.caption))
@@ -507,20 +588,12 @@ struct CreditCardPaymentSheet: View {
         let cm = CurrencyManager.shared
         let now = Date()
 
-        // The part paying off a balance carried from before is a debt payment
-        // (Invest & Debt); the part covering recent purchases stays a
-        // transfer, as those were counted when they were made (CardPaymentDebt).
-        // A billed instalment is a debt payment too: the purchase was never
-        // counted as spending, so this is where it is counted.
-        let inCard = { (tx: TxRecord) in cm.convert(tx.amount, from: tx.currency, to: creditCard.resolvedCurrency) }
+        // Billed instalments and the older balance are a debt payment (Savings
+        // & debt): neither was ever counted as spending. The part covering
+        // purchases stays a transfer, as those were counted when they were
+        // made. The split is the one the sheet showed (CardPaymentDebt).
         let paidInCard = cm.convert(abs(amount), from: source.resolvedCurrency, to: creditCard.resolvedCurrency)
-        let before = creditCard.bill()
-        let debtInCard = CardPaymentDebt.debtPortion(
-            payment: paidInCard,
-            owedBefore: before.revolving,
-            recentCharges: CardPaymentDebt.recentCharges(transactions: creditCard.transactions,
-                                                         before: now, convert: inCard),
-            installmentDue: before.installmentDue)
+        let debtInCard = CardPaymentDebt.split(payment: paidInCard, on: creditCard).debt
         let debt = min(cm.convert(debtInCard, from: creditCard.resolvedCurrency, to: source.resolvedCurrency),
                        abs(amount))
         let settled = abs(amount) - debt

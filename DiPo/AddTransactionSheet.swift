@@ -24,6 +24,7 @@ struct AddTransactionSheet: View {
     /// Whole history, used to learn how THIS user categorises merchants.
     @Query private var allTransactions: [TxRecord]
     @Query private var allInstallments: [CardInstallment]
+    @Query private var recurringPlans: [RecurringExpense]
 
     @State private var txType: AddTxType = .expense
     @State private var name: String = ""
@@ -745,10 +746,19 @@ struct AddTransactionSheet: View {
             CurrencyManager.shared.formatted(v.rounded(), currency: alert.currency.isEmpty
                                              ? CurrencyManager.shared.preferredCurrency : alert.currency)
         }
+        // With monthly expenses still to come in the figure, the sentence says
+        // so: nothing the user typed would explain them.
+        let bills = alert.scheduled >= 0.5
         if alert.isExceeded {
-            return String(format: loc("tx.budget_over_msg"), alert.group.label, money(alert.over), money(alert.limit))
+            return bills
+                ? String(format: loc("tx.budget_over_msg_bills"), alert.group.label, money(alert.over),
+                         money(alert.limit), money(alert.scheduled))
+                : String(format: loc("tx.budget_over_msg"), alert.group.label, money(alert.over), money(alert.limit))
         }
-        return String(format: loc("tx.budget_approach_msg"), alert.group.label, money(alert.leftAfter), money(alert.limit))
+        return bills
+            ? String(format: loc("tx.budget_approach_msg_bills"), alert.group.label, money(alert.leftAfter),
+                     money(alert.limit), money(alert.scheduled))
+            : String(format: loc("tx.budget_approach_msg"), alert.group.label, money(alert.leftAfter), money(alert.limit))
     }
 
     private var creditOverMessage: String {
@@ -807,17 +817,32 @@ struct AddTransactionSheet: View {
             let income = MainCard.budgetIncome(schedules: salarySchedules, transactions: potTx,
                                                from: from, to: to, currency: main.resolvedCurrency).amount
             let extra: Double = ExtraFunds.total(in: potTx, from: from, to: to, currency: main.resolvedCurrency)
+            let amountInMain = CurrencyManager.shared.convert(abs(effectiveAmount), from: effectiveCurrency,
+                                                              to: main.resolvedCurrency)
+            // Monthly expenses still to come are already out of what the group
+            // has left on the Smart Budget screen, so they are here too — less
+            // the one this entry may be, paid by hand ahead of its day.
+            let scheduled: Double = SmartBudgetManager.shared.group(for: selectedCategory).map { grp in
+                let due = ScheduledBills.bills(
+                    ScheduledBills.upcoming(plans: recurringPlans, cards: vm.cards,
+                                            cardIDs: MainCard.budgetSpendingCardIDs(in: vm.cards),
+                                            periodStart: from, periodEnd: to, currency: main.resolvedCurrency),
+                    in: grp)
+                return ScheduledBills.removingEntry(from: due, amount: amountInMain, name: name,
+                                                    category: selectedCategory, currency: main.resolvedCurrency)
+                    .reduce(0.0) { $0 + $1.amount }
+            } ?? 0
             if let alert = SmartBudgetManager.shared.wouldExceed(
                 category: selectedCategory,
-                amount: CurrencyManager.shared.convert(abs(effectiveAmount), from: effectiveCurrency,
-                                                       to: main.resolvedCurrency),
+                amount: amountInMain,
                 currency: main.resolvedCurrency,
                 date: selectedDate,
                 transactions: potTx,
                 income: income + extra,
                 periodStart: from, periodEnd: to,
                 cardID: main.id.uuidString,
-                configs: cardBudgetConfigs
+                configs: cardBudgetConfigs,
+                scheduled: scheduled
             ) {
                 pendingBudgetAlert = alert
                 showBudgetAlert = true

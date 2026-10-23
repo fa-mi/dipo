@@ -92,16 +92,19 @@ extension BankCard {
         return bill().bill
     }
 
-    /// Credit still available to spend (limit − owed), never below 0.
+    /// Credit still available to spend, never below 0: the limit less the
+    /// whole debt, instalment principal not billed yet included — it holds
+    /// the limit though it is on no bill. Taking only the bill off said
+    /// Rp 34 jt was free on a card whose Debts row said Rp 24 jt.
     func availableCredit() -> Double {
         guard isCreditCard else { return 0 }
-        return max(creditLimit - owedBalance(), 0)
+        return max(creditLimit - bill().total, 0)
     }
 
-    /// Fraction of the limit used, 0…1 (for a usage bar).
+    /// Fraction of the limit used, 0…1 (for a usage bar), on the same total.
     var creditUtilization: Double {
         guard isCreditCard, creditLimit > 0 else { return 0 }
-        return min(owedBalance() / creditLimit, 1)
+        return min(bill().total / creditLimit, 1)
     }
 
     /// Formatted owed amount.

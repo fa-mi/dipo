@@ -157,6 +157,25 @@ struct SmartBudgetSettingsSheet: View {
         return nil
     }
 
+    /// Monthly expenses due before the period ends and not recorded yet, on
+    /// the cards this budget reads. Each group takes its share out of what it
+    /// has left, so payday no longer shows money that kos and the transfer
+    /// home have already claimed.
+    private var scheduled: [ScheduledBill] {
+        guard let id = selectedCardID else { return [] }
+        return ScheduledBills.upcoming(plans: recurringPlans, cards: cards,
+                                       cardIDs: budgetCardIDs ?? [id],
+                                       periodStart: periodStart, periodEnd: periodEnd,
+                                       currency: cardCurrency)
+    }
+
+    /// Monthly expenses that read like an investment but are filed where they
+    /// count as spending — offered a move on the Savings & debt screen.
+    private var misfiledInvestments: [RecurringExpense] {
+        guard let id = selectedCardID else { return [] }
+        return ScheduledBills.looksLikeInvestment(recurringPlans, cardIDs: budgetCardIDs ?? [id])
+    }
+
     /// Selected card object for display
     private var selectedCard: BankCard? {
         guard let id = selectedCardID else { return nil }
@@ -652,8 +671,12 @@ struct SmartBudgetSettingsSheet: View {
         .padding(.horizontal, 22)
 
         if monthlyIncome > 0 {
+            let bills = scheduled
+            let misfiled = misfiledInvestments
             ForEach(BudgetGroup.allCases, id: \.rawValue) { grp in
-                BudgetGroupCard(group: grp, budgetTx: budgetTx, income: monthlyIncome, currency: cardCurrency, cardID: selectedCardID, configs: cardConfigs, periodStart: periodStart, periodEnd: periodEnd)
+                BudgetGroupCard(group: grp, budgetTx: budgetTx, income: monthlyIncome, currency: cardCurrency, cardID: selectedCardID, configs: cardConfigs, periodStart: periodStart, periodEnd: periodEnd,
+                                bills: ScheduledBills.bills(bills, in: grp),
+                                misfiled: grp == .investDebt ? misfiled : [])
                     .padding(.horizontal, 22)
             }
         } else {
@@ -1046,6 +1069,11 @@ struct BudgetGroupCard: View {
     /// Next payday (or the 1st of next month) — passed on so the detail
     /// screen counts the days actually left.
     var periodEnd: Date? = nil
+    /// This group's monthly expenses still to come this period.
+    var bills: [ScheduledBill] = []
+    /// Savings & debt only: monthly expenses that read like an investment but
+    /// count as spending.
+    var misfiled: [RecurringExpense] = []
     @State private var animatedProgress: Double = 0
 
     private var monthStart: Date { periodStart }
@@ -1059,9 +1087,33 @@ struct BudgetGroupCard: View {
     /// Savings & debt at or past its target.
     private var isAhead: Bool  { !group.isCeiling && spent >= limit && limit > 0 }
     private var targetPct: Int { BudgetGroup.pct(ratio) }
+    private var billsTotal: Double { bills.reduce(0.0) { $0 + $1.amount } }
+    /// Share of the limit the bills still to come take, after what is spent.
+    private var billsShare: Double { limit > 0 ? billsTotal / limit : 0 }
+    /// Not over yet, but the bills still to come will take it there.
+    private var willGoOver: Bool { group.isCeiling && !isOver && limit > 0 && spent + billsTotal > limit }
+    private func money(_ v: Double) -> String { CurrencyManager.shared.formatted(v.rounded(), currency: currency) }
+
+    /// One line under the figures: what the bills still to come leave.
+    private var billsLine: String? {
+        guard billsTotal >= 0.5, limit > 0 else { return nil }
+        if group.isCeiling {
+            if willGoOver {
+                return String(format: loc("budget.bills_card_over"), money(billsTotal), group.label,
+                              money(spent + billsTotal - limit))
+            }
+            guard !isOver else { return nil }
+            return String(format: loc("budget.bills_card_left"), money(billsTotal),
+                          money(max(limit - spent - billsTotal, 0)))
+        }
+        guard !isAhead else { return nil }
+        if spent + billsTotal >= limit { return String(format: loc("budget.bills_card_reach"), money(billsTotal)) }
+        return String(format: loc("budget.bills_card_to_go"), money(billsTotal),
+                      money(max(limit - spent - billsTotal, 0)))
+    }
 
     var body: some View {
-        NavigationLink(destination: BudgetGroupDetailView(group: group, budgetTx: budgetTx, income: income, currency: currency, cardID: cardID, configs: configs, periodStart: periodStart, periodEnd: periodEnd)) {
+        NavigationLink(destination: BudgetGroupDetailView(group: group, budgetTx: budgetTx, income: income, currency: currency, cardID: cardID, configs: configs, periodStart: periodStart, periodEnd: periodEnd, bills: bills, misfiled: misfiled)) {
             VStack(spacing: 12) {
                 HStack {
                     HStack(spacing: 8) {
@@ -1078,6 +1130,13 @@ struct BudgetGroupCard: View {
                             .lineLimit(1)
                             .padding(.horizontal, 8).padding(.vertical, 3)
                             .background(AppTheme.red.opacity(0.12), in: Capsule())
+                    } else if willGoOver {
+                        // Not over yet: orange, and in the future tense.
+                        Text(String(format: loc("budget.will_go_over_short"), money(spent + billsTotal - limit)))
+                            .font(.system(.caption2, weight: .bold)).foregroundStyle(AppTheme.orange)
+                            .lineLimit(1)
+                            .padding(.horizontal, 8).padding(.vertical, 3)
+                            .background(AppTheme.orange.opacity(0.12), in: Capsule())
                     } else if isAhead {
                         HStack(spacing: 3) {
                             Image(systemName: "checkmark").font(.system(.caption2, weight: .heavy))
@@ -1092,6 +1151,14 @@ struct BudgetGroupCard: View {
                 GeometryReader { g in
                     ZStack(alignment: .leading) {
                         RoundedRectangle(cornerRadius: 4).fill(AppTheme.cardMid).frame(height: 7)
+                        // The bills still to come, after what is spent: the part
+                        // of the limit already claimed. Orange when they will
+                        // take the group past it.
+                        if billsShare > 0, !isOver {
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(willGoOver ? AppTheme.orange.opacity(0.5) : group.color.opacity(0.35))
+                                .frame(width: g.size.width * min(CGFloat(animatedProgress + billsShare), 1.0), height: 7)
+                        }
                         RoundedRectangle(cornerRadius: 4).fill(isOver ? AppTheme.red : group.color)
                             .frame(width: g.size.width * min(CGFloat(animatedProgress), 1.0), height: 7)
                     }
@@ -1109,6 +1176,15 @@ struct BudgetGroupCard: View {
                             Text(CurrencyManager.shared.formatted(limit, currency: currency))
                                 .font(.system(.subheadline, weight: .bold)).foregroundStyle(group.color)
                         }
+                    }
+                }
+                if let line = billsLine {
+                    HStack(alignment: .top, spacing: 6) {
+                        Image(systemName: "calendar.badge.clock").font(.system(.caption))
+                            .foregroundStyle(willGoOver ? AppTheme.orange : group.color)
+                        Text(line).font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Spacer(minLength: 0)
                     }
                 }
                 if !groupTx.isEmpty {
@@ -1161,6 +1237,16 @@ struct BudgetGroupDetailView: View {
     /// The next payday (or the 1st of next month). "Start plus one month" was
     /// the 25th when the salary lands on Friday the 23rd: two days too many.
     var periodEnd: Date? = nil
+    /// This group's monthly expenses still to come this period: taken out of
+    /// what is left, and listed so the figure can be checked.
+    var bills: [ScheduledBill] = []
+    /// Savings & debt only: monthly expenses that read like an investment but
+    /// are filed where they count as spending.
+    var misfiled: [RecurringExpense] = []
+    @Environment(\.modelContext) private var context
+    /// Plans moved from here, hidden at once rather than when the list above
+    /// next recomputes.
+    @State private var moved: Set<UUID> = []
 
     private var cal: Calendar  { Calendar.current }
     private var monthStart: Date { periodStart }
@@ -1182,7 +1268,14 @@ struct BudgetGroupDetailView: View {
     /// of or ahead of — never "over".
     private var isOver: Bool     { group.isCeiling && spent > limit && limit > 0 }
     private var isAhead: Bool    { !group.isCeiling && spent >= limit && limit > 0 }
-    private var remaining: Double { max(limit - spent, 0) }
+    private var billsTotal: Double { bills.reduce(0.0) { $0 + $1.amount } }
+    /// What is left once the bills still to come are paid — under a limit,
+    /// what can still be spent; under a target, what is still to be put aside.
+    private var remaining: Double { max(limit - spent - billsTotal, 0) }
+    /// Not over yet, but the bills still to come will take it there.
+    private var willGoOver: Bool { group.isCeiling && !isOver && limit > 0 && spent + billsTotal > limit }
+    /// Short of the target, with enough planned to reach it.
+    private var plannedToReach: Bool { !group.isCeiling && !isAhead && limit > 0 && spent + billsTotal >= limit }
     private var overAmt: Double  { max(spent - limit, 0) }
     private var actualPct: Int   { BudgetGroup.pct(spent, of: income) }
     private var targetPct: Int   { BudgetGroup.pct(ratio) }
@@ -1239,13 +1332,142 @@ struct BudgetGroupDetailView: View {
 
     /// What the rest of the period asks for: a daily pace under a limit, or
     /// the amount still to put aside to reach a target.
+    ///
+    /// Today counts — nothing spent yet today comes out of this money too —
+    /// and the last day is named, so the count can be checked on a calendar.
+    /// "For the 33 days left" read as 33 days after today, and payday is 32
+    /// days away.
     private var paceNote: String? {
         guard limit > 0, remaining > 0, daysLeft > 0 else { return nil }
+        let lastDay = StatPeriod.lastDayLabel(before: windowEnd)
         if group.isCeiling {
             guard !isOver else { return nil }
-            return String(format: loc("budget.pace_hint"), fmt(remaining / Double(daysLeft)), daysLeft)
+            return String(format: loc("budget.pace_hint"), fmt(remaining / Double(daysLeft)), daysLeft, lastDay)
         }
-        return String(format: loc("budget.goal_pace"), fmt(remaining), daysLeft)
+        return String(format: loc("budget.goal_pace"), fmt(remaining), lastDay)
+    }
+
+    /// What the monthly expenses still to come do to the figures above.
+    private var billsNote: String? {
+        guard billsTotal >= 0.5, limit > 0 else { return nil }
+        if group.isCeiling {
+            if isOver { return String(format: loc("budget.bills_more_over"), fmt(billsTotal)) }
+            if willGoOver {
+                return String(format: loc("budget.bills_will_over"), fmt(billsTotal), group.label,
+                              fmt(spent + billsTotal - limit))
+            }
+            return String(format: loc("budget.bills_taken_out"), fmt(billsTotal))
+        }
+        if isAhead { return nil }
+        return String(format: loc(plannedToReach ? "budget.bills_reach" : "budget.bills_planned"), fmt(billsTotal))
+    }
+
+    /// Moves a monthly expense into Investment, with what it already charged
+    /// this period, so the move shows here now rather than next month.
+    private func moveToInvestment(_ plan: RecurringExpense) {
+        let key = RecurringHistory.normalized(plan.label)
+        let cards = (try? context.fetch(FetchDescriptor<BankCard>())) ?? []
+        for card in cards where card.id == plan.cardID {
+            for tx in card.transactions
+            where tx.notes == "tx.note.recurring_auto" && tx.date >= periodStart
+                && RecurringHistory.normalized(tx.name) == key {
+                tx.category = .investment
+                tx.iconBgHex = TxCategory.investment.iconBg
+            }
+        }
+        plan.category = .investment
+        try? context.save()
+        // A re-filed row keeps the transaction count, the only change the
+        // rollup cache notices on its own.
+        RollupStore.shared.rebuild(context: context)
+        LedgerRevision.shared.bump()
+        HapticManager.shared.success()
+        withAnimation(.spring(response: 0.3)) { _ = moved.insert(plan.id) }
+    }
+
+    /// A monthly expense that reads like an investment but is filed as
+    /// spending — "Gold invest" under Commitment, so it counted as a Need and
+    /// never reached this target.
+    @ViewBuilder private var misfiledHints: some View {
+        ForEach(misfiled.filter { !moved.contains($0.id) }, id: \.id) { plan in
+            VStack(alignment: .leading, spacing: 8) {
+                Label(String(format: loc("budget.misfiled_investment"), plan.label,
+                             CurrencyManager.shared.formatted(plan.amount, currency: plan.currency),
+                             plan.category.displayLabel,
+                             SmartBudgetManager.shared.group(for: plan.category)?.label ?? plan.category.displayLabel),
+                      systemImage: "info.circle.fill")
+                    .font(.system(.caption, weight: .medium))
+                    .foregroundStyle(AppTheme.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Button { moveToInvestment(plan) } label: {
+                    Text(String(format: loc("budget.misfiled_move"), TxCategory.investment.displayLabel))
+                        .font(.system(.caption, weight: .bold))
+                        .foregroundStyle(AppTheme.onVividFill)
+                        .padding(.horizontal, 12).padding(.vertical, 7)
+                        .background(AppTheme.accentFill, in: Capsule())
+                }
+                .buttonStyle(ScaleButtonStyle())
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(AppTheme.blue.opacity(0.1), in: RoundedRectangle(cornerRadius: AppRadius.md))
+            .padding(.horizontal, 22)
+        }
+    }
+
+    /// The monthly expenses taken out above, each with its day, so "Left"
+    /// can be checked line by line.
+    @ViewBuilder private var billsList: some View {
+        if !bills.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Text(loc("budget.bills_title")).font(.system(.subheadline, weight: .semibold))
+                        .foregroundStyle(AppTheme.textPrimary)
+                    Spacer()
+                    Text(fmt(billsTotal)).font(.system(.subheadline, weight: .medium))
+                        .foregroundStyle(AppTheme.textSecondary)
+                }
+                .padding(.horizontal, 22)
+                VStack(spacing: 0) {
+                    ForEach(bills) { bill in
+                        HStack(spacing: 14) {
+                            Image(systemName: bill.category.icon)
+                                .font(.system(.subheadline)).foregroundStyle(bill.category.color)
+                                .frame(width: 40, height: 40)
+                                .background(bill.category.color.opacity(0.14), in: RoundedRectangle(cornerRadius: AppRadius.sm))
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(bill.label).font(.system(.subheadline, weight: .medium))
+                                    .foregroundStyle(AppTheme.textPrimary).lineLimit(1)
+                                Text(DateFormatterCache.template("EEEEdMMM").string(from: bill.due))
+                                    .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
+                            }
+                            Spacer(minLength: 8)
+                            VStack(alignment: .trailing, spacing: 2) {
+                                // A bill in another currency is converted at today's
+                                // rate, so its rupiah figure is an estimate.
+                                if bill.planCurrency.uppercased() != currency.uppercased() {
+                                    Text("≈ " + fmt(bill.amount)).font(.system(.subheadline, weight: .semibold))
+                                        .foregroundStyle(AppTheme.textPrimary)
+                                    Text(CurrencyManager.shared.formatted(bill.planAmount, currency: bill.planCurrency))
+                                        .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
+                                } else {
+                                    Text(fmt(bill.amount)).font(.system(.subheadline, weight: .semibold))
+                                        .foregroundStyle(AppTheme.textPrimary)
+                                }
+                            }
+                        }
+                        .padding(.horizontal, 16).padding(.vertical, 11)
+                        if bill.id != bills.last?.id { Divider().background(AppTheme.cardMid).padding(.horizontal, 16) }
+                    }
+                }
+                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+                .padding(.horizontal, 22)
+                Text(loc("budget.bills_foot"))
+                    .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 22)
+            }
+        }
     }
 
     // MARK: - Budget Bar
@@ -1254,13 +1476,19 @@ struct BudgetGroupDetailView: View {
     // full" the moment you go 1% over — it shows the budgeted part in the group
     // colour and the overspill in red, with a tick marking exactly where the
     // limit sits. Under budget, the right edge of the track IS the limit.
-    private var barScale: Double { max(spent, limit, 1) }
+    private var barScale: Double { max(spent + billsTotal, limit, 1) }
     /// Share of the track occupied by spending that is still inside the limit.
     private var withinFraction: Double { min(spent, limit) / barScale }
     /// Share of the track occupied by the overspill (0 when under budget).
     private var overFraction: Double { max(spent - limit, 0) / barScale }
+    /// The monthly expenses still to come, after what is spent: the part
+    /// inside the limit, and the part that will run past it.
+    private var billsWithinFraction: Double { min(billsTotal, max(limit - spent, 0)) / barScale }
+    private var billsPastFraction: Double { max(billsTotal - max(limit - spent, 0), 0) / barScale }
     /// Where the limit tick sits along the track.
     private var limitFraction: Double { limit / barScale }
+    /// The tick is drawn once something — spent or still to come — reaches it.
+    private var showsLimitTick: Bool { isOver || isAhead || willGoOver || plannedToReach }
     /// Percentage of the budget consumed (can exceed 100).
     private var usedOfBudgetPct: Int { limit > 0 ? Int(((spent / limit) * 100).rounded()) : 0 }
 
@@ -1286,12 +1514,23 @@ struct BudgetGroupDetailView: View {
                                                          startPoint: .leading, endPoint: .trailing))
                                     .frame(width: W * CGFloat(overFraction))
                             }
+                            // Still to come: paler, so it reads as claimed,
+                            // not spent. What will run past a limit is orange.
+                            if billsWithinFraction > 0 {
+                                Rectangle().fill(group.color.opacity(0.35))
+                                    .frame(width: W * CGFloat(billsWithinFraction))
+                            }
+                            if billsPastFraction > 0 {
+                                Rectangle().fill(group.isCeiling ? AppTheme.orange.opacity(0.55) : group.color.opacity(0.35))
+                                    .frame(width: W * CGFloat(billsPastFraction))
+                            }
                         }
                         .frame(height: 12)
                         .clipShape(Capsule())
 
-                        // Limit tick — only drawn when spending has run past it.
-                        if isOver || isAhead {
+                        // Limit tick — drawn once spending, or what is still
+                        // to come, reaches it.
+                        if showsLimitTick {
                             Capsule().fill(Color.white.opacity(0.92))
                                 .frame(width: 2.5, height: 20)
                                 .shadow(color: .black.opacity(0.4), radius: 2)
@@ -1303,7 +1542,7 @@ struct BudgetGroupDetailView: View {
                 .frame(height: 20)
 
                 // Caption anchored under the limit tick.
-                if isOver || isAhead {
+                if showsLimitTick {
                     GeometryReader { g in
                         Text(loc(group.isCeiling ? "budget.limit_marker" : "budget.target_marker"))
                             .font(.system(.caption2, weight: .bold))
@@ -1429,6 +1668,19 @@ struct BudgetGroupDetailView: View {
                         }
                         .padding(.horizontal, 10).padding(.bottom, 14)
 
+                        if let note = billsNote {
+                            Divider().background(AppTheme.cardMid).padding(.horizontal, 18)
+                            HStack(alignment: .top, spacing: 8) {
+                                Image(systemName: "calendar.badge.clock").font(.system(.caption))
+                                    .foregroundStyle(isOver || willGoOver ? AppTheme.orange : group.color)
+                                Text(note)
+                                    .font(.system(.caption, weight: .medium))
+                                    .foregroundStyle(willGoOver ? AppTheme.orange : AppTheme.textSecondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                Spacer()
+                            }.padding(.horizontal, 18).padding(.vertical, 12)
+                        }
+
                         if let note = paceNote {
                             Divider().background(AppTheme.cardMid).padding(.horizontal, 18)
                             HStack(spacing: 8) {
@@ -1443,6 +1695,9 @@ struct BudgetGroupDetailView: View {
                     .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
                     .overlay(RoundedRectangle(cornerRadius: AppRadius.lg).stroke(isOver ? AppTheme.red.opacity(0.3) : Color.clear, lineWidth: 1.5))
                     .padding(.horizontal, 22)
+
+                    misfiledHints
+                    billsList
 
                     // Category breakdown — every number here is a share of THIS
                     // group's spending, so the bars and the % labels agree.

@@ -5,54 +5,100 @@ import SwiftData
 //
 // A card bill payment was recorded as a plain transfer: the purchases were
 // already counted as spending when they were made on the card, so counting
-// the payment too would count them twice. That is right for a bill made of
-// this month's and last month's purchases.
+// the payment too would count them twice. That is right for the part of a
+// payment that covers purchases logged in DiPo.
 //
-// It is wrong for a balance carried from before — an opening balance owed
-// when the card was added, or purchases from months ago never paid off. That
-// is debt, and paying it down is a debt payment like any other: it belongs in
-// Invest & Debt, where Smart Budget and the advice look for it. Leaving it a
-// transfer showed "Invest & Debt Rp 0" to someone who had just paid Rp 2 jt
-// off an Rp 11 jt card balance.
+// It is wrong for debt that was never counted as spending — the balance owed
+// when the card was added, and instalments, whose purchase is not a
+// transaction at all. Paying those down is a debt payment like any other: it
+// belongs in Savings & debt, where Smart Budget and the advice look for it.
 //
-// So a payment is split: the part covering the carried balance is recorded
-// as a debt payment, the part covering recent purchases stays a transfer.
-// "Recent" is the window FinancialLadder uses — this month and last.
+// So a payment is split, and the order it settles things in decides how:
+// instalments billed and not yet paid first, then purchases logged in DiPo,
+// oldest first, then the older balance. The first and the last are debt
+// payments; the purchases are a transfer.
+//
+// Purchases come before the older balance on purpose. The rule used to be the
+// other way round — what the card owed beyond this month's and last month's
+// purchases was "carried", and paid first — so every purchase not paid within
+// two months turned into carried debt, and was counted again as a debt
+// payment when it was finally paid: once in Needs or Wants when it was
+// bought, once in Savings & debt. A Rp 1,5 jt payment against a card with
+// Rp 500 rb of this month's purchases counted Rp 1,5 jt of debt paid when the
+// debt had gone down by Rp 1 jt.
 
 enum CardPaymentDebt {
 
-    /// How much of `payment` pays down debt rather than recent purchases:
-    /// instalments billed and not yet paid — settled first, and never counted
-    /// as spending when the purchase was made — then the balance carried over.
-    /// `owedBefore` is the rest of what the card owed, without those
-    /// instalments.
-    static func debtPortion(payment: Double, owedBefore: Double, recentCharges: Double,
-                            installmentDue: Double = 0) -> Double {
-        min(max(payment, 0),
-            max(installmentDue, 0) + FinancialLadder.carriedOver(owed: owedBefore, recentCharges: recentCharges))
+    /// How a payment divides, in the card's currency.
+    struct Split: Equatable {
+        /// Instalments billed and the older balance: counted as a debt payment.
+        let debt: Double
+        /// Purchases already counted as spending when they were made.
+        let purchases: Double
+        /// Paid beyond everything owed: it stays on the card as credit.
+        let extra: Double
     }
 
-    /// What the card owed just before `date`, in the card's currency: the
-    /// opening balance moved by every transaction since the card became a
-    /// credit card. Mirrors `BankCard.owedBalance()` at a point in time.
-    static func owedBefore(openingOwed: Double, since: Date?, transactions: [TxRecord],
-                           date: Date, convert: (TxRecord) -> Double) -> Double {
-        let from = since ?? .distantPast
-        let movement = transactions
-            .filter { $0.date >= from && $0.date < date }
-            .reduce(0.0) { $0 + convert($1) }
-        return max(openingOwed - movement, 0)
+    /// Splits `payment`: billed instalments first, then purchases, then the
+    /// older balance; anything beyond them is extra.
+    static func split(payment: Double, installmentDue: Double, unpaidPurchases: Double,
+                      olderBalance: Double) -> Split {
+        let paid = max(payment, 0)
+        let instalments = min(paid, max(installmentDue, 0))
+        let purchases = min(paid - instalments, max(unpaidPurchases, 0))
+        let older = min(paid - instalments - purchases, max(olderBalance, 0))
+        return Split(debt: instalments + older, purchases: purchases,
+                     extra: paid - instalments - purchases - older)
     }
 
-    /// Purchases on the card from the start of the month before `date` up to
-    /// it: the bill a payment is normally settling.
-    static func recentCharges(transactions: [TxRecord], before date: Date,
-                              convert: (TxRecord) -> Double, cal: Calendar = .current) -> Double {
-        let month = cal.date(from: cal.dateComponents([.year, .month], from: date)) ?? date
-        let start = cal.date(byAdding: .month, value: -1, to: month) ?? month
-        return transactions
-            .filter { $0.date >= start && $0.date < date && $0.amount < 0 && $0.txSubtype != .transfer }
-            .reduce(0.0) { $0 + abs(convert($1)) }
+    /// How `payment`, in the card's currency, would split if it were recorded
+    /// on `card` now — or at `date`, with the ledger as it stood then.
+    static func split(payment: Double, on card: BankCard, installments: [CardInstallment]? = nil,
+                      asOf date: Date? = nil) -> Split {
+        let bill = card.bill(installments, asOf: date)
+        let unpaid = unpaidPurchases(on: card, installments: installments, asOf: date)
+        return split(payment: payment, installmentDue: bill.installmentDue,
+                     unpaidPurchases: unpaid, olderBalance: bill.revolving - unpaid)
+    }
+
+    /// Purchases logged on `card` and not paid off yet, in the card's currency —
+    /// the part of its balance already counted as spending. The rest of the
+    /// balance, besides billed instalments, is the older balance.
+    ///
+    /// Replays the card's ledger in date order under the rule `split` uses.
+    /// Credits fill billed instalments first, in total, exactly as `bill()`
+    /// counts them; what is left of each credit pays purchases made before it.
+    /// A refund takes its purchase back. A charge that is not a purchase — a
+    /// cash withdrawal moved to another account — was never spending, so it
+    /// is part of the older balance.
+    static func unpaidPurchases(on card: BankCard, installments: [CardInstallment]? = nil,
+                                asOf date: Date? = nil) -> Double {
+        guard card.isCreditCard else { return 0 }
+        let cm = CurrencyManager.shared
+        let since = card.creditSince ?? .distantPast
+        let asOf = date ?? .now
+        let mine = (installments ?? card.storedInstallments).filter { $0.cardID == card.id && $0.isActive }
+        var instalmentRoom = mine.reduce(0.0) {
+            $0 + cm.convert($1.billed(after: max($1.createdAt, since), upTo: asOf),
+                            from: $1.currency, to: card.resolvedCurrency)
+        }
+        let rows = card.transactions
+            .filter { $0.date >= since && (date == nil || $0.date <= asOf) }
+            .sorted { $0.date < $1.date }
+        var purchases = 0.0
+        for tx in rows {
+            let v = cm.convert(tx.amount, from: tx.currency, to: card.resolvedCurrency)
+            if v < 0 {
+                if tx.txSubtype == .normal { purchases -= v }
+            } else if tx.txSubtype == .refund {
+                purchases = max(purchases - v, 0)
+            } else {
+                let toInstalments = min(v, instalmentRoom)
+                instalmentRoom -= toInstalments
+                purchases = max(purchases - (v - toInstalments), 0)
+            }
+        }
+        return min(purchases, card.bill(installments, asOf: date).revolving)
     }
 
     // MARK: Payments recorded before this
@@ -60,8 +106,9 @@ enum CardPaymentDebt {
     private static let doneKey = "cardPaymentDebt.reclassified.v1"
 
     /// Once: re-file the debt part of earlier card payments, which were all
-    /// recorded as transfers. A payment wholly against the carried balance is
-    /// re-categorised in place; one that was partly that is split in two.
+    /// recorded as transfers, under the rule `split` uses. A payment that was
+    /// all debt is re-categorised in place; one that was partly debt is split
+    /// in two.
     @MainActor
     static func reclassifyPastPayments(cards: [BankCard], context: ModelContext) {
         guard !UserDefaults.standard.bool(forKey: doneKey) else { return }
@@ -89,12 +136,12 @@ enum CardPaymentDebt {
                 }).first else { continue }
                 let (card, credit) = match
 
-                let inCard = { (tx: TxRecord) in cm.convert(tx.amount, from: tx.currency, to: card.resolvedCurrency) }
-                let cutoff = min(out.date, credit.date)
-                let owed = owedBefore(openingOwed: card.openingOwed, since: card.creditSince,
-                                      transactions: card.transactions, date: cutoff, convert: inCard)
-                let recent = recentCharges(transactions: card.transactions, before: cutoff, convert: inCard)
-                let debtInCard = debtPortion(payment: credit.amount, owedBefore: owed, recentCharges: recent)
+                // Under today's rule, with the card's ledger as it stood just
+                // before this payment: its own leg is written a moment after
+                // the cash side, so it is not yet in it.
+                let paid = credit.currency.isEmpty ? credit.amount
+                    : cm.convert(credit.amount, from: credit.currency, to: card.resolvedCurrency)
+                let debtInCard = Self.split(payment: paid, on: card, asOf: min(out.date, credit.date)).debt
                 guard debtInCard >= 1 else { continue }
                 let debt = min(cm.convert(debtInCard, from: card.resolvedCurrency, to: out.currency),
                                abs(out.amount))
@@ -104,12 +151,12 @@ enum CardPaymentDebt {
                     out.txSubtype = .normal
                 } else {
                     out.amount = -(abs(out.amount) - debt)
-                    let split = TxRecord(name: out.name, date: out.date, amount: -debt, type: out.type,
-                                         icon: out.icon, iconBgHex: TxCategory.debtPayment.iconBg,
-                                         category: .debtPayment, currency: out.currency,
-                                         notes: "tx.note.cc_payment", subtype: .normal)
-                    context.insert(split)
-                    source.transactions.append(split)
+                    let debtRow = TxRecord(name: out.name, date: out.date, amount: -debt, type: out.type,
+                                           icon: out.icon, iconBgHex: TxCategory.debtPayment.iconBg,
+                                           category: .debtPayment, currency: out.currency,
+                                           notes: "tx.note.cc_payment", subtype: .normal)
+                    context.insert(debtRow)
+                    source.transactions.append(debtRow)
                 }
                 changed = true
             }

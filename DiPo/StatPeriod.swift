@@ -178,6 +178,16 @@ enum StatPeriod: String, CaseIterable {
         return max(cal.dateComponents([.day], from: cal.startOfDay(for: now), to: cycle.end).day ?? 0, 0)
     }
 
+    /// The last day a window ending at `end` covers — the day before the next
+    /// payday — as "24 Nov" in the app's language. Said beside a count of
+    /// days left, so the reader can check it: "33 days left" on payday read
+    /// as 33 days after today.
+    static func lastDayLabel(before end: Date) -> String {
+        let cal = Calendar.current
+        let last = cal.safeDate(byAdding: .day, value: -1, to: cal.startOfDay(for: end))
+        return DateFormatterCache.template("dMMM").string(from: last)
+    }
+
     /// Dates the salary landed on `card` — what cycle boundaries snap onto.
     static func salaryDates(on card: BankCard?) -> [Date] {
         (card?.transactions ?? []).filter { $0.category == .salary && $0.amount > 0 }.map(\.date)

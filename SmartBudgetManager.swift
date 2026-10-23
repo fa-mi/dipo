@@ -314,11 +314,15 @@ final class SmartBudgetManager {
 
     /// Check if a new transaction would exceed the group limit.
     /// Pass the currency of the transaction being added so amounts are correctly converted.
+    /// `scheduled` is the group's monthly expenses still to come this period,
+    /// in `currency` — taken out of what is left, as the Smart Budget screen
+    /// takes them, so the warning and the screen quote the same "left".
     func wouldExceed(category: TxCategory, amount: Double, currency: String = "IDR",
                      date: Date = .now,
                      transactions: [TxRecord], income: Double,
                      periodStart: Date? = nil, periodEnd: Date? = nil,
-                     cardID: String? = nil, configs: [CardBudgetConfig] = []) -> BudgetAlert? {
+                     cardID: String? = nil, configs: [CardBudgetConfig] = [],
+                     scheduled: Double = 0) -> BudgetAlert? {
         // Defense-in-depth: bail on missing access too. Otherwise a logged-out
         // user with a stale `isEnabled = true` setting would get budget
         // exceedance prompts during transaction entry — visible leakage of a
@@ -348,17 +352,18 @@ final class SmartBudgetManager {
         // income and the new amount are both expressed in.
         let alreadySpent = spent(in: grp, transactions: transactions, targetCurrency: currency,
                                  periodStart: periodStart)
+        let claimed = max(scheduled, 0)
         let amountConverted = abs(amount)
-        let newTotal = alreadySpent + amountConverted
+        let newTotal = alreadySpent + claimed + amountConverted
 
         if newTotal > limit {
             let over = newTotal - limit
             return BudgetAlert(group: grp, limit: limit, spent: alreadySpent, newTotal: newTotal, over: over,
-                               currency: currency)
+                               currency: currency, scheduled: claimed)
         }
-        if newTotal / limit > 0.9 && alreadySpent / limit <= 0.9 {
+        if newTotal / limit > 0.9 && (alreadySpent + claimed) / limit <= 0.9 {
             return BudgetAlert(group: grp, limit: limit, spent: alreadySpent, newTotal: newTotal, over: 0,
-                               isWarning: true, currency: currency)
+                               isWarning: true, currency: currency, scheduled: claimed)
         }
         return nil
     }
@@ -737,22 +742,19 @@ final class SmartBudgetManager {
                             )
                         )
                     }
-                    // Quantified target: "to get back on track, limit X/day".
-                    // dayOfMonth + daysInMonth give us the "days remaining"
-                    // window. We also surface this in the action label so
-                    // the user sees something concrete, not just "Adjust".
-                    // Days left in the BUDGET window — the pay cycle when we have
-                    // one, otherwise the calendar month.
-                    let daysLeft: Int = {
+                    // The last day of the BUDGET window — the day before the
+                    // next payday when there is one, otherwise the month's
+                    // last day. Named rather than counted: "with 33 days
+                    // still to go" on payday read as 33 days after today.
+                    let lastDay: String = {
                         // The next payday when the caller knows it — "start plus
                         // one month" is the 25th when the salary lands on the 23rd.
                         if let start = periodStart,
                            let end = periodEnd ?? cal.date(byAdding: .month, value: 1, to: start) {
-                            return max(cal.dateComponents([.day], from: cal.startOfDay(for: now), to: end).day ?? 1, 1)
+                            return StatPeriod.lastDayLabel(before: end)
                         }
-                        let dayOfMonth = cal.component(.day, from: now)
-                        let daysInMonth = cal.range(of: .day, in: .month, for: now)?.count ?? 30
-                        return max(daysInMonth - dayOfMonth + 1, 1)
+                        let monthStart = cal.safeDate(from: cal.dateComponents([.year, .month], from: now))
+                        return StatPeriod.lastDayLabel(before: cal.safeDate(byAdding: .month, value: 1, to: monthStart))
                     }()
                     // This branch is only reachable via `spent > limit`, so
                     // the budget is already gone: a "target per day" figure
@@ -766,7 +768,7 @@ final class SmartBudgetManager {
                     // they actually want the decomposition. Stacking six
                     // figures into a paragraph meant none of them were read.
                     let overFmt = CurrencyManager.shared.formatted(spent - limit, currency: target)
-                    var bodyWithTarget = String(format: loc("insight.over_by_recover"), daysLeft, overFmt)
+                    var bodyWithTarget = String(format: loc("insight.over_by_recover"), overFmt, lastDay)
                     // Where to look first. Needs over budget: trim Lifestyle
                     // before cutting what the household needs, when there is
                     // Lifestyle spending to trim.
@@ -2257,6 +2259,9 @@ struct BudgetAlert {
     /// What every amount here is in: the main card's currency. The warning
     /// printed them in the app's currency, so a dollar card read "Rp 300".
     var currency: String = ""
+    /// Monthly expenses still to come in the group, inside `newTotal` — said
+    /// in the warning, since nothing the user typed explains them.
+    var scheduled: Double = 0
 
     var isExceeded: Bool { over > 0 }
 
