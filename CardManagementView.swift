@@ -382,6 +382,9 @@ struct CardListView: View {
 
                     Spacer(minLength: 110)
                 }
+                // Centred and capped, like Home: on the Duo's inner display
+                // the column would otherwise stretch to the panel.
+                .phoneWidthCapped()
                 .containerRelativeFrame(.horizontal)
             }
 

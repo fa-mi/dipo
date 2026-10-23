@@ -10,18 +10,45 @@ extension StatisticsView {
         ZStack {
             AppTheme.bg.ignoresSafeArea()
             ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 16) {
-                    header
-                    spendHero
-                    metricStrip
-                    dualCards
-                    categoriesCard
-                    notesCard
-                    detailLink
-                    Spacer(minLength: 110)
+                Group {
+                    // Room for two phone columns (the Duo opened and turned):
+                    // how much and am I fine on the left, where it went and
+                    // what's worth knowing on the right.
+                    if pageColumns == 2 {
+                        HStack(alignment: .top, spacing: AppLayout.columnGap) {
+                            VStack(alignment: .leading, spacing: 16) {
+                                header
+                                spendHero
+                                metricStrip
+                            }
+                            .frame(maxWidth: AppLayout.phoneContentMaxWidth)
+                            VStack(alignment: .leading, spacing: 16) {
+                                dualCards
+                                categoriesCard
+                                notesCard
+                                detailLink
+                            }
+                            .frame(maxWidth: AppLayout.phoneContentMaxWidth)
+                        }
+                        .padding(.bottom, 40)
+                    } else {
+                        VStack(alignment: .leading, spacing: 16) {
+                            header
+                            spendHero
+                            metricStrip
+                            dualCards
+                            categoriesCard
+                            notesCard
+                            detailLink
+                            Spacer(minLength: 110)
+                        }
+                        // Centred and capped, like Home (AppLayout).
+                        .frame(maxWidth: AppLayout.phoneContentMaxWidth - 2 * AppLayout.pageMargin)
+                    }
                 }
                 .padding(.horizontal, 22)
                 .padding(.top, 20)
+                .frame(maxWidth: .infinity)
                 .containerRelativeFrame(.horizontal)
             }
         }

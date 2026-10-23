@@ -196,6 +196,31 @@ enum AppLayout {
     /// stretched one — line lengths grow past comfortable reading, and card
     /// content floats in whitespace.
     static let phoneContentMaxWidth: CGFloat = 440
+
+    /// The narrowest a phone column gets when two stand side by side: an
+    /// iPhone mini's width, less a little.
+    static let columnMinWidth: CGFloat = 340
+    static let columnGap: CGFloat = 20
+    static let pageMargin: CGFloat = 22
+
+    /// Whether a page this wide holds two phone columns, with the gap and
+    /// the page's margins. The Duo opened and turned (about 794 pt beside the
+    /// tab rail) does; opened upright (about 530 pt) and every iPhone held
+    /// upright don't, and keep the one column they have today.
+    static func fitsTwoColumns(_ width: CGFloat) -> Bool {
+        width >= 2 * columnMinWidth + columnGap + 2 * pageMargin
+    }
+}
+
+private struct PageColumnsKey: EnvironmentKey { static let defaultValue = 1 }
+
+extension EnvironmentValues {
+    /// How many phone columns the tab's page has room for: 2 on a wide panel,
+    /// 1 everywhere else. Set by MainTabView from the space beside its tabs.
+    var pageColumns: Int {
+        get { self[PageColumnsKey.self] }
+        set { self[PageColumnsKey.self] = newValue }
+    }
 }
 
 extension View {
@@ -205,6 +230,14 @@ extension View {
     func phoneWidthCapped() -> some View {
         frame(maxWidth: AppLayout.phoneContentMaxWidth)
             .frame(maxWidth: .infinity)
+    }
+
+    /// A whole screen held to phone width: for screens pushed from a tab,
+    /// which are one column whatever the panel. The page colour is carried
+    /// to the edges, so the column doesn't sit on the system's background.
+    func phoneColumn() -> some View {
+        phoneWidthCapped()
+            .background(AppTheme.bg.ignoresSafeArea())
     }
 }
 

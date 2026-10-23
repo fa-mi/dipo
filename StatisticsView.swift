@@ -48,6 +48,8 @@ struct StatisticsView: View {
     @State var selectedCardID: String? = nil // Kept only as a recompute trigger; the card itself comes from MainCard.
     /// Observed so switching the main card in the Wallet redraws this screen.
     @State var sb = SmartBudgetManager.shared
+    /// Two on a wide panel — the main page then lays out in two columns.
+    @Environment(\.pageColumns) var pageColumns
     /// Bumped when a row changes in place — an edit, a row made a loan.
     @State var ledger = LedgerRevision.shared
     @State var showExportSheet = false
@@ -95,13 +97,17 @@ struct StatisticsView: View {
                 .navigationTitle(loc("stats.title"))
                 .toolbar(.hidden, for: .navigationBar)
                 .navigationDestination(for: StatsRoute.self) { route in
-                    switch route {
-                    case .analysis: fullAnalysis
-                    case .weekly:   weeklyDetail
-                    case .trends:   trendsDetail
-                    case .cycle(let s, let e, let label):
-                        cycleDetail(start: s, end: e, label: label)
+                    // One column, whatever the panel (AppLayout).
+                    Group {
+                        switch route {
+                        case .analysis: fullAnalysis
+                        case .weekly:   weeklyDetail
+                        case .trends:   trendsDetail
+                        case .cycle(let s, let e, let label):
+                            cycleDetail(start: s, end: e, label: label)
+                        }
                     }
+                    .phoneColumn()
                 }
         }
         .onAppear {
