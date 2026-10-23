@@ -80,6 +80,26 @@ struct DiPoAppShortcuts: AppShortcutsProvider {
             shortTitle: "Log from Message",
             systemImageName: "text.bubble"
         )
+        // Both answer in place, without opening DiPo (DiPoIntents.swift).
+        AppShortcut(
+            intent: LogExpenseIntent(),
+            phrases: [
+                "Log an expense in \(.applicationName)",
+                "Catat pengeluaran di \(.applicationName)",
+            ],
+            shortTitle: "Log an Expense",
+            systemImageName: "plus.circle"
+        )
+        AppShortcut(
+            intent: MoneyLeftIntent(),
+            phrases: [
+                "How much money is left in \(.applicationName)",
+                "Check money left in \(.applicationName)",
+                "Cek sisa uang di \(.applicationName)",
+            ],
+            shortTitle: "Money Left",
+            systemImageName: "banknote"
+        )
     }
 }
 

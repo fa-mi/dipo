@@ -115,6 +115,12 @@ final class AuthViewModel {
 
     var isBiometricActive: Bool { isBiometricAvailable && biometricEnabled }
 
+    /// Whether DiPo's lock stands in front of it, for code with no view model
+    /// to ask: Siri and Shortcuts check it before saying anything the lock is
+    /// there to hide. Setup isn't checked — reading the Keychain can fail, and
+    /// a failed read must not count as "no lock".
+    static var lockIsOn: Bool { AuthViewModel().isBiometricActive }
+
     private var wentToBackground = false
 
     var savedName: String { Keychain.load(key: kName) ?? "User" }
