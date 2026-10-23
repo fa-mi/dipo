@@ -144,6 +144,112 @@ final class SmartBudgetMathTests: XCTestCase {
         XCTAssertEqual(alert.currency, "USD")
     }
 
+    /// Monthly expenses still to come are out of what a group has left on the
+    /// Smart Budget screen, so the warning counts them too and keeps them in
+    /// the alert to say so. Rp 10 jt income, Needs 65%, Rp 3.936.000 of kos,
+    /// transfers and subscriptions due before payday.
+    func testTheWarningCountsMonthlyExpensesStillToCome() throws {
+        royal()
+        sb.dailyRatio = 0.65
+        sb.lifestyleRatio = 0.20
+        sb.investDebtRatio = 0.15
+        let p = period
+        func check(_ amount: Double, scheduled: Double) -> BudgetAlert? {
+            sb.wouldExceed(category: .food, amount: amount, currency: "IDR", date: .now, transactions: [],
+                           income: 10_000_000, periodStart: p.start, periodEnd: p.end, scheduled: scheduled)
+        }
+        XCTAssertNil(check(2_500_000, scheduled: 0), "Rp 2,5 jt of Rp 6,5 jt, with nothing else due")
+        let near = try XCTUnwrap(check(2_500_000, scheduled: 3_936_000))
+        XCTAssertFalse(near.isExceeded)
+        XCTAssertEqual(near.leftAfter, 64_000, accuracy: 0.5)
+        XCTAssertEqual(near.scheduled, 3_936_000)
+        let over = try XCTUnwrap(check(3_000_000, scheduled: 3_936_000))
+        XCTAssertEqual(over.over, 436_000, accuracy: 0.5)
+    }
+
+    // MARK: Done on purpose
+
+    private func intents(_ kinds: CycleIntentKind...) -> CycleIntentSet {
+        CycleIntentSet(kinds: Set(kinds), notes: [:])
+    }
+
+    /// Which choice explains which group being over its limit.
+    func testOnPurposeChoicesExcuseTheRightGroups() {
+        XCTAssertTrue(intents(.lifestyleSplurge).excusesOverLimit(.lifestyle))
+        XCTAssertFalse(intents(.lifestyleSplurge).excusesOverLimit(.daily), "spending more by choice is Wants")
+        for kind in [CycleIntentKind.plannedExpense, .plannedSavingsDraw, .lowIncome] {
+            XCTAssertTrue(intents(kind).excusesOverLimit(.daily), kind.rawValue)
+            XCTAssertTrue(intents(kind).excusesOverLimit(.lifestyle), kind.rawValue)
+        }
+        XCTAssertFalse(intents(.pauseInvesting).excusesOverLimit(.lifestyle))
+        XCTAssertFalse(intents(.plannedExpense).excusesOverLimit(.investDebt), "a target has no limit")
+        XCTAssertTrue(intents(.lifestyleSplurge).excusesSpike(in: .shopping))
+        XCTAssertFalse(intents(.lifestyleSplurge).excusesSpike(in: .food))
+        XCTAssertTrue(intents(.plannedExpense).excusesSpike(in: .food))
+    }
+
+    /// A choice counts for the period it was marked for; one marked to keep
+    /// applying carries on.
+    func testAChoiceCountsForItsPeriodAndOngoingOnesCarryOn() {
+        let start = cal.date(from: DateComponents(year: 2026, month: 10, day: 23))!
+        let set = CycleIntentSet.running([
+            CycleIntent(kind: .plannedExpense, cycleKey: "2026-09-25"),
+            CycleIntent(kind: .lowIncome, cycleKey: "2026-08-25", isRecurring: true),
+            CycleIntent(kind: .lifestyleSplurge, cycleKey: "2026-10-23"),
+        ], periodStart: start)
+        XCTAssertFalse(set.has(.plannedExpense), "last period's one-off stays there")
+        XCTAssertTrue(set.has(.lowIncome))
+        XCTAssertTrue(set.has(.lifestyleSplurge))
+    }
+
+    /// DiPo on Home says a planned overspend as the choice it was: the same
+    /// figure, in blue, with nothing to fix. The sheet promised this and only
+    /// Deep Analysis kept the promise.
+    func testDiPoSaysAPlannedOverspendAsAChoice() throws {
+        royal()
+        let p = period
+        // Wants: 30% of Rp 5 jt is Rp 1,5 jt, and Rp 2 jt is spent.
+        let spent = [tx(-2_000_000, .shopping, p.start.addingTimeInterval(86_400))]
+        func first(_ set: CycleIntentSet) -> SmartInsight? {
+            sb.evaluateAll(allTransactions: spent, income: 5_000_000, targetCurrency: "IDR",
+                           periodStart: p.start, periodEnd: p.end, intents: set).first
+        }
+        let slip = try XCTUnwrap(first(.empty))
+        XCTAssertEqual(slip.color, AppTheme.red)
+        let planned = try XCTUnwrap(first(intents(.lifestyleSplurge)))
+        XCTAssertEqual(planned.color, AppTheme.blue)
+        XCTAssertEqual(planned.title, String(format: loc("insight.group_over_planned_title"),
+                                             BudgetGroup.lifestyle.label))
+        XCTAssertTrue(planned.body.contains(idr(500_000)), planned.body)
+    }
+
+    /// Pausing investing takes investing out of what DiPo suggests for money
+    /// left over; the debt part of the advice would stay.
+    func testPausingInvestingTakesItOutOfTheSurplusAdvice() {
+        royal()
+        let nudge = sb.surplusInsight(unspent: 3_000_000, debtPaid: 0, invested: 0, debtDue: 0,
+                                      income: 10_000_000, investShare: 0.20, currency: "IDR")
+        XCTAssertEqual(nudge.color, AppTheme.orange, "Rp 2 jt of the 20% still to put aside")
+        let paused = sb.surplusInsight(unspent: 3_000_000, debtPaid: 0, invested: 0, debtDue: 0,
+                                       income: 10_000_000, investShare: 0.20, currency: "IDR",
+                                       investPaused: true)
+        XCTAssertEqual(paused.color, AppTheme.blue)
+        XCTAssertNil(paused.action)
+    }
+
+    /// Going all-in on debt is the point, not a warning.
+    func testGoingAllInOnDebtIsNotWarnedAbout() {
+        royal()
+        let p = period
+        let paid = [tx(-4_000_000, .debtPayment, p.start.addingTimeInterval(86_400))]
+        func first(_ set: CycleIntentSet) -> SmartInsight? {
+            sb.evaluateAll(allTransactions: paid, income: 5_000_000, targetCurrency: "IDR",
+                           periodStart: p.start, periodEnd: p.end, intents: set).first
+        }
+        XCTAssertEqual(first(.empty)?.title, loc("insight.debt_high_title"))
+        XCTAssertNotEqual(first(intents(.debtFocus))?.title, loc("insight.debt_high_title"))
+    }
+
     // MARK: What DiPo says
 
     /// Paying a debt down faster than last period is not a spending spike.

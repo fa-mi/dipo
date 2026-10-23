@@ -41,11 +41,13 @@ struct DangerConfirmSheet: View {
     enum Tone {
         case danger   // red — irreversible / data loss
         case warning  // orange — reversible / less severe
+        case info     // blue — worth knowing, nothing at risk
 
         var color: Color {
             switch self {
             case .danger:  return AppTheme.red
             case .warning: return AppTheme.orange
+            case .info:    return AppTheme.blue
             }
         }
     }

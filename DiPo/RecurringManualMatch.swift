@@ -27,9 +27,14 @@ enum RecurringManualMatch {
     /// — qualify on the amount. A day-to-day row qualifies only if it shares a
     /// word with the bill: a Rp 55.000 lunch is not the parking bill.
     static func couldBe(_ tx: TxRecord, planLabel: String, planCategory: TxCategory) -> Bool {
-        if tx.category == planCategory || tx.category == .other
-            || SmartBudgetManager.fixedCategories.contains(tx.category) { return true }
-        return sharesWord(tx.name, planLabel)
+        couldBe(name: tx.name, category: tx.category, planLabel: planLabel, planCategory: planCategory)
+    }
+
+    /// The same rule for an entry not saved yet.
+    static func couldBe(name: String, category: TxCategory, planLabel: String, planCategory: TxCategory) -> Bool {
+        if category == planCategory || category == .other
+            || SmartBudgetManager.fixedCategories.contains(category) { return true }
+        return sharesWord(name, planLabel)
     }
 
     static func words(_ s: String) -> Set<String> {

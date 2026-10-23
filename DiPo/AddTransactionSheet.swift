@@ -24,6 +24,10 @@ struct AddTransactionSheet: View {
     /// Whole history, used to learn how THIS user categorises merchants.
     @Query private var allTransactions: [TxRecord]
     @Query private var allInstallments: [CardInstallment]
+    @Query private var recurringPlans: [RecurringExpense]
+    /// What the user marked as on purpose this period, which turns the
+    /// over-limit warning from an alarm into a note.
+    @Query private var cycleIntents: [CycleIntent]
 
     @State private var txType: AddTxType = .expense
     @State private var name: String = ""
@@ -38,6 +42,8 @@ struct AddTransactionSheet: View {
     @State private var saveInPreferred = false
     @State private var showBudgetAlert = false
     @State private var pendingBudgetAlert: BudgetAlert? = nil
+    /// The group is over on purpose this period: same figures, calm tone.
+    @State private var budgetAlertPlanned = false
     @State private var showCreditLimitAlert = false
     @State private var creditOverConfirmed = false
     @State private var showConversionPaywall = false
@@ -718,13 +724,13 @@ struct AddTransactionSheet: View {
                 .preferredColorScheme(appColorScheme())
         }
         .confirmSheet(isPresented: $showBudgetAlert,
-                      icon: pendingBudgetAlert?.isExceeded == true
+                      icon: budgetAlertPlanned ? "checkmark.seal.fill"
+                          : pendingBudgetAlert?.isExceeded == true
                           ? "exclamationmark.triangle.fill" : "gauge.with.dots.needle.67percent",
-                      tone: .warning,
-                      title: pendingBudgetAlert?.isExceeded == true
-                          ? loc("tx.budget_exceed") : loc("tx.approach_limit"),
+                      tone: budgetAlertPlanned ? .info : .warning,
+                      title: budgetAlertTitle,
                       message: budgetAlertMessage,
-                      confirmLabel: loc("tx.add_anyway")) { commitTransaction() }
+                      confirmLabel: loc(budgetAlertPlanned ? "common.save" : "tx.add_anyway")) { commitTransaction() }
         .confirmSheet(isPresented: $showCreditLimitAlert,
                       icon: "creditcard.trianglebadge.exclamationmark",
                       tone: .warning,
@@ -737,6 +743,12 @@ struct AddTransactionSheet: View {
         .trackScreen(.addTransaction)
     }
 
+    private var budgetAlertTitle: String {
+        let over = pendingBudgetAlert?.isExceeded == true
+        if budgetAlertPlanned && over { return loc("tx.budget_planned_title") }
+        return over ? loc("tx.budget_exceed") : loc("tx.approach_limit")
+    }
+
     /// In the main card's currency, which the amounts are in, and saying
     /// what is left once this entry is saved rather than before it.
     private var budgetAlertMessage: String {
@@ -745,10 +757,24 @@ struct AddTransactionSheet: View {
             CurrencyManager.shared.formatted(v.rounded(), currency: alert.currency.isEmpty
                                              ? CurrencyManager.shared.preferredCurrency : alert.currency)
         }
+        // With monthly expenses still to come in the figure, the sentence says
+        // so: nothing the user typed would explain them.
+        let bills = alert.scheduled >= 0.5
         if alert.isExceeded {
-            return String(format: loc("tx.budget_over_msg"), alert.group.label, money(alert.over), money(alert.limit))
+            // Marked as planned: the same figures, said without "Save it
+            // anyway?" — there is nothing to talk the user out of.
+            let key = budgetAlertPlanned
+                ? (bills ? "tx.budget_over_planned_msg_bills" : "tx.budget_over_planned_msg")
+                : (bills ? "tx.budget_over_msg_bills" : "tx.budget_over_msg")
+            return bills
+                ? String(format: loc(key), alert.group.label, money(alert.over), money(alert.limit), money(alert.scheduled))
+                : String(format: loc(key), alert.group.label, money(alert.over), money(alert.limit))
         }
-        return String(format: loc("tx.budget_approach_msg"), alert.group.label, money(alert.leftAfter), money(alert.limit))
+        let left = bills
+            ? String(format: loc("tx.budget_approach_msg_bills"), alert.group.label, money(alert.leftAfter),
+                     money(alert.limit), money(alert.scheduled))
+            : String(format: loc("tx.budget_approach_msg"), alert.group.label, money(alert.leftAfter), money(alert.limit))
+        return budgetAlertPlanned ? left + " " + loc("insight.planned_note") : left
     }
 
     private var creditOverMessage: String {
@@ -807,21 +833,38 @@ struct AddTransactionSheet: View {
             let income = MainCard.budgetIncome(schedules: salarySchedules, transactions: potTx,
                                                from: from, to: to, currency: main.resolvedCurrency).amount
             let extra: Double = ExtraFunds.total(in: potTx, from: from, to: to, currency: main.resolvedCurrency)
+            let amountInMain = CurrencyManager.shared.convert(abs(effectiveAmount), from: effectiveCurrency,
+                                                              to: main.resolvedCurrency)
+            // Monthly expenses still to come are already out of what the group
+            // has left on the Smart Budget screen, so they are here too — less
+            // the one this entry may be, paid by hand ahead of its day.
+            let scheduled: Double = SmartBudgetManager.shared.group(for: selectedCategory).map { grp in
+                let due = ScheduledBills.bills(
+                    ScheduledBills.upcoming(plans: recurringPlans, cards: vm.cards,
+                                            cardIDs: MainCard.budgetSpendingCardIDs(in: vm.cards),
+                                            periodStart: from, periodEnd: to, currency: main.resolvedCurrency),
+                    in: grp)
+                return ScheduledBills.removingEntry(from: due, amount: amountInMain, name: name,
+                                                    category: selectedCategory, currency: main.resolvedCurrency)
+                    .reduce(0.0) { $0 + $1.amount }
+            } ?? 0
             if let alert = SmartBudgetManager.shared.wouldExceed(
                 category: selectedCategory,
-                amount: CurrencyManager.shared.convert(abs(effectiveAmount), from: effectiveCurrency,
-                                                       to: main.resolvedCurrency),
+                amount: amountInMain,
                 currency: main.resolvedCurrency,
                 date: selectedDate,
                 transactions: potTx,
                 income: income + extra,
                 periodStart: from, periodEnd: to,
                 cardID: main.id.uuidString,
-                configs: cardBudgetConfigs
+                configs: cardBudgetConfigs,
+                scheduled: scheduled
             ) {
                 pendingBudgetAlert = alert
+                budgetAlertPlanned = CycleIntentSet.running(cycleIntents, periodStart: from)
+                    .excusesOverLimit(alert.group)
                 showBudgetAlert = true
-                HapticManager.shared.warning()
+                if budgetAlertPlanned { HapticManager.shared.tap() } else { HapticManager.shared.warning() }
                 return
             }
         }

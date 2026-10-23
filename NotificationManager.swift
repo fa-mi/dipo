@@ -1384,12 +1384,18 @@ enum NotificationScheduler {
         NotificationManager.scheduleInactivityNudge(lastTxDate: lastTxDate)
 
         // ── Overspend push ─────────────────────────────────────────────
+        // Not when the user said this period's spending past the pay was on
+        // purpose — a planned one-off, a planned draw on savings, a thin
+        // month. "No alarm about spending more than you earned" is what that
+        // choice promises.
         let topCatEntry = perCategory.filter { $0.value > 0 }.max { $0.value < $1.value }
-        NotificationManager.checkOverspendPush(
-            income: monthIncome, expense: monthExpense, currencyCode: preferred,
-            topCategory: topCatEntry?.key.displayLabel,
-            topCategoryAmount: topCatEntry?.value ?? 0
-        )
+        if !runningIntents(context: context).excusesDeficit {
+            NotificationManager.checkOverspendPush(
+                income: monthIncome, expense: monthExpense, currencyCode: preferred,
+                topCategory: topCatEntry?.key.displayLabel,
+                topCategoryAmount: topCatEntry?.value ?? 0
+            )
+        }
 
         // ── Debt due-date reminders ────────────────────────────────────
         scheduleDebtReminders(context: context, preferred: preferred, cal: cal, now: now)
@@ -1462,6 +1468,19 @@ enum NotificationScheduler {
         }
     }
 
+    /// What the user marked as on purpose for the running budget period: the
+    /// one opened the day the salary landed on the main card, or the 1st.
+    private static func runningIntents(context: ModelContext) -> CycleIntentSet {
+        let salaries: [SalarySchedule] = (try? context.fetch(FetchDescriptor<SalarySchedule>())) ?? []
+        let cards: [BankCard] = (try? context.fetch(FetchDescriptor<BankCard>())) ?? []
+        let cal = Calendar.current
+        let start: Date = MainCard.payDay(salaries).map {
+            StatPeriod.cycle(payDay: $0, salaryDates: StatPeriod.salaryDates(on: MainCard.resolve(in: cards))).start
+        } ?? cal.safeDate(from: cal.dateComponents([.year, .month], from: Date()))
+        let intents: [CycleIntent] = (try? context.fetch(FetchDescriptor<CycleIntent>())) ?? []
+        return CycleIntentSet.running(intents, periodStart: start)
+    }
+
     /// Fire an over-budget alert for any Smart Budget group that has exceeded
     /// its target this pay cycle. Mirrors the in-app Smart Budget screen: income
     /// comes from the salary schedule and the window is pay-cycle-aware, so an
@@ -1528,9 +1547,25 @@ enum NotificationScheduler {
         }
         let cycleKey = ISO8601DateFormatter.dayString(from: periodStart)
 
+        // Monthly expenses still to come, which the screen takes out of what
+        // each group has left: the other group's room to cover an overspend
+        // is what remains after them.
+        let plans: [RecurringExpense] = (try? context.fetch(FetchDescriptor<RecurringExpense>())) ?? []
+        let bills: [ScheduledBill] = MainCard.resolve(in: allCards) != nil
+            ? ScheduledBills.upcoming(plans: plans, cards: allCards,
+                                      cardIDs: MainCard.budgetSpendingCardIDs(in: allCards),
+                                      periodStart: period.start, periodEnd: period.end, currency: currency)
+            : []
+        // The day before the next payday, named: a count of days left read as
+        // days after today.
+        let lastDay = StatPeriod.lastDayLabel(before: period.end)
+        // Groups the user marked as over on purpose this period get no alert.
+        let intents = CycleIntentSet.running((try? context.fetch(FetchDescriptor<CycleIntent>())) ?? [],
+                                             periodStart: period.start)
+
         // Only spending groups can be "over budget". Invest & Debt being UNDER
         // its allocation is a savings shortfall, not an overspend — not alerted.
-        for group in [BudgetGroup.daily, .lifestyle] {
+        for group in [BudgetGroup.daily, .lifestyle] where !intents.excusesOverLimit(group) {
             // periodStart required — otherwise spent() clips the cycle back to
             // the calendar month and the alert misses the pre-1st spending.
             let spent = mgr.spent(in: group, transactions: windowTx, targetCurrency: currency,
@@ -1551,12 +1586,7 @@ enum NotificationScheduler {
             let otherLimit = income * otherRatio
             let otherSpent = mgr.spent(in: otherGroup, transactions: windowTx,
                                        targetCurrency: currency, periodStart: periodStart)
-            let otherHeadroom = max(otherLimit - otherSpent, 0)
-
-            // Counted as the screen counts them: today included, up to the real
-            // next payday. "Start plus one month" ran past a payday pulled
-            // forward off a weekend, and counting from this moment dropped today.
-            let daysLeft = StatPeriod.daysLeft(in: period)
+            let otherHeadroom = max(otherLimit - otherSpent - ScheduledBills.total(bills, in: otherGroup), 0)
 
             let advice: String = {
                 if otherHeadroom >= over {
@@ -1565,11 +1595,11 @@ enum NotificationScheduler {
                                   cm.formatted(over.rounded(), currency: currency),
                                   otherGroup.label,
                                   cm.formatted(otherHeadroom.rounded(), currency: currency),
-                                  daysLeft)
+                                  lastDay)
                 }
                 // Nothing spare anywhere: the plan itself is the problem.
                 return String(format: loc("notif.budget_advice_replan"),
-                              cm.formatted(over.rounded(), currency: currency), daysLeft)
+                              cm.formatted(over.rounded(), currency: currency), lastDay)
             }()
 
             NotificationManager.postBudgetGroupAlert(

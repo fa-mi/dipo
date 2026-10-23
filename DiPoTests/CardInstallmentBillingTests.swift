@@ -186,18 +186,45 @@ final class CardInstallmentBillingTests: XCTestCase {
     /// The instalment part of a payment is a debt payment: the iPad was never
     /// counted as spending when it was bought, so this is where it is counted.
     func testTheInstalmentPartOfAPaymentIsADebtPayment() {
-        XCTAssertEqual(CardPaymentDebt.debtPortion(payment: 854_167, owedBefore: 5_750_000,
-                                                   recentCharges: 470_000, installmentDue: monthly),
+        // Rp 5.750.000 besides the instalment: Rp 470.000 bought this month,
+        // Rp 5.280.000 older.
+        XCTAssertEqual(CardPaymentDebt.split(payment: 854_167, installmentDue: monthly,
+                                             unpaidPurchases: 470_000, olderBalance: 5_280_000).debt,
                        854_167, accuracy: 0.5)
-        // The whole bill: the instalment and the carried balance are debt;
-        // the Rp 470.000 bought this month is the transfer.
-        let debt = CardPaymentDebt.debtPortion(payment: 6_604_167, owedBefore: 5_750_000,
-                                               recentCharges: 470_000, installmentDue: monthly)
-        XCTAssertEqual(debt, monthly + 5_280_000, accuracy: 0.5)
-        XCTAssertEqual(6_604_167 - debt, 470_000, accuracy: 1)
-        // Without instalments, as before.
-        XCTAssertEqual(CardPaymentDebt.debtPortion(payment: 2_000_000, owedBefore: 5_750_000, recentCharges: 470_000),
-                       2_000_000)
+        // The whole bill: the instalment and the older balance are debt; the
+        // Rp 470.000 bought this month is the transfer.
+        let whole = CardPaymentDebt.split(payment: 6_604_167, installmentDue: monthly,
+                                          unpaidPurchases: 470_000, olderBalance: 5_280_000)
+        XCTAssertEqual(whole.debt, monthly + 5_280_000, accuracy: 0.5)
+        XCTAssertEqual(whole.purchases, 470_000, accuracy: 1)
+        // Without instalments the purchases are settled first: of Rp 2 jt,
+        // Rp 470.000 pays for them and Rp 1.530.000 comes off the older balance.
+        let part = CardPaymentDebt.split(payment: 2_000_000, installmentDue: 0,
+                                         unpaidPurchases: 470_000, olderBalance: 5_280_000)
+        XCTAssertEqual(part.purchases, 470_000, accuracy: 0.5)
+        XCTAssertEqual(part.debt, 1_530_000, accuracy: 0.5)
+    }
+
+    /// On the card's own ledger: a payment fills the billed instalment first,
+    /// then this month's purchase, and only then the older balance.
+    func testOnTheLedgerAPaymentFillsTheInstalmentThenPurchases() {
+        let card = tokopediaCC()
+        let ipad = iPad(on: card, start: day(10, 9))
+        let shoes = TxRecord(name: "Sepatu", date: day(11, 5), amount: -470_000, type: "tx.type.purchase",
+                             icon: "SE", iconBgHex: TxCategory.shopping.iconBg, category: .shopping, currency: "IDR")
+        context.insert(shoes)
+        card.transactions.append(shoes)
+        XCTAssertEqual(CardPaymentDebt.unpaidPurchases(on: card, installments: [ipad], asOf: day(11, 12)),
+                       470_000, accuracy: 0.5)
+        let s = CardPaymentDebt.split(payment: 1_500_000, on: card, installments: [ipad], asOf: day(11, 12))
+        XCTAssertEqual(s.purchases, 470_000, accuracy: 0.5)
+        XCTAssertEqual(s.debt, 1_500_000 - 470_000, accuracy: 0.5, "the instalment and Rp 175.833 of the older balance")
+
+        pay(1_500_000, on: card, at: day(11, 13))
+        XCTAssertEqual(CardPaymentDebt.unpaidPurchases(on: card, installments: [ipad], asOf: day(11, 14)), 0)
+        let b = card.bill([ipad], asOf: day(11, 14))
+        XCTAssertEqual(b.installmentDue, 0)
+        XCTAssertEqual(b.revolving, 5_750_000 + 470_000 - (1_500_000 - monthly), accuracy: 0.5)
     }
 
     // MARK: Words

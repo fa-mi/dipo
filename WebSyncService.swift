@@ -313,6 +313,9 @@ final class WebSyncService {
         /// honours them — reading the globals instead would show the web a
         /// different split from the one the phone is enforcing.
         var configs: [CardBudgetConfig] = []
+        /// What the user marked as on purpose, so the dashboard's insights
+        /// say what the phone's do.
+        var intents: [CycleIntent] = []
     }
 
     private func fetchSource(context: ModelContext) -> Source {
@@ -322,7 +325,8 @@ final class WebSyncService {
             goals:      (try? context.fetch(FetchDescriptor<SavingsGoal>())) ?? [],
             recurrings: (try? context.fetch(FetchDescriptor<RecurringExpense>())) ?? [],
             salaries:   (try? context.fetch(FetchDescriptor<SalarySchedule>())) ?? [],
-            configs:    (try? context.fetch(FetchDescriptor<CardBudgetConfig>())) ?? []
+            configs:    (try? context.fetch(FetchDescriptor<CardBudgetConfig>())) ?? [],
+            intents:    (try? context.fetch(FetchDescriptor<CycleIntent>())) ?? []
         )
     }
 
@@ -653,13 +657,14 @@ final class WebSyncService {
                                                           payDay: day,
                                                           recurrings: recurrings, currency: base, now: now)
             }()
+            let intents = CycleIntentSet.running(source.intents, periodStart: cycle.start)
             func insights(in language: LanguageManager.Language) -> [[String: String]] {
                 LanguageManager.shared.withLanguage(language) {
                     sb.evaluateAll(
                         allTransactions: budgetTx, income: income,
                         cardID: sb.budgetCardID, configs: configs,
                         targetCurrency: base, goals: goals, periodStart: cycle.start,
-                        periodEnd: cycleEnd, projectedSpend: projected
+                        periodEnd: cycleEnd, projectedSpend: projected, intents: intents
                     ).prefix(3).map { ["title": $0.title, "body": $0.body] }
                 }
             }

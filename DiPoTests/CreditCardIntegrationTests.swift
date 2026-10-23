@@ -146,16 +146,18 @@ final class CreditCardIntegrationTests: XCTestCase {
                              "a card with room left must never read as unaffordable")
     }
 
-    /// Utilisation crosses the risk threshold only when instalments are
-    /// counted — 20% blind versus 80% actual on the same card.
-    func testUtilisationCrossesTheRiskThresholdOnlyWithInstalments() throws {
+    /// Instalments hold the limit on every screen. The wallet's bar and the
+    /// card face read the bill alone — 20% used and Rp 8 jt free — while the
+    /// Debts row, counting the instalment, said 80% and Rp 2 jt.
+    func testUtilisationAndAvailableCountInstalmentsEverywhere() throws {
         let card = makeCreditCard(limit: 10_000_000, owed: 2_000_000)
         addInstallment(to: card, amount: 6_000_000, tenor: 12)
         try context.save()
 
         let inst = try allInstallments()
-        XCTAssertLessThan(card.creditUtilization, 0.7, "the blind figure looks healthy")
-        XCTAssertGreaterThan(card.utilisation(inst), 0.7, "the real one is not")
+        XCTAssertGreaterThan(card.utilisation(inst), 0.7)
+        XCTAssertEqual(card.creditUtilization, card.utilisation(inst), accuracy: 0.001)
+        XCTAssertEqual(card.availableCredit(), card.availableCredit(inst), accuracy: 1)
     }
 
     /// An inactive instalment stops locking credit without being deleted.
