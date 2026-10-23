@@ -162,4 +162,41 @@ struct CycleIntentSet {
     var excusesSaving: Bool {
         has(.plannedExpense) || has(.lowIncome) || has(.debtFocus)
     }
+
+    // MARK: Everywhere else
+    //
+    // The sheet promised more than Deep Analysis delivered: "DiPo will stop
+    // calling it a slip-up", while DiPo on Home still said "Wants is over its
+    // limit", the over-limit notification still came, and the purchase
+    // warning still asked "Add anyway?". These switches carry the same
+    // choices to Home, the notifications and the warnings. Numbers stay;
+    // only the judgement and the tone change.
+
+    /// Don't call a group past its limit a problem. A planned one-off, a
+    /// planned draw on savings or a thin month explain either group; choosing
+    /// to spend more explains Wants. Savings & debt has a target, not a limit.
+    func excusesOverLimit(_ group: BudgetGroup) -> Bool {
+        switch group {
+        case .daily:      return excusesDeficit
+        case .lifestyle:  return excusesDeficit || excusesLifestyle
+        case .investDebt: return false
+        }
+    }
+
+    /// Don't call a category's jump a spike: a planned one-off explains any
+    /// of them, choosing to spend more explains the Wants ones.
+    func excusesSpike(in category: TxCategory) -> Bool {
+        has(.plannedExpense)
+            || (has(.lifestyleSplurge) && SmartBudgetManager.lifestyleCategories.contains(category))
+    }
+
+    /// Don't warn that debt payments took most of the pay: going all-in on
+    /// debt is the point.
+    var excusesDebtLoad: Bool { has(.debtFocus) }
+
+    /// The intents in force for the pay period that opened on `periodStart` —
+    /// the running one, which Home, the alerts and the warnings judge.
+    static func running(_ all: [CycleIntent], periodStart: Date) -> CycleIntentSet {
+        resolve(all, cycleKey: ISO8601DateFormatter.dayString(from: periodStart))
+    }
 }

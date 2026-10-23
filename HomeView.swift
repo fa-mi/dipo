@@ -29,6 +29,9 @@ struct HomeView: View {
     /// Declared Monthly Expenses — surfaced on Home when a charge is imminent,
     /// so the balance drop never comes as a surprise.
     @Query private var recurringExpenses: [RecurringExpense]
+    /// What the user marked as on purpose (CycleIntentView), so DiPo on Home
+    /// says it the same way Deep Analysis does.
+    @Query private var cycleIntents: [CycleIntent]
 
     /// The next DECLARED recurring charge due within 3 days (soonest first).
     private var upcomingDeclaredRecurring: RecurringExpense? {
@@ -61,10 +64,13 @@ struct HomeView: View {
         let daily: Double
         let lifestyle: Double
         let investDebt: Double
+        /// A choice marked or unmarked as on purpose changes what DiPo says.
+        let intents: Int
     }
     private var budgetSettingsSignal: BudgetSettingsSignal {
         BudgetSettingsSignal(enabled: budgetManager.isEnabled, daily: budgetManager.dailyRatio,
-                             lifestyle: budgetManager.lifestyleRatio, investDebt: budgetManager.investDebtRatio)
+                             lifestyle: budgetManager.lifestyleRatio, investDebt: budgetManager.investDebtRatio,
+                             intents: cycleIntents.count)
     }
     /// Held in @State so SwiftUI observes plan changes — reading the singleton
     /// inline inside a computed property registers no dependency, so the net
@@ -473,16 +479,19 @@ struct HomeView: View {
         let extra: Double = onMain
             ? ExtraFunds.total(in: tx, from: extraFrom, to: cycle?.end, currency: budgetCurrency)
             : 0
+        // What the user marked as on purpose for this period: DiPo says it
+        // as a choice, not a slip.
+        let intents = CycleIntentSet.running(cycleIntents, periodStart: extraFrom)
         cachedInsights = SmartBudgetManager.shared.evaluateAll(
             allTransactions: tx, income: budgetIncome(from: extraFrom, to: cycle?.end) + extra,
             cardID: budgetCard?.id.uuidString, configs: cardBudgetConfigs,
             targetCurrency: budgetCurrency, goals: activeGoals,
             periodStart: cycleStart, periodEnd: cycle?.end,
-            projectedSpend: projected)
+            projectedSpend: projected, intents: intents)
         // Same `cycleStart` the insights above use — without it this ran on
         // calendar months and contradicted the card directly beside it.
         cachedAnomalies = SmartBudgetManager.shared.spendingAnomalies(
-            allTransactions: tx, periodStart: cycleStart)
+            allTransactions: tx, periodStart: cycleStart, intents: intents)
         cachedRecurring = SmartBudgetManager.shared.detectRecurring(allTransactions: tx)
     }
 

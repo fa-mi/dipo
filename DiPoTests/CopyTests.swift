@@ -89,6 +89,18 @@ final class CopyTests: XCTestCase {
         }
     }
 
+    /// The on-purpose sheet says plainly what each choice does: no "By design",
+    /// no "slip-up", no clause hung off a spaced dash.
+    func testTheOnPurposeSheetSpeaksPlainly() throws {
+        let (en, id) = try tables()
+        XCTAssertNotEqual(en["intent.title"], "By design")
+        XCTAssertFalse(en["intent.subtitle", default: ""].contains("slip-up"))
+        for (key, english) in en where key.hasPrefix("intent.") {
+            XCTAssertFalse(english.contains(" — "), "EN \(key)")
+            XCTAssertFalse(id[key, default: ""].contains(" — "), "ID \(key)")
+        }
+    }
+
     /// Errors say what didn't work and what to do; they don't apologise.
     func testErrorsDoNotApologise() throws {
         let (en, id) = try tables()
