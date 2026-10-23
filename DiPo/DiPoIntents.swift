@@ -262,8 +262,15 @@ struct MoneyLeftSummary {
 
 enum DiPoIntentSupport {
 
+    /// Every card in the app's store. Not a default argument of the one
+    /// below: a default value is worked out outside the main actor, where
+    /// `mainContext` can't be read.
     @MainActor
-    static func cards(in context: ModelContext = DiPoApp.sharedModelContainer.mainContext) -> [BankCard] {
+    static func cards() -> [BankCard] {
+        cards(in: DiPoApp.sharedModelContainer.mainContext)
+    }
+
+    static func cards(in context: ModelContext) -> [BankCard] {
         (try? context.fetch(FetchDescriptor<BankCard>())) ?? []
     }
 
