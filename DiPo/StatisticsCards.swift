@@ -298,7 +298,12 @@ struct CycleTrendPoint: Identifiable {
     let start: Date
     let end: Date
     let income: Double
+    /// Spending & bills, as the headline counts them: debt paid down and money
+    /// put away are left out. With them in, a period with Rp 6,6 jt of card
+    /// bills read as Rp 17,5 jt of spending, and "Usually" said Rp 16,8 jt
+    /// against a Rp 10 jt salary.
     let expense: Double
+    /// The rows behind `income` and `expense`.
     let txCount: Int
     var net: Double { income - expense }
     /// A period that has not finished yet holds an incomplete total.
@@ -504,7 +509,7 @@ struct CycleTrendBreakdown: View {
                                 }
                                 Divider().overlay(AppTheme.cardMid)
                                 row(loc("stats.income"), money(p.income), AppTheme.accent)
-                                row(loc("stats.expenses"), "− " + money(p.expense), AppTheme.red)
+                                row(loc("stats.book_living"), "− " + money(p.expense), AppTheme.red)
                                 row(loc("stats.trend_counted"),
                                     String(format: loc("search.results_count"), p.txCount),
                                     AppTheme.textSecondary)

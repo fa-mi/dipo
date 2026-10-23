@@ -960,14 +960,16 @@ extension StatisticsView {
         for (s, e) in bucketStarts {
             let rows = scopeTransactions
                 .filter { $0.date >= s && $0.date < e && $0.txSubtype != .transfer }
-            // The hero's rules, so the last bar and "spent" above it are one
-            // figure: a refund takes back its expense rather than counting as
-            // income.
+            // The hero's rules, so the last bar and "spending & bills" above it
+            // are one figure: a refund takes back its expense rather than
+            // counting as income, and debt paid and money put away are not
+            // spending.
+            let counted = rows.filter { $0.category != .debtPayment && $0.category != .investment }
             points.append(CycleTrendPoint(label: fmt.string(from: payCycleDay != nil ? e : s),
                                           start: s, end: e,
                                           income: Self.income(rows, convert: convertedAmount),
-                                          expense: Self.expenses(rows, convert: convertedAmount),
-                                          txCount: rows.count))
+                                          expense: Self.living(rows, convert: convertedAmount),
+                                          txCount: counted.count))
         }
         // Drop months that pre-date the account's first transaction. Rendering
         // them as placeholder tracks filled a third of the chart with bars for

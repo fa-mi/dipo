@@ -179,16 +179,20 @@ extension StatisticsView {
         let highest = done.max { $0.expense < $1.expense }
         let lowest = done.min { $0.expense < $1.expense }
         // A running period set against a whole finished one always looks
-        // cheaper — day 12 against all 28. Compare the same number of days.
+        // cheaper — day 12 against all 28. Compare the same number of days,
+        // in spending & bills as the bars are, and not in the first week.
         let prev: Double = {
             guard points.count >= 2, let last = points.last else { return 0 }
             let before = points[points.count - 2]
             guard last.isRunning, selectedCard != nil else { return before.expense }
             let cutoff = before.start.addingTimeInterval(Date().timeIntervalSince(last.start))
-            return Self.stretchTotal(scopeTransactions, from: before.start, to: min(cutoff, before.end),
-                                     income: false, convert: convertedAmount) ?? 0
+            return Self.livingTotal(scopeTransactions, from: before.start, to: min(cutoff, before.end),
+                                    convert: convertedAmount) ?? 0
         }()
-        let change: Double? = prev > 0 ? (trendTotal - prev) / prev * 100 : nil
+        let runningDay: Int? = points.last.flatMap { last in
+            last.isRunning ? (Calendar.current.dateComponents([.day], from: last.start, to: Date()).day ?? 0) + 1 : nil
+        }
+        let change = Self.livingChange(trendTotal, previous: prev, elapsed: runningDay)
 
         return ZStack {
             AppTheme.bg.ignoresSafeArea()
