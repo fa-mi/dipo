@@ -182,7 +182,7 @@ final class AIChatViewModel {
         // reads what the rules couldn't, before a credit is spent on the
         // server. Same follow-up rule, same cards to check. Anything it can't
         // read with confidence goes on below as before (OnDeviceTxParser).
-        if !isFollowUp, OnDeviceTxParser.isAvailable {
+        if !isFollowUp, #available(iOS 26.0, *), OnDeviceTxParser.isAvailable {
             isLoading = true
             let read = await OnDeviceTxParser.parse(text)
             isLoading = false

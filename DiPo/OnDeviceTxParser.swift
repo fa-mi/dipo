@@ -20,7 +20,9 @@ import FoundationModels
 enum OnDeviceTxParser {
 
     /// Apple Intelligence is on, the model is downloaded, and it reads the
-    /// phone's language.
+    /// phone's language. (iOS 26 and later, like everything here that
+    /// touches the model; the rules below it build for any iOS.)
+    @available(iOS 26.0, *)
     static var isAvailable: Bool {
         let model = SystemLanguageModel.default
         guard case .available = model.availability else { return false }
@@ -41,6 +43,7 @@ enum OnDeviceTxParser {
 
     /// Nil when this phone can't run the model, the text is no entry, or the
     /// reading doesn't hold up — the caller then carries on to the server.
+    @available(iOS 26.0, *)
     static func parse(_ text: String) async -> LocalTxParser.Result? {
         let note = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard isAvailable, !note.isEmpty, note.count <= maxLength, !isQuestion(note),
@@ -106,11 +109,13 @@ enum OnDeviceTxParser {
         return LocalTxParser.Result(items: items)
     }
 
+    @available(iOS 26.0, *)
     private static func candidate(_ entry: OnDeviceTxEntry) -> Candidate {
         Candidate(name: entry.name, amount: entry.amount, isExpense: entry.isExpense,
                   category: category(of: entry.category))
     }
 
+    @available(iOS 26.0, *)
     static func category(of kind: OnDeviceTxKind) -> TxCategory {
         switch kind {
         case .food:         return .food
@@ -136,12 +141,14 @@ enum OnDeviceTxParser {
 // `nonisolated`: the model fills these in off the main actor, and the app's
 // default isolation would otherwise tie them to it.
 
+@available(iOS 26.0, *)
 @Generable
 nonisolated struct OnDeviceTxDraft {
     @Guide(description: "One entry per purchase, payment or money received in the note")
     var items: [OnDeviceTxEntry]
 }
 
+@available(iOS 26.0, *)
 @Generable
 nonisolated struct OnDeviceTxEntry {
     @Guide(description: "A short name for what it was, without the amount")
@@ -153,6 +160,7 @@ nonisolated struct OnDeviceTxEntry {
     var category: OnDeviceTxKind
 }
 
+@available(iOS 26.0, *)
 @Generable
 nonisolated enum OnDeviceTxKind: CaseIterable {
     case food, transport, shopping, bills, health, travel, rentOrFamily, other

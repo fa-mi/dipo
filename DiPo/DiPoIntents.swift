@@ -95,7 +95,10 @@ struct LogExpenseIntent: AppIntent {
     static var description = IntentDescription(
         "Records an expense in DiPo without opening it. DiPo says what it will save and asks first."
     )
-    static let supportedModes: IntentModes = .background
+    /// Stays in the background, like LogFromMessageIntent. (`openAppWhenRun`
+    /// rather than iOS 26's `supportedModes`, so the app still builds for the
+    /// iOS 17 and 18 the min-ios-probe job checks.)
+    static var openAppWhenRun: Bool = false
     static var authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
 
     @Parameter(title: "Amount", requestValueDialog: "How much was it?")
@@ -140,9 +143,13 @@ struct LogExpenseIntent: AppIntent {
 
         // Said back before anything is written: a misheard "two hundred
         // thousand" is caught here, not found in the ledger a week later.
-        try await requestConfirmation(
-            actionName: .log,
-            dialog: "\(String(format: loc("appintent.log.confirm"), money, label, place))")
+        if #available(iOS 18.0, *) {
+            try await requestConfirmation(
+                actionName: .log,
+                dialog: "\(String(format: loc("appintent.log.confirm"), money, label, place))")
+        } else {
+            try await requestConfirmation()
+        }
 
         let tx = DiPoIntentSupport.expense(amount: amount, name: label, category: cat, currency: currency)
         // Insert before appending: `transactions` has no inverse, so a row
@@ -164,19 +171,14 @@ struct MoneyLeftIntent: AppIntent {
     static var description = IntentDescription(
         "Says your main card's balance, this period's spending and what is left of your income, and how long until payday. When DiPo is locked or its balances are hidden, nothing is read out."
     )
-    /// Background by default. Brought forward only when DiPo's lock is on,
-    /// so the lock can ask first.
-    static let supportedModes: IntentModes = [.background, .foreground(.dynamic)]
+    static var openAppWhenRun: Bool = false
     static var authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
 
     @MainActor
     func perform() async throws -> some IntentResult & ProvidesDialog {
         if AuthViewModel.lockIsOn {
-            // Open DiPo, where its lock asks for Face ID and Home shows the
-            // figures behind it. Nothing is said, and nothing is read first.
-            if systemContext.currentMode.canContinueInForeground {
-                try await continueInForeground(alwaysConfirm: false)
-            }
+            // DiPo's lock asks for Face ID before Home shows these figures;
+            // Siri doesn't get round it. Nothing is said, nothing read first.
             return .result(dialog: "\(loc("appintent.money.locked"))")
         }
         let context = DiPoApp.sharedModelContainer.mainContext
