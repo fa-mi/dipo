@@ -26,6 +26,15 @@ extension BankCard {
         isHidden ? "•••• •••• •••• ••••" : formattedNumber
     }
 
+    /// How a transfer's two legs name the other card: "Transfer to •••• 0969",
+    /// "Transfer from GoPay". Written into the rows' names, by the transfer
+    /// form and by the review queue's "Record as a transfer".
+    var transferLabel: String {
+        if isDigitalWallet, !walletProvider.isEmpty { return walletProvider }
+        let l4 = last4
+        return l4.isEmpty ? (holderName.isEmpty ? loc("transfer.card") : holderName) : "•••• \(l4)"
+    }
+
     /// Compact one-line name for choosers ("BRI ·· 0969", "GoPay"). Wallets show
     /// their provider; cards show the holder name plus the last four digits so
     /// two cards from the same bank stay distinguishable.

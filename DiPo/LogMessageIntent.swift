@@ -35,16 +35,21 @@ struct LogFromMessageIntent: AppIntent {
         let context = ModelContext(DiPoApp.sharedModelContainer)
         let currency = CurrencyManager.shared.preferredCurrency
 
-        guard let parsed = BankMessageParser.parse(text, defaultCurrency: currency) else {
+        // The bank's number also sends one-time codes, often with the amount
+        // they confirm, and promos and reminders. None of them is kept, a
+        // code not even in part, and the reply doesn't repeat it.
+        guard NotificationTx.screen(text) == .payment,
+              let parsed = BankMessageParser.parse(text, defaultCurrency: currency) else {
             // Said plainly rather than filed as an empty row: a queue full of
             // blanks is worse than a message that was skipped.
-            return .result(dialog: "No amount found in that message, so nothing was saved.")
+            return .result(dialog: "\(loc("logmsg.skipped"))")
         }
 
         let cards = (try? context.fetch(FetchDescriptor<BankCard>())) ?? []
         let card = BankMessageParser.matchCard(parsed, cards: cards)
         let category = SmartBudgetManager.suggestCategory(
-            for: parsed.merchant, txType: parsed.amount < 0 ? "Expense" : "Income") ?? .other
+            for: parsed.merchant, txType: parsed.amount < 0 ? "Expense" : "Income")
+            ?? (parsed.amount < 0 ? .other : .incomeOther)
 
         PendingInbox.capture(
             name: parsed.merchant,
@@ -61,7 +66,7 @@ struct LogFromMessageIntent: AppIntent {
         )
 
         let money = CurrencyManager.shared.formatted(parsed.amount, currency: parsed.currency)
-        let name = parsed.merchant.isEmpty ? "a transaction" : parsed.merchant
-        return .result(dialog: "Saved \(name), \(money), for review in DiPo.")
+        let name = parsed.merchant.isEmpty ? loc("logmsg.a_payment") : parsed.merchant
+        return .result(dialog: "\(String(format: loc("logmsg.saved"), name, money))")
     }
 }

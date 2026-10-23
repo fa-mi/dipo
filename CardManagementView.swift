@@ -1347,11 +1347,7 @@ struct CardTransferSheet: View {
         (sourceCard?.resolvedCurrency ?? "") != (destCard?.resolvedCurrency ?? "")
     }
 
-    private func label(_ card: BankCard) -> String {
-        if card.isDigitalWallet, !card.walletProvider.isEmpty { return card.walletProvider }
-        let l4 = card.last4
-        return l4.isEmpty ? (card.holderName.isEmpty ? loc("transfer.card") : card.holderName) : "•••• \(l4)"
-    }
+    private func label(_ card: BankCard) -> String { card.transferLabel }
 
     var body: some View {
         NavigationStack {

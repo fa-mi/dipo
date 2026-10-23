@@ -9,7 +9,7 @@ import Foundation
 // The queue doesn't merge them on its own. Two coffees at the same price a
 // minute apart are real too, and a payment dropped as a "duplicate" is one
 // nobody notices is missing. So it says what it sees, on both rows, and the
-// user decides.
+// user decides: swipe one away, or record a move as the transfer it was.
 
 enum PendingTwins {
 
@@ -26,18 +26,38 @@ enum PendingTwins {
 
     /// Another row of the same amount and currency, read within `window` of
     /// this one. Crossed outranks repeated: recording a move between cards as
-    /// spending is the bigger mistake. A held bill has its own note and
-    /// is left out.
+    /// spending is the bigger mistake.
     static func kind(of item: PendingTransaction, among rows: [PendingTransaction]) -> Kind? {
-        guard item.source != .recurring, item.amount != 0 else { return nil }
-        var found: Kind?
-        for other in rows where other.id != item.id && other.source != .recurring
-            && other.currency == item.currency
-            && abs(abs(other.amount) - abs(item.amount)) < 0.5
-            && abs(other.capturedAt.timeIntervalSince(item.capturedAt)) <= window {
-            if (other.amount < 0) != (item.amount < 0) { return .crossed }
-            found = .repeated
+        let twins = self.twins(of: item, among: rows)
+        if twins.contains(where: { crosses($0, item) }) { return .crossed }
+        return twins.isEmpty ? nil : .repeated
+    }
+
+    /// The other half of a crossed pair: opposite in sign, nearest in time.
+    static func crossedPartner(of item: PendingTransaction,
+                               among rows: [PendingTransaction]) -> PendingTransaction? {
+        twins(of: item, among: rows)
+            .filter { crosses($0, item) }
+            .min { gap($0, item) < gap($1, item) }
+    }
+
+    /// A held bill has its own note and is left out.
+    private static func twins(of item: PendingTransaction,
+                              among rows: [PendingTransaction]) -> [PendingTransaction] {
+        guard item.source != .recurring, item.amount != 0 else { return [] }
+        return rows.filter { other in
+            other.id != item.id && other.source != .recurring
+                && other.currency == item.currency
+                && abs(abs(other.amount) - abs(item.amount)) < 0.5
+                && gap(other, item) <= window
         }
-        return found
+    }
+
+    private static func crosses(_ a: PendingTransaction, _ b: PendingTransaction) -> Bool {
+        (a.amount < 0) != (b.amount < 0)
+    }
+
+    private static func gap(_ a: PendingTransaction, _ b: PendingTransaction) -> TimeInterval {
+        abs(a.capturedAt.timeIntervalSince(b.capturedAt))
     }
 }

@@ -96,10 +96,27 @@ enum NotificationTx {
         if words(notice.app).contains("dipo") { return .notMoney }
         let text = plain(notice.text)
         if isSecret(text) { return .secret }
-        guard BankMessageParser.firstAmount(in: text) != nil, !has(offerWords, in: text),
-              !has(reminderWords, in: text), !isDelivery(text) else { return .notMoney }
-        if has(unfinishedWords, in: text), !isSettledRefund(text) { return .notMoney }
+        if isNotPayment(text) { return .notMoney }
         return has(movedWords, in: text) ? .payment : .notMoney
+    }
+
+    /// A message the user's own automation picked out: a bank's SMS or email,
+    /// from a sender the user chose. The same screening, without asking it to
+    /// say the money moved, because bank SMS are terse ("BCA: 27/09 DB
+    /// Rp50.000,00 QRIS WARKOP"). Codes still never pass: the bank's number
+    /// sends its OTPs too, often with the amount they confirm.
+    static func screen(_ message: String) -> Verdict {
+        let text = plain(message)
+        if isSecret(text) { return .secret }
+        return isNotPayment(text) ? .notMoney : .payment
+    }
+
+    /// No amount, an offer, a reminder, a parcel on its way, or a payment
+    /// that isn't done.
+    private static func isNotPayment(_ text: String) -> Bool {
+        BankMessageParser.firstAmount(in: text) == nil || has(offerWords, in: text)
+            || has(reminderWords, in: text) || isDelivery(text)
+            || (has(unfinishedWords, in: text) && !isSettledRefund(text))
     }
 
     /// A one-time code, a password, or the warning that comes with them.

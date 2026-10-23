@@ -194,6 +194,29 @@ final class NotificationTxTests: XCTestCase {
         XCTAssertNil(read("Rp500.000 berhasil kamu bayar minggu ini", app: "DiPo"))
     }
 
+    // MARK: Bank SMS
+
+    /// A bank's SMS is terse and comes from a sender the user picked, so it
+    /// needn't say that money moved. A code or a promo still never passes:
+    /// the bank's number sends those too.
+    func testBankMessagesAreScreenedToo() {
+        let payments = [
+            "BCA: 27/09 DB Rp50.000,00 QRIS WARKOP PAK BUDI",
+            "Trx Rek. xxxx0969: Transfer IBNK ke BUDI SANTOSO Rp. 250000.00 27/09/26 21:22:13",
+            "BCA: 27/09 CR Rp10.000.000,00 TRANSFER DARI PT SUMBER REJEKI",
+            "BRI: Transaksi Rp50.000 di INDOMARET",
+        ]
+        for message in payments {
+            XCTAssertEqual(NotificationTx.screen(message), .payment, message)
+        }
+        XCTAssertEqual(NotificationTx.screen("BCA: Kode OTP Anda 449120 untuk transfer Rp500.000. RAHASIA."), .secret)
+        XCTAssertEqual(NotificationTx.screen("BRI: Nikmati cashback hingga Rp50.000 pakai BRImo"), .notMoney)
+        XCTAssertEqual(NotificationTx.screen("Tagihan kartu kredit Rp2.500.000 jatuh tempo 25/10"), .notMoney)
+        XCTAssertEqual(NotificationTx.screen("BCA: Login berhasil di perangkat baru"), .notMoney)
+        // The same terse line from an app's notification has to say more.
+        XCTAssertEqual(verdict("BRI: Transaksi Rp50.000 di INDOMARET", app: "BRImo"), .notMoney)
+    }
+
     // MARK: The notice
 
     func testTheTitleIsReadOnceAndTheBannerIsKeptAsSeen() {

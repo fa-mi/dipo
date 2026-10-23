@@ -152,4 +152,43 @@ enum PendingInbox {
         context.delete(item)
         return true
     }
+
+    /// Turn a crossed pair, money out of one card and the same money into
+    /// another, into the move between cards it was: the two legs the
+    /// transfer form writes, so Statistics keeps it out of spending and
+    /// income and pairs the legs (OwnMoves). Both legs take the earlier time,
+    /// which is when the money moved and what the pairing looks for.
+    ///
+    /// Returns false, leaving both rows, unless one is out and one is in, on
+    /// two different cards the user has.
+    @MainActor
+    @discardableResult
+    static func commitTransfer(_ a: PendingTransaction, _ b: PendingTransaction,
+                               cards: [BankCard], context: ModelContext) -> Bool {
+        let (out, into) = a.amount < 0 ? (a, b) : (b, a)
+        guard out.amount < 0, into.amount > 0,
+              let from = cards.first(where: { $0.id == out.cardID }),
+              let to = cards.first(where: { $0.id == into.cardID }),
+              from.id != to.id else { return false }
+        let date = min(out.date, into.date)
+        // Named, coloured and typed as the transfer form writes them.
+        let debit = TxRecord(
+            name: String(format: loc("transfer.to_name"), to.transferLabel),
+            date: date, amount: out.amount, type: "tx.type.purchase",
+            icon: "⇄", iconBgHex: "#38BDF8", category: .other,
+            currency: out.currency, notes: "", subtype: .transfer)
+        let credit = TxRecord(
+            name: String(format: loc("transfer.from_name"), from.transferLabel),
+            date: date, amount: into.amount, type: "tx.type.income",
+            icon: "⇄", iconBgHex: "#38BDF8", category: .other,
+            currency: into.currency, notes: "", subtype: .transfer)
+        // Insert before appending, as in `commit`.
+        context.insert(debit)
+        from.transactions.append(debit)
+        context.insert(credit)
+        to.transactions.append(credit)
+        context.delete(out)
+        context.delete(into)
+        return true
+    }
 }

@@ -44,6 +44,14 @@ final class PendingTwinsTests: XCTestCase {
         XCTAssertEqual(PendingTwins.kind(of: into, among: [out, into]), .crossed)
     }
 
+    /// The row "Record as a transfer" pairs with: opposite in sign, nearest.
+    func testTheCrossedPartnerIsTheNearestOppositeRow() {
+        let out = row(-100_000, at: 0), near = row(100_000, at: 1), far = row(100_000, at: 6)
+        let again = row(-100_000, at: 0.5)
+        XCTAssertEqual(PendingTwins.crossedPartner(of: out, among: [out, far, near, again])?.id, near.id)
+        XCTAssertNil(PendingTwins.crossedPartner(of: again, among: [out, again]), "Same way is no partner.")
+    }
+
     func testCrossedOutranksRepeated() {
         let out = row(-100_000, at: 0), outAgain = row(-100_000, at: 0.2), into = row(100_000, at: 1)
         XCTAssertEqual(PendingTwins.kind(of: out, among: [out, outAgain, into]), .crossed)
