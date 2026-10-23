@@ -177,8 +177,17 @@ struct CardCarousel: View {
     var hideAll = false
     var onShowAll: () -> Void = {}
 
+    /// The page clips its content, and the glow under a card reaches about
+    /// 74pt below it: the glow sits 14pt lower than the card and its blur
+    /// spreads some 60pt past that. With 30pt of room it stopped in a straight
+    /// line just above the dots. The page now runs this much lower so the glow
+    /// fades out completely inside it. The dots move up by the same amount, so
+    /// they sit where they did, over the fading glow. The carousel's height is
+    /// unchanged, so nothing below it on Home moves.
+    private let glowRoom: CGFloat = 44
+
     var body: some View {
-        VStack(spacing: 2) {
+        VStack(spacing: 2 - glowRoom) {
             TabView(selection: Binding(
                 get: { vm.selectedCardIndex },
                 set: { vm.selectCard($0) }
@@ -186,16 +195,13 @@ struct CardCarousel: View {
                 ForEach(Array(vm.cards.enumerated()), id: \.element.id) { index, card in
                     BankCardView(card: card, hideAll: hideAll, onShowAll: onShowAll)
                         .padding(.horizontal, 22)
-                        // The page clips its content, so the glow under the card
-                        // needs room inside it — the old black shadow was cut
-                        // off flat along the bottom edge.
                         .padding(.top, 4)
-                        .padding(.bottom, 30)
+                        .padding(.bottom, 30 + glowRoom)
                         .tag(index)
                 }
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
-            .frame(height: 216)
+            .frame(height: 216 + glowRoom)
 
             HStack(spacing: 5) {
                 ForEach(0..<max(vm.cards.count, 1), id: \.self) { i in
