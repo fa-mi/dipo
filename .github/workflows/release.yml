@@ -47,7 +47,8 @@ permissions:
 jobs:
   release:
     if: github.ref == 'refs/heads/main'
-    runs-on: macos-26
+    # Xcode 27 has its own runner image (macOS 27, Apple silicon).
+    runs-on: xcode-27
     timeout-minutes: 60
     env:
       BUNDLE_ID: com.fahmiaquinas.DiPo
@@ -65,9 +66,16 @@ jobs:
             echo "SPM_DIR=$RUNNER_TEMP/spm"
           } >> "$GITHUB_ENV"
 
+      # iPhone Duo gives an app its whole inner display only when it was
+      # built with Xcode 27.1 (the iOS 27.1 SDK); a build from an older
+      # Xcode is shown there letterboxed. The app still targets iOS 26.2.
+      # Pinned to 27.1, never a beta: App Store Connect refuses beta builds.
       - name: Select Xcode
         run: |
-          XCODE=$(ls -d /Applications/Xcode_26*.app | sort -V | tail -1)
+          XCODE=$(ls -d /Applications/Xcode_27.1*.app 2>/dev/null | grep -vi beta | sort -V | tail -1)
+          if [ -z "$XCODE" ]; then
+            echo "::error::No Xcode 27.1 on this image. Installed:"; ls -d /Applications/Xcode_*.app; exit 1
+          fi
           sudo xcode-select -s "$XCODE"
           xcodebuild -version
 
