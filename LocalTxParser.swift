@@ -275,9 +275,10 @@ enum LocalTxParser {
     }
 }
 
-private extension TxCategory {
+extension TxCategory {
     /// Whether this category describes money coming in. Used to keep category
-    /// inference on the correct side of the ledger.
+    /// inference on the correct side of the ledger — here, and when checking
+    /// what the on-device model read (OnDeviceTxParser).
     var isIncomeCategory: Bool {
         switch self {
         case .salary, .freelance, .business, .bonus, .gift, .incomeOther: return true
