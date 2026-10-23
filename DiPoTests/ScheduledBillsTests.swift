@@ -160,10 +160,13 @@ final class ScheduledBillsTests: XCTestCase {
 
     func testThePeriodFromPaydayIsThirtyThreeDaysEndingTheTwentyFourth() {
         XCTAssertEqual(StatPeriod.daysLeft(in: (periodStart, periodEnd), now: day(10, 23, hour: 8)), 33)
+        // The day before the next payday, in the app's own date format —
+        // "24 Nov" on an Indonesian phone, "Nov 24" on an English one.
+        let last = StatPeriod.lastDayLabel(before: periodEnd)
+        XCTAssertEqual(last, DateFormatterCache.template("dMMM").string(from: day(11, 24)))
+        XCTAssertNotEqual(last, DateFormatterCache.template("dMMM").string(from: periodEnd))
         LanguageManager.shared.withLanguage(.indonesian) {
-            let last = StatPeriod.lastDayLabel(before: periodEnd)
-            XCTAssertEqual(last, "24 Nov")
-            XCTAssertEqual(String(format: loc("budget.pace_hint"), "Rp 77.697", 33, last),
+            XCTAssertEqual(String(format: loc("budget.pace_hint"), "Rp 77.697", 33, "24 Nov"),
                            "Kamu bisa pakai Rp 77.697 per hari selama 33 hari, dari hari ini sampai 24 Nov.")
         }
     }
