@@ -5,10 +5,11 @@ import SwiftData
 // MARK: - Hand a bank message to DiPo
 //
 // iOS will not let an app read another app's notifications — there is no
-// equivalent of Android's NotificationListenerService, and Shortcuts has no
-// "when a notification arrives" trigger either. What it does have is a
-// Communication trigger for a MESSAGE or an EMAIL, which is how most Indonesian
-// banks and wallets announce a transaction anyway.
+// equivalent of Android's NotificationListenerService. Until iOS 27 Shortcuts
+// had no "when a notification arrives" trigger either (from iOS 27 it does, and
+// LogFromNotificationIntent takes those). What it has always had is a
+// Communication trigger for a MESSAGE or an EMAIL, which is how many Indonesian
+// banks still announce a transaction, and the only way on iOS 26 and earlier.
 //
 // So the user builds the automation once — "when I receive a message from BCA,
 // run this" — and it calls this intent with the text. `openAppWhenRun` is false,

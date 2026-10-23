@@ -13,8 +13,9 @@ import SwiftData
 // not yours, correct what was misread — a merchant name, the card it came out
 // of — and submit the rest in one go.
 //
-// This is the destination. What fills it (a Shortcuts automation on a bank SMS,
-// the Back Tap screenshot, a scanned receipt) plugs in through `capture`.
+// This is the destination. What fills it (a Shortcuts automation on a bank SMS
+// or on a bank app's notifications, the Back Tap screenshot, a scanned receipt)
+// plugs in through `capture`.
 
 @Model
 final class PendingTransaction {
@@ -65,6 +66,7 @@ final class PendingTransaction {
 /// read is part of how much you should trust it.
 enum PendingSource: String, CaseIterable {
     case shortcut   // a Shortcuts automation handed over a bank SMS or email
+    case notification // a Shortcuts automation handed over another app's notification
     case backTap    // the Back Tap screenshot flow
     case scan       // a scanned receipt
     case manual
@@ -76,6 +78,7 @@ enum PendingSource: String, CaseIterable {
     var icon: String {
         switch self {
         case .shortcut: return "bolt.horizontal.circle.fill"
+        case .notification: return "bell.badge.fill"
         case .backTap:  return "iphone.gen3.badge.play"
         case .scan:     return "doc.text.viewfinder"
         case .manual:   return "square.and.pencil"
@@ -86,6 +89,7 @@ enum PendingSource: String, CaseIterable {
     var labelKey: String {
         switch self {
         case .shortcut: return "pending.source.shortcut"
+        case .notification: return "pending.source.notification"
         case .backTap:  return "pending.source.backtap"
         case .scan:     return "pending.source.scan"
         case .manual:   return "pending.source.manual"

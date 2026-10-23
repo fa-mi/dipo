@@ -155,7 +155,7 @@ enum BankMessageParser {
 
     /// Words up to the next separator, with amounts, dates and bank names
     /// dropped — those sit next to the name often enough to be picked up.
-    private static func firstName(in tail: String) -> String? {
+    static func firstName(in tail: String) -> String? {
         let stop = CharacterSet(charactersIn: ",.;:\n\r")
         let chunk = tail.components(separatedBy: stop).first ?? tail
         let cleaned = chunk

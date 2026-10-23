@@ -101,6 +101,18 @@ struct PendingInboxSheet: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(AppTheme.orange.opacity(0.10), in: RoundedRectangle(cornerRadius: AppRadius.sm))
             }
+            // One payment told by two apps, or one move told from both ends.
+            // Said on both rows; which one to keep is the user's call.
+            if let twin = PendingTwins.kind(of: item, among: pending) {
+                Label(loc(twin == .crossed ? "pending.twin_crossed" : "pending.twin_repeated"),
+                      systemImage: twin == .crossed ? "arrow.left.arrow.right.circle.fill" : "square.on.square")
+                    .font(.system(.caption))
+                    .foregroundStyle(AppTheme.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(10)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(AppTheme.orange.opacity(0.10), in: RoundedRectangle(cornerRadius: AppRadius.sm))
+            }
         }
         .padding(14)
         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
