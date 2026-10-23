@@ -182,7 +182,9 @@ final class WebPeriodViewTests: XCTestCase {
         XCTAssertNil(v["safe"], "nothing to project from")
 
         let en = words(v, "en")
-        XCTAssertEqual(en["scope"] as? String, "With the cards it pays bills from · \(bca.pickerLabel)")
+        // Both cards say only "Fahmi", so the name stays whole and the digits
+        // tell them apart.
+        XCTAssertEqual(en["scope"] as? String, "With the cards it pays bills from · Fahmi ••9331")
         let own = (en["lines"] as? [[String: Any]] ?? []).first { $0["details"] != nil }
         let details = try XCTUnwrap(own?["details"] as? [[String: Any]])
         XCTAssertEqual(details.count, 1, "BRI↔BCA cancels inside the pot; only OVO is left")

@@ -84,7 +84,7 @@ enum WebPeriodView {
 
         func inLanguage(_ language: LanguageManager.Language) -> [String: Any] {
             LanguageManager.shared.withLanguage(language) {
-                Self.words(book, main: main, pot: pot, cycle: cycle, outlook: outlook, change: change,
+                Self.words(book, main: main, pot: pot, cards: cards, cycle: cycle, outlook: outlook, change: change,
                            ownLines: ownLines, currency: currency, language: language)
             }
         }
@@ -203,8 +203,8 @@ enum WebPeriodView {
 
     /// Every sentence and book line, in the language `loc()` currently
     /// resolves to. Called inside `withLanguage`.
-    static func words(_ book: PeriodCashBook, main: BankCard, pot: [BankCard], cycle: Cycle,
-                      outlook: (payday: Date, end: Double)?, change: Double?,
+    static func words(_ book: PeriodCashBook, main: BankCard, pot: [BankCard], cards: [BankCard],
+                      cycle: Cycle, outlook: (payday: Date, end: Double)?, change: Double?,
                       ownLines: [OwnMoves.Line], currency: String,
                       language: LanguageManager.Language) -> [String: Any] {
         let money: (Double) -> String = { CurrencyManager.shared.formatted($0, currency: currency) }
@@ -243,7 +243,7 @@ enum WebPeriodView {
         }
         if pot.count > 1 {
             w["scope"] = String(format: loc("stats.with_bill_cards"),
-                                pot.dropFirst().map(\.pickerLabel).joined(separator: ", "))
+                                pot.dropFirst().map { $0.shortName(among: cards) }.joined(separator: ", "))
         }
         return w
     }

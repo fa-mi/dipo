@@ -57,15 +57,23 @@ final class DiPoIntentsTests: XCTestCase {
 
     // MARK: What Siri calls a card
 
-    func testSiriNamesACardByItsBankAndLastFourNotItsHolder() {
-        XCTAssertEqual(DiPoIntentSupport.spokenName(card("Fahmi Aquinas", issuer: "bri")), "BRI 0969")
+    func testSiriNamesACardByWhatTellsItApartNotItsHolder() {
+        // Fahmi's cards: no bank chosen, the bank written into the name.
+        let bri = card("Fahmi Aquinas BRI", "5221845086220969")
+        let bca = card("Fahmi Aquinas BCA", "4111111111119331")
+        let mandiri = card("Fahmi Aquinas Mandiri", "4111111111113661")
+        let all = [bri, bca, mandiri]
+        XCTAssertEqual(all.map { DiPoIntentSupport.spokenName($0, among: all) },
+                       ["BRI 0969", "BCA 9331", "Mandiri 3661"])
+        let chosen = card("Fahmi Aquinas", issuer: "bri")
+        XCTAssertEqual(DiPoIntentSupport.spokenName(chosen, among: [chosen]), "BRI 0969")
         let wallet = BankCard(holderName: "Fahmi", cardNumber: "GoPay", balance: 0, expireDate: "Digital",
                               gradientStart: "#00AED6", gradientEnd: "#006E8A", sortOrder: 0, currency: "IDR",
                               isDigitalWallet: true, walletProvider: "GoPay")
         context.insert(wallet)
-        XCTAssertEqual(DiPoIntentSupport.spokenName(wallet), "GoPay")
-        // No bank chosen: the chooser's own label.
-        XCTAssertEqual(DiPoIntentSupport.spokenName(card("Tabungan", "5221845086224821")), "Tabungan ·· 4821")
+        XCTAssertEqual(DiPoIntentSupport.spokenName(wallet, among: [wallet]), "GoPay")
+        let tabungan = card("Tabungan", "5221845086224821")
+        XCTAssertEqual(DiPoIntentSupport.spokenName(tabungan, among: [tabungan]), "Tabungan 4821")
     }
 
     // MARK: Which card

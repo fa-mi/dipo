@@ -302,11 +302,14 @@ extension StatisticsView {
 
     var periodSubtitle: String {
         let locale = LanguageManager.shared.currentLocale
-        let fmt = DateFormatter()
+        // "23 Okt – 24 Nov 2026", "Oct 23 – Nov 24, 2026": short months and
+        // the year said once. Two full dates ("October 23, 2026 – November
+        // 24, 2026") filled a line before the header had said anything else.
+        let fmt = DateIntervalFormatter()
         fmt.locale = locale
-        fmt.dateFormat = DateFormatter.dateFormat(fromTemplate: "dMMMMyyyy", options: 0, locale: locale)
+        fmt.dateTemplate = "dMMMyyyy"
         if selectedPeriod == .custom {
-            return "\(fmt.string(from: customStart)) – \(fmt.string(from: customEnd))"
+            return fmt.string(from: customStart, to: customEnd)
         }
         // Use effectiveRange so the pay-cycle window (payday → today) shows its
         // real anchored dates, not the calendar-month fallback.
@@ -333,9 +336,9 @@ extension StatisticsView {
             let nextPay = cycleBoundary(monthsFromNow: 1)
                 ?? cal.safeDate(byAdding: .month, value: 1, to: start)
             let lastDay = cal.safeDate(byAdding: .day, value: -1, to: nextPay)
-            return "\(fmt.string(from: start)) – \(fmt.string(from: lastDay))"
+            return fmt.string(from: start, to: lastDay)
         }
-        return "\(fmt.string(from: start)) – \(fmt.string(from: end))"
+        return fmt.string(from: start, to: end)
     }
 
     // NOTE: Removed unconverted `income`, `expenses`, `netBalance` properties.
@@ -383,7 +386,24 @@ extension StatisticsView {
     /// The bill cards' names for the screen's subtitle, or nil when there are none.
     var billCardsLabel: String? {
         let bills = scopeCards.dropFirst()
-        return bills.isEmpty ? nil : bills.map(\.pickerLabel).joined(separator: ", ")
+        return bills.isEmpty ? nil : bills.map { $0.shortName(among: appVM.cards) }.joined(separator: ", ")
+    }
+
+    /// Every card the figures cover, on one line: "BRI ••0969 (main) · BCA
+    /// ••9331 · Mandiri ••3661". Nil without a main card.
+    var scopeCardsLine: String? {
+        guard let main = scopeCards.first else { return nil }
+        return ([String(format: loc("stats.scope_main"), main.shortName(among: appVM.cards))]
+                + scopeCards.dropFirst().map { $0.shortName(among: appVM.cards) })
+            .joined(separator: " · ")
+    }
+
+    /// The same, said in full for VoiceOver: which is the main card, and that
+    /// the others are the cards it pays bills from.
+    var scopeCardsSpoken: String? {
+        guard let main = scopeCards.first else { return nil }
+        let first = String(format: loc("stats.main_card_line"), main.shortName(among: appVM.cards))
+        return billCardsLabel.map { first + ". " + String(format: loc("stats.with_bill_cards"), $0) } ?? first
     }
 
     /// The card a row sits on, for its list row.
@@ -1310,15 +1330,5 @@ extension StatisticsView {
         // `card.transactions` is in insertion order, so `prefix(5)` was
         // showing arbitrary rows, not the latest ones.
         return base.sorted { $0.date > $1.date }
-    }
-    
-    /// Compact card label for filter pills and exports.
-    /// Digital wallet → provider name. Card → holder + last4.
-    func cardLabel(_ card: BankCard) -> String {
-        if card.isDigitalWallet, !card.walletProvider.isEmpty {
-            return card.walletProvider
-        }
-        let holder = card.holderName.split(separator: " ").first.map(String.init) ?? card.holderName
-        return "\(holder) ••\(card.last4)"
     }
 }

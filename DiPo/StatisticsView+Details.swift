@@ -602,15 +602,14 @@ extension StatisticsView {
                         Text(periodSubtitle)
                             .font(.system(.footnote, weight: .semibold))
                             .foregroundStyle(AppTheme.textPrimary)
-                        if let main = selectedCard {
-                            Text(String(format: loc("stats.main_card_line"), cardLabel(main)))
+                        // One line for every card the figures cover. It took
+                        // two sentences, with the holder's name on each card.
+                        if let cards = scopeCardsLine {
+                            Text(cards)
                                 .font(.system(.caption))
                                 .foregroundStyle(AppTheme.textSecondary)
-                            if let bills = billCardsLabel {
-                                Text(String(format: loc("stats.with_bill_cards"), bills))
-                                    .font(.system(.caption))
-                                    .foregroundStyle(AppTheme.textSecondary)
-                            }
+                                .lineLimit(2)
+                                .accessibilityLabel(scopeCardsSpoken ?? cards)
                         }
                     }
                     .padding(.bottom, 4)

@@ -69,20 +69,22 @@ struct CardQuery: EntityQuery {
     @MainActor
     func entities(for identifiers: [UUID]) async throws -> [CardEntity] {
         let wanted = Set(identifiers)
-        return DiPoIntentSupport.cards()
+        let cards = DiPoIntentSupport.cards()
+        return cards
             .filter { wanted.contains($0.id) }
-            .map { CardEntity(id: $0.id, name: DiPoIntentSupport.spokenName($0)) }
+            .map { CardEntity(id: $0.id, name: DiPoIntentSupport.spokenName($0, among: cards)) }
     }
 
     /// The main card first, then the rest in the Wallet's order.
     @MainActor
     func suggestedEntities() async throws -> [CardEntity] {
-        DiPoIntentSupport.cards()
+        let cards = DiPoIntentSupport.cards()
+        return cards
             .sorted { a, b in
                 if MainCard.isMain(a) != MainCard.isMain(b) { return MainCard.isMain(a) }
                 return a.sortOrder < b.sortOrder
             }
-            .map { CardEntity(id: $0.id, name: DiPoIntentSupport.spokenName($0)) }
+            .map { CardEntity(id: $0.id, name: DiPoIntentSupport.spokenName($0, among: cards)) }
     }
 }
 
@@ -134,7 +136,7 @@ struct LogExpenseIntent: AppIntent {
             ?? DiPoIntentSupport.suggestedCategory(for: label, history: cards.flatMap(\.transactions))
         let currency = target.resolvedCurrency
         let money = CurrencyManager.shared.formatted(amount, currency: currency)
-        let place = DiPoIntentSupport.spokenName(target)
+        let place = DiPoIntentSupport.spokenName(target, among: cards)
 
         // Said back before anything is written: a misheard "two hundred
         // thousand" is caught here, not found in the ledger a week later.
@@ -223,7 +225,7 @@ struct MoneyLeftSummary {
         }
         let extra = MainCard.isMain(main) ? ExtraFunds.total(in: all, from: start, currency: currency) : 0
         return MoneyLeftSummary(
-            cardName: DiPoIntentSupport.spokenName(main),
+            cardName: DiPoIntentSupport.spokenName(main, among: cards),
             balance: main.computedBalance(),
             currency: currency,
             periodStart: cycle?.start,
@@ -287,16 +289,14 @@ enum DiPoIntentSupport {
         loc(cards.isEmpty ? "appintent.no_card" : "appintent.no_main")
     }
 
-    /// How Siri names a card: "BCA 0969", "GoPay". Not `pickerLabel`, which
-    /// leads with the holder's name — read aloud, that says whose phone it
-    /// is rather than which card.
-    static func spokenName(_ card: BankCard) -> String {
-        if card.isDigitalWallet, !card.walletProvider.isEmpty { return card.walletProvider }
+    /// How Siri names a card: "BCA 9331", "GoPay" — the name Statistics
+    /// shows (`BankCard.shortName`), without the dots, which are read out.
+    /// Not `pickerLabel`: it leads with the holder, the same person on every
+    /// card, so it said whose phone it was rather than which card.
+    static func spokenName(_ card: BankCard, among cards: [BankCard]) -> String {
+        let name = card.distinctName(among: cards)
         let last4 = String(card.cardNumber.filter(\.isNumber).suffix(4))
-        if let bank = BankIssuer.find(card.issuerID)?.name {
-            return last4.isEmpty ? bank : "\(bank) \(last4)"
-        }
-        return card.pickerLabel
+        return card.isDigitalWallet || last4.count < 4 ? name : "\(name) \(last4)"
     }
 
     /// The same bounds the quick-entry parser holds an amount to.
