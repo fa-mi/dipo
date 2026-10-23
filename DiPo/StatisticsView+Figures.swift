@@ -12,15 +12,6 @@ extension StatisticsView {
         MainCard.payDay(salarySchedules)
     }
 
-    /// Income for BUDGET MATH in the export insight: the stated salary schedule
-    /// when there is one (so a pre-payday period doesn't distort the ratio),
-    /// otherwise actual income received in the period.
-    var budgetInsightIncome: Double {
-        let active = MainCard.salaries(salarySchedules)
-        guard !active.isEmpty else { return filteredIncome }
-        return active.reduce(0.0) { $0 + CurrencyManager.shared.convert($1.amount, from: $1.currency, to: displayCurrency) }
-    }
-
     /// Periods shown as chips. "Pay cycle" only appears when there's a salary
     /// schedule to anchor it on; otherwise it would be meaningless.
     var availablePeriods: [StatPeriod] {
@@ -130,6 +121,35 @@ extension StatisticsView {
         return wantIncome ? income(slice, convert: convert) : expenses(slice, convert: convert)
     }
 
+    /// Living costs: spending less debt paid down and money put away, as the
+    /// cash book counts them. A card bill paid clears what is owed; it buys
+    /// nothing new.
+    static func living(_ txs: [TxRecord], convert: (TxRecord) -> Double) -> Double {
+        let keptApart = PeriodCashBook.categorySpend(txs, .debtPayment, convert: convert)
+            + PeriodCashBook.categorySpend(txs, .investment, convert: convert)
+        return max(expenses(txs, convert: convert) - keptApart, 0)
+    }
+
+    /// Living costs over [from, to). Nil when nothing was spent: no data is
+    /// not zero.
+    static func livingTotal(_ txs: [TxRecord], from: Date, to: Date,
+                            convert: (TxRecord) -> Double) -> Double? {
+        let slice = txs.filter { $0.date >= from && $0.date < to }
+        guard slice.contains(where: { $0.amount < 0 && $0.txSubtype != .transfer }) else { return nil }
+        return living(slice, convert: convert)
+    }
+
+    /// Living costs against the same days of the previous period, in percent:
+    /// the "vs last period" chip on every screen. Nil in a period's first week,
+    /// when a day or two decides it. On day 1 a Rp 1,5 jt card bill plus one
+    /// day's shopping, set against last period's first day of Rp 154.000, read
+    /// "1020% more than last time".
+    static func livingChange(_ current: Double, previous: Double?, elapsed: Int?) -> Double? {
+        guard let previous, previous > 0 else { return nil }
+        if let elapsed, elapsed < settledDays { return nil }
+        return (current - previous) / previous * 100
+    }
+
     /// The pay-cycle hero's figures for one card, in one currency.
     struct CycleFigures {
         let start: Date
@@ -142,6 +162,8 @@ extension StatisticsView {
         /// The same days of the previous cycle — what the hero's chip compares.
         let previousIncome: Double?
         let previousSpent: Double?
+        /// Of `previousSpent`: living costs, which the chip now compares.
+        var previousLiving: Double? = nil
     }
 
     /// Exactly what Statistics shows for the pay cycle — the anchored window,
@@ -170,7 +192,8 @@ extension StatisticsView {
             spent: expenses(window, convert: convert),
             progress: p,
             previousIncome: stretchTotal(all, from: prevStart, to: cutoff, income: true, convert: convert),
-            previousSpent: stretchTotal(all, from: prevStart, to: cutoff, income: false, convert: convert))
+            previousSpent: stretchTotal(all, from: prevStart, to: cutoff, income: false, convert: convert),
+            previousLiving: livingTotal(all, from: prevStart, to: cutoff, convert: convert))
     }
 
     var periodProgress: (elapsed: Int, total: Int)? {
@@ -191,24 +214,59 @@ extension StatisticsView {
     var previousPeriodExpenses: Double? { previousPeriodTotal(positive: false) }
 
     func previousPeriodTotal(positive: Bool) -> Double? {
-        let cal = Calendar.current
-        let (start, _) = effectiveRange
-
-        // The previous window begins where the previous CYCLE actually began —
-        // see `previousCycleStart` for why that is not one calendar month back.
-        let prevStart: Date
-        if selectedPeriod == .payCycle, let day = payCycleDay {
-            prevStart = Self.previousCycleStart(before: start, payDay: day)
-        } else {
-            guard let naive = cal.date(byAdding: .month, value: -1, to: start) else { return nil }
-            prevStart = naive
-        }
-        let cutoff: Date = {
-            guard let p = periodProgress else { return start }
-            return cal.date(byAdding: .day, value: p.elapsed, to: prevStart) ?? start
-        }()
-        return Self.stretchTotal(scopeTransactions, from: prevStart, to: cutoff,
+        guard let prevStart = previousWindowStart else { return nil }
+        return Self.stretchTotal(scopeTransactions, from: prevStart, to: previousCutoff(from: prevStart),
                                  income: positive, convert: convertedAmount)
+    }
+
+    /// Where the period before the selected one began. The previous window
+    /// begins where the previous CYCLE actually began — see
+    /// `previousCycleStart` for why that is not one calendar month back.
+    var previousWindowStart: Date? {
+        let (start, _) = effectiveRange
+        if selectedPeriod == .payCycle, let day = payCycleDay {
+            return Self.previousCycleStart(before: start, payDay: day)
+        }
+        return Calendar.current.date(byAdding: .month, value: -1, to: start)
+    }
+
+    /// As many days on from `prevStart` as the selected period has run, or
+    /// the selected period's start when it has finished.
+    func previousCutoff(from prevStart: Date) -> Date {
+        let (start, _) = effectiveRange
+        guard let p = periodProgress else { return start }
+        return Calendar.current.date(byAdding: .day, value: p.elapsed, to: prevStart) ?? start
+    }
+
+    /// Living costs over the same days one period back.
+    var previousPeriodLiving: Double? {
+        guard let prevStart = previousWindowStart else { return nil }
+        return Self.livingTotal(scopeTransactions, from: prevStart, to: previousCutoff(from: prevStart),
+                                convert: convertedAmount)
+    }
+
+    /// Living costs this period: the cash book's "spending & bills".
+    var periodLiving: Double { Self.living(filteredTx, convert: convertedAmount) }
+
+    /// The "vs last period" figure, on living costs, from the second week on.
+    var periodLivingChange: Double? {
+        Self.livingChange(periodLiving, previous: previousPeriodLiving, elapsed: periodProgress?.elapsed)
+    }
+
+    /// Spending & bills by category, largest first: refunds taken off their
+    /// category, and transfers, debt paid and money put away left out. The
+    /// rows that make up the headline's "spending & bills", for the report.
+    var livingCategories: [(category: TxCategory, amount: Double)] {
+        var totals: [TxCategory: Double] = [:]
+        for tx in filteredTx where tx.txSubtype != .transfer
+            && tx.category != .debtPayment && tx.category != .investment {
+            let amt = abs(convertedAmount(tx))
+            if tx.txSubtype == .refund { totals[tx.category, default: 0] -= amt }
+            else if tx.amount < 0 { totals[tx.category, default: 0] += amt }
+        }
+        return totals.filter { $0.value >= 0.5 }
+            .map { (category: $0.key, amount: $0.value) }
+            .sorted { $0.amount > $1.amount }
     }
 
 
@@ -363,6 +421,7 @@ extension StatisticsView {
         cachedFilteredTx = computeFilteredTx()
         // Figures LAST: they read both of the above.
         cachedFigures = computeFigures()
+        cachedPriorPeriod = computePriorPeriod()
         cachedNetWorthTrend = computeNetWorthTrend()
     }
     
@@ -435,7 +494,10 @@ extension StatisticsView {
     var todaySpend: Double {
         guard selectedCard != nil else { return 0 }
         let cal = Calendar.current
-        return expenseSum(scopeTransactions.filter { cal.isDateInToday($0.date) })
+        // Spending & bills, as the headline above it counts them. With the
+        // card bill in it, payday read "Today Rp 1.725.000" under a headline
+        // that said Rp 225.000 had been spent.
+        return Self.living(scopeTransactions.filter { cal.isDateInToday($0.date) }, convert: convertedAmount)
     }
 
     /// A Monday-first calendar, in the app's language.
@@ -643,14 +705,56 @@ extension StatisticsView {
             }
         }
         f.dailyTotals = perDay.values.sorted()
-        if !f.dailyTotals.isEmpty {
-            let m = f.dailyTotals.count / 2
-            f.typicalDaily = f.dailyTotals.count % 2 == 0
-                ? (f.dailyTotals[m - 1] + f.dailyTotals[m]) / 2
-                : f.dailyTotals[m]
-        }
+        f.typicalDaily = median(f.dailyTotals)
         return f
     }
+
+    /// The middle value; 0 for none.
+    static func median(_ values: [Double]) -> Double {
+        let v = values.sorted()
+        guard !v.isEmpty else { return 0 }
+        let m = v.count / 2
+        return v.count % 2 == 0 ? (v[m - 1] + v[m]) / 2 : v[m]
+    }
+
+    // MARK: A period's first week
+    //
+    // A period's own days set its pace once there are enough of them. On its
+    // first day there is one. Fahmi's payday, Rp 225.000 of ordinary spending,
+    // was projected across all 33 days: "Rp 0 left over each day", "Balance
+    // may run out before payday", payday at −Rp 2.072.887 and Rp 1.575.000 a
+    // week, on the morning a Rp 10 jt salary landed. Until a period is a week
+    // old its day-to-day figures lean on the period before it.
+
+    /// Days a period needs before its own day-to-day figures stand alone.
+    static let settledDays = 7
+
+    /// The whole period before the selected one, read during its first week.
+    struct PriorPeriod {
+        let figures: SpendingFigures
+        let days: Int
+        /// Its day-to-day spending per day, the rate `projection` uses.
+        var dailyRate: Double { figures.variable / Double(max(days, 1)) }
+    }
+
+    /// The figures of [from, to), or nil when nothing was spent in it.
+    static func priorPeriod(_ txs: [TxRecord], from: Date, to: Date, rhythm: SpendingRhythm,
+                            convert: (TxRecord) -> Double) -> PriorPeriod? {
+        let rows = txs.filter { $0.date >= from && $0.date < to }
+        let days = Calendar.current.dateComponents([.day], from: from, to: to).day ?? 0
+        guard days > 0, rows.contains(where: { $0.amount < 0 && $0.txSubtype != .transfer }) else { return nil }
+        return PriorPeriod(figures: figures(for: rows, rhythm: rhythm, convert: convert), days: days)
+    }
+
+    /// Nil once the selected period is a week old, or with nothing before it.
+    func computePriorPeriod() -> PriorPeriod? {
+        guard selectedCard != nil, let p = periodProgress, p.elapsed < Self.settledDays,
+              let prevStart = previousWindowStart else { return nil }
+        return Self.priorPeriod(scopeTransactions, from: prevStart, to: effectiveRange.start,
+                                rhythm: rhythm, convert: convertedAmount)
+    }
+
+    var priorPeriod: PriorPeriod? { cachedPriorPeriod }
 
     /// Day-to-day spending only. The denominator of every rate on this screen.
     var variableSpend: Double { cachedFigures.variable }
@@ -674,7 +778,14 @@ extension StatisticsView {
     /// A median cannot be dragged by a handful of expensive days, which is
     /// exactly the property this number needs. The big days are not hidden —
     /// they are reported as what they are, in `irregularSpend`.
-    var typicalDailySpend: Double { cachedFigures.typicalDaily }
+    ///
+    /// In a period's first week the median also takes in the previous
+    /// period's days. On day 1 it was that one day, and the fixed-payments
+    /// card set Rp 182.185 a day against it and said "Rp 0 left over each day".
+    var typicalDailySpend: Double {
+        guard let prior = priorPeriod, !prior.figures.dailyTotals.isEmpty else { return cachedFigures.typicalDaily }
+        return Self.median(cachedFigures.dailyTotals + prior.figures.dailyTotals)
+    }
 
     /// The irregular spending this period: episodic categories plus anything
     /// marked a one-off. Named rather than averaged away.
@@ -745,12 +856,17 @@ extension StatisticsView {
         return max(Calendar.current.dateComponents([.day], from: start, to: end).day ?? 0, 0)
     }
 
+    /// Which day of the period today is, counting today: day 1 on payday.
+    /// `periodDays` counts whole days, so on payday it was 0, and the card
+    /// said "Only 0 days in this period so far".
+    var periodDayNumber: Int { periodProgress?.elapsed ?? max(periodDays, 1) }
+
     /// A window under ~2 weeks doesn't hold enough data for a stable weekly
     /// pace — dividing a front-loaded, still-in-progress span (e.g. a pay
     /// cycle 8 days in) by fractional weeks inflates the figure. Flag those so
     /// the UI marks the weekly average as a partial estimate.
     var isPartialWeeklyPeriod: Bool {
-        periodDays < 14
+        periodDayNumber < 14
     }
     
     var topCategories: [(category: TxCategory, amount: Double, percentage: Double)] {
@@ -870,14 +986,20 @@ extension StatisticsView {
         let cm = CurrencyManager.shared
 
         if let projected = projectedSpend, let p = periodProgress {
-            let overIncome = filteredIncome > 0 && projected > filteredIncome
+            // Living costs, as the headline's pace sentence reads them: with a
+            // Rp 1,5 jt card bill in it this said Rp 12.912.887 where the
+            // headline said Rp 11.412.887, for the same period.
+            let book = cashBook
+            let living = max(projected - (book.map { $0.debtPaid + $0.invested } ?? 0), 0)
+            let funds = livingFunds
+            let overIncome = funds > 0 && living > funds
             out.append((
                 "chart.line.uptrend.xyaxis",
                 overIncome ? AppTheme.orange : AppTheme.accent,
-                String(format: loc("stats.pattern.pace"), cm.formatted(projected, currency: displayCurrency)),
+                String(format: loc("stats.pattern.pace"), cm.formatted(living, currency: displayCurrency)),
                 overIncome
                     ? String(format: loc("stats.pattern.pace_over"),
-                             cm.formatted(projected - filteredIncome, currency: displayCurrency), p.total)
+                             cm.formatted(living - funds, currency: displayCurrency), p.total)
                     : String(format: loc("stats.pattern.pace_ok"), p.total)
             ))
         }
@@ -914,7 +1036,8 @@ extension StatisticsView {
         }
         if let big = biggestExpense {
             let amt = abs(convertedAmount(big))
-            let share = filteredExpenses > 0 ? Int((amt / filteredExpenses * 100).rounded()) : 0
+            let living = periodLiving
+            let share = living > 0 ? Int((min(amt / living, 1) * 100).rounded()) : 0
             out.append((
                 "arrow.up.right.circle.fill",
                 AppTheme.textSecondary,
@@ -932,7 +1055,8 @@ extension StatisticsView {
     var projectedSpend: Double? {
         guard let p = periodProgress, filteredExpenses > 0 else { return nil }
         return Self.projection(variable: variableSpend, fixed: fixedSpend,
-                               upcoming: upcomingFixed, progress: p)
+                               upcoming: upcomingFixed, progress: p,
+                               priorDaily: priorPeriod?.dailyRate)
     }
 
     /// Straight-lining EVERYTHING multiplied the monthly charges by however
@@ -946,19 +1070,42 @@ extension StatisticsView {
     ///   • fixed charges already made, counted once;
     ///   • fixed charges still to come, taken from the recurring plans rather
     ///     than guessed — DiPo knows the rent is due on the 8th.
+    ///
+    /// Day-to-day spending already made is kept as it is; the days still to
+    /// come are rated by `dailyRate`. Once a period is a week old that is the
+    /// straight line it always was.
     static func projection(variable: Double, fixed: Double, upcoming: Double,
-                           progress p: (elapsed: Int, total: Int)) -> Double? {
-        guard p.elapsed > 0, p.total > 0 else { return nil }
-        return variable / Double(p.elapsed) * Double(p.total) + fixed + upcoming
+                           progress p: (elapsed: Int, total: Int), priorDaily: Double? = nil) -> Double? {
+        guard p.total > 0,
+              let rate = dailyRate(variable: variable, elapsed: p.elapsed, priorDaily: priorDaily)
+        else { return nil }
+        return variable + rate * Double(max(p.total - p.elapsed, 0)) + fixed + upcoming
+    }
+
+    /// Day-to-day spending per day, for the days still to come. A period's own
+    /// rate once it is a week old. Before that its days are made up to a week
+    /// with days at last period's rate, so one day decides a seventh of the
+    /// rate rather than all of it. Nil before a first day, and in a first week
+    /// with no period before it to lean on: too early to say.
+    static func dailyRate(variable: Double, elapsed: Int, priorDaily: Double?) -> Double? {
+        guard elapsed > 0 else { return nil }
+        if elapsed >= settledDays { return variable / Double(elapsed) }
+        guard let prior = priorDaily else { return nil }
+        return (variable + prior * Double(settledDays - elapsed)) / Double(settledDays)
     }
 
     /// The same projection for a caller that is not this screen — Home's
     /// pace warning — built from the same pieces, so the two quote one figure.
     /// Nil when there is no running cycle or nothing has been spent yet.
     /// `billCards` are read with `card` as one pot — pass the main card's.
+    ///
+    /// `livingOnly` takes out the debt paid and money put away so far, for a
+    /// caller that holds the figure against income: Statistics' pace sentence
+    /// does the same, or a card bill reads as a pace of overspending.
     static func projectedCycleSpend(card: BankCard, billCards: [BankCard] = [], payDay: Int,
                                     recurrings: [RecurringExpense],
-                                    currency: String, now: Date = Date()) -> Double? {
+                                    currency: String, now: Date = Date(),
+                                    livingOnly: Bool = false) -> Double? {
         let convert: (TxRecord) -> Double = { tx in
             let from = tx.currency.isEmpty ? card.resolvedCurrency : tx.currency
             return CurrencyManager.shared.convert(tx.amount, from: from, to: currency)
@@ -975,7 +1122,17 @@ extension StatisticsView {
         let f = figures(for: window, rhythm: rhythm, convert: convert)
         let upcoming = upcomingFixed(recurrings: recurrings, cardIDs: Set(pot.map(\.id)),
                                      periodEnd: cycle.end, currency: currency, now: now)
-        return projection(variable: f.variable, fixed: f.fixed, upcoming: upcoming, progress: p)
+        // The first week leans on the cycle before, as Statistics does.
+        let prior = p.elapsed < settledDays
+            ? Self.priorPeriod(all, from: previousCycleStart(before: cycle.start, payDay: payDay), to: cycle.start,
+                               rhythm: rhythm, convert: convert)?.dailyRate
+            : nil
+        guard let total = projection(variable: f.variable, fixed: f.fixed, upcoming: upcoming,
+                                     progress: p, priorDaily: prior) else { return nil }
+        guard livingOnly else { return total }
+        let keptApart = PeriodCashBook.categorySpend(window, .debtPayment, convert: convert)
+            + PeriodCashBook.categorySpend(window, .investment, convert: convert)
+        return max(total - keptApart, 0)
     }
 
     /// Recurring charges falling in the remainder of this period. Counted at
@@ -1098,9 +1255,13 @@ extension StatisticsView {
         return (max(p.elapsed - spentDays.count, 0), p.elapsed)
     }
 
-    /// Single largest outflow — the anchor a list of five recent rows never gave.
+    /// Single largest purchase — the anchor a list of five recent rows never
+    /// gave. A card bill or money put away is not a purchase: "Biggest single
+    /// spend: Tokopedia CC bill payment, 87% of everything" named a repayment
+    /// as the period's spending.
     var biggestExpense: TxRecord? {
-        filteredTx.filter { $0.amount < 0 && $0.txSubtype == .normal }
+        filteredTx.filter { $0.amount < 0 && $0.txSubtype == .normal
+                            && $0.category != .debtPayment && $0.category != .investment }
             .max { abs(convertedAmount($0)) < abs(convertedAmount($1)) }
     }
 

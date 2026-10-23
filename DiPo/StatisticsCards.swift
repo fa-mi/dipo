@@ -114,9 +114,15 @@ struct SpendingTrendCard: View {
 
 // MARK: - Summary Cards
 
+/// The period in the headline's terms: income against spending & bills, debt
+/// paid and money put away kept on lines of their own. It used to count a
+/// Rp 1,5 jt card bill as spending, so the analysis said "17% spent" under a
+/// headline that said 2%.
 struct NetBalanceSummary: View {
+    /// Income minus spending & bills.
     let net: Double
     let income: Double
+    /// Spending & bills.
     let expenses: Double
     let currency: String
     /// The selected card's CUMULATIVE balance (what Home shows). Rendered as a
@@ -124,14 +130,23 @@ struct NetBalanceSummary: View {
     /// reading "Net this period" as the card balance and reporting a "bug".
     var cardBalanceNow: Double? = nil
     /// Balance at the period's start + net transfer movement — together with
-    /// `net` they RECONCILE exactly to the card balance:
-    /// start + net + transfers = balance. Nil hides the breakdown.
+    /// `net` and the two lines below they RECONCILE exactly to the card
+    /// balance: start + net − debt − invested + transfers = balance. Nil hides
+    /// the breakdown.
     var startBalance: Double? = nil
     var transferNet: Double? = nil
+    /// Paid down on debts and cards; put into savings and investments.
+    var debtPaid: Double = 0
+    var invested: Double = 0
+    /// What spending & bills are measured against: income plus any money added
+    /// to the period's budget, as in the headline. Income when nil.
+    var funds: Double? = nil
     /// Day N of M when the period is still running. Nil for finished periods.
     var progress: (elapsed: Int, total: Int)? = nil
-    /// Spending over the same number of days one period ago.
-    var previousExpenses: Double? = nil
+    /// `StatisticsView.livingChange`: nil in the period's first week.
+    var change: Double? = nil
+
+    private var base: Double { funds ?? income }
 
     private func chip(_ icon: String, _ tint: Color, _ text: String) -> some View {
         HStack(spacing: 4) {
@@ -144,13 +159,13 @@ struct NetBalanceSummary: View {
     }
 
     private var spentPct: Double {
-        guard income > 0 else { return 0 }
-        return min((expenses / income) * 100, 100)
+        guard base > 0 else { return 0 }
+        return min((expenses / base) * 100, 100)
     }
-    
+
     private var savedPct: Double {
-        guard income > 0 else { return 0 }
-        return max(0, 100 - (expenses / income) * 100)
+        guard base > 0 else { return 0 }
+        return max(0, 100 - (expenses / base) * 100)
     }
 
     var body: some View {
@@ -174,7 +189,7 @@ struct NetBalanceSummary: View {
             }
             // Share of income spent, warming from green to red as it fills, with
             // a tick where TIME is: a bar ending past it is ahead of the calendar.
-            SpendGauge(fraction: income > 0 ? expenses / income : 0,
+            SpendGauge(fraction: base > 0 ? expenses / base : 0,
                        timeMarker: progress.map { Double($0.elapsed) / Double($0.total) },
                        height: 8)
             HStack {
@@ -187,19 +202,18 @@ struct NetBalanceSummary: View {
                               String(format: "%.0f%%", savedPct))
                      : loc("stats.overspent"))
                     .font(.system(.caption2, weight: .medium))
-                    .foregroundStyle(SpendGauge.tone(for: income > 0 ? expenses / income : 1))
+                    .foregroundStyle(SpendGauge.tone(for: base > 0 ? expenses / base : 1))
             }
 
             // Two facts that make the percentages mean something: how far into
             // the period we are, and how this pace compares to last time.
-            if progress != nil || previousExpenses != nil {
+            if progress != nil || change != nil {
                 HStack(spacing: 8) {
                     if let p = progress {
                         chip("clock", AppTheme.blue,
                              String(format: loc("stats.day_of"), p.elapsed, p.total))
                     }
-                    if let prev = previousExpenses, prev > 0 {
-                        let delta = (expenses - prev) / prev * 100
+                    if let delta = change, abs(delta) >= 1 {
                         let up = delta >= 0
                         chip(up ? "arrow.up.right" : "arrow.down.right",
                              up ? AppTheme.orange : AppTheme.accent,
@@ -211,22 +225,28 @@ struct NetBalanceSummary: View {
                 .padding(.top, 2)
             }
 
-            // Full reconciliation: start balance + net + transfers = today's
-            // balance. Every rupiah between "net this period" and the card
-            // balance is accounted for on screen.
+            // Full reconciliation: start balance + net − debt − invested +
+            // transfers = today's balance. Every rupiah between "net this
+            // period" and the card balance is accounted for on screen.
             if let start = startBalance, let balance = cardBalanceNow {
                 Divider().background(AppTheme.cardMid)
                 VStack(spacing: 6) {
                     reconRow(loc("stats.recon_start"), start)
                     reconRow(loc("stats.net_balance"), net, signed: true)
+                    if debtPaid >= 0.5 {
+                        reconRow(loc("stats.book_debt"), -debtPaid, signed: true)
+                    }
+                    if invested >= 0.5 {
+                        reconRow(loc("stats.book_invest"), -invested, signed: true)
+                    }
                     if let transfers = transferNet, abs(transfers) > 0.5 {
                         reconRow(loc("stats.recon_transfers"), transfers, signed: true)
                     }
-                    // When the period is still running, start + net + transfers
-                    // lands exactly on today's balance. For a past period (e.g.
-                    // "Last Month") it lands on that period's CLOSING balance —
-                    // label whichever applies so the math always visibly closes.
-                    let closing = start + net + (transferNet ?? 0)
+                    // When the period is still running, the lines land exactly
+                    // on today's balance. For a past period (e.g. "Last Month")
+                    // they land on that period's CLOSING balance — label
+                    // whichever applies so the math always visibly closes.
+                    let closing = start + net - debtPaid - invested + (transferNet ?? 0)
                     let isToday = abs(closing - balance) < 1
                     Divider().background(AppTheme.cardMid.opacity(0.6))
                     HStack {
@@ -301,7 +321,11 @@ struct SmartInsightsCard: View {
     /// and reads much higher than a steady weekly pace. We keep showing it but
     /// flag it as a partial-period estimate so it isn't mistaken for a rate.
     var isPartialPeriod: Bool = false
+    /// Which day of the period it is, counting today.
     var periodDays: Int = 0
+    /// In the period's first week the typical day also counts the period
+    /// before it (see `StatisticsView.typicalDailySpend`); the caveat says so.
+    var leansOnPrior: Bool = false
     /// Opens the audit. A figure that excludes some of your spending has to be
     /// traceable back to the transactions it did and did not use.
     var onAudit: (() -> Void)? = nil
@@ -350,7 +374,8 @@ struct SmartInsightsCard: View {
                     .foregroundStyle(AppTheme.textPrimary)
                     .contentTransition(.numericText())
                 Text(isPartialPeriod
-                     ? String(format: loc("stats.weekly_avg_partial_sub"), periodDays)
+                     ? String(format: loc(leansOnPrior ? "stats.weekly_avg_prior_sub" : "stats.weekly_avg_partial_sub"),
+                              periodDays)
                      : loc("stats.weekly_avg_sub"))
                     .font(.system(.caption2))
                     .foregroundStyle(isPartialPeriod ? AppTheme.orange.opacity(0.9) : AppTheme.textSecondary.opacity(0.8))

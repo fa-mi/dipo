@@ -38,6 +38,9 @@ struct StatisticsView: View {
     @State var cachedFilteredTx: [TxRecord] = []
     @State var cachedRhythm = SpendingRhythm(history: []) { _ in 0 }
     @State var cachedFigures = SpendingFigures()
+    /// The period before the selected one, while the selected one is under a
+    /// week old. See `computePriorPeriod`.
+    @State var cachedPriorPeriod: PriorPeriod? = nil
     @State var cachedNetWorthTrend: [CycleTrendPoint] = []
     @State var customStart: Date = Calendar.current.safeDate(byAdding: .month, value: -1, to: Date())
     @State var customEnd: Date = Date()
@@ -183,22 +186,20 @@ struct StatisticsView: View {
                 .preferredColorScheme(appColorScheme())
         }
         .sheet(isPresented: $showExportSheet) {
+            // The headline's own figures and sentences, so the image says what
+            // the screen says. Everything here is on the free screen.
+            let book = cashBook
             StatsExportSheet(
-                period: selectedPeriod,
                 periodSubtitle: periodSubtitle,
                 selectedCard: selectedCard,
-                income: filteredIncome,
-                budgetIncome: budgetInsightIncome,
-                expenses: filteredExpenses,
-                // The typical week is a Royal note, so it is withheld from the
-                // export itself, not just hidden in the layout. Categories are
-                // on the free screen, so they travel for everyone.
-                weeklyAverage: premiumMgr.canAccess(.smartBudget) ? weeklyAverage : 0,
-                topCategories: topCategories,
-                transactions: filteredTx,
                 currency: displayCurrency,
-                configs: cardBudgetConfigs,
-                previousExpenses: previousPeriodExpenses
+                living: book?.living ?? periodLiving,
+                livingFunds: livingFunds,
+                progress: periodProgress,
+                change: periodLivingChange,
+                debtLine: book?.debtSentence(money: money),
+                paceLine: paceLine(book),
+                categories: livingCategories
             )
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)

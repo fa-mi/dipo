@@ -713,7 +713,8 @@ struct FinancialBriefingView: View {
                     return StatisticsView.projectedCycleSpend(card: card, billCards: MainCard.billCards(in: cards),
                                                               payDay: day,
                                                               recurrings: recurrings,
-                                                              currency: CurrencyManager.shared.preferredCurrency)
+                                                              currency: CurrencyManager.shared.preferredCurrency,
+                                                              livingOnly: true)
                 }()
                 briefing = FinancialBriefingEngine.build(
                     cards: cards, debts: debts, goals: goals,

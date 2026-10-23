@@ -611,13 +611,20 @@ extension StatisticsView {
                     }
                     .padding(.bottom, 4)
 
-                    NetBalanceSummary(net: filteredIncome - filteredExpenses, income: filteredIncome,
-                                      expenses: filteredExpenses, currency: displayCurrency,
+                    // The headline's terms: spending & bills against income,
+                    // debt paid and money put away on lines of their own.
+                    let book = cashBook
+                    let living = book?.living ?? periodLiving
+                    NetBalanceSummary(net: filteredIncome - living, income: filteredIncome,
+                                      expenses: living, currency: displayCurrency,
                                       cardBalanceNow: scopeBalanceNow,
                                       startBalance: periodStartBalance,
                                       transferNet: periodTransferNet,
+                                      debtPaid: book?.debtPaid ?? 0,
+                                      invested: book?.invested ?? 0,
+                                      funds: livingFunds,
                                       progress: periodProgress,
-                                      previousExpenses: previousPeriodExpenses)
+                                      change: periodLivingChange)
 
                     // The trend's working lives here now: the main page carries a
                     // compact "Trends" tile, and this is the one tap away.
@@ -633,7 +640,8 @@ extension StatisticsView {
                             totalExpenses: filteredExpenses,
                             currency: displayCurrency,
                             isPartialPeriod: isPartialWeeklyPeriod,
-                            periodDays: periodDays
+                            periodDays: periodDayNumber,
+                            leansOnPrior: priorPeriod != nil
                         )
                         if premiumMgr.canAccess(.smartBudget) {
                             insightsCard

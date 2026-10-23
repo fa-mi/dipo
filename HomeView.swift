@@ -461,7 +461,8 @@ struct HomeView: View {
                                                       billCards: MainCard.isMain(card) ? MainCard.billCards(in: queriedCards) : [],
                                                       payDay: day,
                                                       recurrings: recurringExpenses,
-                                                      currency: budgetCurrency)
+                                                      currency: budgetCurrency,
+                                                      livingOnly: true)
         }()
         // Debt still due each month, so the surplus advice can put it before
         // investing: debt minimums plus credit-card instalments and minimums,
