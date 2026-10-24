@@ -31,6 +31,9 @@ struct AddTransactionSheet: View {
 
     @State private var txType: AddTxType = .expense
     @State private var name: String = ""
+    /// The words of the user's past names, read once when the sheet opens:
+    /// what a slip in the name field is checked against first.
+    @State private var nameVocabulary: [String: FuzzyName.Known] = [:]
     @State private var amountText: String = ""
     @State private var currency: String = CurrencyManager.shared.preferredCurrency
     @State private var selectedCategory: TxCategory = .shopping
@@ -478,6 +481,12 @@ struct AddTransactionSheet: View {
                     }
                 }
 
+            // A slip of a name the user or DiPo knows ("indimaret"). Taking
+            // it runs the name's onChange, so the category follows the fix.
+            if let fix = FuzzyName.corrected(name, history: nameVocabulary) {
+                NameFixHint(suggestion: fix) { name = fix }
+            }
+
             if txType == .expense {
                 CategorySuggestionHint(name: name, transactions: allTransactions,
                                        categories: availableCategories,
@@ -485,6 +494,7 @@ struct AddTransactionSheet: View {
             }
         }
         .padding(.horizontal, 22)
+        .onAppear { nameVocabulary = FuzzyName.vocabulary(of: allTransactions.map(\.name)) }
     }
 
     private var categorySection: some View {

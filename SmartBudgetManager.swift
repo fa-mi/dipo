@@ -1163,6 +1163,8 @@ final class SmartBudgetManager {
 
     // MARK: - Auto Categorize
 
+    /// FuzzyName reads slips of these keywords too: after adding one, run
+    /// ci/fuzzy-words.py.
     static let merchantMap: [(keywords: [String], category: TxCategory)] = [
         // Food — minimarkets, restaurants, cafes, food delivery, groceries
         (["indomaret", "alfamart", "alfamidi", "lawson", "7-eleven", "711", "circle k",
@@ -1301,11 +1303,12 @@ final class SmartBudgetManager {
 
     /// What this user's own history says `name` should be categorised as.
     ///
-    /// Two tiers, because the evidence differs in strength:
+    /// Three tiers, because the evidence differs in strength:
     ///   • exact normalised name — 2 matches is already a pattern
     ///   • shared token ("warkop" inside "warkop pak budi") — needs 3, since a
     ///     token can collide across unrelated merchants
-    /// Both require the winning category to be genuinely dominant: at least
+    ///   • a slip of a past word ("indimaret" for "indomaret") — also 3
+    /// Each requires the winning category to be genuinely dominant: at least
     /// 60% of matches and ahead by 2. A merchant the user splits between two
     /// categories (Alfamart → sometimes Food, sometimes Shopping) is genuinely
     /// ambiguous, and guessing there would train the user to distrust it.
@@ -1344,6 +1347,26 @@ final class SmartBudgetManager {
                 return LearnedCategory(category: cat, count: n, matchedTerm: token, isExact: false)
             }
         }
+
+        // Tier 3 — a slip of a word the user has written before ("indimaret"
+        // for their "Indomaret"). The same bar as a shared word, and the hint
+        // names the word they wrote. Only a word that can be a slip at all is
+        // looked for.
+        for token in meaningfulTokens(target).sorted(by: { $0.count > $1.count })
+        where token.count >= 6 && !FuzzyName.isWord(token) {
+            var aimedAt: String?
+            let bySlip = history.filter { tx in
+                normalizedMerchant(tx.name).split(separator: " ").contains { piece in
+                    let word = String(piece)
+                    guard FuzzyName.isTypo(token, of: word) else { return false }
+                    if aimedAt == nil { aimedAt = word }
+                    return true
+                }
+            }
+            if let (cat, n) = winner(bySlip, minCount: 3) {
+                return LearnedCategory(category: cat, count: n, matchedTerm: aimedAt ?? token, isExact: false)
+            }
+        }
         return nil
     }
 
@@ -1364,6 +1387,17 @@ final class SmartBudgetManager {
         for entry in merchantMap {
             for keyword in entry.keywords {
                 if lower.contains(keyword) { return entry.category }
+            }
+        }
+        // A slip of a known name ("indimaret", "tokopedi") points the same
+        // way. Only after every exact match has had its turn, and only for
+        // words of six letters or more (see FuzzyName).
+        let words = normalizedMerchant(name)
+        guard words.split(separator: " ").contains(where: { $0.count >= 6 }) else { return nil }
+        for entry in merchantMap {
+            for keyword in entry.keywords
+            where FuzzyName.contains(words, typoOf: keyword.trimmingCharacters(in: .whitespaces)) {
+                return entry.category
             }
         }
         return nil

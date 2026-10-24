@@ -841,6 +841,8 @@ final class LanguageManager {
         "tx.save_in_currency":  "Save in %@ at today's rate",
         "tx.learned_from":     "You picked this %d times for \"%@\"",
         "tx.auto_detected":     "Auto-detected: %@",
+        "tx.name_fix":          "Did you mean %@?",
+        "tx.name_fix_use":      "Use",
         "tx.valid_error":       "Enter a name and an amount",
         "tx.add_type":          "Record %@",
 
@@ -4431,6 +4433,8 @@ final class LanguageManager {
         "tx.save_in_currency":  "Simpan dalam %@ pakai kurs hari ini",
         "tx.learned_from":     "Kamu pilih ini %d kali untuk \"%@\"",
         "tx.auto_detected":     "Terdeteksi otomatis: %@",
+        "tx.name_fix":          "Maksud kamu %@?",
+        "tx.name_fix_use":      "Pakai",
         "tx.valid_error":       "Isi nama dan jumlahnya",
         "tx.add_type":          "Catat %@",
 
