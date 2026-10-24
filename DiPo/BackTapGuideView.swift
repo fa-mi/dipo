@@ -53,14 +53,16 @@ struct BackTapGuideView: View {
     /// No gesture at all: from iOS 27 Shortcuts can run DiPo's action when a
     /// bank or wallet app sends a notification (LogFromNotificationIntent).
     /// The payment waits under Review like everything else read for you.
+    /// iOS 27 builds this inside a new shortcut: its Automation actions put
+    /// the trigger at the top, and DiPo's action goes under it.
     private var notificationSteps: [GuideStep] {
         [
             GuideStep(id: 1, title: loc("backtap.n1_title"), body: loc("backtap.n1_body"),
                       glyph: "bell.badge"),
             GuideStep(id: 2, title: loc("backtap.n2_title"), body: loc("backtap.n2_body"),
-                      glyph: "lock.open"),
-            GuideStep(id: 3, title: loc("backtap.n3_title"), body: loc("backtap.n3_body"),
                       glyph: "plus.circle"),
+            GuideStep(id: 3, title: loc("backtap.n3_title"), body: loc("backtap.n3_body"),
+                      glyph: "lock.open"),
         ]
     }
 
