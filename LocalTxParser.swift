@@ -48,8 +48,9 @@ enum LocalTxParser {
     ]
 
     /// Category keywords. First match wins, so the table is ordered from most
-    /// specific to most generic.
-    private static let categoryWords: [(TxCategory, [String])] = [
+    /// specific to most generic. FuzzyName reads slips of them too: after
+    /// adding one, run ci/fuzzy-words.py.
+    static let categoryWords: [(TxCategory, [String])] = [
         (.food,      ["makan", "makanan", "minum", "kopi", "coffee", "sarapan", "nasi",
                       "warteg", "resto", "restoran", "cafe", "kafe", "jajan", "snack",
                       "bakso", "mie", "ayam", "gofood", "grabfood", "lunch", "dinner",
@@ -237,6 +238,12 @@ enum LocalTxParser {
             // or "gaji" would match .commitment through an unrelated keyword.
             if isIncome != category.isIncomeCategory { continue }
             for key in keys where s.contains(key) { return category }
+        }
+        // A slip of one of those words ("bensni", "parkri") reads the same,
+        // once no word matched as written (see FuzzyName).
+        let words = tokens(s).joined(separator: " ")
+        for (category, keys) in categoryWords where isIncome == category.isIncomeCategory {
+            if keys.contains(where: { FuzzyName.contains(words, typoOf: $0) }) { return category }
         }
         return isIncome ? .incomeOther : .other
     }

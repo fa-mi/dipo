@@ -473,6 +473,35 @@ struct CategorySuggestionHint: View {
     }
 }
 
+// MARK: - Name suggestion
+
+/// "Did you mean Indomaret?" under a name typed with a slip (FuzzyName). Laid
+/// out like the category hint below it, and like it only offers: the name
+/// changes when the user taps.
+struct NameFixHint: View {
+    let suggestion: String
+    let apply: () -> Void
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "wand.and.stars").font(.system(.caption)).foregroundStyle(AppTheme.accent)
+            Text(String(format: loc("tx.name_fix"), suggestion))
+                .font(.system(.caption, weight: .medium)).foregroundStyle(AppTheme.textSecondary)
+            Spacer()
+            Button {
+                HapticManager.shared.tap()
+                apply()
+            } label: {
+                Text(loc("tx.name_fix_use")).font(.system(.caption2, weight: .semibold))
+                    .foregroundStyle(AppTheme.onVividFill)
+                    .padding(.horizontal, 10).padding(.vertical, 4)
+                    .background(AppTheme.accentFill, in: Capsule())
+            }
+        }
+        .transition(.opacity)
+    }
+}
+
 // MARK: - Spend gauge
 
 /// How much of an income has gone, as a bar that warms as it fills: green while
