@@ -4,7 +4,7 @@ import PhotosUI
 import UniformTypeIdentifiers   // for `.json` UTType in fileImporter
 
 // Moved out of ProfileView.swift. Its pieces (hero, steps, callouts) are in
-// GuidePieces.swift, shared with the notification guide.
+// GuidePieces.swift.
 
 // MARK: - Back Tap walkthrough
 
@@ -16,8 +16,8 @@ import UniformTypeIdentifiers   // for `.json` UTType in fileImporter
 /// binds them — and without a guide that chain is three apps deep and
 /// invisible.
 ///
-/// Two gestures, two lists, kept apart because they are independent setups:
-/// someone may well want only one of them.
+/// Two gestures and a notification automation, three lists, kept apart
+/// because they are independent setups: someone may well want only one.
 struct BackTapGuideView: View {
     @Environment(\.dismiss) private var dismiss
 
@@ -50,6 +50,27 @@ struct BackTapGuideView: View {
         ]
     }
 
+    /// No gesture at all: from iOS 27 Shortcuts can run DiPo's action when a
+    /// bank or wallet app sends a notification (LogFromNotificationIntent).
+    /// The payment waits under Review like everything else read for you.
+    private var notificationSteps: [GuideStep] {
+        [
+            GuideStep(id: 1, title: loc("backtap.n1_title"), body: loc("backtap.n1_body"),
+                      glyph: "bell.badge"),
+            GuideStep(id: 2, title: loc("backtap.n2_title"), body: loc("backtap.n2_body"),
+                      glyph: "lock.open"),
+            GuideStep(id: 3, title: loc("backtap.n3_title"), body: loc("backtap.n3_body"),
+                      glyph: "plus.circle"),
+        ]
+    }
+
+    /// The iOS version, on an iPhone too old for the notification trigger.
+    /// Said before those steps, which can't be followed yet.
+    private var olderIOS: String? {
+        let needed = OperatingSystemVersion(majorVersion: 27, minorVersion: 0, patchVersion: 0)
+        return ProcessInfo.processInfo.isOperatingSystemAtLeast(needed) ? nil : UIDevice.current.systemVersion
+    }
+
     var body: some View {
         NavigationStack {
             ZStack {
@@ -69,6 +90,18 @@ struct BackTapGuideView: View {
                             .foregroundStyle(AppTheme.textSecondary)
                             .fixedSize(horizontal: false, vertical: true)
                         GuideStepList(steps: voiceSteps, tint: AppTheme.accent)
+
+                        GuideSectionLabel(text: loc("backtap.notif_heading"), tint: AppTheme.blue)
+                        Text(loc("backtap.notif_intro"))
+                            .font(.system(.footnote))
+                            .foregroundStyle(AppTheme.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        if let version = olderIOS {
+                            GuideCallout(title: loc("backtap.notif_needs_ios_heading"),
+                                         message: String(format: loc("backtap.notif_needs_ios"), version),
+                                         icon: "exclamationmark.circle", tint: AppTheme.orange)
+                        }
+                        GuideStepList(steps: notificationSteps, tint: AppTheme.blue)
 
                         GuideCallout(title: loc("backtap.using_heading"), message: loc("backtap.using_body"),
                                      icon: "sparkles", tint: AppTheme.accent)

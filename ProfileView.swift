@@ -23,7 +23,6 @@ struct ProfileView: View {
     @State private var idCopied           = false
     @State private var emailText          = ""
     @State private var showBackTapGuide = false
-    @State private var showNotificationGuide = false
     @State private var showInterests = false
     @State private var showWebSync        = false
     @State private var showCleanup        = false
@@ -342,11 +341,6 @@ struct ProfileView: View {
         }
         .sheet(isPresented: $showBackTapGuide) {
             BackTapGuideView()
-                .presentationDetents([.large]).presentationDragIndicator(.visible)
-                .presentationBackground(AppTheme.bg).preferredColorScheme(appColorScheme())
-        }
-        .sheet(isPresented: $showNotificationGuide) {
-            NotificationLogGuideView()
                 .presentationDetents([.large]).presentationDragIndicator(.visible)
                 .presentationBackground(AppTheme.bg).preferredColorScheme(appColorScheme())
         }
@@ -776,12 +770,6 @@ struct ProfileView: View {
                 iconOverride: "hand.tap.fill",
                 tintOverride: AppTheme.orange,
                 showPaywall: $showPaywall) { showBackTapGuide = true }
-
-            // Not gated: it reads on the phone and costs nothing to run, like
-            // the message automation it sits beside in Shortcuts.
-            ProfileFeatureLink(icon: "bell.badge.fill", color: AppTheme.accent,
-                               title: loc("profile.notiflog"),
-                               subtitle: loc("profile.notiflog_sub")) { showNotificationGuide = true }
 
             // What DiPo knows the user enjoys; he guesses, they decide.
             PremiumLockedFeatureLink(

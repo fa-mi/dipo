@@ -2,10 +2,10 @@ import SwiftUI
 
 // MARK: - Pieces of a setup guide
 //
-// The walkthroughs for what DiPo can't set up from inside the app (Back Tap,
-// the notification automation) share one look: a card that says what you get,
-// numbered steps on a rail, callouts for what's worth knowing, and a button
-// that opens Shortcuts.
+// The walkthrough for what DiPo can't set up from inside the app (Back Tap and
+// the notification automation, in BackTapGuideView): a card that says what
+// you get, numbered steps on a rail, callouts for what's worth knowing, and a
+// button that opens Shortcuts.
 
 struct GuideStep: Identifiable {
     let id: Int
