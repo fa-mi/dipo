@@ -1163,8 +1163,9 @@ final class SmartBudgetManager {
 
     // MARK: - Auto Categorize
 
-    /// FuzzyName reads slips of these keywords too: after adding one, run
-    /// ci/fuzzy-words.py.
+    /// Read through `KeywordReading`: a keyword under six characters has to
+    /// be a whole word of the name. FuzzyName reads slips of these keywords
+    /// too: after adding one, run ci/fuzzy-words.py.
     static let merchantMap: [(keywords: [String], category: TxCategory)] = [
         // Food — minimarkets, restaurants, cafes, food delivery, groceries
         (["indomaret", "alfamart", "alfamidi", "lawson", "7-eleven", "711", "circle k",
@@ -1173,26 +1174,27 @@ final class SmartBudgetManager {
           "kfc", "mcdonald", "mcd", "burger king", "pizza hut", "domino", "wendy",
           "starbucks", "cafe", "coffee", "kopi kenangan", "janji jiwa", "fore",
           "gofood", "grabfood", "shopeefood", "restoran", "restaurant", "food",
-          "hokben", "yoshinoya", "geprek", "ayam", "soto", "rendang",
+          "foodcourt", "hokben", "yoshinoya", "geprek", "ayam", "soto", "rendang",
           "j.co", "dunkin", "krispy kreme", "chatime", "xing fu tang",
           "ranch market", "all fresh", "farmers market", "transmart", "carrefour",
           // Indonesian dishes/outlets that were falling through to "Other" —
           // together these accounted for a fifth of one user's real spend.
           "famimart", "fami mart", "superindo", "yogya", "borma", "griya",
           "pecel", "acai", "acaii", "seblak", "batagor", "siomay", "somay",
-          "martabak", "bakmi", "kwetiau", "kwetiaw", "gudeg", "rawon", "pempek",
+          "martabak", "bakmi", "bakmie", "indomie", "makanan", "risoles",
+          "kwetiau", "kwetiaw", "gudeg", "rawon", "pempek",
           "bubur", "lontong", "ketoprak", "gorengan", "cireng", "risol",
           "roti", "bakery", "donat", "dimsum", "sushi", "ramen", "ricebowl",
-          "rice bowl", "seafood", "steak", "salad", "juice", "jus ", "smoothie",
-          "boba", "milk tea", "matcha", "es kopi", "kedai", "resto", "katering",
-          "catering", "prasmanan", "angkringan", "lesehan", "pujasera"], .food),
+          "rice bowl", "seafood", "steak", "steakhouse", "salad", "juice", "jus ",
+          "smoothie", "boba", "milk tea", "matcha", "es kopi", "kedai", "resto",
+          "katering", "catering", "prasmanan", "angkringan", "lesehan", "pujasera"], .food),
         // Transport — ride hailing, fuel, parking, public transit
         (["grab", "gojek", "gocar", "goride", "grabcar", "grabbike", "ojek", "taxi",
           "uber", "bluebird", "blue bird", "maxim", "indriver", "incar",
           "parkir", "parking", "secure parking", "toll", "tol",
           "bensin", "pertamina", "shell", "bp", "vivo", "spbu",
-          "bus", "kereta", "commuter", "krl", "mrt", "lrt", "transjakarta",
-          "kereta api", "kai", "whoosh", "argo"], .transport),
+          "bus", "busway", "kereta", "commuter", "krl", "mrt", "lrt", "transjakarta",
+          "kereta api", "kai", "whoosh", "argo", "transport"], .transport),
         // Shopping — e-commerce, malls, fashion, electronics
         (["tokopedia", "shopee", "lazada", "tiktok shop", "bukalapak", "blibli",
           "amazon", "ebay", "aliexpress",
@@ -1202,6 +1204,9 @@ final class SmartBudgetManager {
           "ace hardware", "informa", "ikea", "ruparupa",
           "erafone", "samsung", "iphone", "apple store", "ibox", "digimap",
           "best", "electronic city", "elektronik"], .shopping),
+        // Airlines named "… Air", ahead of Bills: there "air" is water.
+        (["lion air", "batik air", "super air jet", "pelita air", "sriwijaya air",
+          "wings air", "nam air", "air asia"], .travel),
         // Bills — utilities, internet, streaming, insurance, taxes
         (["pln", "listrik", "electricity", "air", "water", "pdam", "gas",
           "telkom", "telkomsel", "indosat", "xl", "tri", "smartfren",
@@ -1227,7 +1232,7 @@ final class SmartBudgetManager {
         // Travel — hotels, flights, OTA platforms
         (["hotel", "airbnb", "oyo", "reddoorz", "airy",
           "traveloka", "tiket.com", "tiket com", "booking", "agoda", "trivago", "pegipegi",
-          "pesawat", "flight", "garuda", "lion air", "citilink", "batik air",
+          "pesawat", "flight", "garuda", "citilink",
           "airasia", "scoot", "singapore airlines", "qatar", "emirates",
           "pelni", "kapal", "ship", "ferry", "wisata", "tour", "travel"], .travel),
         // Investment — brokerages, crypto, savings products
@@ -1281,6 +1286,43 @@ final class SmartBudgetManager {
         let matchedTerm: String
         /// True when the whole normalised name matched, false for a token match.
         let isExact: Bool
+    }
+
+    /// A name as the keyword map reads it: lowercased, in words split at
+    /// anything that isn't a letter or digit ("J.CO" is "j co", "K-24" is
+    /// "k 24").
+    struct KeywordReading {
+        let text: String
+        let words: [Substring]
+
+        init(_ name: String) {
+            text = name.lowercased()
+            words = text.split { !$0.isLetter && !$0.isNumber }
+        }
+
+        /// Whether the name carries `keyword`. Six characters or more is
+        /// distinctive enough to find anywhere ("shopeepay", "berlangganan").
+        /// Anything shorter has to be whole words: "sport" is not in
+        /// "transport", nor "tri" in "istri", "kai" in "pakaian" or "tol" in
+        /// "botol".
+        func mentions(_ keyword: String) -> Bool {
+            if keyword.count >= 6 { return text.contains(keyword) }
+            let parts = keyword.split { !$0.isLetter && !$0.isNumber }
+            guard !parts.isEmpty, words.count >= parts.count else { return false }
+            return (0...(words.count - parts.count)).contains { start in
+                zip(words[start...], parts).allSatisfy { word, part in
+                    word == part || (parts.count == 1 && Self.isForm(word, of: part))
+                }
+            }
+        }
+
+        /// "sports" of "sport", "hotelnya" of "hotel": an ending that doesn't
+        /// change what the word names.
+        private static func isForm(_ word: Substring, of part: Substring) -> Bool {
+            guard part.count >= 3, word.hasPrefix(part) else { return false }
+            let ending = word.dropFirst(part.count)
+            return ending == "s" || ending == "nya"
+        }
     }
 
     /// Lowercased, punctuation- and digit-free, whitespace-collapsed. Makes
@@ -1340,9 +1382,10 @@ final class SmartBudgetManager {
         }
 
         // Tier 2 — a distinctive word in common. Prefers the longest shared
-        // token so "warkop" beats a generic fragment.
+        // token so "warkop" beats a generic fragment. A short one has to be a
+        // word of the past name, so "sport" never learns from "transport".
         for token in meaningfulTokens(target).sorted(by: { $0.count > $1.count }) {
-            let byToken = history.filter { normalizedMerchant($0.name).contains(token) }
+            let byToken = history.filter { KeywordReading($0.name).mentions(token) }
             if let (cat, n) = winner(byToken, minCount: 3) {
                 return LearnedCategory(category: cat, count: n, matchedTerm: token, isExact: false)
             }
@@ -1383,10 +1426,10 @@ final class SmartBudgetManager {
     static func suggestCategory(for name: String, txType: String) -> TxCategory? {
         // Income txs go to .salary etc. — categorization isn't merchant-based.
         if txType == "Income" { return nil }
-        let lower = name.lowercased()
+        let reading = KeywordReading(name)
         for entry in merchantMap {
-            for keyword in entry.keywords {
-                if lower.contains(keyword) { return entry.category }
+            for keyword in entry.keywords where reading.mentions(keyword) {
+                return entry.category
             }
         }
         // A slip of a known name ("indimaret", "tokopedi") points the same

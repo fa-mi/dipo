@@ -272,6 +272,7 @@ enum ReceiptParser {
         "apotek", "apotik", "bengkel", "salon", "laundry", "londri", "binatu",
         "minimarket", "supermarket", "pasar", "kios", "depot", "rumah makan",
         "angkringan", "lesehan", "pujasera", "katering", "catering", "klinik",
+        "foodcourt", "steakhouse",
     ]
 
     private static func extractMerchant(from lines: [String], excluding issuer: String = "") -> String {
@@ -343,10 +344,10 @@ enum ReceiptParser {
             // marketplace or the ride app instead of the warung that was paid.
             // A real "Shopee" or "Grab" header is not a rail and still matches.
             if isPaymentBrandOnly(line) || isIssuer(line) { continue }
-            let lower = line.lowercased()
+            let reading = SmartBudgetManager.KeywordReading(line)
             for entry in SmartBudgetManager.merchantMap {
                 for keyword in entry.keywords {
-                    guard lower.contains(keyword) else { continue }
+                    guard reading.mentions(keyword) else { continue }
                     // A brand keyword IS the answer, and canonicalising it is
                     // the point: "INDOMARET BSD JL RAYA" and "Indomaret Kav 5"
                     // should land in one place in the user's history.
