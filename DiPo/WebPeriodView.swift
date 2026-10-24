@@ -29,6 +29,8 @@ enum WebPeriodView {
         let projected: Double?
         /// Spending over the same days of the previous cycle.
         let previousSpent: Double?
+        /// Of that, living costs: what the "vs last period" chip compares.
+        var previousLiving: Double? = nil
     }
 
     /// Statistics' `cashBook` for a caller that is not the screen: the pot's
@@ -72,16 +74,17 @@ enum WebPeriodView {
         }()
         // Red only when the balance is on course to run out.
         let danger = (outlook?.end ?? book.end) < 0.5
-        let change: Double? = cycle.previousSpent.flatMap { prev in
-            prev > 0 ? (book.spent - prev) / prev * 100 : nil
-        }
+        // Living costs against the same days last cycle, from the second week
+        // on, as the phone's chip.
+        let change = StatisticsView.livingChange(book.living, previous: cycle.previousLiving,
+                                                 elapsed: cycle.progress?.elapsed)
         let window = pot.flatMap(\.transactions).filter { $0.date >= cycle.start && $0.date <= cycle.now }
         let ownLines = OwnMoves.lines(window, scope: pot, cards: cards,
                                       convert: converter(main: main, currency: currency))
 
         func inLanguage(_ language: LanguageManager.Language) -> [String: Any] {
             LanguageManager.shared.withLanguage(language) {
-                Self.words(book, main: main, pot: pot, cycle: cycle, outlook: outlook, change: change,
+                Self.words(book, main: main, pot: pot, cards: cards, cycle: cycle, outlook: outlook, change: change,
                            ownLines: ownLines, currency: currency, language: language)
             }
         }
@@ -200,8 +203,8 @@ enum WebPeriodView {
 
     /// Every sentence and book line, in the language `loc()` currently
     /// resolves to. Called inside `withLanguage`.
-    static func words(_ book: PeriodCashBook, main: BankCard, pot: [BankCard], cycle: Cycle,
-                      outlook: (payday: Date, end: Double)?, change: Double?,
+    static func words(_ book: PeriodCashBook, main: BankCard, pot: [BankCard], cards: [BankCard],
+                      cycle: Cycle, outlook: (payday: Date, end: Double)?, change: Double?,
                       ownLines: [OwnMoves.Line], currency: String,
                       language: LanguageManager.Language) -> [String: Any] {
         let money: (Double) -> String = { CurrencyManager.shared.formatted($0, currency: currency) }
@@ -240,7 +243,7 @@ enum WebPeriodView {
         }
         if pot.count > 1 {
             w["scope"] = String(format: loc("stats.with_bill_cards"),
-                                pot.dropFirst().map(\.pickerLabel).joined(separator: ", "))
+                                pot.dropFirst().map { $0.shortName(among: cards) }.joined(separator: ", "))
         }
         return w
     }

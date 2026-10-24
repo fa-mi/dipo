@@ -382,6 +382,9 @@ struct CardListView: View {
 
                     Spacer(minLength: 110)
                 }
+                // Centred and capped, like Home: on the Duo's inner display
+                // the column would otherwise stretch to the panel.
+                .phoneWidthCapped()
                 .containerRelativeFrame(.horizontal)
             }
 
@@ -1344,11 +1347,7 @@ struct CardTransferSheet: View {
         (sourceCard?.resolvedCurrency ?? "") != (destCard?.resolvedCurrency ?? "")
     }
 
-    private func label(_ card: BankCard) -> String {
-        if card.isDigitalWallet, !card.walletProvider.isEmpty { return card.walletProvider }
-        let l4 = card.last4
-        return l4.isEmpty ? (card.holderName.isEmpty ? loc("transfer.card") : card.holderName) : "•••• \(l4)"
-    }
+    private func label(_ card: BankCard) -> String { card.transferLabel }
 
     var body: some View {
         NavigationStack {

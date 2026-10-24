@@ -5,10 +5,11 @@ import SwiftData
 // MARK: - Hand a bank message to DiPo
 //
 // iOS will not let an app read another app's notifications — there is no
-// equivalent of Android's NotificationListenerService, and Shortcuts has no
-// "when a notification arrives" trigger either. What it does have is a
-// Communication trigger for a MESSAGE or an EMAIL, which is how most Indonesian
-// banks and wallets announce a transaction anyway.
+// equivalent of Android's NotificationListenerService. Until iOS 27 Shortcuts
+// had no "when a notification arrives" trigger either (from iOS 27 it does, and
+// LogFromNotificationIntent takes those). What it has always had is a
+// Communication trigger for a MESSAGE or an EMAIL, which is how many Indonesian
+// banks still announce a transaction, and the only way on iOS 26 and earlier.
 //
 // So the user builds the automation once — "when I receive a message from BCA,
 // run this" — and it calls this intent with the text. `openAppWhenRun` is false,
@@ -34,16 +35,21 @@ struct LogFromMessageIntent: AppIntent {
         let context = ModelContext(DiPoApp.sharedModelContainer)
         let currency = CurrencyManager.shared.preferredCurrency
 
-        guard let parsed = BankMessageParser.parse(text, defaultCurrency: currency) else {
+        // The bank's number also sends one-time codes, often with the amount
+        // they confirm, and promos and reminders. None of them is kept, a
+        // code not even in part, and the reply doesn't repeat it.
+        guard NotificationTx.screen(text) == .payment,
+              let parsed = BankMessageParser.parse(text, defaultCurrency: currency) else {
             // Said plainly rather than filed as an empty row: a queue full of
             // blanks is worse than a message that was skipped.
-            return .result(dialog: "No amount found in that message, so nothing was saved.")
+            return .result(dialog: "\(loc("logmsg.skipped"))")
         }
 
         let cards = (try? context.fetch(FetchDescriptor<BankCard>())) ?? []
         let card = BankMessageParser.matchCard(parsed, cards: cards)
         let category = SmartBudgetManager.suggestCategory(
-            for: parsed.merchant, txType: parsed.amount < 0 ? "Expense" : "Income") ?? .other
+            for: parsed.merchant, txType: parsed.amount < 0 ? "Expense" : "Income")
+            ?? (parsed.amount < 0 ? .other : .incomeOther)
 
         PendingInbox.capture(
             name: parsed.merchant,
@@ -60,7 +66,7 @@ struct LogFromMessageIntent: AppIntent {
         )
 
         let money = CurrencyManager.shared.formatted(parsed.amount, currency: parsed.currency)
-        let name = parsed.merchant.isEmpty ? "a transaction" : parsed.merchant
-        return .result(dialog: "Saved \(name), \(money), for review in DiPo.")
+        let name = parsed.merchant.isEmpty ? loc("logmsg.a_payment") : parsed.merchant
+        return .result(dialog: "\(String(format: loc("logmsg.saved"), name, money))")
     }
 }

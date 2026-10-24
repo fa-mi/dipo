@@ -580,7 +580,8 @@ final class WebSyncService {
                     card: main, billCards: Array(pot.dropFirst()), payDay: day,
                     recurrings: recurrings, currency: base, now: f.end)
                 let period = WebPeriodView.Cycle(start: f.start, now: f.end, progress: f.progress,
-                                                 projected: projected, previousSpent: f.previousSpent)
+                                                 projected: projected, previousSpent: f.previousSpent,
+                                                 previousLiving: f.previousLiving)
                 if let view = WebPeriodView.payload(pot: pot, cards: cards, cycle: period, currency: base) {
                     out["periodView"] = view
                 }
@@ -655,7 +656,8 @@ final class WebSyncService {
                 guard let day = payDay, let card = mainCard else { return nil }
                 return StatisticsView.projectedCycleSpend(card: card, billCards: MainCard.billCards(in: cards),
                                                           payDay: day,
-                                                          recurrings: recurrings, currency: base, now: now)
+                                                          recurrings: recurrings, currency: base, now: now,
+                                                          livingOnly: true)
             }()
             let intents = CycleIntentSet.running(source.intents, periodStart: cycle.start)
             func insights(in language: LanguageManager.Language) -> [[String: String]] {

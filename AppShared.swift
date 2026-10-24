@@ -1042,9 +1042,11 @@ extension View {
         }
     }
 
-    /// Marks a destination as pushed from a tab. See `FeatureStack`.
+    /// Marks a destination as pushed from a tab. See `FeatureStack`. Held to
+    /// phone width: a feature screen is one column, whatever the panel.
     func pushedFeature() -> some View {
         environment(\.pushedFeature, true)
+            .phoneColumn()
     }
 }
 

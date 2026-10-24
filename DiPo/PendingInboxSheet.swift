@@ -15,6 +15,8 @@ struct PendingInboxSheet: View {
 
     @State private var editing: PendingTransaction?
     @State private var submitting = false
+    @State private var showPaywall = false
+    @State private var pm = PremiumManager.shared
 
     /// Rows that cannot be submitted because nothing says which card they came
     /// from. Named rather than silently skipped — a submit that quietly leaves
@@ -81,6 +83,13 @@ struct PendingInboxSheet: View {
                     .presentationBackground(AppTheme.bg)
                     .preferredColorScheme(appColorScheme())
             }
+            .sheet(isPresented: $showPaywall) {
+                PaywallView()
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
+                    .presentationBackground(AppTheme.bg)
+                    .preferredColorScheme(appColorScheme())
+            }
         }
     }
 
@@ -101,9 +110,75 @@ struct PendingInboxSheet: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(AppTheme.orange.opacity(0.10), in: RoundedRectangle(cornerRadius: AppRadius.sm))
             }
+            if let twin = PendingTwins.kind(of: item, among: pending) {
+                twinNote(twin, for: item)
+            }
         }
         .padding(14)
         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+    }
+
+    /// One payment told by two apps, or one move told from both ends. Said on
+    /// both rows; which to keep is the user's call. A move between two of the
+    /// user's cards can be recorded as the transfer it was, behind the same
+    /// Royal gate as the transfer form.
+    private func twinNote(_ twin: PendingTwins.Kind, for item: PendingTransaction) -> some View {
+        let partner = twin == .crossed ? PendingTwins.crossedPartner(of: item, among: pending) : nil
+        return VStack(alignment: .leading, spacing: 10) {
+            Label(loc(twin == .crossed ? "pending.twin_crossed" : "pending.twin_repeated"),
+                  systemImage: twin == .crossed ? "arrow.left.arrow.right.circle.fill" : "square.on.square")
+                .font(.system(.caption))
+                .foregroundStyle(AppTheme.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
+            if let partner {
+                if onTwoCards(item, partner) {
+                    transferButton(item, partner)
+                } else {
+                    Text(loc("pending.twin_transfer_cards"))
+                        .font(.system(.caption))
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(AppTheme.orange.opacity(0.10), in: RoundedRectangle(cornerRadius: AppRadius.sm))
+    }
+
+    private func transferButton(_ item: PendingTransaction, _ partner: PendingTransaction) -> some View {
+        Button {
+            HapticManager.shared.tap()
+            guard pm.canAccess(.cardTransfer) else { showPaywall = true; return }
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                if PendingInbox.commitTransfer(item, partner, cards: cards, context: context) {
+                    try? context.save()
+                    HapticManager.shared.success()
+                }
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "arrow.left.arrow.right")
+                    .font(.system(.caption, weight: .semibold))
+                Text(loc("pending.twin_transfer"))
+                    .font(.system(.caption, weight: .semibold))
+                if !pm.canAccess(.cardTransfer) {
+                    Image(systemName: "crown.fill")
+                        .font(.system(.caption2, weight: .bold)).imageScale(.small)
+                        .foregroundStyle(PremiumPlan.royal.color)
+                }
+            }
+            .foregroundStyle(AppTheme.accent)
+            .padding(.horizontal, 12).padding(.vertical, 7)
+            .background(AppTheme.accent.opacity(0.14), in: Capsule())
+        }
+        .buttonStyle(ScaleButtonStyle())
+    }
+
+    /// Both rows on a card the user has, and not the same one.
+    private func onTwoCards(_ a: PendingTransaction, _ b: PendingTransaction) -> Bool {
+        guard let x = a.cardID, let y = b.cardID, x != y else { return false }
+        return cards.contains { $0.id == x } && cards.contains { $0.id == y }
     }
 
     private func rowLine(_ item: PendingTransaction) -> some View {

@@ -26,6 +26,15 @@ extension BankCard {
         isHidden ? "•••• •••• •••• ••••" : formattedNumber
     }
 
+    /// How a transfer's two legs name the other card: "Transfer to •••• 0969",
+    /// "Transfer from GoPay". Written into the rows' names, by the transfer
+    /// form and by the review queue's "Record as a transfer".
+    var transferLabel: String {
+        if isDigitalWallet, !walletProvider.isEmpty { return walletProvider }
+        let l4 = last4
+        return l4.isEmpty ? (holderName.isEmpty ? loc("transfer.card") : holderName) : "•••• \(l4)"
+    }
+
     /// Compact one-line name for choosers ("BRI ·· 0969", "GoPay"). Wallets show
     /// their provider; cards show the holder name plus the last four digits so
     /// two cards from the same bank stay distinguishable.
@@ -34,6 +43,37 @@ extension BankCard {
         let name = isDigitalWallet && !walletProvider.isEmpty ? walletProvider : holderName
         if name.isEmpty { return last4.isEmpty ? loc("card.untitled") : "·· \(last4)" }
         return last4.isEmpty ? name : "\(name) ·· \(last4)"
+    }
+
+    /// What tells this card from the user's others, without its digits.
+    ///
+    /// A wallet goes by its provider and a card by the bank chosen for it. A
+    /// card with no bank chosen goes by its own name less the leading words
+    /// it shares with another card: people write the bank into the name, so
+    /// "Fahmi Aquinas BRI", "Fahmi Aquinas BCA" and "Fahmi Aquinas Mandiri"
+    /// read as BRI, BCA and Mandiri, where `pickerLabel` repeated the holder
+    /// on each. Nothing is guessed: a name that is all shared stays whole,
+    /// and the last four digits tell those apart.
+    func distinctName(among cards: [BankCard]) -> String {
+        if isDigitalWallet { return walletProvider.isEmpty ? loc("wallet.untitled") : walletProvider }
+        if let bank = BankIssuer.find(issuerID)?.name { return bank }
+        let words = holderName.split(whereSeparator: \.isWhitespace)
+        guard !words.isEmpty else { return loc("wallet.untitled") }
+        let shared = cards
+            .filter { $0.id != id && !$0.isDigitalWallet }
+            .map { other in
+                zip(words, other.holderName.split(whereSeparator: \.isWhitespace))
+                    .prefix(while: { $0.lowercased() == $1.lowercased() }).count
+            }
+            .max() ?? 0
+        return (shared < words.count ? words.dropFirst(shared) : words[...]).joined(separator: " ")
+    }
+
+    /// `distinctName` and the last four digits: "BCA ••9331", "GoPay".
+    func shortName(among cards: [BankCard]) -> String {
+        let name = distinctName(among: cards)
+        let last4 = String(cardNumber.filter(\.isNumber).suffix(4))
+        return isDigitalWallet || last4.count < 4 ? name : "\(name) ••\(last4)"
     }
 
     /// Phone number shown in the UI, respecting this card's individual hide/show state.

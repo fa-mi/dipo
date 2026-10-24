@@ -100,6 +100,53 @@ final class PendingInboxTests: XCTestCase {
         XCTAssertEqual(queue.count, 1)
     }
 
+    /// A top-up told from both ends, recorded as the move it was: the two
+    /// legs the transfer form writes, at one time so they pair, and both rows
+    /// gone from the queue.
+    func testACrossedPairBecomesOneTransfer() throws {
+        let bank = makeCard(), wallet = makeCard()
+        PendingInbox.capture(name: "Top up GoPay", amount: -100_000, currency: "IDR",
+                             cardID: bank.id, source: .notification, context: context)
+        PendingInbox.capture(name: "Top up", amount: 100_000, currency: "IDR",
+                             cardID: wallet.id, source: .notification, context: context)
+        let rows = queue
+        XCTAssertEqual(rows.count, 2)
+
+        XCTAssertTrue(PendingInbox.commitTransfer(rows[0], rows[1], cards: [bank, wallet], context: context))
+        try context.save()
+
+        let out = try XCTUnwrap(bank.transactions.first)
+        let into = try XCTUnwrap(wallet.transactions.first)
+        XCTAssertEqual(out.amount, -100_000)
+        XCTAssertEqual(into.amount, 100_000)
+        XCTAssertEqual(out.txSubtype, .transfer)
+        XCTAssertEqual(into.txSubtype, .transfer)
+        XCTAssertEqual(out.date, into.date, "One moment, so Statistics pairs the legs.")
+        XCTAssertTrue(NonFlowMovements.isOwnAccountMove(out, incoming: false))
+        XCTAssertTrue(NonFlowMovements.isOwnAccountMove(into, incoming: true))
+        XCTAssertTrue(queue.isEmpty)
+    }
+
+    /// Only one out and one in, on two different cards the user has.
+    func testATransferNeedsTwoCardsAndBothWays() throws {
+        let card = makeCard()
+        PendingInbox.capture(name: "Out", amount: -50_000, currency: "IDR",
+                             cardID: card.id, source: .notification, context: context)
+        PendingInbox.capture(name: "In", amount: 50_000, currency: "IDR",
+                             cardID: card.id, source: .notification, context: context)
+        PendingInbox.capture(name: "No card", amount: 50_000, currency: "IDR",
+                             cardID: nil, source: .notification, context: context)
+        let out = try XCTUnwrap(queue.first { $0.name == "Out" })
+        let into = try XCTUnwrap(queue.first { $0.name == "In" })
+        let orphan = try XCTUnwrap(queue.first { $0.name == "No card" })
+
+        XCTAssertFalse(PendingInbox.commitTransfer(out, into, cards: [card], context: context), "One card.")
+        XCTAssertFalse(PendingInbox.commitTransfer(out, orphan, cards: [card], context: context), "No card.")
+        XCTAssertFalse(PendingInbox.commitTransfer(into, orphan, cards: [card], context: context), "Both in.")
+        XCTAssertEqual(queue.count, 3)
+        XCTAssertTrue(ledger.isEmpty)
+    }
+
     /// Income keeps its sign through the crossing too.
     func testIncomeStaysIncome() throws {
         let card = makeCard()

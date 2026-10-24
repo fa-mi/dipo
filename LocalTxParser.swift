@@ -162,27 +162,46 @@ enum LocalTxParser {
 
     // MARK: - Amount extraction
 
+    /// Number forms accepted: 25000, 25.000, 25,5, 25rb, 2jt, 50k, 1.5jt
+    private static let amountPattern = #"(\d{1,3}(?:[.\s]\d{3})+|\d+(?:[.,]\d+)?)\s*(miliar|milyar|juta|jt|ribu|rb|k|m)?\b"#
+
     /// Finds the first number plus optional multiplier suffix. Returns the value
     /// and the range it occupied so the caller can strip it from the name.
     private static func extractAmount(_ s: String) -> (Double, Range<String.Index>)? {
-        // Number forms accepted: 25000, 25.000, 25,5, 25rb, 2jt, 50k, 1.5jt
-        let pattern = #"(\d{1,3}(?:[.\s]\d{3})+|\d+(?:[.,]\d+)?)\s*(miliar|milyar|juta|jt|ribu|rb|k|m)?\b"#
-        guard let regex = try? NSRegularExpression(pattern: pattern),
+        guard let regex = try? NSRegularExpression(pattern: amountPattern),
               let match = regex.firstMatch(in: s, range: NSRange(s.startIndex..., in: s)),
-              let numRange = Range(match.range(at: 1), in: s),
-              let whole = Range(match.range(at: 0), in: s)
+              let whole = Range(match.range(at: 0), in: s),
+              let amount = value(of: match, in: s)
         else { return nil }
+        return (amount, whole)
+    }
 
-        let numText = String(s[numRange])
+    /// Every amount written in the text, in order, each read the way `parse`
+    /// reads one: "25rb" is 25000, "1,5jt" 1500000, "25.000" 25000.
+    ///
+    /// What OnDeviceTxParser holds the on-device model to. The model may split
+    /// a message and name its parts, but an amount it returns must be one of
+    /// these — a number it worked out, rather than read, is thrown away.
+    static func amounts(in raw: String) -> [Double] {
+        let s = raw.lowercased()
+        guard let regex = try? NSRegularExpression(pattern: amountPattern) else { return [] }
+        return regex.matches(in: s, range: NSRange(s.startIndex..., in: s))
+            .compactMap { value(of: $0, in: s) }
+            .filter { $0 > 0 && $0 < 1_000_000_000_000 }
+    }
+
+    /// The value of one `amountPattern` match: the number, read with its
+    /// suffix in mind, times the suffix.
+    private static func value(of match: NSTextCheckingResult, in s: String) -> Double? {
+        guard let numRange = Range(match.range(at: 1), in: s) else { return nil }
         var suffix = ""
         if match.range(at: 2).location != NSNotFound,
            let r = Range(match.range(at: 2), in: s) {
             suffix = String(s[r])
         }
-
-        guard let base = parseNumber(numText, hasSuffix: !suffix.isEmpty) else { return nil }
+        guard let base = parseNumber(String(s[numRange]), hasSuffix: !suffix.isEmpty) else { return nil }
         let factor = multipliers.first { $0.token == suffix }?.factor ?? 1
-        return (base * factor, whole)
+        return base * factor
     }
 
     /// The "." is the crux. In Indonesian "25.000" is twenty-five thousand, but
@@ -222,7 +241,9 @@ enum LocalTxParser {
         return isIncome ? .incomeOther : .other
     }
 
-    private static func looksLikeQuestion(_ s: String) -> Bool {
+    /// Expects lowercased text. Also OnDeviceTxParser's first test: a question
+    /// goes to the server, which can answer it.
+    static func looksLikeQuestion(_ s: String) -> Bool {
         if s.hasSuffix("?") { return true }
         let openers = ["berapa", "apakah", "gimana", "bagaimana", "kenapa", "mengapa",
                        "kapan", "dimana", "di mana", "siapa", "how much", "how many",
@@ -254,9 +275,10 @@ enum LocalTxParser {
     }
 }
 
-private extension TxCategory {
+extension TxCategory {
     /// Whether this category describes money coming in. Used to keep category
-    /// inference on the correct side of the ledger.
+    /// inference on the correct side of the ledger — here, and when checking
+    /// what the on-device model read (OnDeviceTxParser).
     var isIncomeCategory: Bool {
         switch self {
         case .salary, .freelance, .business, .bonus, .gift, .incomeOther: return true

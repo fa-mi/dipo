@@ -135,6 +135,20 @@ final class AIChatViewModel {
 
     // ── Send a message ────────────────────────────────────────────────────
 
+    /// An entry read on the phone, by the rules or by Apple Intelligence, put
+    /// up as cards to check before adding. Nothing is recorded from here.
+    private func showReading(_ reading: LocalTxParser.Result) {
+        let parsed = reading.items.map { item in
+            AIParsedTx(name: item.name, amount: item.amount,
+                       isExpense: item.isExpense, category: item.category,
+                       currency: CurrencyManager.shared.preferredCurrency,
+                       date: .now, notes: "tx.note.quick_entry")
+        }
+        messages.append(AIChatMessage(role: .assistant,
+            text: loc(parsed.count == 1 ? "ai.local_one" : "ai.local_many"),
+            transactions: parsed))
+    }
+
     func send(context: String = "") async {
         let text = input.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty, !isLoading else { return }
@@ -160,16 +174,22 @@ final class AIChatViewModel {
         // only means anything alongside the question, and the model is the
         // only part of this that can see both.
         if !isFollowUp, let local = LocalTxParser.parse(text) {
-            let parsed = local.items.map { item in
-                AIParsedTx(name: item.name, amount: item.amount,
-                           isExpense: item.isExpense, category: item.category,
-                           currency: CurrencyManager.shared.preferredCurrency,
-                           date: .now, notes: "tx.note.quick_entry")
-            }
-            messages.append(AIChatMessage(role: .assistant,
-                text: loc(parsed.count == 1 ? "ai.local_one" : "ai.local_many"),
-                transactions: parsed))
+            showReading(local)
             return
+        }
+
+        // Apple Intelligence, on a phone that has it: the on-device model
+        // reads what the rules couldn't, before a credit is spent on the
+        // server. Same follow-up rule, same cards to check. Anything it can't
+        // read with confidence goes on below as before (OnDeviceTxParser).
+        if !isFollowUp, #available(iOS 26.0, *), OnDeviceTxParser.isAvailable {
+            isLoading = true
+            let read = await OnDeviceTxParser.parse(text)
+            isLoading = false
+            if let read {
+                showReading(read)
+                return
+            }
         }
 
         // The local parser couldn't take it, so it needs the model — and there

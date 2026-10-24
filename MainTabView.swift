@@ -31,6 +31,15 @@ struct MainTabView: View {
     @Environment(\.scenePhase) private var scenePhase
     /// Tabs the user has opened this session. Home is always mounted.
     @State private var visitedTabs: Set<AppTab> = [.home]
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    /// The width the tabs' pages get: the screen, less the rail when it shows.
+    @State private var pageWidth: CGFloat = 0
+
+    /// A wide panel — the iPhone Duo opened, a large iPhone turned on its
+    /// side — stands the tabs in a rail on the leading edge, where Apple's
+    /// own apps put them there. The bottom bar would stretch across it, its
+    /// five buttons drifting apart. Every iPhone held upright keeps the bar.
+    private var usesRail: Bool { horizontalSizeClass == .regular }
 
     /// Observed so the gate reacts the moment a main card is chosen or cleared.
     @State private var sb = SmartBudgetManager.shared
@@ -83,74 +92,18 @@ struct MainTabView: View {
     /// the share extension, notifications. Split from `body` because the single
     /// chain of ~30 modifiers had grown past what the type checker will infer.
     private var core: some View {
-        ZStack(alignment: .bottom) {
-            ZStack {
-                ForEach(AppTab.allCases, id: \.self) { tab in
-                    // Mounted on first visit, then kept. All five used to mount at
-                    // launch and stay live behind Home at opacity 0, so every
-                    // transaction added on Home also re-evaluated Statistics (the
-                    // largest screen in the app) and Profile. Kept after the first
-                    // visit so scroll position and choices survive switching back.
-                    if vm.activeTab == tab || visitedTabs.contains(tab) {
-                        Group {
-                            switch tab {
-                            case .home:  homeStack
-                            case .stats: StatisticsView(statsVM: StatsViewModel(), appVM: vm)
-                            case .add:   Color.clear
-                            case .cards: walletStack
-                            case .plan:  PlanView(vm: vm)
-                            }
-                        }
-                        // Only the tab coming in fades, and quickly; the one
-                        // leaving goes at once. Fading and scaling two whole
-                        // screens together meant compositing both offscreen
-                        // for 0.4 s, which is where the switch stuttered.
-                        .opacity(vm.activeTab == tab ? 1 : 0)
-                        .animation(vm.activeTab == tab ? .easeOut(duration: 0.18) : nil, value: vm.activeTab)
-                        // DiPo on a hidden tab holds still instead of rendering.
-                        .environment(\.dipoAnimates, vm.activeTab == tab)
-                        // A tab at opacity 0 is still in the tree; without this,
-                        // VoiceOver could land on buttons of a screen nobody can see.
-                        .accessibilityHidden(vm.activeTab != tab)
-                        .allowsHitTesting(vm.activeTab == tab)
-                    }
-                }
+        HStack(spacing: 0) {
+            if usesRail {
+                TabRail(vm: vm, namespace: tabNS, showAddSheet: $showAddSheet,
+                        showNoCardBanner: $showNoCardBanner)
+                    .padding(.leading, 12)
+                    .padding(.vertical, 12)
+                    .transition(.move(edge: .leading).combined(with: .opacity))
             }
-            .onChange(of: vm.activeTab) { _, tab in visitedTabs.insert(tab) }
-
-            // No-card toast banner
-            if showNoCardBanner {
-                HStack(spacing: 10) {
-                    Image(systemName: "creditcard.fill")
-                        .font(.system(.subheadline))
-                        .foregroundStyle(AppTheme.accent)
-                    Text(loc("home.add_card_first"))
-                        .font(.system(.footnote, weight: .medium))
-                        .foregroundStyle(AppTheme.textPrimary)
-                }
-                .padding(.horizontal, 18)
-                .padding(.vertical, 12)
-                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
-                .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.accent.opacity(0.3), lineWidth: 1))
-                .shadow(color: .black.opacity(0.25), radius: 12, y: 4)
-                .padding(.bottom, 100)
-                .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
-
-            // Steps aside while a feature is pushed, so it never covers the
-            // bottom of a screen that was laid out as a full page.
-            if !vm.isInsideFeature {
-                CustomTabBar(vm: vm, namespace: tabNS, showAddSheet: $showAddSheet,
-                             showNoCardBanner: $showNoCardBanner)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
-
-            // Confirmation toasts. Mounted here — above every tab, below every
-            // sheet — so one overlay serves the whole app and no screen has to
-            // own its own success UI.
-            ActionFeedbackOverlay()
+            pages
         }
-        .ignoresSafeArea(edges: .bottom)
+        .background(AppTheme.bg.ignoresSafeArea())
+        .animation(.spring(response: 0.35, dampingFraction: 0.9), value: usesRail)
         .animation(.spring(response: 0.35, dampingFraction: 0.9), value: vm.isInsideFeature)
         // Everything downstream reads the main card, so nothing downstream can
         // be trusted until one exists. Presented without a dismiss path on
@@ -233,6 +186,84 @@ struct MainTabView: View {
         }
     }
 
+    /// The tabs' pages, with the bottom bar over them on a phone, and the
+    /// banners and toasts that sit above every tab.
+    private var pages: some View {
+        ZStack(alignment: .bottom) {
+            ZStack {
+                ForEach(AppTab.allCases, id: \.self) { tab in
+                    // Mounted on first visit, then kept. All five used to mount at
+                    // launch and stay live behind Home at opacity 0, so every
+                    // transaction added on Home also re-evaluated Statistics (the
+                    // largest screen in the app) and Profile. Kept after the first
+                    // visit so scroll position and choices survive switching back.
+                    if vm.activeTab == tab || visitedTabs.contains(tab) {
+                        Group {
+                            switch tab {
+                            case .home:  homeStack
+                            case .stats: StatisticsView(statsVM: StatsViewModel(), appVM: vm)
+                            case .add:   Color.clear
+                            case .cards: walletStack
+                            case .plan:  PlanView(vm: vm)
+                            }
+                        }
+                        // Only the tab coming in fades, and quickly; the one
+                        // leaving goes at once. Fading and scaling two whole
+                        // screens together meant compositing both offscreen
+                        // for 0.4 s, which is where the switch stuttered.
+                        .opacity(vm.activeTab == tab ? 1 : 0)
+                        .animation(vm.activeTab == tab ? .easeOut(duration: 0.18) : nil, value: vm.activeTab)
+                        // DiPo on a hidden tab holds still instead of rendering.
+                        .environment(\.dipoAnimates, vm.activeTab == tab)
+                        // A tab at opacity 0 is still in the tree; without this,
+                        // VoiceOver could land on buttons of a screen nobody can see.
+                        .accessibilityHidden(vm.activeTab != tab)
+                        .allowsHitTesting(vm.activeTab == tab)
+                    }
+                }
+            }
+            .onChange(of: vm.activeTab) { _, tab in visitedTabs.insert(tab) }
+            // Home and Statistics split into two columns where two phone
+            // columns fit beside the rail (AppLayout.fitsTwoColumns).
+            .environment(\.pageColumns, AppLayout.fitsTwoColumns(pageWidth) ? 2 : 1)
+
+            // No-card toast banner
+            if showNoCardBanner {
+                HStack(spacing: 10) {
+                    Image(systemName: "creditcard.fill")
+                        .font(.system(.subheadline))
+                        .foregroundStyle(AppTheme.accent)
+                    Text(loc("home.add_card_first"))
+                        .font(.system(.footnote, weight: .medium))
+                        .foregroundStyle(AppTheme.textPrimary)
+                }
+                .padding(.horizontal, 18)
+                .padding(.vertical, 12)
+                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+                .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.accent.opacity(0.3), lineWidth: 1))
+                .shadow(color: .black.opacity(0.25), radius: 12, y: 4)
+                .padding(.bottom, 100)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+
+            // Steps aside while a feature is pushed, so it never covers the
+            // bottom of a screen that was laid out as a full page. Never
+            // shown beside the rail, which stands clear of every page.
+            if !usesRail && !vm.isInsideFeature {
+                CustomTabBar(vm: vm, namespace: tabNS, showAddSheet: $showAddSheet,
+                             showNoCardBanner: $showNoCardBanner)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+
+            // Confirmation toasts. Mounted here — above every tab, below every
+            // sheet — so one overlay serves the whole app and no screen has to
+            // own its own success UI.
+            ActionFeedbackOverlay()
+        }
+        .onGeometryChange(for: CGFloat.self) { proxy in proxy.size.width } action: { pageWidth = $0 }
+        .ignoresSafeArea(edges: .bottom)
+    }
+
     /// Home, with Profile pushed from the avatar in its header.
     private var homeStack: some View {
         NavigationStack(path: $vm.homePath) {
@@ -240,7 +271,7 @@ struct MainTabView: View {
                 .navigationTitle(loc("tab.home"))
                 .toolbar(.hidden, for: .navigationBar)
                 .navigationDestination(for: HomeRoute.self) { _ in
-                    ProfileView(authVM: authVM)
+                    ProfileView(authVM: authVM).phoneColumn()
                 }
         }
     }
@@ -393,58 +424,20 @@ struct CustomTabBar: View {
     @Binding var showAddSheet: Bool
     @Binding var showNoCardBanner: Bool
 
-    private var hasCards: Bool { !vm.cards.isEmpty }
-
     var body: some View {
         HStack(spacing: 0) {
             ForEach(AppTab.allCases, id: \.self) { tab in
                 if tab == .add {
                     TabLogoButton(
-                        action: {
-                            if hasCards {
-                                HapticManager.shared.success()
-                                showAddSheet = true
-                            } else {
-                                HapticManager.shared.error()
-                                withAnimation { showNoCardBanner = true }
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
-                                    withAnimation { showNoCardBanner = false }
-                                }
-                            }
-                        },
+                        action: { tapAdd(hasCards: !vm.cards.isEmpty, showAddSheet: $showAddSheet,
+                                         showNoCardBanner: $showNoCardBanner) },
                         isEnabled: true
                     )
                 } else {
                     Button { vm.selectTab(tab) } label: {
-                        VStack(spacing: 4) {
-                            ZStack {
-                                if vm.activeTab == tab {
-                                    RoundedRectangle(cornerRadius: AppRadius.sm)
-                                        .fill(AppTheme.accent.opacity(0.15))
-                                        .frame(width: 44, height: 36)
-                                        .matchedGeometryEffect(id: "tab_bg", in: namespace)
-                                }
-                                Image(systemName: tab.icon)
-                                    .font(.system(size: 20,
-                                                  weight: vm.activeTab == tab ? .semibold : .regular))
-                                    .foregroundStyle(vm.activeTab == tab
-                                                     ? AppTheme.accent
-                                                     : AppTheme.textSecondary)
-                                    // A single bounce marks the tab you just picked.
-                                    .symbolEffect(.bounce, options: .nonRepeating, value: vm.activeTab == tab)
-                                    .scaleEffect(vm.activeTab == tab ? 1.05 : 1)
-                                    .animation(.spring(response: 0.3, dampingFraction: 0.6),
-                                               value: vm.activeTab)
-                            }
-                            Text(tab.label)
-                                .font(.system(size: 10,
-                                              weight: vm.activeTab == tab ? .semibold : .regular))
-                                .foregroundStyle(vm.activeTab == tab
-                                                 ? AppTheme.accent
-                                                 : AppTheme.textSecondary)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 56)
+                        TabItemLabel(tab: tab, isActive: vm.activeTab == tab, namespace: namespace)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 56)
                     }
                     .buttonStyle(.plain)
                 }
@@ -459,5 +452,92 @@ struct CustomTabBar: View {
                 .shadow(color: .black.opacity(0.3), radius: 20, y: -4)
         }
         .padding(.horizontal, 10)
+    }
+}
+
+/// The tab bar stood on the leading edge, for a wide panel (see
+/// `MainTabView.usesRail`): the same tabs in the same order, the add button
+/// in the middle, the same marker moving between them.
+struct TabRail: View {
+    @Bindable var vm: AppViewModel
+    var namespace: Namespace.ID
+    @Binding var showAddSheet: Bool
+    @Binding var showNoCardBanner: Bool
+
+    var body: some View {
+        VStack(spacing: 6) {
+            ForEach(AppTab.allCases, id: \.self) { tab in
+                if tab == .add {
+                    TabLogoButton(
+                        action: { tapAdd(hasCards: !vm.cards.isEmpty, showAddSheet: $showAddSheet,
+                                         showNoCardBanner: $showNoCardBanner) },
+                        isEnabled: true
+                    )
+                    .padding(.vertical, 6)
+                } else {
+                    Button { vm.selectTab(tab) } label: {
+                        TabItemLabel(tab: tab, isActive: vm.activeTab == tab, namespace: namespace)
+                            .frame(width: 64, height: 60)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, 14)
+        .frame(width: 76)
+        .background {
+            RoundedRectangle(cornerRadius: AppRadius.xl)
+                .fill(AppTheme.cardDark)
+                .shadow(color: .black.opacity(0.3), radius: 20, x: 4)
+        }
+    }
+}
+
+/// A tab's icon and name, marked when it is the open tab. Shared by the bar
+/// and the rail so the two can't drift apart.
+private struct TabItemLabel: View {
+    let tab: AppTab
+    let isActive: Bool
+    var namespace: Namespace.ID
+
+    var body: some View {
+        VStack(spacing: 4) {
+            ZStack {
+                if isActive {
+                    RoundedRectangle(cornerRadius: AppRadius.sm)
+                        .fill(AppTheme.accent.opacity(0.15))
+                        .frame(width: 44, height: 36)
+                        .matchedGeometryEffect(id: "tab_bg", in: namespace)
+                }
+                Image(systemName: tab.icon)
+                    .font(.system(size: 20, weight: isActive ? .semibold : .regular))
+                    .foregroundStyle(isActive ? AppTheme.accent : AppTheme.textSecondary)
+                    // A single bounce marks the tab you just picked.
+                    .symbolEffect(.bounce, options: .nonRepeating, value: isActive)
+                    .scaleEffect(isActive ? 1.05 : 1)
+                    .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isActive)
+            }
+            Text(tab.label)
+                .font(.system(size: 10, weight: isActive ? .semibold : .regular))
+                .foregroundStyle(isActive ? AppTheme.accent : AppTheme.textSecondary)
+        }
+    }
+}
+
+/// The add button, in the bar or the rail: the add form, or — with no card
+/// to add to — a moment's banner saying to add one first.
+@MainActor
+private func tapAdd(hasCards: Bool, showAddSheet: Binding<Bool>, showNoCardBanner: Binding<Bool>) {
+    if hasCards {
+        HapticManager.shared.success()
+        showAddSheet.wrappedValue = true
+    } else {
+        HapticManager.shared.error()
+        withAnimation { showNoCardBanner.wrappedValue = true }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+            withAnimation { showNoCardBanner.wrappedValue = false }
+        }
     }
 }

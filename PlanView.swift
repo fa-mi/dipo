@@ -84,6 +84,8 @@ struct PlanView: View {
                     }
                     .padding(.horizontal, 22)
                     .padding(.top, 20)
+                    // Centred and capped, like Home (AppLayout).
+                    .phoneWidthCapped()
                     .containerRelativeFrame(.horizontal)
                 }
             }

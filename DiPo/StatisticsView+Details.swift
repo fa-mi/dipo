@@ -179,16 +179,20 @@ extension StatisticsView {
         let highest = done.max { $0.expense < $1.expense }
         let lowest = done.min { $0.expense < $1.expense }
         // A running period set against a whole finished one always looks
-        // cheaper — day 12 against all 28. Compare the same number of days.
+        // cheaper — day 12 against all 28. Compare the same number of days,
+        // in spending & bills as the bars are, and not in the first week.
         let prev: Double = {
             guard points.count >= 2, let last = points.last else { return 0 }
             let before = points[points.count - 2]
             guard last.isRunning, selectedCard != nil else { return before.expense }
             let cutoff = before.start.addingTimeInterval(Date().timeIntervalSince(last.start))
-            return Self.stretchTotal(scopeTransactions, from: before.start, to: min(cutoff, before.end),
-                                     income: false, convert: convertedAmount) ?? 0
+            return Self.livingTotal(scopeTransactions, from: before.start, to: min(cutoff, before.end),
+                                    convert: convertedAmount) ?? 0
         }()
-        let change: Double? = prev > 0 ? (trendTotal - prev) / prev * 100 : nil
+        let runningDay: Int? = points.last.flatMap { last in
+            last.isRunning ? (Calendar.current.dateComponents([.day], from: last.start, to: Date()).day ?? 0) + 1 : nil
+        }
+        let change = Self.livingChange(trendTotal, previous: prev, elapsed: runningDay)
 
         return ZStack {
             AppTheme.bg.ignoresSafeArea()
@@ -598,26 +602,32 @@ extension StatisticsView {
                         Text(periodSubtitle)
                             .font(.system(.footnote, weight: .semibold))
                             .foregroundStyle(AppTheme.textPrimary)
-                        if let main = selectedCard {
-                            Text(String(format: loc("stats.main_card_line"), cardLabel(main)))
+                        // One line for every card the figures cover. It took
+                        // two sentences, with the holder's name on each card.
+                        if let cards = scopeCardsLine {
+                            Text(cards)
                                 .font(.system(.caption))
                                 .foregroundStyle(AppTheme.textSecondary)
-                            if let bills = billCardsLabel {
-                                Text(String(format: loc("stats.with_bill_cards"), bills))
-                                    .font(.system(.caption))
-                                    .foregroundStyle(AppTheme.textSecondary)
-                            }
+                                .lineLimit(2)
+                                .accessibilityLabel(scopeCardsSpoken ?? cards)
                         }
                     }
                     .padding(.bottom, 4)
 
-                    NetBalanceSummary(net: filteredIncome - filteredExpenses, income: filteredIncome,
-                                      expenses: filteredExpenses, currency: displayCurrency,
+                    // The headline's terms: spending & bills against income,
+                    // debt paid and money put away on lines of their own.
+                    let book = cashBook
+                    let living = book?.living ?? periodLiving
+                    NetBalanceSummary(net: filteredIncome - living, income: filteredIncome,
+                                      expenses: living, currency: displayCurrency,
                                       cardBalanceNow: scopeBalanceNow,
                                       startBalance: periodStartBalance,
                                       transferNet: periodTransferNet,
+                                      debtPaid: book?.debtPaid ?? 0,
+                                      invested: book?.invested ?? 0,
+                                      funds: livingFunds,
                                       progress: periodProgress,
-                                      previousExpenses: previousPeriodExpenses)
+                                      change: periodLivingChange)
 
                     // The trend's working lives here now: the main page carries a
                     // compact "Trends" tile, and this is the one tap away.
@@ -633,7 +643,8 @@ extension StatisticsView {
                             totalExpenses: filteredExpenses,
                             currency: displayCurrency,
                             isPartialPeriod: isPartialWeeklyPeriod,
-                            periodDays: periodDays
+                            periodDays: periodDayNumber,
+                            leansOnPrior: priorPeriod != nil
                         )
                         if premiumMgr.canAccess(.smartBudget) {
                             insightsCard

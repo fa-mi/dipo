@@ -72,8 +72,27 @@ final class WebPeriodViewTests: XCTestCase {
             row("Tokopedia CC bill payment", -1_882_381, day(10, 8, 19), .debtPayment),
         ]
         let cycle = WebPeriodView.Cycle(start: day(9, 25, 0), now: day(10, 12), progress: (elapsed: 18, total: 30),
-                                        projected: 12_000_000, previousSpent: 9_000_000)
+                                        projected: 12_000_000, previousSpent: 9_000_000,
+                                        previousLiving: 5_700_000)
         return (bri, cycle)
+    }
+
+    /// In a cycle's first week a day or two decides any comparison, so the
+    /// chip waits for the second. On payday a Rp 1,5 jt card bill and the
+    /// day's shopping, against last cycle's first day, read "1020% more".
+    func testTheFirstWeekHasNoComparison() throws {
+        let bri = card("Fahmi", "5221845086220969")
+        bri.transactions += [row("Main Salary", 10_000_000, day(10, 23, 0), .salary),
+                             row("Tokopedia CC bill payment", -1_500_000, day(10, 23, 8), .debtPayment),
+                             row("Makan", -225_000, day(10, 23, 20), .food)]
+        let cycle = WebPeriodView.Cycle(start: day(10, 23, 0), now: day(10, 23, 21),
+                                        progress: (elapsed: 1, total: 33),
+                                        projected: nil, previousSpent: 154_000, previousLiving: 154_000)
+        let v = try XCTUnwrap(WebPeriodView.payload(pot: [bri], cards: [bri], cycle: cycle,
+                                                    currency: "IDR", extraIDs: []))
+        XCTAssertEqual(v["living"] as? Double ?? 0, 225_000, accuracy: 0.5, "the card bill is not living")
+        XCTAssertNil(v["change"])
+        XCTAssertNil(words(v, "en")["change"])
     }
 
     func testTheWebGetsTheCalmReadingNotOverBudget() throws {
@@ -163,7 +182,9 @@ final class WebPeriodViewTests: XCTestCase {
         XCTAssertNil(v["safe"], "nothing to project from")
 
         let en = words(v, "en")
-        XCTAssertEqual(en["scope"] as? String, "With the cards it pays bills from · \(bca.pickerLabel)")
+        // Both cards say only "Fahmi", so the name stays whole and the digits
+        // tell them apart.
+        XCTAssertEqual(en["scope"] as? String, "With the cards it pays bills from · Fahmi ••9331")
         let own = (en["lines"] as? [[String: Any]] ?? []).first { $0["details"] != nil }
         let details = try XCTUnwrap(own?["details"] as? [[String: Any]])
         XCTAssertEqual(details.count, 1, "BRI↔BCA cancels inside the pot; only OVO is left")

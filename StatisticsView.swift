@@ -38,6 +38,9 @@ struct StatisticsView: View {
     @State var cachedFilteredTx: [TxRecord] = []
     @State var cachedRhythm = SpendingRhythm(history: []) { _ in 0 }
     @State var cachedFigures = SpendingFigures()
+    /// The period before the selected one, while the selected one is under a
+    /// week old. See `computePriorPeriod`.
+    @State var cachedPriorPeriod: PriorPeriod? = nil
     @State var cachedNetWorthTrend: [CycleTrendPoint] = []
     @State var customStart: Date = Calendar.current.safeDate(byAdding: .month, value: -1, to: Date())
     @State var customEnd: Date = Date()
@@ -45,6 +48,8 @@ struct StatisticsView: View {
     @State var selectedCardID: String? = nil // Kept only as a recompute trigger; the card itself comes from MainCard.
     /// Observed so switching the main card in the Wallet redraws this screen.
     @State var sb = SmartBudgetManager.shared
+    /// Two on a wide panel — the main page then lays out in two columns.
+    @Environment(\.pageColumns) var pageColumns
     /// Bumped when a row changes in place — an edit, a row made a loan.
     @State var ledger = LedgerRevision.shared
     @State var showExportSheet = false
@@ -92,13 +97,17 @@ struct StatisticsView: View {
                 .navigationTitle(loc("stats.title"))
                 .toolbar(.hidden, for: .navigationBar)
                 .navigationDestination(for: StatsRoute.self) { route in
-                    switch route {
-                    case .analysis: fullAnalysis
-                    case .weekly:   weeklyDetail
-                    case .trends:   trendsDetail
-                    case .cycle(let s, let e, let label):
-                        cycleDetail(start: s, end: e, label: label)
+                    // One column, whatever the panel (AppLayout).
+                    Group {
+                        switch route {
+                        case .analysis: fullAnalysis
+                        case .weekly:   weeklyDetail
+                        case .trends:   trendsDetail
+                        case .cycle(let s, let e, let label):
+                            cycleDetail(start: s, end: e, label: label)
+                        }
                     }
+                    .phoneColumn()
                 }
         }
         .onAppear {
@@ -183,22 +192,20 @@ struct StatisticsView: View {
                 .preferredColorScheme(appColorScheme())
         }
         .sheet(isPresented: $showExportSheet) {
+            // The headline's own figures and sentences, so the image says what
+            // the screen says. Everything here is on the free screen.
+            let book = cashBook
             StatsExportSheet(
-                period: selectedPeriod,
                 periodSubtitle: periodSubtitle,
                 selectedCard: selectedCard,
-                income: filteredIncome,
-                budgetIncome: budgetInsightIncome,
-                expenses: filteredExpenses,
-                // The typical week is a Royal note, so it is withheld from the
-                // export itself, not just hidden in the layout. Categories are
-                // on the free screen, so they travel for everyone.
-                weeklyAverage: premiumMgr.canAccess(.smartBudget) ? weeklyAverage : 0,
-                topCategories: topCategories,
-                transactions: filteredTx,
                 currency: displayCurrency,
-                configs: cardBudgetConfigs,
-                previousExpenses: previousPeriodExpenses
+                living: book?.living ?? periodLiving,
+                livingFunds: livingFunds,
+                progress: periodProgress,
+                change: periodLivingChange,
+                debtLine: book?.debtSentence(money: money),
+                paceLine: paceLine(book),
+                categories: livingCategories
             )
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)

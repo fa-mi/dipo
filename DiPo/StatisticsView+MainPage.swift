@@ -10,18 +10,45 @@ extension StatisticsView {
         ZStack {
             AppTheme.bg.ignoresSafeArea()
             ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 16) {
-                    header
-                    spendHero
-                    metricStrip
-                    dualCards
-                    categoriesCard
-                    notesCard
-                    detailLink
-                    Spacer(minLength: 110)
+                Group {
+                    // Room for two phone columns (the Duo opened and turned):
+                    // how much and am I fine on the left, where it went and
+                    // what's worth knowing on the right.
+                    if pageColumns == 2 {
+                        HStack(alignment: .top, spacing: AppLayout.columnGap) {
+                            VStack(alignment: .leading, spacing: 16) {
+                                header
+                                spendHero
+                                metricStrip
+                            }
+                            .frame(maxWidth: AppLayout.phoneContentMaxWidth)
+                            VStack(alignment: .leading, spacing: 16) {
+                                dualCards
+                                categoriesCard
+                                notesCard
+                                detailLink
+                            }
+                            .frame(maxWidth: AppLayout.phoneContentMaxWidth)
+                        }
+                        .padding(.bottom, 40)
+                    } else {
+                        VStack(alignment: .leading, spacing: 16) {
+                            header
+                            spendHero
+                            metricStrip
+                            dualCards
+                            categoriesCard
+                            notesCard
+                            detailLink
+                            Spacer(minLength: 110)
+                        }
+                        // Centred and capped, like Home (AppLayout).
+                        .frame(maxWidth: AppLayout.phoneContentMaxWidth - 2 * AppLayout.pageMargin)
+                    }
                 }
                 .padding(.horizontal, 22)
                 .padding(.top, 20)
+                .frame(maxWidth: .infinity)
                 .containerRelativeFrame(.horizontal)
             }
         }
@@ -162,7 +189,7 @@ extension StatisticsView {
                             .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                             .lineLimit(1).minimumScaleFactor(0.7)
                         Spacer(minLength: 4)
-                        if let c = expenseChange, abs(c) >= 1 {
+                        if let c = periodLivingChange, abs(c) >= 1 {
                             let tint = c < 0 ? AppTheme.accent : (danger ? AppTheme.red : AppTheme.orange)
                             HStack(spacing: 3) {
                                 Image(systemName: c >= 0 ? "arrow.up.right" : "arrow.down.right")
@@ -593,11 +620,6 @@ extension StatisticsView {
 
     // MARK: 1 · How much went out, and am I fine
 
-    var expenseChange: Double? {
-        guard let prev = previousPeriodExpenses, prev > 0 else { return nil }
-        return (filteredExpenses - prev) / prev * 100
-    }
-
     /// One sentence on where this is heading, for a period still running —
     /// for living costs, the figure held against income above. Debt paid and
     /// money put away so far are taken out of the projection, or a card
@@ -999,9 +1021,10 @@ extension StatisticsView {
     }
 }
 
-private extension View {
+extension View {
     /// A panel on the hero's field: a tinted fill and a hairline that
-    /// catches the light, as the web's frosted boxes.
+    /// catches the light, as the web's frosted boxes. The shared report
+    /// draws its panels the same way.
     func heroPanel(_ fill: Color, edge: Double = 0.06) -> some View {
         background(fill, in: RoundedRectangle(cornerRadius: AppRadius.md))
             .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(Color.white.opacity(edge), lineWidth: 1))

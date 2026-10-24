@@ -7,6 +7,8 @@ struct HomeView: View {
     @Bindable var vm: AppViewModel
     @Environment(\.modelContext) private var context
     @Environment(\.scenePhase) private var scenePhase
+    /// Two on a wide panel: Home then lays out in two columns (Sections).
+    @Environment(\.pageColumns) private var pageColumns
     @State private var wasInBackground = false
     @Query(sort: \SalarySchedule.createdAt) private var salarySchedules: [SalarySchedule]
     @Query(sort: \BankCard.sortOrder) private var queriedCards: [BankCard]
@@ -461,7 +463,8 @@ struct HomeView: View {
                                                       billCards: MainCard.isMain(card) ? MainCard.billCards(in: queriedCards) : [],
                                                       payDay: day,
                                                       recurrings: recurringExpenses,
-                                                      currency: budgetCurrency)
+                                                      currency: budgetCurrency,
+                                                      livingOnly: true)
         }()
         // Debt still due each month, so the surplus advice can put it before
         // investing: debt minimums plus credit-card instalments and minimums,
@@ -544,202 +547,49 @@ struct HomeView: View {
 
             ScrollViewReader { proxy in
             ScrollView(showsIndicators: false) {
-                VStack(spacing: 0) {
-
-                    // Header always visible
-                    HomeHeader(vm: vm, showSearch: $showSearch, showNotifications: $showNotifications)
-                        .id(Self.topAnchor)
-                        .padding(.horizontal, 22)
-                        .padding(.top, 18)
-                        .opacity(headerAppeared ? 1 : 0)
-                        .offset(y: headerAppeared ? 0 : -16)
-                        .animation(AppMotion.appear, value: headerAppeared)
-
-                    if hasCards { moneyTop }
-
-                    // DiPo's one line: reminds about unread notifications, a
-                    // bill falling due and payday, and opens Ask DiPo when his
-                    // face is tapped.
-                    DiPoHomeSection(unread: NotificationManager.shared.unreadCount,
-                                    bill: dipoBill,
-                                    daysToPayday: nearestSalary.map { SalaryDateEngine.daysUntilPay(dayOfMonth: $0.dayOfMonth) },
-                                    payDate: nearestSalary.map { SalaryDateEngine.nextPayDate(dayOfMonth: $0.dayOfMonth) },
-                                    assetCheck: dipoAssetCheck,
-                                    isRoyal: dipoIsRoyal,
-                                    onAskDiPo: { askDiPoPrompt = nil; showAskDiPo = true },
-                                    onAction: { action in
-                                        switch action {
-                                        case .notifications: showNotifications = true
-                                        case .bills:         vm.open(PlanRoute.bills)
-                                        case .salary:        vm.open(PlanRoute.salary)
-                                        case .checkIn, .streak, .interestGuess: break   // handled inside DiPo's section
-                                        case .quest:
-                                            showQuest = true
-                                        case .assetCheck:
-                                            assetCheckSnoozedUntil = AssetMarketCheck.snoozed()
-                                            vm.open(PlanRoute.assets)
-                                        case .interestTip(let interest):
-                                            askDiPoPrompt = interest.prompt
-                                            showAskDiPo = true
-                                        case .customInterestTip(let name):
-                                            askDiPoPrompt = String(format: loc("interest.custom.prompt"), name)
-                                            showAskDiPo = true
-                                        }
-                                    })
-                        .padding(.horizontal, 22)
-                        .padding(.top, hasCards ? 14 : 12)
-                        .opacity(headerAppeared ? 1 : 0)
-                        .animation(AppMotion.appear, value: headerAppeared)
-
-                    if !hasCards {
-                        NoCardState(showAddCard: $showAddCard, showAddSalary: $showAddSalary)
-                            .padding(.top, 40)
-                                                        .opacity(contentAppeared ? 1 : 0)
-                            .offset(y: contentAppeared ? 0 : 30)
-                            .animation(AppMotion.appear, value: contentAppeared)
-
+                Group {
+                    if pageColumns == 2 && hasCards {
+                        HStack(alignment: .top, spacing: 0) {
+                            VStack(spacing: 0) {
+                                homeHeader
+                                moneyTop
+                                flowCard
+                                netWorthCard
+                            }
+                            .frame(maxWidth: AppLayout.phoneContentMaxWidth)
+                            VStack(spacing: 0) {
+                                dipoSection
+                                attentionCards
+                                filterBar
+                                transactionsCard
+                            }
+                            // DiPo's line starts level with the header beside it.
+                            .padding(.top, 4)
+                            .frame(maxWidth: AppLayout.phoneContentMaxWidth)
+                        }
+                        .padding(.bottom, 40)
+                        .frame(maxWidth: .infinity)
                     } else {
-                        // One attention slot. Candidates are ranked by how
-                        // urgent and how actionable they are; only the winner
-                        // gets a card. The rest sit behind a single row so
-                        // nothing is lost — it just stops competing.
-                        let attention = attentionItems
-                        if let top = attention.first {
-                            top.view
-                                .padding(.horizontal, 22)
-                                .padding(.top, 14)
-                                .transition(.move(edge: .top).combined(with: .opacity))
-
-                            if showAllAttention {
-                                ForEach(attention.dropFirst()) { item in
-                                    item.view
-                                        .padding(.horizontal, 22)
-                                        .padding(.top, 8)
-                                        .transition(.move(edge: .top).combined(with: .opacity))
-                                }
+                        VStack(spacing: 0) {
+                            homeHeader
+                            if hasCards { moneyTop }
+                            dipoSection
+                            if !hasCards {
+                                noCardState
+                            } else {
+                                attentionCards
+                                flowCard
+                                netWorthCard
+                                filterBar
+                                transactionsCard
                             }
-
-                            if attention.count > 1 {
-                                Button {
-                                    HapticManager.shared.tap()
-                                    withAnimation(AppMotion.appear) { showAllAttention.toggle() }
-                                } label: {
-                                    MoreAttentionRow(count: attention.count - 1,
-                                                     expanded: showAllAttention)
-                                }
-                                .buttonStyle(ScaleButtonStyle())
-                                .padding(.horizontal, 22)
-                                .padding(.top, 8)
-                            }
+                            Spacer(minLength: 120)
                         }
-
-                        // What came in and what went out this pay cycle. The
-                        // total above says where the money stands; this says
-                        // which direction it has been moving to get there.
-                        MonthFlowCard(income: monthIncome,
-                                      expense: monthExpense,
-                                      putAway: flowPutAway,
-                                      extra: flowExtra,
-                                      currency: selectedCard?.resolvedCurrency
-                                                ?? CurrencyManager.shared.preferredCurrency,
-                                      periodLabel: flowPeriodLabel,
-                                      isHidden: hideAll || (selectedCard?.isHidden ?? false),
-                                      note: flowNote,
-                                      noteTone: flowNoteTone,
-                                      onDetails: flowDetails)
-                            .padding(.horizontal, 22)
-                            .padding(.top, 14)
-                            .opacity(contentAppeared ? 1 : 0)
-                            .offset(y: contentAppeared ? 0 : 18)
-                            .animation(AppMotion.appear, value: contentAppeared)
-
-                        // Net Worth — cash minus liabilities. Only shown when the
-                        // user actually has liabilities (credit cards / debts),
-                        // otherwise it's just the cash total again.
-                        if worth.liabilities > 0.5 && canSeeNetWorth && !hideAll {
-                            let netWorth = worth.total
-                            let fmt = { (v: Double) in CurrencyManager.shared.formatted(v, currency: CurrencyManager.shared.preferredCurrency) }
-                            VStack(alignment: .leading, spacing: 5) {
-                                HStack(spacing: 10) {
-                                    Image(systemName: "chart.pie.fill").font(.system(.footnote)).foregroundStyle(AppTheme.purple)
-                                    Text(loc("home.net_worth")).font(.system(.caption, weight: .medium)).foregroundStyle(AppTheme.textSecondary)
-                                    Spacer()
-                                    Text((netWorth < 0 ? "-" : "") + fmt(Swift.abs(netWorth)))
-                                        .font(.system(.subheadline, weight: .bold))
-                                        .foregroundStyle(netWorth >= 0 ? AppTheme.textPrimary : AppTheme.red)
-                                        // Roll the digits when a transaction
-                                        // moves this. Seeing the figure change
-                                        // is what links the action just taken
-                                        // to its effect on net worth.
-                                        .contentTransition(.numericText())
-                                        .animation(.easeOut(duration: 0.45), value: netWorth)
-                                }
-                                // Spell out the arithmetic — a bare "net worth"
-                                // figure (especially a negative one) is alarming
-                                // and unreadable without its parts.
-                                Text(worth.goals > 0.5
-                                     ? String(format: loc("home.net_worth_breakdown_savings"),
-                                              fmt(worth.balance), fmt(worth.goals), fmt(worth.liabilities))
-                                     : String(format: loc("home.net_worth_breakdown"),
-                                              fmt(worth.balance), fmt(worth.liabilities)))
-                                    .font(.system(.caption2))
-                                    .foregroundStyle(AppTheme.textSecondary.opacity(0.75))
-                                    .fixedSize(horizontal: false, vertical: true)
-                                // Investments live in their own menu, so name their
-                                // share of net worth here rather than leaving the
-                                // total unexplained.
-                                if worth.investments > 0.5 {
-                                    Text(String(format: loc("invest.networth_line"), fmt(worth.investments)))
-                                        .font(.system(.caption2, weight: .medium))
-                                        .foregroundStyle(AppTheme.accent)
-                                }
-                                if worth.assets > 0.5 {
-                                    Text(String(format: loc("asset.networth_line"), fmt(worth.assets)))
-                                        .font(.system(.caption2, weight: .medium))
-                                        .foregroundStyle(AppTheme.teal)
-                                }
-                            }
-                            .padding(.horizontal, 16).padding(.vertical, 11)
-                            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
-                            .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.purple.opacity(0.15), lineWidth: 1))
-                            .padding(.horizontal, 22).padding(.top, 12)
-                            .opacity(contentAppeared ? 1 : 0)
-                        }
-
-                        // Category filter — grid on iPad, scroll on iPhone
-                        CategoryFilterBar(selectedFilter: $categoryFilter)
-                            .padding(.horizontal, 22)
-                            .padding(.top, 14)
-                            .opacity(contentAppeared ? 1 : 0)
-                            .offset(y: contentAppeared ? 0 : 20)
-                            .animation(AppMotion.appear, value: contentAppeared)
-
-                        TransactionSection(
-                            transactions: selectedCardTransactions,
-                            cards: queriedCards,
-                            categoryFilter: categoryFilter,
-                            onClearFilter: { withAnimation { categoryFilter = nil } },
-                            sourceCard: selectedCard,
-                            onOpenSearch: { HapticManager.shared.tap(); showSearch = true }
-                        )
-                        .id(vm.selectedCardIndex)
-                        // The list reads as one surface now instead of floating
-                        // loose on the page — it is a single thing ("what you
-                        // spent") and its edges should say so.
-                        .padding(16)
-                        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.xl))
-                        .padding(.top, 14)
-                        .padding(.horizontal, 22)
-                                                .opacity(contentAppeared ? 1 : 0)
-                        .offset(y: contentAppeared ? 0 : 24)
-                        .animation(AppMotion.appear, value: contentAppeared)
+                        // Centred AND capped. Without the cap the column simply
+                        // stretched to 626 pt on the Duo's inner display.
+                        .phoneWidthCapped()
                     }
-
-                    Spacer(minLength: 120)
                 }
-                // Centred AND capped. Without the cap the column simply
-                // stretched to 626 pt on the Duo's inner display.
-                .phoneWidthCapped()
                 // Pin the column to the scroll view's OWN width. Under iOS 26 a
                 // vertical ScrollView proposes an unbounded width to its content,
                 // so every `.frame(maxWidth: .infinity)` child (the income/expense
@@ -880,6 +730,215 @@ struct HomeView: View {
                 .presentationBackground(AppTheme.bg)
                 .preferredColorScheme(appColorScheme())
         }
+    }
+
+    // MARK: Sections
+    //
+    // One column on a phone, in this order: header, money, DiPo, what needs
+    // attention, this period, net worth, the list. Two columns where two
+    // phone columns fit (the Duo opened and turned): where the money stands
+    // on the left, what needs doing and what moved on the right.
+
+    private var homeHeader: some View {
+        // Header always visible
+        HomeHeader(vm: vm, showSearch: $showSearch, showNotifications: $showNotifications)
+            .id(Self.topAnchor)
+            .padding(.horizontal, 22)
+            .padding(.top, 18)
+            .opacity(headerAppeared ? 1 : 0)
+            .offset(y: headerAppeared ? 0 : -16)
+            .animation(AppMotion.appear, value: headerAppeared)
+    }
+
+    private var dipoSection: some View {
+        // DiPo's one line: reminds about unread notifications, a
+        // bill falling due and payday, and opens Ask DiPo when his
+        // face is tapped.
+        DiPoHomeSection(unread: NotificationManager.shared.unreadCount,
+                        bill: dipoBill,
+                        daysToPayday: nearestSalary.map { SalaryDateEngine.daysUntilPay(dayOfMonth: $0.dayOfMonth) },
+                        payDate: nearestSalary.map { SalaryDateEngine.nextPayDate(dayOfMonth: $0.dayOfMonth) },
+                        assetCheck: dipoAssetCheck,
+                        isRoyal: dipoIsRoyal,
+                        onAskDiPo: { askDiPoPrompt = nil; showAskDiPo = true },
+                        onAction: { action in
+                            switch action {
+                            case .notifications: showNotifications = true
+                            case .bills:         vm.open(PlanRoute.bills)
+                            case .salary:        vm.open(PlanRoute.salary)
+                            case .checkIn, .streak, .interestGuess: break   // handled inside DiPo's section
+                            case .quest:
+                                showQuest = true
+                            case .assetCheck:
+                                assetCheckSnoozedUntil = AssetMarketCheck.snoozed()
+                                vm.open(PlanRoute.assets)
+                            case .interestTip(let interest):
+                                askDiPoPrompt = interest.prompt
+                                showAskDiPo = true
+                            case .customInterestTip(let name):
+                                askDiPoPrompt = String(format: loc("interest.custom.prompt"), name)
+                                showAskDiPo = true
+                            }
+                        })
+            .padding(.horizontal, 22)
+            .padding(.top, hasCards ? 14 : 12)
+            .opacity(headerAppeared ? 1 : 0)
+            .animation(AppMotion.appear, value: headerAppeared)
+    }
+
+    private var noCardState: some View {
+        NoCardState(showAddCard: $showAddCard, showAddSalary: $showAddSalary)
+            .padding(.top, 40)
+            .opacity(contentAppeared ? 1 : 0)
+            .offset(y: contentAppeared ? 0 : 30)
+            .animation(AppMotion.appear, value: contentAppeared)
+    }
+
+    @ViewBuilder
+    private var attentionCards: some View {
+        // One attention slot. Candidates are ranked by how
+        // urgent and how actionable they are; only the winner
+        // gets a card. The rest sit behind a single row so
+        // nothing is lost — it just stops competing.
+        let attention = attentionItems
+        if let top = attention.first {
+            top.view
+                .padding(.horizontal, 22)
+                .padding(.top, 14)
+                .transition(.move(edge: .top).combined(with: .opacity))
+
+            if showAllAttention {
+                ForEach(attention.dropFirst()) { item in
+                    item.view
+                        .padding(.horizontal, 22)
+                        .padding(.top, 8)
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                }
+            }
+
+            if attention.count > 1 {
+                Button {
+                    HapticManager.shared.tap()
+                    withAnimation(AppMotion.appear) { showAllAttention.toggle() }
+                } label: {
+                    MoreAttentionRow(count: attention.count - 1,
+                                     expanded: showAllAttention)
+                }
+                .buttonStyle(ScaleButtonStyle())
+                .padding(.horizontal, 22)
+                .padding(.top, 8)
+            }
+        }
+    }
+
+    private var flowCard: some View {
+        // What came in and what went out this pay cycle. The
+        // total above says where the money stands; this says
+        // which direction it has been moving to get there.
+        MonthFlowCard(income: monthIncome,
+                      expense: monthExpense,
+                      putAway: flowPutAway,
+                      extra: flowExtra,
+                      currency: selectedCard?.resolvedCurrency
+                                ?? CurrencyManager.shared.preferredCurrency,
+                      periodLabel: flowPeriodLabel,
+                      isHidden: hideAll || (selectedCard?.isHidden ?? false),
+                      note: flowNote,
+                      noteTone: flowNoteTone,
+                      onDetails: flowDetails)
+            .padding(.horizontal, 22)
+            .padding(.top, 14)
+            .opacity(contentAppeared ? 1 : 0)
+            .offset(y: contentAppeared ? 0 : 18)
+            .animation(AppMotion.appear, value: contentAppeared)
+    }
+
+    @ViewBuilder
+    private var netWorthCard: some View {
+        // Net Worth — cash minus liabilities. Only shown when the
+        // user actually has liabilities (credit cards / debts),
+        // otherwise it's just the cash total again.
+        if worth.liabilities > 0.5 && canSeeNetWorth && !hideAll {
+            let netWorth = worth.total
+            let fmt = { (v: Double) in CurrencyManager.shared.formatted(v, currency: CurrencyManager.shared.preferredCurrency) }
+            VStack(alignment: .leading, spacing: 5) {
+                HStack(spacing: 10) {
+                    Image(systemName: "chart.pie.fill").font(.system(.footnote)).foregroundStyle(AppTheme.purple)
+                    Text(loc("home.net_worth")).font(.system(.caption, weight: .medium)).foregroundStyle(AppTheme.textSecondary)
+                    Spacer()
+                    Text((netWorth < 0 ? "-" : "") + fmt(Swift.abs(netWorth)))
+                        .font(.system(.subheadline, weight: .bold))
+                        .foregroundStyle(netWorth >= 0 ? AppTheme.textPrimary : AppTheme.red)
+                        // Roll the digits when a transaction
+                        // moves this. Seeing the figure change
+                        // is what links the action just taken
+                        // to its effect on net worth.
+                        .contentTransition(.numericText())
+                        .animation(.easeOut(duration: 0.45), value: netWorth)
+                }
+                // Spell out the arithmetic — a bare "net worth"
+                // figure (especially a negative one) is alarming
+                // and unreadable without its parts.
+                Text(worth.goals > 0.5
+                     ? String(format: loc("home.net_worth_breakdown_savings"),
+                              fmt(worth.balance), fmt(worth.goals), fmt(worth.liabilities))
+                     : String(format: loc("home.net_worth_breakdown"),
+                              fmt(worth.balance), fmt(worth.liabilities)))
+                    .font(.system(.caption2))
+                    .foregroundStyle(AppTheme.textSecondary.opacity(0.75))
+                    .fixedSize(horizontal: false, vertical: true)
+                // Investments live in their own menu, so name their
+                // share of net worth here rather than leaving the
+                // total unexplained.
+                if worth.investments > 0.5 {
+                    Text(String(format: loc("invest.networth_line"), fmt(worth.investments)))
+                        .font(.system(.caption2, weight: .medium))
+                        .foregroundStyle(AppTheme.accent)
+                }
+                if worth.assets > 0.5 {
+                    Text(String(format: loc("asset.networth_line"), fmt(worth.assets)))
+                        .font(.system(.caption2, weight: .medium))
+                        .foregroundStyle(AppTheme.teal)
+                }
+            }
+            .padding(.horizontal, 16).padding(.vertical, 11)
+            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+            .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.purple.opacity(0.15), lineWidth: 1))
+            .padding(.horizontal, 22).padding(.top, 12)
+            .opacity(contentAppeared ? 1 : 0)
+        }
+    }
+
+    private var filterBar: some View {
+        // Category filter — grid on iPad, scroll on iPhone
+        CategoryFilterBar(selectedFilter: $categoryFilter)
+            .padding(.horizontal, 22)
+            .padding(.top, 14)
+            .opacity(contentAppeared ? 1 : 0)
+            .offset(y: contentAppeared ? 0 : 20)
+            .animation(AppMotion.appear, value: contentAppeared)
+    }
+
+    private var transactionsCard: some View {
+        TransactionSection(
+            transactions: selectedCardTransactions,
+            cards: queriedCards,
+            categoryFilter: categoryFilter,
+            onClearFilter: { withAnimation { categoryFilter = nil } },
+            sourceCard: selectedCard,
+            onOpenSearch: { HapticManager.shared.tap(); showSearch = true }
+        )
+        .id(vm.selectedCardIndex)
+        // The list reads as one surface now instead of floating
+        // loose on the page — it is a single thing ("what you
+        // spent") and its edges should say so.
+        .padding(16)
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.xl))
+        .padding(.top, 14)
+        .padding(.horizontal, 22)
+        .opacity(contentAppeared ? 1 : 0)
+        .offset(y: contentAppeared ? 0 : 24)
+        .animation(AppMotion.appear, value: contentAppeared)
     }
 
     /// The total of every cash account in one short row, then the cards to

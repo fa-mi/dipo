@@ -1,27 +1,24 @@
 import SwiftUI
 import SwiftData
 
-// Moved out of StatisticsView.swift, unchanged. The export sheet and the report it renders.
+// Moved out of StatisticsView.swift. The export sheet and the report it renders.
 
 // MARK: - Statistics Export Sheet
 
 struct StatsExportSheet: View {
-    let period: StatPeriod
     let periodSubtitle: String
     let selectedCard: BankCard?
-    let income: Double
-    /// Salary-aware income for the recommendation math (see StatsReportCard).
-    var budgetIncome: Double? = nil
-    let expenses: Double
-    let weeklyAverage: Double
-    let topCategories: [(category: TxCategory, amount: Double, percentage: Double)]
-    let transactions: [TxRecord]
     let currency: String
-    /// Per-card budget configs forwarded from the parent so this sheet can
-    /// hand them to StatsReportCard for ratio resolution.
-    let configs: [CardBudgetConfig]
-    /// Spending over the same stretch of the previous period, for the change chip.
-    var previousExpenses: Double? = nil
+    /// The headline's figures, exactly as Statistics shows them.
+    let living: Double
+    let livingFunds: Double
+    let progress: (elapsed: Int, total: Int)?
+    /// `StatisticsView.livingChange`: nil in the period's first week.
+    let change: Double?
+    let debtLine: String?
+    let paceLine: (ok: Bool, text: String)?
+    /// Spending & bills by category, largest first.
+    let categories: [(category: TxCategory, amount: Double)]
 
     @Environment(\.dismiss) private var dismiss
     @State private var shareItem: ShareItem?
@@ -40,17 +37,14 @@ struct StatsExportSheet: View {
             periodSubtitle: periodSubtitle,
             cardLabel: selectedCard.map(cardDisplayLabel) ?? "—",
             cardColor: selectedCard.map { Color(hex: $0.gradientStart) } ?? AppTheme.accent,
-            income: income,
-            budgetIncome: budgetIncome,
-            expenses: expenses,
-            weeklyAverage: weeklyAverage,
-            topCategories: topCategories,
-            transactionCount: transactions.count,
             currency: currency,
-            cardID: selectedCard?.id.uuidString,
-            configs: configs,
-            filteredTransactions: transactions,
-            previousExpenses: previousExpenses
+            living: living,
+            livingFunds: livingFunds,
+            progress: progress,
+            change: change,
+            debtLine: debtLine,
+            paceLine: paceLine,
+            categories: categories
         )
     }
 
@@ -71,7 +65,6 @@ struct StatsExportSheet: View {
                         // width it is rendered at.
                         report
                             .frame(maxWidth: 400)
-                            .shadow(color: .black.opacity(0.10), radius: 18, y: 8)
                             .padding(.horizontal, 18)
                     }
                     .padding(.top, 8)
@@ -119,8 +112,9 @@ struct StatsExportSheet: View {
 
     // MARK: - Export
 
-    /// Renders the report to a PNG at 3× and hands it to the share sheet, in the
-    /// app's own light/dark setting so the image matches what was previewed.
+    /// Renders the report to a PNG at 3× and hands it to the share sheet. The
+    /// card is the headline's dark field in both themes; the margin around it
+    /// follows the app's light or dark setting, as the preview does.
     @MainActor
     private func exportImage() {
         isGenerating = true
@@ -157,51 +151,66 @@ struct StatsExportSheet: View {
 
 // MARK: - Stats Report Card (preview and PNG export)
 
-/// The report as an image someone would actually send: the same four answers
-/// as the Statistics screen, in the same colours, sized for a phone story.
+/// The report as an image someone would actually send: the Statistics
+/// headline, on its field, in its words.
 ///
-/// It used to lead on a net figure in a green or red wash, set income and
-/// spending in two boxes, rank categories with orange/grey/purple medals in the
-/// old muted category colours, and close on a bordered tinted advice box — a
-/// different visual language from the screen it was exported from.
+/// It used to say "Expenses Rp 1.725.000" and "1020% more than last time" on
+/// the day a Rp 1,5 jt card bill was paid, under a headline that said
+/// Rp 225.000 had been spent and the card bill was not new spending. Now it
+/// carries the headline's figures: spending & bills against income, debt paid
+/// on a line of its own, where the period is heading, and what the spending
+/// was. The balance is not in it: this is the picture that leaves the phone.
 struct StatsReportCard: View {
     let periodSubtitle: String
     let cardLabel: String
     let cardColor: Color
-    let income: Double
-    /// Income for BUDGET MATH (the recommendation): the salary schedule when
-    /// there is one, so a period ending before payday doesn't distort it.
-    var budgetIncome: Double? = nil
-    private var insightIncome: Double { budgetIncome ?? income }
-    let expenses: Double
-    let weeklyAverage: Double
-    let topCategories: [(category: TxCategory, amount: Double, percentage: Double)]
-    let transactionCount: Int
     let currency: String
-    /// Card whose ratios appear in the budget split. nil = global defaults.
-    let cardID: String?
-    let configs: [CardBudgetConfig]
-    /// The period's transactions — for the same `topInsight()` Home uses.
-    let filteredTransactions: [TxRecord]
-    var previousExpenses: Double? = nil
-
-    @Environment(\.colorScheme) private var colorScheme
+    /// Spending & bills, and what it is measured against: income plus any
+    /// money added to the period's budget.
+    let living: Double
+    let livingFunds: Double
+    let progress: (elapsed: Int, total: Int)?
+    let change: Double?
+    /// The headline's debt and pace sentences, word for word.
+    let debtLine: String?
+    let paceLine: (ok: Bool, text: String)?
+    let categories: [(category: TxCategory, amount: Double)]
 
     private func money(_ v: Double) -> String {
         CurrencyManager.shared.formatted(v, currency: currency)
     }
 
+    private var ratio: Double { livingFunds > 0 ? living / livingFunds : 0 }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
+        VStack(alignment: .leading, spacing: 16) {
             header
-            spendingBlock
-            if !topCategories.isEmpty { categoriesBlock }
-            insightBlock
-            if SmartBudgetManager.shared.hasActiveBudget, income > 0 { budgetBlock }
+            figure
+            if livingFunds > 0 { gauge }
+            if let debtLine {
+                panel("creditcard.fill", AppTheme.blue, debtLine, fill: AppTheme.flowCobalt.opacity(0.18))
+            }
+            if let paceLine {
+                panel(paceLine.ok ? "checkmark.circle.fill" : "exclamationmark.triangle.fill",
+                      paceLine.ok ? AppTheme.accent : AppTheme.orange, paceLine.text,
+                      fill: paceLine.ok ? AppTheme.flowPine.opacity(0.13) : AppTheme.orange.opacity(0.12))
+            }
+            if !categories.isEmpty { categoriesBlock }
             footer
         }
         .padding(20)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.xl))
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background {
+            // The headline's field. Never the peach one: that warns about the
+            // balance, which the image does not show.
+            RoundedRectangle(cornerRadius: AppRadius.xl).fill(AppTheme.flowGround)
+                .overlay { FlowField() }
+                .clipShape(RoundedRectangle(cornerRadius: AppRadius.xl))
+                .overlay(RoundedRectangle(cornerRadius: AppRadius.xl)
+                    .stroke(AppTheme.flowMint.opacity(0.16), lineWidth: 1))
+        }
+        // Dark in both themes, as the headline is.
+        .environment(\.colorScheme, .dark)
     }
 
     private var header: some View {
@@ -209,7 +218,7 @@ struct StatsReportCard: View {
             Image("DiPoMascot")
                 .resizable().scaledToFit()
                 .frame(width: 34, height: 34)
-                .blendMode(colorScheme == .dark ? .screen : .multiply)
+                .blendMode(.screen)
             VStack(alignment: .leading, spacing: 1) {
                 Text(loc("stats.report_title"))
                     .font(.system(.subheadline, design: .rounded, weight: .bold))
@@ -217,7 +226,7 @@ struct StatsReportCard: View {
                 Text(periodSubtitle)
                     .font(.system(.caption))
                     .foregroundStyle(AppTheme.textSecondary)
-                    .lineLimit(1).minimumScaleFactor(0.8)
+                    .lineLimit(2).minimumScaleFactor(0.8)
             }
             Spacer(minLength: 6)
             HStack(spacing: 5) {
@@ -232,165 +241,107 @@ struct StatsReportCard: View {
         }
     }
 
-    private var spendingBlock: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(loc("stats.expenses"))
-                    .font(.system(.footnote, weight: .semibold))
-                    .foregroundStyle(AppTheme.textSecondary)
-                Text(money(expenses))
-                    .font(.system(size: 34, weight: .bold, design: .rounded))
-                    .foregroundStyle(AppTheme.textPrimary)
-                    .lineLimit(1).minimumScaleFactor(0.55)
-            }
-            if let prev = previousExpenses, prev > 0 {
-                let change = (expenses - prev) / prev * 100
-                let up = change >= 0
-                Label(String(format: loc(up ? "stats.vs_prev_up" : "stats.vs_prev_down"),
-                             Int(abs(change).rounded())),
-                      systemImage: up ? "arrow.up.right" : "arrow.down.right")
-                    .font(.system(.caption, weight: .semibold))
-                    .foregroundStyle(up ? AppTheme.red : AppTheme.accent)
-                    .padding(.horizontal, 9).padding(.vertical, 4)
-                    .background((up ? AppTheme.red : AppTheme.accent).opacity(0.12), in: Capsule())
-            }
-            if income > 0 {
-                let used = expenses / income
-                SpendGauge(fraction: used)
-                HStack {
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(loc("stats.income")).font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
-                        Text(money(income)).font(.system(.footnote, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+    /// Spending & bills, as the headline counts them, and what it is out of.
+    private var figure: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(loc("stats.book_living"))
+                .font(.system(.footnote, weight: .medium))
+                .foregroundStyle(AppTheme.textSecondary)
+            Text(money(living))
+                .font(.system(size: 40, weight: .bold))
+                .foregroundStyle(LinearGradient(stops: [.init(color: AppTheme.textPrimary, location: 0.3),
+                                                        .init(color: AppTheme.flowFrost, location: 1)],
+                                                startPoint: .top, endPoint: .bottom))
+                .minimumScaleFactor(0.5).lineLimit(1)
+            Text(figureCaption)
+                .font(.system(.footnote))
+                .foregroundStyle(AppTheme.textSecondary)
+                .lineLimit(2)
+        }
+    }
+
+    private var figureCaption: String {
+        var parts: [String] = []
+        if livingFunds > 0 { parts.append(String(format: loc("stats.share_of_income"), money(livingFunds))) }
+        if let p = progress { parts.append(String(format: loc("stats.day_of"), p.elapsed, p.total)) }
+        return parts.joined(separator: " · ")
+    }
+
+    /// The headline's gauge: the share of income, and a tick where time is.
+    /// Bars of a set width, as the category rows: the masked gradient the
+    /// screen uses drew full in this sheet whatever the share.
+    private var gauge: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            GeometryReader { g in
+                let w = g.size.width
+                ZStack(alignment: .leading) {
+                    Capsule().fill(AppTheme.cardMid)
+                    Capsule().fill(ratio >= 1 ? AppTheme.orange : AppTheme.accent)
+                        .frame(width: max(w * CGFloat(min(ratio, 1)), 10))
+                    if let p = progress, p.total > 0 {
+                        Capsule()
+                            .fill(AppTheme.textPrimary.opacity(0.75))
+                            .frame(width: 2, height: 18)
+                            .offset(x: w * CGFloat(Double(p.elapsed) / Double(p.total)) - 1)
                     }
-                    Spacer()
-                    VStack(alignment: .trailing, spacing: 1) {
-                        Text(loc(income >= expenses ? "stats.left" : "stats.over"))
-                            .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
-                        Text(money(abs(income - expenses)))
-                            .font(.system(.footnote, weight: .semibold))
-                            .foregroundStyle(SpendGauge.tone(for: used))
+                }
+                .frame(height: 10)
+                .frame(maxHeight: .infinity)
+            }
+            .frame(height: 18)
+
+            HStack(spacing: 8) {
+                Text(String(format: loc("stats.pct_of_income"), PeriodCashBook.usedPct(ratio: ratio)))
+                    .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
+                    .lineLimit(2).minimumScaleFactor(0.8)
+                Spacer(minLength: 4)
+                if let c = change, abs(c) >= 1 {
+                    let tint = c < 0 ? AppTheme.accent : AppTheme.orange
+                    HStack(spacing: 3) {
+                        Image(systemName: c >= 0 ? "arrow.up.right" : "arrow.down.right")
+                            .font(.system(.caption2, weight: .bold))
+                        Text(String(format: loc("stats.vs_last_period"), String(format: "%.0f%%", abs(c))))
+                            .font(.system(.caption2, weight: .bold))
+                            .lineLimit(1)
                     }
+                    .foregroundStyle(tint)
+                    .padding(.horizontal, 8).padding(.vertical, 4)
+                    .background(tint.opacity(0.15), in: Capsule())
+                    .fixedSize()
                 }
             }
         }
+    }
+
+    private func panel(_ icon: String, _ tint: Color, _ text: String, fill: Color) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: icon)
+                .font(.system(.subheadline))
+                .foregroundStyle(tint)
+            Text(text)
+                .font(.system(.footnote, weight: .medium))
+                .foregroundStyle(AppTheme.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .heroPanel(fill)
     }
 
     private var categoriesBlock: some View {
-        VStack(alignment: .leading, spacing: 11) {
+        VStack(alignment: .leading, spacing: 8) {
             Text(loc("stats.where_title"))
                 .font(.system(.footnote, weight: .bold))
                 .foregroundStyle(AppTheme.textPrimary)
-            ForEach(Array(topCategories.prefix(5).enumerated()), id: \.offset) { _, item in
-                ReportCategoryRow(category: item.category, amount: item.amount,
-                                  percentage: item.percentage, currency: currency)
-            }
-        }
-    }
-
-    private var insightBlock: some View {
-        let insight = SmartBudgetManager.shared.topInsight(
-            allTransactions: filteredTransactions,
-            income: insightIncome,
-            cardID: cardID,
-            configs: configs,
-            targetCurrency: currency,
-            periodStart: filteredTransactions.map(\.date).min()
-        )
-        let (icon, tint, title, body): (String, Color, String, String) = {
-            if let insight { return (insight.icon, insight.color, insight.title, insight.body) }
-            if insightIncome <= 0 {
-                return ("info.circle.fill", AppTheme.textSecondary,
-                        loc("rec.no_income_title"), loc("rec.no_income_body"))
-            }
-            let savingsRate = max(0, (insightIncome - expenses) / insightIncome * 100)
-            let spendRatio = expenses / insightIncome
-            if spendRatio > 0.9 {
-                return ("exclamationmark.triangle.fill", AppTheme.red,
-                        loc("rec.overspend_title"),
-                        String(format: loc("rec.overspend_body"), BudgetGroup.pct(spendRatio)))
-            }
-            if savingsRate >= 20 {
-                return ("checkmark.seal.fill", AppTheme.accent,
-                        loc("rec.great_savings_title"),
-                        String(format: loc("rec.great_savings_body"), Int(savingsRate)))
-            }
-            return ("lightbulb.fill", AppTheme.orange,
-                    loc("rec.balance_title"),
-                    String(format: loc("rec.balance_body"), Int(savingsRate)))
-        }()
-
-        return VStack(alignment: .leading, spacing: 10) {
-            Text(loc("stats.notes_title"))
-                .font(.system(.footnote, weight: .bold))
-                .foregroundStyle(AppTheme.textPrimary)
-            reportNote(icon, tint, title, body)
-            if weeklyAverage > 0 {
-                reportNote("cup.and.saucer.fill", AppTheme.purple,
-                           String(format: loc("stats.weekly_line"), money(weeklyAverage)),
-                           String(format: loc("stats.report_tx_inline"), transactionCount))
-            }
-        }
-    }
-
-    private func reportNote(_ icon: String, _ tint: Color, _ title: String, _ body: String) -> some View {
-        HStack(alignment: .top, spacing: 10) {
-            Image(systemName: icon)
-                .font(.system(.caption, weight: .semibold))
-                .foregroundStyle(tint)
-                .frame(width: 28, height: 28)
-                .background(tint.opacity(0.14), in: RoundedRectangle(cornerRadius: AppRadius.xs))
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.system(.footnote, weight: .semibold))
-                    .foregroundStyle(AppTheme.textPrimary)
-                    .fixedSize(horizontal: false, vertical: true)
-                Text(body)
-                    .font(.system(.caption))
-                    .foregroundStyle(AppTheme.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            Spacer(minLength: 0)
-        }
-    }
-
-    /// The budget split as one bar in the group colours — the same three
-    /// shares the Smart Budget screen uses.
-    private var budgetBlock: some View {
-        let r = SmartBudgetManager.shared.ratios(forCardID: cardID, configs: configs)
-        let parts: [(String, Double, Color)] = [
-            (loc("budget.group.daily"), r.daily, AppTheme.blue),
-            (loc("budget.group.lifestyle"), r.lifestyle, AppTheme.purple),
-            (loc("budget.group.invest_debt"), r.investDebt, AppTheme.accent),
-        ]
-        return VStack(alignment: .leading, spacing: 10) {
-            Text(loc("budget.allocation_title"))
-                .font(.system(.footnote, weight: .bold))
-                .foregroundStyle(AppTheme.textPrimary)
-            GeometryReader { g in
-                HStack(spacing: 3) {
-                    ForEach(Array(parts.enumerated()), id: \.offset) { _, part in
-                        Capsule().fill(part.2)
-                            .frame(width: max((g.size.width - 6) * CGFloat(part.1), 4))
-                    }
+            VStack(alignment: .leading, spacing: 11) {
+                ForEach(Array(categories.prefix(5).enumerated()), id: \.offset) { _, item in
+                    ReportCategoryRow(category: item.category, amount: item.amount,
+                                      percentage: living > 0 ? min(item.amount / living, 1) * 100 : 0,
+                                      currency: currency)
                 }
             }
-            .frame(height: 8)
-            HStack(alignment: .top, spacing: 8) {
-                ForEach(Array(parts.enumerated()), id: \.offset) { _, part in
-                    VStack(alignment: .leading, spacing: 2) {
-                        HStack(spacing: 4) {
-                            Circle().fill(part.2).frame(width: 7, height: 7)
-                            Text(part.0).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
-                                .lineLimit(1).minimumScaleFactor(0.8)
-                        }
-                        Text("\(Int((part.1 * 100).rounded()))% · " + money(income * part.1))
-                            .font(.system(.caption2, weight: .semibold))
-                            .foregroundStyle(AppTheme.textPrimary)
-                            .lineLimit(1).minimumScaleFactor(0.7)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                }
-            }
+            .padding(12)
+            .heroPanel(AppTheme.flowGround.opacity(0.46), edge: 0.09)
         }
     }
 
