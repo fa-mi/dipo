@@ -55,14 +55,23 @@ struct BackTapGuideView: View {
     /// The payment waits under Review like everything else read for you.
     /// iOS 27 builds this inside a new shortcut: its Automation actions put
     /// the trigger at the top, and DiPo's action goes under it.
+    ///
+    /// Each step has a picture: filling the action's blanks takes a variable
+    /// and then one of its parts, which nobody guesses from words alone.
     private var notificationSteps: [GuideStep] {
         [
             GuideStep(id: 1, title: loc("backtap.n1_title"), body: loc("backtap.n1_body"),
-                      glyph: "bell.badge"),
+                      glyph: "bell.badge", picture: AnyView(NotificationSetupPicture.trigger)),
             GuideStep(id: 2, title: loc("backtap.n2_title"), body: loc("backtap.n2_body"),
-                      glyph: "plus.circle"),
+                      glyph: "magnifyingglass", picture: AnyView(NotificationSetupPicture.search)),
             GuideStep(id: 3, title: loc("backtap.n3_title"), body: loc("backtap.n3_body"),
-                      glyph: "lock.open"),
+                      glyph: "hand.tap", picture: AnyView(NotificationSetupPicture.selectVariable)),
+            GuideStep(id: 4, title: loc("backtap.n4_title"), body: loc("backtap.n4_body"),
+                      glyph: "list.bullet", picture: AnyView(NotificationSetupPicture.chooseTitle)),
+            GuideStep(id: 5, title: loc("backtap.n5_title"), body: loc("backtap.n5_body"),
+                      glyph: "checkmark.circle", picture: AnyView(NotificationSetupPicture.filled)),
+            GuideStep(id: 6, title: loc("backtap.n6_title"), body: loc("backtap.n6_body"),
+                      glyph: "lock.open", picture: AnyView(NotificationSetupPicture.runAlone)),
         ]
     }
 
