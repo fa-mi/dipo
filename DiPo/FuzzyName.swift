@@ -101,17 +101,17 @@ enum FuzzyName {
     /// ci/fuzzy-words.py from wordfreq's lists; run it again after adding a
     /// keyword to merchantMap or LocalTxParser.categoryWords.
     static let commonWords: Set<String> = [
-        "airline", "airliner", "angkat", "angket", "angkor", "angkut", "bakers", "belanda",
-        "benson", "berger", "bersin", "booing", "booming", "bugger", "burner", "cleansing",
-        "clearing", "commute", "computer", "denial", "deposit", "deposits", "doktor",
-        "domingo", "electrician", "famili", "farmer", "fitnes", "fright", "galian",
-        "indonesi", "inform", "informs", "kenanga", "kerena", "keuangan", "klinis",
-        "landry", "larson", "lawton", "lonjong", "macdonald", "marked", "marker",
+        "airline", "airliner", "angkat", "angket", "angkor", "angkut", "bakers", "bakrie",
+        "belanda", "benson", "berger", "bersin", "booing", "booming", "bugger", "burner",
+        "cleansing", "clearing", "commute", "computer", "denial", "deposit", "deposits",
+        "doktor", "domingo", "electrician", "famili", "farmer", "fitnes", "fright",
+        "galian", "indonesi", "inform", "informs", "kenanga", "kerena", "keuangan",
+        "klinis", "landry", "larson", "lawton", "lonjong", "macdonald", "marked", "marker",
         "martabat", "medial", "packing", "pajang", "palang", "pandang", "parang", "parker",
-        "parkit", "parting", "pasang", "pawang", "pedang", "perawat", "pertama", "renang",
-        "rentang", "rindang", "saking", "saling", "sambung", "saring", "saying", "serapan",
-        "serves", "serviks", "shaving", "shipping", "stopping", "tunangan", "tunjungan",
-        "winata"
+        "parkit", "parting", "pasang", "pawang", "pedang", "perawat", "pertama", "pevita",
+        "renang", "rentang", "rindang", "saking", "saling", "sambung", "saring", "saying",
+        "serapan", "serves", "serviks", "shaving", "shipping", "stopping", "tunangan",
+        "tunjungan", "winata"
     ]
 
     // MARK: Offering a name back

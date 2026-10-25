@@ -8,7 +8,8 @@ import SwiftData
 // A backup analysis showed ~21% of one user's spend sitting in "Other" — which
 // the budget engine counts as Lifestyle, quietly skewing every Daily-vs-
 // Lifestyle number. This screen re-runs the categoriser over existing
-// uncategorised expenses and applies the fixes in bulk.
+// uncategorised expenses and applies the fixes in bulk. It also offers back
+// the rows an old keyword mix-up filed wrong (SmartBudgetManager.misfiledFix).
 
 struct TidyCategoriesView: View {
     let cards: [BankCard]
@@ -24,25 +25,40 @@ struct TidyCategoriesView: View {
         let id: UUID
         let tx: TxRecord
         var category: TxCategory     // mutable — user can override
+        /// What it was filed under, for a row an old keyword mix-up filed
+        /// wrong; nil for one sitting in Other.
+        let was: TxCategory?
         let amount: Double
         let currency: String
+    }
+
+    /// What Tidy offers for a transaction: a category for an uncategorised
+    /// expense, or the right one for an expense an old keyword mix-up filed
+    /// wrong. DataCleanupView counts the same.
+    static func offer(for tx: TxRecord) -> (category: TxCategory, was: TxCategory?)? {
+        guard tx.amount < 0, tx.txSubtype == .normal else { return nil }
+        guard tx.category == .other else {
+            guard let fix = SmartBudgetManager.misfiledFix(name: tx.name, category: tx.category) else { return nil }
+            return (category: fix, was: tx.category)
+        }
+        guard let suggested = SmartBudgetManager.suggestCategory(for: tx.name, txType: "Expense"),
+              suggested != .other else { return nil }
+        return (suggested, nil)
     }
 
     private func build() -> [TidySuggestion] {
         let all = cards.flatMap { $0.transactions }
         return all.compactMap { tx -> TidySuggestion? in
-            guard tx.amount < 0, tx.txSubtype == .normal, tx.category == .other,
-                  let suggested = SmartBudgetManager.suggestCategory(for: tx.name, txType: "Expense"),
-                  suggested != .other else { return nil }
-            return TidySuggestion(id: tx.id, tx: tx, category: suggested,
+            guard let offer = Self.offer(for: tx) else { return nil }
+            return TidySuggestion(id: tx.id, tx: tx, category: offer.category, was: offer.was,
                                   amount: abs(tx.amount),
                                   currency: tx.currency.isEmpty ? CurrencyManager.shared.preferredCurrency : tx.currency)
         }
         .sorted { $0.amount > $1.amount }
     }
 
-    private var totalReclassified: Double {
-        suggestions.reduce(0) { $0 + CurrencyManager.shared.convert($1.amount, from: $1.currency, to: CurrencyManager.shared.preferredCurrency) }
+    private func total(of rows: [TidySuggestion]) -> Double {
+        rows.reduce(0) { $0 + CurrencyManager.shared.convert($1.amount, from: $1.currency, to: CurrencyManager.shared.preferredCurrency) }
     }
 
     var body: some View {
@@ -83,12 +99,20 @@ struct TidyCategoriesView: View {
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(String(format: loc("tidy.found"), suggestions.count,
-                        CurrencyManager.shared.formatted(totalReclassified, currency: CurrencyManager.shared.preferredCurrency)))
-                .font(.system(.footnote)).foregroundStyle(AppTheme.textSecondary)
-                .frame(maxWidth: .infinity, alignment: .leading)
+        let uncategorised = suggestions.filter { $0.was == nil }
+        let misfiled = suggestions.count - uncategorised.count
+        return VStack(alignment: .leading, spacing: 6) {
+            if !uncategorised.isEmpty {
+                Text(String(format: loc("tidy.found"), uncategorised.count,
+                            CurrencyManager.shared.formatted(total(of: uncategorised),
+                                                             currency: CurrencyManager.shared.preferredCurrency)))
+            }
+            if misfiled > 0 {
+                Text(String(format: loc("tidy.misfiled"), misfiled))
+            }
         }
+        .font(.system(.footnote)).foregroundStyle(AppTheme.textSecondary)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 22).padding(.bottom, 4)
     }
 
@@ -100,7 +124,7 @@ struct TidyCategoriesView: View {
             }
             VStack(alignment: .leading, spacing: 3) {
                 Text(s.wrappedValue.tx.name).font(.system(.subheadline, weight: .medium)).foregroundStyle(AppTheme.textPrimary).lineLimit(1)
-                Text(CurrencyManager.shared.formatted(s.wrappedValue.amount, currency: s.wrappedValue.currency))
+                Text(detail(s.wrappedValue))
                     .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
             }
             Spacer(minLength: 6)
@@ -122,6 +146,13 @@ struct TidyCategoriesView: View {
         }
         .padding(12)
         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+    }
+
+    /// The amount, and what a misfiled row was filed under.
+    private func detail(_ s: TidySuggestion) -> String {
+        let amount = CurrencyManager.shared.formatted(s.amount, currency: s.currency)
+        guard let was = s.was else { return amount }
+        return amount + " · " + String(format: loc("tidy.was"), was.displayLabel)
     }
 
     private var applyButton: some View {

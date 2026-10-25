@@ -4,7 +4,8 @@ import SwiftUI
 //
 // The walkthrough for what DiPo can't set up from inside the app (Back Tap and
 // the notification automation, in BackTapGuideView): a card that says what
-// you get, numbered steps on a rail, callouts for what's worth knowing, and a
+// you get, numbered steps on a rail, a picture under a step where the screen
+// is hard to picture from words, callouts for what's worth knowing, and a
 // button that opens Shortcuts.
 
 struct GuideStep: Identifiable {
@@ -12,6 +13,8 @@ struct GuideStep: Identifiable {
     let title: String
     let body: String
     let glyph: String
+    /// What the screen looks like at this step, shown under its words.
+    var picture: AnyView? = nil
 }
 
 /// What the finished setup feels like, before the steps that earn it.
@@ -90,6 +93,9 @@ struct GuideStepList: View {
                             .font(.system(.footnote))
                             .foregroundStyle(AppTheme.textSecondary)
                             .fixedSize(horizontal: false, vertical: true)
+                        if let picture = step.picture {
+                            picture.padding(.top, 6)
+                        }
                     }
                     .padding(.bottom, step.id == steps.count ? 0 : 20)
                     Spacer(minLength: 0)

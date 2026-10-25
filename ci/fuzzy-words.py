@@ -31,7 +31,8 @@ def quoted(path, start):
     source = (ROOT / path).read_text()
     begin = source.index(start)
     end = source.index("\n    ]\n", begin)
-    return re.findall(r'"([^"]*)"', source[begin:end])
+    # The strings of the list, not the ones quoted in its comments.
+    return re.findall(r'"([^"]*)"', re.sub(r"//[^\n]*", "", source[begin:end]))
 
 
 def allowance(n):

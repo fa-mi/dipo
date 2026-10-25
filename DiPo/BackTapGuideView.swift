@@ -20,20 +20,22 @@ import UniformTypeIdentifiers   // for `.json` UTType in fileImporter
 /// because they are independent setups: someone may well want only one.
 struct BackTapGuideView: View {
     @Environment(\.dismiss) private var dismiss
+    /// The notification action's last note, read when the guide opens.
+    @State private var heard: NotificationAutomationStatus?
 
     /// Double tap → capture the payment screen.
     private var screenshotSteps: [GuideStep] {
         [
             GuideStep(id: 1, title: loc("backtap.s1_title"), body: loc("backtap.s1_body"),
-                      glyph: "plus.square.on.square"),
+                      glyph: "plus.square.on.square", picture: AnyView(GuidePicture.newShortcut)),
             GuideStep(id: 2, title: loc("backtap.s2_title"), body: loc("backtap.s2_body"),
-                      glyph: "camera.viewfinder"),
+                      glyph: "camera.viewfinder", picture: AnyView(GuidePicture.takeScreenshot)),
             GuideStep(id: 3, title: loc("backtap.s3_title"), body: loc("backtap.s3_body"),
-                      glyph: "text.viewfinder"),
+                      glyph: "text.viewfinder", picture: AnyView(GuidePicture.logFromScreenshot)),
             GuideStep(id: 4, title: loc("backtap.s4_title"), body: loc("backtap.s4_body"),
-                      glyph: "textformat"),
+                      glyph: "textformat", picture: AnyView(GuidePicture.nameAndSave)),
             GuideStep(id: 5, title: loc("backtap.s5_title"), body: loc("backtap.s5_body"),
-                      glyph: "hand.tap.fill"),
+                      glyph: "hand.tap.fill", picture: AnyView(GuidePicture.backTap(triple: false))),
         ]
     }
 
@@ -42,11 +44,12 @@ struct BackTapGuideView: View {
     private var voiceSteps: [GuideStep] {
         [
             GuideStep(id: 1, title: loc("backtap.v1_title"), body: loc("backtap.v1_body"),
-                      glyph: "square.and.arrow.down.on.square"),
+                      glyph: "square.and.arrow.down.on.square",
+                      picture: AnyView(GuidePicture.dipoAction(loc("tappic.log_with_voice")))),
             GuideStep(id: 2, title: loc("backtap.v2_title"), body: loc("backtap.v2_body"),
-                      glyph: "hand.tap.fill"),
+                      glyph: "hand.tap.fill", picture: AnyView(GuidePicture.backTap(triple: true))),
             GuideStep(id: 3, title: loc("backtap.v3_title"), body: loc("backtap.v3_body"),
-                      glyph: "waveform"),
+                      glyph: "waveform", picture: AnyView(GuidePicture.voiceTalk)),
         ]
     }
 
@@ -55,15 +58,37 @@ struct BackTapGuideView: View {
     /// The payment waits under Review like everything else read for you.
     /// iOS 27 builds this inside a new shortcut: its Automation actions put
     /// the trigger at the top, and DiPo's action goes under it.
+    ///
+    /// Filling the action's blanks takes a variable and then one of its
+    /// parts, which nobody guesses from words alone; every step in this guide
+    /// has a picture of its screen (GuidePicture).
     private var notificationSteps: [GuideStep] {
         [
             GuideStep(id: 1, title: loc("backtap.n1_title"), body: loc("backtap.n1_body"),
-                      glyph: "bell.badge"),
+                      glyph: "bell.badge", picture: AnyView(GuidePicture.trigger)),
             GuideStep(id: 2, title: loc("backtap.n2_title"), body: loc("backtap.n2_body"),
-                      glyph: "plus.circle"),
+                      glyph: "magnifyingglass", picture: AnyView(GuidePicture.dipoAction(loc("notifpic.action")))),
             GuideStep(id: 3, title: loc("backtap.n3_title"), body: loc("backtap.n3_body"),
-                      glyph: "lock.open"),
+                      glyph: "hand.tap", picture: AnyView(GuidePicture.selectVariable)),
+            GuideStep(id: 4, title: loc("backtap.n4_title"), body: loc("backtap.n4_body"),
+                      glyph: "list.bullet", picture: AnyView(GuidePicture.chooseTitle)),
+            GuideStep(id: 5, title: loc("backtap.n5_title"), body: loc("backtap.n5_body"),
+                      glyph: "checkmark.circle", picture: AnyView(GuidePicture.filled)),
+            GuideStep(id: 6, title: loc("backtap.n6_title"), body: loc("backtap.n6_body"),
+                      glyph: "lock.open", picture: AnyView(GuidePicture.runAlone)),
         ]
+    }
+
+    /// Whether the automation has run: grey until it has, orange while a
+    /// blank still needs filling, green once it reads everything.
+    private var statusIcon: String {
+        guard let heard else { return "clock" }
+        return heard.isMissingABlank ? "exclamationmark.circle" : "checkmark.circle"
+    }
+
+    private var statusTint: Color {
+        guard let heard else { return AppTheme.textSecondary }
+        return heard.isMissingABlank ? AppTheme.orange : AppTheme.accent
     }
 
     /// The iOS version, on an iPhone too old for the notification trigger.
@@ -104,6 +129,11 @@ struct BackTapGuideView: View {
                                          icon: "exclamationmark.circle", tint: AppTheme.orange)
                         }
                         GuideStepList(steps: notificationSteps, tint: AppTheme.blue)
+                        if olderIOS == nil {
+                            GuideCallout(title: loc("notifstatus.heading"),
+                                         message: NotificationAutomationStatus.message(for: heard),
+                                         icon: statusIcon, tint: statusTint)
+                        }
 
                         GuideCallout(title: loc("backtap.using_heading"), message: loc("backtap.using_body"),
                                      icon: "sparkles", tint: AppTheme.accent)
@@ -127,6 +157,7 @@ struct BackTapGuideView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(AppTheme.bg, for: .navigationBar)
             .doneToolbar { dismiss() }
+            .onAppear { heard = NotificationAutomationStatus.last() }
         }
     }
 }
