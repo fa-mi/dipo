@@ -1296,7 +1296,10 @@ struct ProfileView: View {
         try? context.delete(model: CardBudgetConfig.self)
         try? context.delete(model: CycleIntent.self)
         try? context.delete(model: RecurringExpense.self)
+        try? context.delete(model: HeldWant.self)
         try? context.save()
+        // Their "still want it?" pushes would ask about things no longer there.
+        HeldWantReminders.scheduleAll(wants: [])
         UserDefaults.standard.removeObject(forKey: "profile_photo")
         profileImage = nil
         // Wipe Smart Budget settings too — the user expects "Reset All Data"

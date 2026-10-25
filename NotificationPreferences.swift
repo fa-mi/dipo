@@ -30,6 +30,7 @@ final class NotificationPreferences {
         case summary     // weekly recap + monthly summary
         case inactivity  // "you haven't logged anything in 3 days"
         case backup      // "your data hasn't been backed up in a while"
+        case wants       // "still want it?" when a held want's wait is over
 
         var id: String { rawValue }
 
@@ -41,6 +42,7 @@ final class NotificationPreferences {
             case .summary:    return "notifpref.summary"
             case .inactivity: return "notifpref.inactivity"
             case .backup:     return "notifpref.backup"
+            case .wants:      return "notifpref.wants"
             }
         }
         var subtitleKey: String {
@@ -51,6 +53,7 @@ final class NotificationPreferences {
             case .summary:    return "notifpref.summary_sub"
             case .inactivity: return "notifpref.inactivity_sub"
             case .backup:     return "notifpref.backup_sub"
+            case .wants:      return "notifpref.wants_sub"
             }
         }
         var icon: String {
@@ -61,6 +64,7 @@ final class NotificationPreferences {
             case .summary:    return "calendar"
             case .inactivity: return "bell.badge"
             case .backup:     return "externaldrive.fill.badge.icloud"
+            case .wants:      return "hourglass"
             }
         }
         var tint: Color {
@@ -71,6 +75,7 @@ final class NotificationPreferences {
             case .summary:    return AppTheme.blue
             case .inactivity: return AppTheme.purple
             case .backup:     return AppTheme.teal
+            case .wants:      return AppTheme.amber
             }
         }
         fileprivate var storageKey: String { "notifpref_\(rawValue)" }
@@ -107,6 +112,7 @@ final class NotificationPreferences {
         case .summary:    prefixes = ["smart_weekly", "smart_monthly"]
         case .inactivity: prefixes = ["smart_inactivity"]
         case .backup:     prefixes = ["backup_reminder"]
+        case .wants:      prefixes = [HeldWantReminders.idPrefix]
         }
         let center = UNUserNotificationCenter.current()
         center.getPendingNotificationRequests { requests in

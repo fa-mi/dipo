@@ -913,7 +913,10 @@ enum UserSwitchDetector {
         // NEXT person signing in on this device inherits softened verdicts they
         // never chose — the analysis quietly stops warning them.
         try? context.delete(model: CycleIntent.self)
+        // What one person was holding off buying is theirs, and so is the jar.
+        try? context.delete(model: HeldWant.self)
         try? context.save()
+        HeldWantReminders.scheduleAll(wants: [])
 
         // UserDefaults — anything that persists user-specific state. We DO NOT
         // touch language or appearance preferences; those are per-device.

@@ -81,6 +81,9 @@ struct BackupPayload: Codable {
     /// backups still decode, and an older build reading a newer file simply
     /// ignores the key.
     var assets:       [BackupAsset]? = nil
+    /// Wants held before buying, and what was decided about them (schema
+    /// V4). Optional like the rest: older backups decode with none.
+    var heldWants:    [BackupHeldWant]? = nil
 }
 
 // MARK: - DTOs (mirror SwiftData @Model classes 1:1)
@@ -364,6 +367,44 @@ struct BackupAsset: Codable {
     var boughtUsed: Bool? = nil
 }
 
+struct BackupHeldWant: Codable {
+    let id: String
+    let name: String
+    let amount: Double
+    let currency: String
+    let addedAt: Date
+    let waitDays: Int
+    let readyAt: Date
+    let decisionRaw: String?
+    let decidedAt: Date?
+
+    init(_ w: HeldWant) {
+        id = w.id.uuidString
+        name = w.name
+        amount = w.amount
+        currency = w.currency
+        addedAt = w.addedAt
+        waitDays = w.waitDays
+        readyAt = w.readyAt
+        decisionRaw = w.decisionRaw
+        decidedAt = w.decidedAt
+    }
+
+    /// The row as it was, ready to insert. One place for both restore paths.
+    /// A wait outside a day to a year can only come from an edited file, and
+    /// is brought back inside it.
+    func restored() -> HeldWant {
+        let want = HeldWant(name: name, amount: amount, currency: currency,
+                            waitDays: min(max(waitDays, 1), 365), now: addedAt)
+        if let id = UUID(uuidString: id) { want.id = id }
+        want.readyAt = readyAt
+        // Kept as written, even a decision this build doesn't know.
+        want.decisionRaw = decisionRaw
+        want.decidedAt = decidedAt
+        return want
+    }
+}
+
 struct BackupDayCheckIn: Codable {
     let dayKey: String
     let answeredAt: Date
@@ -584,6 +625,7 @@ enum BackupService {
         let installments: [CardInstallment] = (try? context.fetch(FetchDescriptor<CardInstallment>())) ?? []
         let pending: [PendingTransaction] = (try? context.fetch(FetchDescriptor<PendingTransaction>())) ?? []
         let assets: [PhysicalAsset] = (try? context.fetch(FetchDescriptor<PhysicalAsset>())) ?? []
+        let heldWants: [HeldWant] = (try? context.fetch(FetchDescriptor<HeldWant>())) ?? []
 
         // Build a card-id → list-of-tx index so we know which card each tx
         // belongs to without traversing relationships at write time.
@@ -752,7 +794,8 @@ enum BackupService {
                             manualValue: a.manualValue, manualValueDate: a.manualValueDate,
                             annualRate: a.annualRate, taxDueDate: a.taxDueDate, notes: a.notes,
                             createdAt: a.createdAt, sortOrder: a.sortOrder, boughtUsed: a.boughtUsed)
-            }
+            },
+            heldWants: heldWants.map(BackupHeldWant.init)
         )
 
         let encoder = JSONEncoder()
@@ -827,6 +870,7 @@ enum BackupService {
             try? context.delete(model: PendingTransaction.self)
             try? context.delete(model: RecurringExpense.self)
             try? context.delete(model: PhysicalAsset.self)
+            try? context.delete(model: HeldWant.self)
             try context.save()
 
         // The restored data is a different set of cycles and debts than
@@ -1030,6 +1074,10 @@ enum BackupService {
             context.insert(asset)
         }
 
+        for w in payload.heldWants ?? [] {
+            context.insert(w.restored())
+        }
+
         for i in payload.installments ?? [] {
             guard let cardID = UUID(uuidString: i.cardID) else { continue }
             let inst = CardInstallment(cardID: cardID, merchant: i.merchant,
@@ -1071,6 +1119,9 @@ enum BackupService {
             let restoredCards: [BankCard] = (try? context.fetch(FetchDescriptor<BankCard>())) ?? []
             MainCard.reconcile(cards: restoredCards)
 
+            // Pushes for wants that are gone go, and the restored ones' come.
+            HeldWantReminders.scheduleAll(wants: (try? context.fetch(FetchDescriptor<HeldWant>())) ?? [])
+
             // Success — discard the snapshot so we don't leave stale temp
             // files on disk. Failure path keeps the snapshot so a future
             // run could conceivably auto-recover from it.
@@ -1100,6 +1151,7 @@ enum BackupService {
                 try? context.delete(model: PendingTransaction.self)
                 try? context.delete(model: RecurringExpense.self)
                 try? context.delete(model: PhysicalAsset.self)
+                try? context.delete(model: HeldWant.self)
                 try? context.save()
                 NotificationManager.clearDeliveryDedupState()
                 Self.applyPayload(snap, context: context)
@@ -1291,6 +1343,10 @@ enum BackupService {
             asset.createdAt = a.createdAt
             asset.boughtUsed = a.boughtUsed ?? false
             context.insert(asset)
+        }
+
+        for w in payload.heldWants ?? [] {
+            context.insert(w.restored())
         }
 
         for i in payload.installments ?? [] {
