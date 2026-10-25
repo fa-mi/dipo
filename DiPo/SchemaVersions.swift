@@ -105,9 +105,27 @@ nonisolated enum DiPoSchemaV2: VersionedSchema {
 /// V3 notes whether an asset was bought second-hand
 /// (`PhysicalAsset.boughtUsed`, defaulting to false), so its value doesn't
 /// take the drop from new a second time. A defaulted property only: the step
-/// is lightweight.
+/// is lightweight. Builds 3.3 (113) to (136). Frozen: V1's copies plus
+/// PhysicalAsset as it was then (SchemaV3Frozen.swift).
 nonisolated enum DiPoSchemaV3: VersionedSchema {
     static let versionIdentifier = Schema.Version(3, 0, 0)
+
+    static var models: [any PersistentModel.Type] {
+        [
+            DiPoSchemaV1.BankCard.self, DiPoSchemaV1.TxRecord.self, DiPoSchemaV1.SalarySchedule.self,
+            DiPoSchemaV1.DebtRecord.self, DiPoSchemaV1.SavingsGoal.self, DiPoSchemaV1.RecurringExpense.self,
+            DiPoSchemaV1.Receivable.self, DiPoSchemaV1.CardInstallment.self, DiPoSchemaV1.CardBudgetConfig.self,
+            DiPoSchemaV1.CycleIntent.self, DiPoSchemaV1.InvestmentHolding.self, DiPoSchemaV1.InvestmentLot.self,
+            DiPoSchemaV1.DailyRollup.self, DiPoSchemaV1.DayCheckIn.self, DiPoSchemaV1.PendingTransaction.self,
+            DiPoSchemaV3.PhysicalAsset.self,
+        ]
+    }
+}
+
+/// V4 adds the wants held before buying (`HeldWant`, DiPo/HeldWant.swift).
+/// Every other model is unchanged from V3, so the step is lightweight.
+nonisolated enum DiPoSchemaV4: VersionedSchema {
+    static let versionIdentifier = Schema.Version(4, 0, 0)
 
     static var models: [any PersistentModel.Type] {
         [
@@ -117,16 +135,18 @@ nonisolated enum DiPoSchemaV3: VersionedSchema {
             CycleIntent.self, InvestmentHolding.self, InvestmentLot.self,
             DailyRollup.self, DayCheckIn.self, PendingTransaction.self,
             PhysicalAsset.self,
+            // Something wanted, waiting a few days before it is bought.
+            HeldWant.self,
         ]
     }
 }
 
 /// The version the app runs on. Move it forward with each new version.
-typealias DiPoSchemaCurrent = DiPoSchemaV3
+typealias DiPoSchemaCurrent = DiPoSchemaV4
 
 nonisolated enum DiPoMigrationPlan: SchemaMigrationPlan {
     static var schemas: [any VersionedSchema.Type] {
-        [DiPoSchemaV1.self, DiPoSchemaV2.self, DiPoSchemaV3.self]
+        [DiPoSchemaV1.self, DiPoSchemaV2.self, DiPoSchemaV3.self, DiPoSchemaV4.self]
     }
 
     static var stages: [MigrationStage] {
@@ -135,6 +155,8 @@ nonisolated enum DiPoMigrationPlan: SchemaMigrationPlan {
             .lightweight(fromVersion: DiPoSchemaV1.self, toVersion: DiPoSchemaV2.self),
             // One new Bool with a default on PhysicalAsset.
             .lightweight(fromVersion: DiPoSchemaV2.self, toVersion: DiPoSchemaV3.self),
+            // A new model only, again.
+            .lightweight(fromVersion: DiPoSchemaV3.self, toVersion: DiPoSchemaV4.self),
         ]
     }
 }

@@ -1403,6 +1403,9 @@ enum NotificationScheduler {
         // ── Yearly asset taxes (STNK, PBB) ─────────────────────────────
         AssetTaxReminders.scheduleAll(assets: (try? context.fetch(FetchDescriptor<PhysicalAsset>())) ?? [])
 
+        // ── "Still want it?" when a held want's wait is over ──────────
+        HeldWantReminders.scheduleAll(wants: (try? context.fetch(FetchDescriptor<HeldWant>())) ?? [])
+
         // ── Smart Budget per-group over-budget alert ───────────────────
         checkSmartBudgetAlerts(txs: txs, context: context, preferred: preferred)
     }

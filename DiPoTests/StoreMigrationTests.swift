@@ -64,6 +64,53 @@ final class StoreMigrationTests: XCTestCase {
                        v3.split(separator: "\n").filter { !$0.hasPrefix("PhysicalAsset.boughtUsed:") })
     }
 
+    /// Frozen V3 is the live models without what V4 added.
+    func testFrozenV3MatchesTheLiveModelsMinusWhatV4Added() {
+        let v3 = SchemaFingerprintTests.fingerprint(Schema(versionedSchema: DiPoSchemaV3.self))
+        let v4 = SchemaFingerprintTests.fingerprint(Schema(versionedSchema: DiPoSchemaV4.self))
+        XCTAssertEqual(v3.split(separator: "\n"),
+                       v4.split(separator: "\n").filter { !$0.hasPrefix("HeldWant.") })
+    }
+
+    /// A phone on 3.3 (113–136) holds a V3 store. Its rows come through V4 as
+    /// they were, with an empty list of held wants that takes new ones.
+    func testV3StoreOpensAsCurrentWithAnEmptyHoldList() throws {
+        let url = dir.appendingPathComponent("default.store")
+        let schemaV3 = Schema(DiPoSchemaV3.models)
+        let assetID: UUID
+        do {
+            let container = try ModelContainer(for: schemaV3,
+                                               configurations: ModelConfiguration(schema: schemaV3, url: url))
+            let context = ModelContext(container)
+            let goal = DiPoSchemaV1.SavingsGoal()
+            goal.name = "Motor"
+            goal.targetAmount = 15_000_000
+            context.insert(goal)
+            let asset = DiPoSchemaV3.PhysicalAsset()
+            asset.kindRaw = "motorcycle"
+            asset.name = "Beat"
+            asset.currency = "IDR"
+            asset.boughtUsed = true
+            context.insert(asset)
+            try context.save()
+            assetID = asset.id
+        }
+
+        let schema = Schema(versionedSchema: DiPoSchemaCurrent.self)
+        let container = try ModelContainer(for: schema, migrationPlan: DiPoMigrationPlan.self,
+                                           configurations: ModelConfiguration(schema: schema, url: url))
+        let context = ModelContext(container)
+        XCTAssertEqual(try context.fetch(FetchDescriptor<SavingsGoal>()).map(\.name), ["Motor"])
+        let assets = try context.fetch(FetchDescriptor<PhysicalAsset>())
+        XCTAssertEqual(assets.map(\.id), [assetID])
+        XCTAssertEqual(assets.first?.boughtUsed, true)
+        XCTAssertEqual(try context.fetch(FetchDescriptor<HeldWant>()).count, 0)
+
+        context.insert(HeldWant(name: "Sepatu lari", amount: 450_000, currency: "IDR", waitDays: 3))
+        try context.save()
+        XCTAssertEqual(try context.fetch(FetchDescriptor<HeldWant>()).map(\.name), ["Sepatu lari"])
+    }
+
     /// A phone on 3.3 (106–112) holds a V2 store with assets in it. They come
     /// through V3 as they were, counted as bought new.
     func testV2StoreOpensAsCurrentWithItsAssets() throws {

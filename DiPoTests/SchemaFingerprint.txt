@@ -65,6 +65,15 @@ DebtRecord.name: String
 DebtRecord.notes: String
 DebtRecord.totalAmount: Double
 DebtRecord.type: String
+HeldWant.addedAt: Date
+HeldWant.amount: Double
+HeldWant.currency: String
+HeldWant.decidedAt: Optional<Date>?
+HeldWant.decisionRaw: Optional<String>?
+HeldWant.id: UUID
+HeldWant.name: String
+HeldWant.readyAt: Date
+HeldWant.waitDays: Int
 InvestmentHolding.createdAt: Date
 InvestmentHolding.currency: String
 InvestmentHolding.id: UUID

@@ -280,6 +280,12 @@ struct WishlistView: View {
                             .padding(.top, 12)
                     }
 
+                    // Wants held a few days before they are bought; what is
+                    // let go can go straight into one of the goals above.
+                    HoldSection(goals: activeGoals,
+                                onDeposit: { goal, amount, card in deposit(goal, amount, card) })
+                        .padding(.horizontal, 22)
+
                     UnitySavingsSection(onCreate: { goalSheet = .shared })
 
                     if !completedGoals.isEmpty {
@@ -724,6 +730,9 @@ struct GoalCard: View {
 
 struct DepositSheet: View {
     let goal: SavingsGoal
+    /// Already in the field when the sheet opens: the price of something just
+    /// let go on the hold list.
+    var initialAmount: Double = 0
     /// `card` is the account the money leaves; every deposit becomes a real
     /// transaction so balances, statistics and the budget see it.
     let onDeposit: (Double, BankCard?) -> Void
@@ -829,6 +838,9 @@ struct DepositSheet: View {
             // Start on the main card when it can fund a deposit.
             if let main = MainCard.resolve(in: cards), let i = fundingCards.firstIndex(where: { $0.id == main.id }) {
                 sourceIndex = i
+            }
+            if amountText.isEmpty, initialAmount > 0 {
+                amountText = SavingsNumber.edit(initialAmount, currency: goal.currency)
             }
         }
     }
