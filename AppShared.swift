@@ -901,22 +901,13 @@ enum UserSwitchDetector {
     /// reuse it, but normally callers should go through `handleSignIn`.
     @MainActor
     static func wipeLocalData(context: ModelContext) {
-        // SwiftData models — every user-owned schema must be listed here.
-        try? context.delete(model: BankCard.self)
-        try? context.delete(model: TxRecord.self)
-        try? context.delete(model: SalarySchedule.self)
-        try? context.delete(model: DebtRecord.self)
-        try? context.delete(model: SavingsGoal.self)
-        try? context.delete(model: CardBudgetConfig.self)
-        try? context.delete(model: RecurringExpense.self)
-        // Declared cycle intents are user-owned judgements. Left behind, the
-        // NEXT person signing in on this device inherits softened verdicts they
-        // never chose — the analysis quietly stops warning them.
-        try? context.delete(model: CycleIntent.self)
-        // What one person was holding off buying is theirs, and so is the jar.
-        try? context.delete(model: HeldWant.self)
-        try? context.save()
-        HeldWantReminders.scheduleAll(wants: [])
+        // Every record of every model, and the pushes about them — the list
+        // is the schema, so nothing the next person could see is left out
+        // (DiPo/LocalDataWipe.swift).
+        LocalDataWipe.deleteAllRecords(in: context)
+        // Notifications already delivered were written to the previous
+        // person; they leave Notification Center with their data.
+        LocalDataWipe.clearDeliveredNotifications()
 
         // UserDefaults — anything that persists user-specific state. We DO NOT
         // touch language or appearance preferences; those are per-device.

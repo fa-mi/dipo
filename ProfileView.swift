@@ -1285,21 +1285,11 @@ struct ProfileView: View {
     }
 
     private func resetAllData() {
-        try? context.delete(model: BankCard.self)
-        try? context.delete(model: TxRecord.self)
-        try? context.delete(model: SalarySchedule.self)
-        try? context.delete(model: DebtRecord.self)
-        try? context.delete(model: SavingsGoal.self)
-        // Per-card budget configs (50/30/20 ratios per UUID). Without this
-        // delete, orphan rows linger in the store referencing deleted card IDs
-        // and accumulate forever every time the user resets.
-        try? context.delete(model: CardBudgetConfig.self)
-        try? context.delete(model: CycleIntent.self)
-        try? context.delete(model: RecurringExpense.self)
-        try? context.delete(model: HeldWant.self)
-        try? context.save()
-        // Their "still want it?" pushes would ask about things no longer there.
-        HeldWantReminders.scheduleAll(wants: [])
+        // Every record of every model, and the pushes that speak about them.
+        // This used to be its own list, and loans, instalments, investments,
+        // assets and the review queue all survived a reset
+        // (DiPo/LocalDataWipe.swift).
+        LocalDataWipe.deleteAllRecords(in: context)
         UserDefaults.standard.removeObject(forKey: "profile_photo")
         profileImage = nil
         // Wipe Smart Budget settings too — the user expects "Reset All Data"
