@@ -1,19 +1,37 @@
 import SwiftUI
 
-// MARK: - Pictures for the notification walkthrough
+// MARK: - Pictures for the Tap to Log walkthrough
 //
-// What Shortcuts shows at each step of the notification automation, drawn
-// under the step that asks for it (BackTapGuideView). Drawn rather than
+// What Shortcuts and Settings show at each step of the setups in
+// BackTapGuideView, drawn under the step that asks for it. Drawn rather than
 // screenshotted: a drawing stays sharp, follows light and dark, and carries no
-// bank's logo. Shortcuts' words appear as an English iPhone shows them, which
-// is how DiPo's own action always reads; the steps give the Indonesian names
-// beside them. A green ring marks what to tap.
+// bank's logo. The words are the ones the steps use, so a picture and its step
+// always agree; DiPo's own actions read in English everywhere, as Shortcuts
+// shows them. A green ring marks what to tap.
 
-enum NotificationSetupPicture: View {
+enum GuidePicture: View {
+    // The screenshot shortcut, on Back Tap's double tap.
+    /// My Shortcuts, with + to start a new one.
+    case newShortcut
+    /// Take Screenshot in the action search.
+    case takeScreenshot
+    /// DiPo's action under Take Screenshot, its blank filled with the
+    /// screenshot.
+    case logFromScreenshot
+    /// The shortcut named, and Done.
+    case nameAndSave
+    /// Back Tap's settings, the row the step binds ringed.
+    case backTap(triple: Bool)
+
+    // The voice shortcut, on Back Tap's triple tap.
+    /// One of DiPo's actions in the action search.
+    case dipoAction(String)
+    /// A sentence said out loud, and the entries it becomes.
+    case voiceTalk
+
+    // The notification automation.
     /// The trigger, with + to add the payment apps.
     case trigger
-    /// DiPo's action in the search results.
-    case search
     /// A blank tapped, and the trigger's Notification to tap next.
     case selectVariable
     /// What the Notification in a blank can carry, Title chosen.
@@ -26,8 +44,14 @@ enum NotificationSetupPicture: View {
     var body: some View {
         Group {
             switch self {
+            case .newShortcut: newShortcutPicture
+            case .takeScreenshot: takeScreenshotPicture
+            case .logFromScreenshot: logFromScreenshotPicture
+            case .nameAndSave: nameAndSavePicture
+            case .backTap(let triple): backTapPicture(triple: triple)
+            case .dipoAction(let title): dipoActionPicture(title)
+            case .voiceTalk: voiceTalkPicture
             case .trigger: triggerPicture
-            case .search: searchPicture
             case .selectVariable: selectVariablePicture
             case .chooseTitle: chooseTitlePicture
             case .filled: filledPicture
@@ -43,36 +67,130 @@ enum NotificationSetupPicture: View {
         .accessibilityHidden(true)
     }
 
+    // MARK: The screenshot shortcut
+
+    private var newShortcutPicture: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text(loc("tappic.my_shortcuts")).font(.system(.subheadline, weight: .bold))
+                Spacer(minLength: 8)
+                Image(systemName: "plus")
+                    .font(.system(.subheadline, weight: .semibold))
+                    .foregroundStyle(AppTheme.blue)
+                    .frame(width: 26, height: 26)
+                    .background(AppTheme.cardDark, in: Circle())
+                    .tapHere(corner: 13)
+            }
+            HStack(spacing: 8) {
+                ShortcutTile(tint: AppTheme.blue)
+                ShortcutTile(tint: AppTheme.orange)
+            }
+        }
+    }
+
+    private var takeScreenshotPicture: some View {
+        VStack(spacing: 8) {
+            SearchField(text: loc("tappic.take_screenshot"))
+            ResultRow(title: loc("tappic.take_screenshot")) { ScreenshotActionIcon() }
+                .tapHere(corner: 10)
+        }
+    }
+
+    private var logFromScreenshotPicture: some View {
+        VStack(spacing: 0) {
+            TakeScreenshotCard()
+            FlowLine()
+            VariableBubble(text: loc("tappic.screenshot"), glyph: "photo")
+            FlowLine()
+            LogFromScreenshotCard(ringed: true)
+        }
+    }
+
+    private var nameAndSavePicture: some View {
+        VStack(spacing: 8) {
+            HStack {
+                HStack(spacing: 4) {
+                    Text(loc("tappic.shortcut_name")).fontWeight(.semibold)
+                    Image(systemName: "chevron.down")
+                        .font(.system(.caption2, weight: .bold))
+                        .foregroundStyle(AppTheme.textSecondary)
+                }
+                .padding(.horizontal, 10).padding(.vertical, 4)
+                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 9))
+                Spacer(minLength: 8)
+                Text(loc("tappic.done"))
+                    .fontWeight(.bold)
+                    .foregroundStyle(AppTheme.blue)
+                    .padding(.horizontal, 12).padding(.vertical, 4)
+                    .background(AppTheme.cardDark, in: Capsule())
+                    .tapHere(corner: 13)
+            }
+            VStack(spacing: 6) {
+                TakeScreenshotCard()
+                LogFromScreenshotCard(ringed: false)
+            }
+            .opacity(0.6)
+        }
+    }
+
+    private func backTapPicture(triple: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(loc(triple ? "tappic.back_tap" : "tappic.settings_path"))
+                .font(.system(.caption2))
+                .foregroundStyle(AppTheme.textSecondary)
+            ShortcutCard {
+                VStack(spacing: 0) {
+                    SettingRow(label: loc("tappic.double_tap"), value: loc("tappic.shortcut_name"),
+                               ringed: !triple)
+                    Divider().overlay(AppTheme.cardMid)
+                    SettingRow(label: loc("tappic.triple_tap"),
+                               value: loc(triple ? "tappic.log_with_voice" : "tappic.none"),
+                               ringed: triple)
+                }
+            }
+        }
+    }
+
+    // MARK: The voice shortcut
+
+    private func dipoActionPicture(_ title: String) -> some View {
+        VStack(spacing: 8) {
+            SearchField(text: "DiPo")
+            ResultRow(title: title, app: "DiPo") { DiPoActionIcon() }
+                .tapHere(corner: 10)
+        }
+    }
+
+    private var voiceTalkPicture: some View {
+        VStack(alignment: .trailing, spacing: 8) {
+            HStack(alignment: .top, spacing: 5) {
+                Image(systemName: "waveform")
+                Text(verbatim: "\u{201C}" + loc("tappic.voice_said") + "\u{201D}")
+            }
+            .font(.system(.caption, weight: .semibold))
+            .foregroundStyle(AppTheme.onVividFill)
+            .padding(.horizontal, 10).padding(.vertical, 6)
+            .background(AppTheme.accentFill,
+                        in: UnevenRoundedRectangle(topLeadingRadius: 14, bottomLeadingRadius: 14,
+                                                   bottomTrailingRadius: 4, topTrailingRadius: 14))
+            .padding(.leading, 30)
+            ShortcutCard {
+                VStack(spacing: 0) {
+                    SpokenRow(category: .food, name: loc("tappic.voice_lunch"), amount: 45_000)
+                    Divider().overlay(AppTheme.cardMid)
+                    SpokenRow(category: .transport, name: loc("tappic.voice_parking"), amount: 5_000)
+                }
+            }
+        }
+    }
+
+    // MARK: The notification automation
+
     private var triggerPicture: some View {
         VStack(spacing: 0) {
             TriggerCard(apps: ["BRImo", "GoPay", "DANA"], ringOnArrow: false)
             FlowLine()
             VariableBubble()
-        }
-    }
-
-    private var searchPicture: some View {
-        VStack(spacing: 8) {
-            HStack(spacing: 6) {
-                Image(systemName: "magnifyingglass").foregroundStyle(AppTheme.textSecondary)
-                Text(verbatim: "DiPo")
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, 10).padding(.vertical, 6)
-            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 10))
-
-            HStack(spacing: 8) {
-                DiPoActionIcon()
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(loc("notifpic.action")).fontWeight(.semibold)
-                    Text(verbatim: "DiPo").font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
-                }
-                Spacer(minLength: 0)
-                Image(systemName: "plus.circle.fill").font(.system(.body)).foregroundStyle(AppTheme.blue)
-            }
-            .padding(.horizontal, 10).padding(.vertical, 7)
-            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 10))
-            .tapHere(corner: 10)
         }
     }
 
@@ -223,11 +341,13 @@ private struct Pill: View {
     enum Kind { case variable, blank, app }
     let text: String
     let kind: Kind
+    /// What a variable comes from: a notification's bell, a screenshot.
+    var glyph = "bell.fill"
 
     var body: some View {
         HStack(spacing: 3) {
             if kind == .variable {
-                Image(systemName: "bell.fill").imageScale(.small)
+                Image(systemName: glyph).imageScale(.small)
             }
             Text(verbatim: text).fontWeight(kind == .variable ? .semibold : .regular)
         }
@@ -246,16 +366,166 @@ private struct Pill: View {
     }
 }
 
-/// The trigger's output, the variable every blank is filled from.
+/// What a step hands on, drawn under it: the trigger's Notification, Take
+/// Screenshot's Screenshot.
 private struct VariableBubble: View {
+    /// The trigger's Notification when nil.
+    var text: String? = nil
+    var glyph = "bell.fill"
+
     var body: some View {
         HStack(spacing: 4) {
-            Image(systemName: "bell.fill").imageScale(.small)
-            Text(loc("notifpic.notification")).fontWeight(.semibold)
+            Image(systemName: glyph).imageScale(.small)
+            Text(verbatim: text ?? loc("notifpic.notification")).fontWeight(.semibold)
         }
         .foregroundStyle(AppTheme.blue)
         .padding(.horizontal, 9).padding(.vertical, 3)
         .background(AppTheme.blue.opacity(0.14), in: RoundedRectangle(cornerRadius: 8))
+    }
+}
+
+/// A shortcut already in the library, its name left out.
+private struct ShortcutTile: View {
+    let tint: Color
+
+    var body: some View {
+        VStack(alignment: .leading) {
+            RoundedRectangle(cornerRadius: 5).fill(.white.opacity(0.55)).frame(width: 16, height: 16)
+            Spacer(minLength: 8)
+            Capsule().fill(.white.opacity(0.45)).frame(width: 50, height: 6)
+        }
+        .padding(7)
+        .frame(maxWidth: .infinity, minHeight: 46, alignment: .leading)
+        .background(tint.opacity(0.45), in: RoundedRectangle(cornerRadius: 10))
+    }
+}
+
+/// The search field over Shortcuts' list of actions.
+private struct SearchField: View {
+    let text: String
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "magnifyingglass").foregroundStyle(AppTheme.textSecondary)
+            Text(verbatim: text)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 10).padding(.vertical, 6)
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 10))
+    }
+}
+
+/// An action in the search results, with + to add it.
+private struct ResultRow<Icon: View>: View {
+    let title: String
+    var app: String? = nil
+    @ViewBuilder var icon: Icon
+
+    var body: some View {
+        HStack(spacing: 8) {
+            icon
+            VStack(alignment: .leading, spacing: 1) {
+                Text(verbatim: title).fontWeight(.semibold)
+                if let app {
+                    Text(verbatim: app).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
+                }
+            }
+            Spacer(minLength: 0)
+            Image(systemName: "plus.circle.fill").font(.system(.body)).foregroundStyle(AppTheme.blue)
+        }
+        .padding(.horizontal, 10).padding(.vertical, 7)
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 10))
+    }
+}
+
+/// Shortcuts' own Take Screenshot, as its icon reads.
+private struct ScreenshotActionIcon: View {
+    var body: some View {
+        Image(systemName: "camera.viewfinder")
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundStyle(.white)
+            .frame(width: 20, height: 20)
+            .background(AppTheme.slate, in: RoundedRectangle(cornerRadius: 5))
+    }
+}
+
+/// The shortcut's first action.
+private struct TakeScreenshotCard: View {
+    var body: some View {
+        ShortcutCard {
+            HStack(spacing: 6) {
+                ScreenshotActionIcon()
+                Text(loc("tappic.take_screenshot")).fontWeight(.semibold)
+            }
+        }
+    }
+}
+
+/// DiPo's action under it, its blank holding the screenshot.
+private struct LogFromScreenshotCard: View {
+    let ringed: Bool
+
+    var body: some View {
+        ShortcutCard {
+            HStack(spacing: 6) {
+                DiPoActionIcon()
+                Text(loc("tappic.log_from")).fontWeight(.semibold)
+                if ringed {
+                    screenshot.tapHere(corner: 6)
+                } else {
+                    screenshot
+                }
+            }
+        }
+    }
+
+    private var screenshot: Pill {
+        Pill(text: loc("tappic.screenshot"), kind: .variable, glyph: "photo")
+    }
+}
+
+/// A row of Back Tap's settings: the tap, and the shortcut it runs.
+private struct SettingRow: View {
+    let label: String
+    let value: String
+    let ringed: Bool
+
+    var body: some View {
+        if ringed {
+            row.tapHere(corner: 8)
+        } else {
+            row
+        }
+    }
+
+    private var row: some View {
+        HStack {
+            Text(verbatim: label)
+            Spacer(minLength: 8)
+            Text(verbatim: value + " \u{203A}").foregroundStyle(AppTheme.textSecondary)
+        }
+        .padding(.vertical, 6)
+    }
+}
+
+/// One entry DiPo made from the sentence, as the confirm card lists it.
+private struct SpokenRow: View {
+    let category: TxCategory
+    let name: String
+    let amount: Double
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: category.icon)
+                .font(.system(.caption2, weight: .semibold))
+                .foregroundStyle(category.color)
+                .frame(width: 22, height: 22)
+                .background(category.color.opacity(0.16), in: RoundedRectangle(cornerRadius: 7))
+            Text(verbatim: name)
+            Spacer(minLength: 8)
+            Text(CurrencyManager.shared.formatted(amount, currency: "IDR")).fontWeight(.semibold)
+        }
+        .padding(.vertical, 5)
     }
 }
 

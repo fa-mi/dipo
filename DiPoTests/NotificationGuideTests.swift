@@ -1,8 +1,8 @@
 import XCTest
 @testable import DiPo
 
-/// The notification walkthrough in Tap to Log: six steps, each with a picture
-/// of what Shortcuts shows at that point.
+/// The Tap to Log walkthrough: every step with a picture of its screen, and
+/// the notification automation's "is it working?".
 @MainActor
 final class NotificationGuideTests: XCTestCase {
 
@@ -38,6 +38,27 @@ final class NotificationGuideTests: XCTestCase {
                 XCTAssertTrue(loc("backtap.n6_body").contains(loc("notifpic.locked")), "\(language)")
             }
         }
+    }
+
+    /// The Back Tap pictures' words, in both languages, agreeing with their
+    /// steps, and DiPo's actions named as Shortcuts shows them.
+    func testTheBackTapPicturesSpeakBothLanguagesAndMatchTheirSteps() {
+        let labels = ["my_shortcuts", "take_screenshot", "screenshot", "log_from", "log_with_voice",
+                      "shortcut_name", "done", "settings_path", "back_tap", "double_tap", "triple_tap",
+                      "none", "voice_said", "voice_lunch", "voice_parking"].map { "tappic.\($0)" }
+        for language in [LanguageManager.Language.english, .indonesian] {
+            LanguageManager.shared.withLanguage(language) {
+                for key in labels {
+                    XCTAssertNotEqual(loc(key), key, "missing \(key) in \(language)")
+                }
+                XCTAssertTrue(loc("backtap.s2_title").contains(loc("tappic.take_screenshot")), "\(language)")
+                XCTAssertTrue(loc("backtap.s4_body").contains(loc("tappic.shortcut_name")), "\(language)")
+                XCTAssertTrue(loc("backtap.v2_body").contains(loc("tappic.triple_tap")), "\(language)")
+            }
+        }
+        XCTAssertEqual(loc("tappic.log_with_voice"), String(localized: AskDiPoVoiceIntent.title))
+        XCTAssertEqual(loc("tappic.log_from") + " " + loc("tappic.screenshot"),
+                       String(localized: LogFromScreenshotIntent.title))
     }
 
     // MARK: Is it working?

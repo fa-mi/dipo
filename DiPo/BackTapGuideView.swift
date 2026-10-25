@@ -27,15 +27,15 @@ struct BackTapGuideView: View {
     private var screenshotSteps: [GuideStep] {
         [
             GuideStep(id: 1, title: loc("backtap.s1_title"), body: loc("backtap.s1_body"),
-                      glyph: "plus.square.on.square"),
+                      glyph: "plus.square.on.square", picture: AnyView(GuidePicture.newShortcut)),
             GuideStep(id: 2, title: loc("backtap.s2_title"), body: loc("backtap.s2_body"),
-                      glyph: "camera.viewfinder"),
+                      glyph: "camera.viewfinder", picture: AnyView(GuidePicture.takeScreenshot)),
             GuideStep(id: 3, title: loc("backtap.s3_title"), body: loc("backtap.s3_body"),
-                      glyph: "text.viewfinder"),
+                      glyph: "text.viewfinder", picture: AnyView(GuidePicture.logFromScreenshot)),
             GuideStep(id: 4, title: loc("backtap.s4_title"), body: loc("backtap.s4_body"),
-                      glyph: "textformat"),
+                      glyph: "textformat", picture: AnyView(GuidePicture.nameAndSave)),
             GuideStep(id: 5, title: loc("backtap.s5_title"), body: loc("backtap.s5_body"),
-                      glyph: "hand.tap.fill"),
+                      glyph: "hand.tap.fill", picture: AnyView(GuidePicture.backTap(triple: false))),
         ]
     }
 
@@ -44,11 +44,12 @@ struct BackTapGuideView: View {
     private var voiceSteps: [GuideStep] {
         [
             GuideStep(id: 1, title: loc("backtap.v1_title"), body: loc("backtap.v1_body"),
-                      glyph: "square.and.arrow.down.on.square"),
+                      glyph: "square.and.arrow.down.on.square",
+                      picture: AnyView(GuidePicture.dipoAction(loc("tappic.log_with_voice")))),
             GuideStep(id: 2, title: loc("backtap.v2_title"), body: loc("backtap.v2_body"),
-                      glyph: "hand.tap.fill"),
+                      glyph: "hand.tap.fill", picture: AnyView(GuidePicture.backTap(triple: true))),
             GuideStep(id: 3, title: loc("backtap.v3_title"), body: loc("backtap.v3_body"),
-                      glyph: "waveform"),
+                      glyph: "waveform", picture: AnyView(GuidePicture.voiceTalk)),
         ]
     }
 
@@ -58,22 +59,23 @@ struct BackTapGuideView: View {
     /// iOS 27 builds this inside a new shortcut: its Automation actions put
     /// the trigger at the top, and DiPo's action goes under it.
     ///
-    /// Each step has a picture: filling the action's blanks takes a variable
-    /// and then one of its parts, which nobody guesses from words alone.
+    /// Filling the action's blanks takes a variable and then one of its
+    /// parts, which nobody guesses from words alone; every step in this guide
+    /// has a picture of its screen (GuidePicture).
     private var notificationSteps: [GuideStep] {
         [
             GuideStep(id: 1, title: loc("backtap.n1_title"), body: loc("backtap.n1_body"),
-                      glyph: "bell.badge", picture: AnyView(NotificationSetupPicture.trigger)),
+                      glyph: "bell.badge", picture: AnyView(GuidePicture.trigger)),
             GuideStep(id: 2, title: loc("backtap.n2_title"), body: loc("backtap.n2_body"),
-                      glyph: "magnifyingglass", picture: AnyView(NotificationSetupPicture.search)),
+                      glyph: "magnifyingglass", picture: AnyView(GuidePicture.dipoAction(loc("notifpic.action")))),
             GuideStep(id: 3, title: loc("backtap.n3_title"), body: loc("backtap.n3_body"),
-                      glyph: "hand.tap", picture: AnyView(NotificationSetupPicture.selectVariable)),
+                      glyph: "hand.tap", picture: AnyView(GuidePicture.selectVariable)),
             GuideStep(id: 4, title: loc("backtap.n4_title"), body: loc("backtap.n4_body"),
-                      glyph: "list.bullet", picture: AnyView(NotificationSetupPicture.chooseTitle)),
+                      glyph: "list.bullet", picture: AnyView(GuidePicture.chooseTitle)),
             GuideStep(id: 5, title: loc("backtap.n5_title"), body: loc("backtap.n5_body"),
-                      glyph: "checkmark.circle", picture: AnyView(NotificationSetupPicture.filled)),
+                      glyph: "checkmark.circle", picture: AnyView(GuidePicture.filled)),
             GuideStep(id: 6, title: loc("backtap.n6_title"), body: loc("backtap.n6_body"),
-                      glyph: "lock.open", picture: AnyView(NotificationSetupPicture.runAlone)),
+                      glyph: "lock.open", picture: AnyView(GuidePicture.runAlone)),
         ]
     }
 
