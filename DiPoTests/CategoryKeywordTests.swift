@@ -104,6 +104,31 @@ final class CategoryKeywordTests: XCTestCase {
                        .food)
     }
 
+    /// Rows the old reading filed wrong are offered back, and only when
+    /// today's reading names a different category.
+    func testAMisfiledRowIsOfferedItsRightCategory() {
+        XCTAssertEqual(SmartBudgetManager.misfiledFix(name: "Transport", category: .health), .transport)
+        XCTAssertEqual(SmartBudgetManager.misfiledFix(name: "BPJS Kesehatan", category: .transport), .bills)
+        XCTAssertNil(SmartBudgetManager.misfiledFix(name: "Kebaya pesta", category: .shopping),
+                     "Nothing names it now, and the coincidence may be right.")
+        XCTAssertNil(SmartBudgetManager.misfiledFix(name: "Indomaret", category: .shopping),
+                     "No short keyword inside: the user's own choice.")
+        XCTAssertNil(SmartBudgetManager.misfiledFix(name: "Sports Station", category: .health),
+                     "Still read as a word today.")
+        XCTAssertNil(SmartBudgetManager.misfiledFix(name: "Transport", category: .other))
+    }
+
+    /// Tidy holds both kinds: Other to place, and misfiled to put right.
+    func testTidyOffersOtherRowsAndMisfiledOnes() {
+        let misfiled = TidyCategoriesView.offer(for: spent("Transport", .health))
+        XCTAssertEqual(misfiled?.category, .transport)
+        XCTAssertEqual(misfiled?.was, .health)
+        let uncategorised = TidyCategoriesView.offer(for: spent("Indomaret", .other))
+        XCTAssertEqual(uncategorised?.category, .food)
+        XCTAssertNil(uncategorised?.was)
+        XCTAssertNil(TidyCategoriesView.offer(for: spent("Indomaret", .shopping)))
+    }
+
     /// "AQUA BOTOL" under the shop's name was read as the toll road.
     func testAReceiptItemIsNotTakenForTheShop() {
         let text = """

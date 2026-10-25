@@ -75,12 +75,7 @@ struct DataCleanupView: View {
     /// How many rows Tidy could still fix — shown so the row can say whether it
     /// is worth opening at all.
     private var tidyableCount: Int {
-        cards.flatMap { $0.transactions }.reduce(0) { count, tx in
-            guard tx.amount < 0, tx.txSubtype == .normal, tx.category == .other,
-                  let s = SmartBudgetManager.suggestCategory(for: tx.name, txType: "Expense"), s != .other
-            else { return count }
-            return count + 1
-        }
+        cards.flatMap { $0.transactions }.filter { TidyCategoriesView.offer(for: $0) != nil }.count
     }
 
     var body: some View {

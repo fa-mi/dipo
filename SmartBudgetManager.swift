@@ -1325,6 +1325,23 @@ final class SmartBudgetManager {
         }
     }
 
+    /// The category a row should have had, when the one it has could only
+    /// have come from a short keyword read inside a longer word before
+    /// KeywordReading: "Transport" under Health for its "sport", "BPJS" under
+    /// Transport for its "bp". Only when today's reading names a different
+    /// category: a row whose name now matches nothing keeps what it has, as
+    /// such a coincidence can be right ("Kebaya" under Shopping, by "ebay").
+    /// Tidy offers these back; left alone, the learned tier relearns them.
+    static func misfiledFix(name: String, category: TxCategory) -> TxCategory? {
+        guard category != .other,
+              let now = suggestCategory(for: name, txType: "Expense"), now != category else { return nil }
+        let reading = KeywordReading(name)
+        let own = merchantMap.filter { $0.category == category }.flatMap { $0.keywords }
+        guard !own.contains(where: reading.mentions),
+              own.contains(where: { $0.count < 6 && reading.text.contains($0) }) else { return nil }
+        return now
+    }
+
     /// Lowercased, punctuation- and digit-free, whitespace-collapsed. Makes
     /// "Warkop Pak Budi 2" and "warkop pak budi" the same key.
     static func normalizedMerchant(_ raw: String) -> String {
