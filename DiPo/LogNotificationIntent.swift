@@ -44,8 +44,11 @@ struct LogFromNotificationIntent: AppIntent {
     @MainActor
     func perform() async throws -> some IntentResult {
         let notice = NotificationTx.Notice(body: message, title: heading, subtitle: subtitle, app: app)
-        guard let reading = NotificationTx.read(
-            notice, defaultCurrency: CurrencyManager.shared.preferredCurrency) else { return .result() }
+        let reading = NotificationTx.read(notice, defaultCurrency: CurrencyManager.shared.preferredCurrency)
+        // A note that it ran, for the guide's "is it working?": when, from
+        // which app, whether it was a payment. Never what it said.
+        NotificationAutomationStatus.record(app: app, title: heading, kept: reading != nil)
+        guard let reading else { return .result() }
 
         let context = DiPoApp.sharedModelContainer.mainContext
         let cards = (try? context.fetch(FetchDescriptor<BankCard>())) ?? []

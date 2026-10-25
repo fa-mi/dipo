@@ -20,6 +20,8 @@ import UniformTypeIdentifiers   // for `.json` UTType in fileImporter
 /// because they are independent setups: someone may well want only one.
 struct BackTapGuideView: View {
     @Environment(\.dismiss) private var dismiss
+    /// The notification action's last note, read when the guide opens.
+    @State private var heard: NotificationAutomationStatus?
 
     /// Double tap → capture the payment screen.
     private var screenshotSteps: [GuideStep] {
@@ -75,6 +77,18 @@ struct BackTapGuideView: View {
         ]
     }
 
+    /// Whether the automation has run: grey until it has, orange while a
+    /// blank still needs filling, green once it reads everything.
+    private var statusIcon: String {
+        guard let heard else { return "clock" }
+        return heard.isMissingABlank ? "exclamationmark.circle" : "checkmark.circle"
+    }
+
+    private var statusTint: Color {
+        guard let heard else { return AppTheme.textSecondary }
+        return heard.isMissingABlank ? AppTheme.orange : AppTheme.accent
+    }
+
     /// The iOS version, on an iPhone too old for the notification trigger.
     /// Said before those steps, which can't be followed yet.
     private var olderIOS: String? {
@@ -113,6 +127,11 @@ struct BackTapGuideView: View {
                                          icon: "exclamationmark.circle", tint: AppTheme.orange)
                         }
                         GuideStepList(steps: notificationSteps, tint: AppTheme.blue)
+                        if olderIOS == nil {
+                            GuideCallout(title: loc("notifstatus.heading"),
+                                         message: NotificationAutomationStatus.message(for: heard),
+                                         icon: statusIcon, tint: statusTint)
+                        }
 
                         GuideCallout(title: loc("backtap.using_heading"), message: loc("backtap.using_body"),
                                      icon: "sparkles", tint: AppTheme.accent)
@@ -136,6 +155,7 @@ struct BackTapGuideView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(AppTheme.bg, for: .navigationBar)
             .doneToolbar { dismiss() }
+            .onAppear { heard = NotificationAutomationStatus.last() }
         }
     }
 }
