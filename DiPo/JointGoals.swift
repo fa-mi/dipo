@@ -189,6 +189,12 @@ struct SharedGoalsOnlyView: View {
                         .padding(.horizontal, 22)
                         .padding(.top, 20)
 
+                        // Open to every account, one want at a time without
+                        // Royal. No personal goals here, so a price let go
+                        // stays a note rather than becoming a deposit.
+                        HoldSection(goals: [], onDeposit: { _, _, _ in })
+                            .padding(.horizontal, 22)
+
                         // Making a goal needs Royal; taking part does not.
                         UnitySavingsSection(onCreate: { showPaywall = true })
 

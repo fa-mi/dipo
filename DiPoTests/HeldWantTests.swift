@@ -108,6 +108,23 @@ final class HeldWantTests: XCTestCase {
         XCTAssertEqual(HoldTally([w], convert: { a, _ in a }), HoldTally())
     }
 
+    /// Without Royal one want waits at a time; deciding it frees the place.
+    /// Royal holds as many as it likes.
+    func testWithoutRoyalOneWantWaitsAtATime() {
+        XCTAssertEqual(HeldWant.freeLimit, 1)
+        XCTAssertTrue(HeldWant.canHoldAnother(open: 0, royal: false))
+        XCTAssertFalse(HeldWant.canHoldAnother(open: 1, royal: false))
+        XCTAssertFalse(HeldWant.canHoldAnother(open: 4, royal: false), "Kept from Royal days, still no more.")
+        XCTAssertTrue(HeldWant.canHoldAnother(open: 1, royal: true))
+        XCTAssertTrue(HeldWant.canHoldAnother(open: 25, royal: true))
+
+        let shoes = want()
+        let open = { [shoes].filter { !$0.isDecided }.count }
+        XCTAssertFalse(HeldWant.canHoldAnother(open: open(), royal: false))
+        shoes.decide(.letGo)
+        XCTAssertTrue(HeldWant.canHoldAnother(open: open(), royal: false))
+    }
+
     func testTheWaitsOfferedRunShortToLong() {
         XCTAssertEqual(HeldWant.waits, HeldWant.waits.sorted())
         XCTAssertTrue(HeldWant.waits.contains(HeldWant.defaultWait))
@@ -191,7 +208,8 @@ final class HeldWantTests: XCTestCase {
                     "form_title", "form_edit_title", "form_sub", "form_what", "form_what_placeholder",
                     "form_price", "form_wait", "form_ready_at", "form_ready_now", "form_save", "saved",
                     "updated", "held_again", "kept_title", "kept_sub", "not_now", "let_go_toast",
-                    "bought_toast", "bought_toast_sub", "waiting_section", "decided_section"]
+                    "bought_toast", "bought_toast_sub", "waiting_section", "decided_section",
+                    "more_royal", "more_royal_sub"]
             .map { "hold.\($0)" }
             + ["notif.hold_title", "notif.hold_body",
                NotificationPreferences.Kind.wants.titleKey, NotificationPreferences.Kind.wants.subtitleKey]
