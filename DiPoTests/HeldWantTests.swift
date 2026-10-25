@@ -7,6 +7,18 @@ import SwiftData
 @MainActor
 final class HeldWantTests: XCTestCase {
 
+    private var container: ModelContainer!
+
+    override func setUpWithError() throws {
+        let schema = Schema(versionedSchema: DiPoSchemaCurrent.self)
+        container = try ModelContainer(for: schema,
+                                       configurations: ModelConfiguration(schema: schema, isStoredInMemoryOnly: true))
+    }
+
+    override func tearDownWithError() throws {
+        container = nil
+    }
+
     /// A fixed moment, so every wait ends where the test says.
     private let start = Date(timeIntervalSince1970: 1_800_000_000)
     private let hour: TimeInterval = 3_600
@@ -20,7 +32,9 @@ final class HeldWantTests: XCTestCase {
 
     private func want(_ name: String = "Sepatu lari", _ amount: Double = 450_000,
                       currency: String = "IDR", days: Int = 3) -> HeldWant {
-        HeldWant(name: name, amount: amount, currency: currency, waitDays: days, now: start)
+        let w = HeldWant(name: name, amount: amount, currency: currency, waitDays: days, now: start)
+        container.mainContext.insert(w)
+        return w
     }
 
     private func at(_ y: Int, _ m: Int, _ d: Int, _ h: Int, _ min: Int) -> Date {
