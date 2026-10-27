@@ -159,4 +159,18 @@ final class PendingInboxTests: XCTestCase {
         XCTAssertEqual(card.transactions.first?.amount, 25_000)
         XCTAssertFalse(item.isExpense)
     }
+
+    /// "Delete all" asks first, in both languages, saying how many go and
+    /// that none of them is logged.
+    func testDeleteAllSaysHowManyGo() {
+        for language in [LanguageManager.Language.english, .indonesian] {
+            LanguageManager.shared.withLanguage(language) {
+                for key in ["pending.delete_all", "pending.delete_all_title",
+                            "pending.delete_all_message", "pending.deleted_all"] {
+                    XCTAssertNotEqual(loc(key), key, "missing \(key) in \(language)")
+                }
+                XCTAssertTrue(String(format: loc("pending.delete_all_message"), 12).contains("12"), "\(language)")
+            }
+        }
+    }
 }

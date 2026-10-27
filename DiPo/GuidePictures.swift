@@ -582,16 +582,16 @@ private struct SwitchRow: View {
     }
 }
 
-/// DiPo's icon as Shortcuts shows it beside the action.
+/// DiPo's icon as Shortcuts shows it beside the action: the app icon itself
+/// (DiPoIcon, made from AppIcon), so the picture matches what is on screen.
 private struct DiPoActionIcon: View {
     var body: some View {
-        Image("DiPoMascot")
-            .resizable().scaledToFit()
-            .frame(width: 33, height: 49)
+        Image("DiPoIcon")
+            .resizable().scaledToFill()
             .frame(width: 20, height: 20)
-            .background(RadialGradient(colors: [AppTheme.accent.opacity(0.35), AppTheme.flowGround],
-                                       center: .center, startRadius: 0, endRadius: 12))
-            .clipShape(RoundedRectangle(cornerRadius: 5))
+            .clipShape(RoundedRectangle(cornerRadius: 4.5, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 4.5, style: .continuous)
+                .strokeBorder(AppTheme.cardMid, lineWidth: 0.5))
     }
 }
 
