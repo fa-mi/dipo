@@ -1840,6 +1840,8 @@ final class LanguageManager {
         "hold.bought_toast_sub": "Log it when you pay.",
         "hold.waiting_section":  "Still waiting",
         "hold.decided_section":  "Decided",
+        "hold.more_royal":       "Hold more with Royal",
+        "hold.more_royal_sub":   "Without Royal you can hold 1 thing at a time.",
         "notif.hold_title":      "Still want %@?",
         "notif.hold_body":       "You've held it for %@. Open DiPo to buy it or let it go.",
         // Target Bersama (shared goals; "Unity Savings" in code)
@@ -5530,6 +5532,8 @@ final class LanguageManager {
         "hold.bought_toast_sub": "Catat saat kamu bayar ya.",
         "hold.waiting_section":  "Masih ditahan",
         "hold.decided_section":  "Sudah diputuskan",
+        "hold.more_royal":       "Tahan lebih banyak dengan Royal",
+        "hold.more_royal_sub":   "Tanpa Royal, kamu bisa menahan 1 barang sekaligus.",
         "notif.hold_title":      "Masih mau %@?",
         "notif.hold_body":       "Sudah kamu tahan %@. Buka DiPo untuk beli atau lepaskan.",
         // Target Bersama (shared goals; "Unity Savings" in code)

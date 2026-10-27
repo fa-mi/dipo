@@ -7,6 +7,9 @@ import SwiftData
 // still waiting with how long is left, and a way to hold one more. When a
 // wait is over the row asks, right there: let it go, or still want it. A
 // price let go can go into a goal in the next breath. See DiPo/HeldWant.swift.
+//
+// On every account's Savings Goals screen. Without Royal one want waits at a
+// time: with one waiting, "Hold something" becomes the way to Royal.
 
 struct HoldSection: View {
     @Query(sort: \HeldWant.readyAt) private var wants: [HeldWant]
@@ -15,9 +18,17 @@ struct HoldSection: View {
     let onDeposit: (SavingsGoal, Double, BankCard?) -> Void
 
     @State private var adding = false
+    @State private var showPaywall = false
+    /// Observed so the limit lifts the moment Royal is bought.
+    @State private var pm = PremiumManager.shared
 
     /// Wants shown here before "See all".
     private let previewLimit = 3
+
+    private var canHoldAnother: Bool {
+        HeldWant.canHoldAnother(open: wants.filter { !$0.isDecided }.count,
+                                royal: pm.canAccess(.savingsGoals))
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -39,6 +50,7 @@ struct HoldSection: View {
                 .presentationDragIndicator(.visible)
                 .presentationBackground(AppTheme.bg)
         }
+        .royalPaywall(isPresented: $showPaywall)
     }
 
     private func card(now: Date) -> some View {
@@ -54,7 +66,8 @@ struct HoldSection: View {
             // Always in place, even with nothing waiting: the sheet for a
             // price just let go hangs off it.
             HoldRows(wants: Array(open.prefix(previewLimit)), now: now,
-                     goals: goals, onDeposit: onDeposit, dividerAbove: true)
+                     goals: goals, onDeposit: onDeposit, dividerAbove: true,
+                     canHoldAnother: canHoldAnother, onUpgrade: { showPaywall = true })
 
             if open.count > previewLimit {
                 HoldDivider(inset: 16)
@@ -77,7 +90,11 @@ struct HoldSection: View {
             }
 
             HoldDivider(inset: 16)
-            HoldAddRow { adding = true }
+            if canHoldAnother {
+                HoldAddRow { adding = true }
+            } else {
+                HoldRoyalRow { showPaywall = true }
+            }
         }
         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.xl))
     }
@@ -91,6 +108,13 @@ struct HoldListView: View {
     let onDeposit: (SavingsGoal, Double, BankCard?) -> Void
 
     @State private var adding = false
+    @State private var showPaywall = false
+    @State private var pm = PremiumManager.shared
+
+    private var canHoldAnother: Bool {
+        HeldWant.canHoldAnother(open: wants.filter { !$0.isDecided }.count,
+                                royal: pm.canAccess(.savingsGoals))
+    }
 
     var body: some View {
         ZStack {
@@ -113,6 +137,7 @@ struct HoldListView: View {
                 .presentationDragIndicator(.visible)
                 .presentationBackground(AppTheme.bg)
         }
+        .royalPaywall(isPresented: $showPaywall)
     }
 
     private func content(now: Date) -> some View {
@@ -127,9 +152,14 @@ struct HoldListView: View {
             VStack(alignment: .leading, spacing: 12) {
                 sectionTitle(loc("hold.waiting_section"))
                 VStack(spacing: 0) {
-                    HoldRows(wants: open, now: now, goals: goals, onDeposit: onDeposit, dividerAbove: false)
+                    HoldRows(wants: open, now: now, goals: goals, onDeposit: onDeposit, dividerAbove: false,
+                             canHoldAnother: canHoldAnother, onUpgrade: { showPaywall = true })
                     if !open.isEmpty { HoldDivider(inset: 16) }
-                    HoldAddRow { adding = true }
+                    if canHoldAnother {
+                        HoldAddRow { adding = true }
+                    } else {
+                        HoldRoyalRow { showPaywall = true }
+                    }
                 }
                 .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.xl))
             }
@@ -137,7 +167,8 @@ struct HoldListView: View {
             if !decided.isEmpty {
                 VStack(alignment: .leading, spacing: 12) {
                     sectionTitle(loc("hold.decided_section"))
-                    HoldRows(wants: decided, now: now, goals: goals, onDeposit: onDeposit, dividerAbove: false)
+                    HoldRows(wants: decided, now: now, goals: goals, onDeposit: onDeposit, dividerAbove: false,
+                             canHoldAnother: canHoldAnother, onUpgrade: { showPaywall = true })
                         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.xl))
                 }
             }
@@ -165,6 +196,10 @@ struct HoldRows: View {
     /// A rule above the first row too, when the rows follow something else
     /// in the same card.
     var dividerAbove: Bool
+    /// Whether a decided want can go back on the list: false for an account
+    /// without Royal that already has its one want waiting.
+    var canHoldAnother = true
+    var onUpgrade: () -> Void = {}
 
     @Environment(\.modelContext) private var context
     @State private var menuFor: HeldWant?
@@ -207,8 +242,13 @@ struct HoldRows: View {
     private func menu(for want: HeldWant) -> some View {
         var items: [ActionItem] = []
         if want.isDecided {
-            items.append(ActionItem(icon: "arrow.uturn.backward", title: loc("hold.undo"),
-                                    detail: loc("hold.undo_sub"), tint: AppTheme.blue) { undo(want) })
+            if canHoldAnother {
+                items.append(ActionItem(icon: "arrow.uturn.backward", title: loc("hold.undo"),
+                                        detail: loc("hold.undo_sub"), tint: AppTheme.blue) { undo(want) })
+            } else {
+                items.append(ActionItem(icon: "arrow.uturn.backward", title: loc("hold.undo"),
+                                        detail: loc("hold.more_royal_sub"), tint: AppTheme.royalGoldText) { onUpgrade() })
+            }
         } else if want.isReady(at: .now) {
             let until = HeldWant.end(ofWait: want.waitDays, from: .now)
             items.append(ActionItem(icon: "hourglass",
@@ -870,6 +910,51 @@ private struct HoldAddRow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+}
+
+/// In place of "Hold something" once an account without Royal has its one
+/// want waiting: what Royal adds, and the way to it.
+private struct HoldRoyalRow: View {
+    let onUpgrade: () -> Void
+
+    var body: some View {
+        Button {
+            HapticManager.shared.tap(); onUpgrade()
+        } label: {
+            HStack(spacing: 12) {
+                Text("👑").font(.system(.body))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(loc("hold.more_royal"))
+                        .font(.system(.subheadline, weight: .semibold))
+                        .foregroundStyle(AppTheme.textPrimary)
+                    Text(loc("hold.more_royal_sub"))
+                        .font(.system(.caption))
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 4)
+                Image(systemName: "chevron.right")
+                    .font(.system(.caption, weight: .semibold))
+                    .foregroundStyle(AppTheme.textSecondary)
+            }
+            .padding(.horizontal, 16).padding(.vertical, 14)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private extension View {
+    /// The Royal paywall, as every other screen presents it.
+    func royalPaywall(isPresented: Binding<Bool>) -> some View {
+        sheet(isPresented: isPresented) {
+            PaywallView()
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+                .presentationBackground(AppTheme.bg)
+                .preferredColorScheme(appColorScheme())
+        }
     }
 }
 

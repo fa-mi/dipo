@@ -14,6 +14,9 @@ import UserNotifications
 //
 // A held want moves no money. Buying it is logged like any purchase, when it
 // is paid; letting it go into a goal goes through that goal's own deposit.
+//
+// Open to every account: without Royal, one want waits at a time; Royal holds
+// as many as it likes.
 
 @Model
 final class HeldWant {
@@ -54,6 +57,16 @@ extension HeldWant {
     /// The waits offered, in days, and the one picked to start with.
     static let waits = [1, 3, 7, 30]
     static let defaultWait = 3
+
+    /// How many wants an account without Royal can have waiting at once.
+    static let freeLimit = 1
+
+    /// Whether one more want can be held, with `open` already waiting or
+    /// ready to decide. Decided ones don't count: once the one is let go or
+    /// bought, the next can be held.
+    static func canHoldAnother(open: Int, royal: Bool) -> Bool {
+        royal || open < freeLimit
+    }
 
     static func end(ofWait days: Int, from start: Date, calendar: Calendar = .current) -> Date {
         calendar.date(byAdding: .day, value: days, to: start)
@@ -161,8 +174,8 @@ struct HoldTally: Equatable {
 // MARK: - Asking when the wait is over
 
 /// One push per want still waiting, when its wait ends: "Still want it?".
-/// Rides its own switch in notification settings, and needs Royal like the
-/// Savings Goals screen the list lives on.
+/// Rides its own switch in notification settings. Every account gets them:
+/// the list is open without Royal too.
 enum HeldWantReminders {
     struct Planned: Sendable, Equatable {
         let id: String
@@ -182,9 +195,8 @@ enum HeldWantReminders {
     private static var lastPass: Task<Void, Never>?
 
     static func scheduleAll(wants: [HeldWant]) {
-        let enabled = NotificationPreferences.shared.isEnabled(.wants)
-            && PremiumManager.shared.canAccess(.savingsGoals)
-        let planned = enabled ? plan(wants: wants, now: .now, cal: .current) : []
+        let planned = NotificationPreferences.shared.isEnabled(.wants)
+            ? plan(wants: wants, now: .now, cal: .current) : []
         let previous = lastPass
         lastPass = Task {
             await previous?.value
