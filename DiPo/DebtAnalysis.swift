@@ -120,6 +120,7 @@ enum DebtAnalysisSnapshot {
             if carried >= 0.5 { parts.append("\(mc(carried)) of it carried over from earlier bills and charged interest") }
             if b.installmentDue >= 0.5 { parts.append("\(mc(b.installmentDue)) of instalments billed and not paid yet") }
             if b.locked >= 0.5 { parts.append("\(mc(b.locked)) of instalment principal not billed yet") }
+            if b.credit >= 0.5 { parts.append("less \(mc(b.credit)) paid beyond the bill, kept on the card for the next one") }
             if card.creditLimit > 0 { parts.append("limit \(mc(card.creditLimit))") }
             let name = card.holderName.isEmpty ? "credit card" : card.holderName
             lines.append("Credit card '\(name)': " + parts.joined(separator: "; ") + ".")
