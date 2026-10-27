@@ -153,6 +153,9 @@ final class LanguageManager {
         "plan.section_goals": "Saving for something",
         "plan.section_debts": "Debts & credits",
         "plan.section_help": "Help",
+        "plan.more": "More",
+        "plan.more_shown": "Shown",
+        "plan.more_hidden": "Hidden",
         "plan.bills_status": "%d bills · %@ a month",
         "wallet.debts_status": "%d active debts",
 
@@ -3861,6 +3864,9 @@ final class LanguageManager {
         "plan.section_goals": "Menabung untuk sesuatu",
         "plan.section_debts": "Utang & piutang",
         "plan.section_help": "Bantuan",
+        "plan.more": "Lainnya",
+        "plan.more_shown": "Ditampilkan",
+        "plan.more_hidden": "Disembunyikan",
         "plan.bills_status": "%d tagihan · %@ per bulan",
         "wallet.debts_status": "%d utang aktif",
 

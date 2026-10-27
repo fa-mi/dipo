@@ -23,6 +23,8 @@ struct PlanView: View {
     @State private var budget = SmartBudgetManager.shared
     @State private var showPaywall = false
     @State private var showAskDiPo = false
+    /// Whether the rows waiting under More are shown.
+    @State private var moreOpen = false
     /// Read from the whole history, so refreshed on save, not per render.
     @State private var ladder: LadderResult?
 
@@ -61,14 +63,14 @@ struct PlanView: View {
                             row(.goals, icon: "target", tint: AppTheme.teal,
                                 title: loc("profile.savings"), status: goalsStatus,
                                 feature: UserSession.shared.isLoggedIn ? nil : .savingsGoals)
-                            divider
-                            row(.investments, icon: "chart.line.uptrend.xyaxis", tint: AppTheme.accent,
-                                title: loc("premium.feature.investments"), status: investStatus,
-                                feature: .investments)
-                            divider
-                            row(.assets, icon: "house.fill", tint: AppTheme.teal,
-                                title: loc("premium.feature.assets"), status: assetsStatus,
-                                feature: .assets)
+                            if !folded.contains(.investments) {
+                                divider
+                                investmentsRow
+                            }
+                            if !folded.contains(.assets) {
+                                divider
+                                assetsRow
+                            }
                         }
                         // What is owed and what is owed back belongs with the plan,
                         // not with the cards: it used to sit under Wallet, so
@@ -80,6 +82,9 @@ struct PlanView: View {
                         }
                         section(loc("plan.section_help")) {
                             askRow
+                        }
+                        if !folded.isEmpty {
+                            moreCard
                         }
                         Spacer(minLength: 110)
                     }
@@ -203,6 +208,55 @@ struct PlanView: View {
             : String(format: loc("asset.status.summary"), physicalAssets.count, money)
     }
 
+    // MARK: Investments and assets, and More
+
+    /// Under More until something is kept in them.
+    private var folded: [PlanRoute] {
+        PlanFold.underMore(holdings: holdings.count, assets: physicalAssets.count)
+    }
+
+    private var investmentsRow: some View {
+        row(.investments, icon: "chart.line.uptrend.xyaxis", tint: AppTheme.accent,
+            title: loc("premium.feature.investments"), status: investStatus,
+            feature: .investments)
+    }
+
+    private var assetsRow: some View {
+        row(.assets, icon: "house.fill", tint: AppTheme.teal,
+            title: loc("premium.feature.assets"), status: assetsStatus,
+            feature: .assets)
+    }
+
+    /// One row naming what waits here; a tap shows those rows beneath it.
+    private var moreCard: some View {
+        var names: [String] = []
+        if folded.contains(.investments) { names.append(loc("premium.feature.investments")) }
+        if folded.contains(.assets) { names.append(loc("premium.feature.assets")) }
+        return VStack(spacing: 0) {
+            Button {
+                HapticManager.shared.tap()
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) { moreOpen.toggle() }
+            } label: {
+                PlanRowLabel(icon: "ellipsis", tint: AppTheme.textSecondary,
+                             title: loc("plan.more"), status: names.joined(separator: " · "),
+                             lockedPlan: nil, disclosure: moreOpen)
+            }
+            .buttonStyle(.plain)
+            .accessibilityValue(loc(moreOpen ? "plan.more_shown" : "plan.more_hidden"))
+            if moreOpen {
+                if folded.contains(.investments) {
+                    divider
+                    investmentsRow
+                }
+                if folded.contains(.assets) {
+                    divider
+                    assetsRow
+                }
+            }
+        }
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+    }
+
     // MARK: Building blocks
 
     private func section<Rows: View>(_ title: String, @ViewBuilder rows: () -> Rows) -> some View {
@@ -255,6 +309,8 @@ struct PlanRowLabel: View {
     let title: String
     let status: String
     let lockedPlan: PremiumPlan?
+    /// Set for a row that shows more beneath it: whether that is open.
+    var disclosure: Bool? = nil
 
     var body: some View {
         HStack(spacing: 14) {
@@ -277,6 +333,11 @@ struct PlanRowLabel: View {
             Spacer(minLength: 8)
             if let plan = lockedPlan {
                 PlanBadge(plan: plan)
+            } else if let open = disclosure {
+                Image(systemName: "chevron.down")
+                    .font(.system(.caption, weight: .semibold))
+                    .foregroundStyle(AppTheme.textSecondary)
+                    .rotationEffect(.degrees(open ? 180 : 0))
             } else {
                 Image(systemName: "chevron.right")
                     .font(.system(.caption, weight: .semibold))
@@ -302,5 +363,19 @@ struct PlanBadge: View {
         .padding(.horizontal, 7).padding(.vertical, 3)
         .background(plan.color.opacity(0.12), in: Capsule())
         .fixedSize()
+    }
+}
+
+// MARK: - What waits under More
+
+enum PlanFold {
+    /// Investments and assets sit with the goals once something is kept in
+    /// them. Until then they wait under More, so the tab opens on what is in
+    /// use and a free account isn't met by two locked rows.
+    static func underMore(holdings: Int, assets: Int) -> [PlanRoute] {
+        var routes: [PlanRoute] = []
+        if holdings == 0 { routes.append(.investments) }
+        if assets == 0 { routes.append(.assets) }
+        return routes
     }
 }
