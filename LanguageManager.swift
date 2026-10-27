@@ -2955,6 +2955,10 @@ final class LanguageManager {
         "tx.reference":        "Reference",
         // Pending inbox — what DiPo read for you, before it reaches the ledger.
         "pending.title":          "Review",
+        "pending.delete_all":         "Delete all",
+        "pending.delete_all_title":   "Delete everything waiting?",
+        "pending.delete_all_message": "The %d transactions DiPo read will be deleted. None of them is logged.",
+        "pending.deleted_all":        "All deleted",
         "pending.intro":          "DiPo read these while you were away. Swipe away anything that isn't yours, tap to correct it, then submit.",
         "pending.empty":          "Nothing waiting",
         "pending.submit":         "Add %d to my records",
@@ -6647,6 +6651,10 @@ final class LanguageManager {
         "tx.reference":        "Nomor referensi",
         // Kotak masuk transaksi — yang dibaca DiPo, sebelum masuk catatan.
         "pending.title":          "Periksa",
+        "pending.delete_all":         "Hapus semua",
+        "pending.delete_all_title":   "Hapus semua yang menunggu?",
+        "pending.delete_all_message": "%d transaksi yang dibaca DiPo akan dihapus. Tidak ada yang dicatat.",
+        "pending.deleted_all":        "Semua sudah dihapus",
         "pending.intro":          "DiPo membaca ini saat kamu tidak membuka aplikasi. Geser untuk membuang yang bukan punyamu, ketuk untuk membetulkan, lalu simpan.",
         "pending.empty":          "Tidak ada yang menunggu",
         "pending.submit":         "Catat %d transaksi",

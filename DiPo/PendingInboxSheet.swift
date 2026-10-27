@@ -5,7 +5,8 @@ import SwiftData
 //
 // Opens over whatever the user was doing, once, when there is something to
 // review. Three gestures and one button: swipe a row away, tap it to correct
-// it, submit the rest.
+// it, submit the rest. "Delete all" clears the lot at once, for the days the
+// queue fills with things that were never purchases.
 
 struct PendingInboxSheet: View {
     @Environment(\.dismiss) private var dismiss
@@ -15,6 +16,7 @@ struct PendingInboxSheet: View {
 
     @State private var editing: PendingTransaction?
     @State private var submitting = false
+    @State private var confirmingDeleteAll = false
     @State private var showPaywall = false
     @State private var pm = PremiumManager.shared
 
@@ -75,6 +77,20 @@ struct PendingInboxSheet: View {
                     Button(loc("common.close")) { HapticManager.shared.tap(); dismiss() }
                         .foregroundStyle(AppTheme.textSecondary)
                 }
+                if !pending.isEmpty {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button(loc("pending.delete_all")) {
+                            HapticManager.shared.tap(); confirmingDeleteAll = true
+                        }
+                        .foregroundStyle(AppTheme.red)
+                    }
+                }
+            }
+            .confirmSheet(isPresented: $confirmingDeleteAll,
+                          title: loc("pending.delete_all_title"),
+                          message: String(format: loc("pending.delete_all_message"), pending.count),
+                          confirmLabel: loc("pending.delete_all")) {
+                removeAll()
             }
             .sheet(item: $editing) { item in
                 PendingRowEditor(item: item, cards: cards)
@@ -266,6 +282,17 @@ struct PendingInboxSheet: View {
         }
         try? context.save()
         HapticManager.shared.tap()
+    }
+
+    /// Every row, in one go. What they were is gone with them: nothing is
+    /// logged, and a recurring bill held here stays stamped for its month,
+    /// the same as swiping it away.
+    private func removeAll() {
+        for item in pending { context.delete(item) }
+        try? context.save()
+        HapticManager.shared.warning()
+        ActionFeedbackCenter.shared.removed(loc("pending.deleted_all"))
+        dismiss()
     }
 
     private func submitAll() {
