@@ -55,8 +55,9 @@ struct PlanView: View {
                                 title: loc("profile.recurring"), status: billsStatus)
                         }
                         section(loc("plan.section_goals")) {
-                            // Open when signed in: Target Bersama needs no Royal
-                            // to take part in; the screen locks personal goals.
+                            // Open when signed in: one personal goal at a time
+                            // is free, and Target Bersama needs no Royal to take
+                            // part in.
                             row(.goals, icon: "target", tint: AppTheme.teal,
                                 title: loc("profile.savings"), status: goalsStatus,
                                 feature: UserSession.shared.isLoggedIn ? nil : .savingsGoals)
@@ -166,11 +167,9 @@ struct PlanView: View {
     }
 
     private var goalsStatus: String {
-        guard pm.canAccess(.savingsGoals) else {
-            return loc(UserSession.shared.isLoggedIn ? "savings.status_shared_only" : "profile.requires_royal")
-        }
+        guard UserSession.shared.isLoggedIn else { return loc("profile.requires_royal") }
         let active = goals.filter { !$0.isCompleted }.count
-        return active == 0 ? loc("savings.no_goals") : String(format: loc("savings.active_goals"), active)
+        return active == 0 ? loc("savings.no_goals") : SavingsGoal.inProgressText(active)
     }
 
     private var investStatus: String {
@@ -277,14 +276,7 @@ struct PlanRowLabel: View {
             }
             Spacer(minLength: 8)
             if let plan = lockedPlan {
-                HStack(spacing: 3) {
-                    Image(systemName: plan.icon).imageScale(.small)
-                    Text(plan.label)
-                }
-                .font(.system(.caption2, weight: .bold))
-                .foregroundStyle(plan.color)
-                .padding(.horizontal, 7).padding(.vertical, 3)
-                .background(plan.color.opacity(0.12), in: Capsule())
+                PlanBadge(plan: plan)
             } else {
                 Image(systemName: "chevron.right")
                     .font(.system(.caption, weight: .semibold))
@@ -293,5 +285,22 @@ struct PlanRowLabel: View {
         }
         .padding(.horizontal, 14).padding(.vertical, 14)
         .contentShape(Rectangle())
+    }
+}
+
+/// The plan a locked thing needs, in place of its chevron.
+struct PlanBadge: View {
+    let plan: PremiumPlan
+
+    var body: some View {
+        HStack(spacing: 3) {
+            Image(systemName: plan.icon).imageScale(.small)
+            Text(plan.label)
+        }
+        .font(.system(.caption2, weight: .bold))
+        .foregroundStyle(plan.color)
+        .padding(.horizontal, 7).padding(.vertical, 3)
+        .background(plan.color.opacity(0.12), in: Capsule())
+        .fixedSize()
     }
 }
