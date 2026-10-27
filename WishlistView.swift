@@ -172,6 +172,25 @@ extension SavingsGoal {
     }
 }
 
+// MARK: - One goal at a time without Royal
+
+extension SavingsGoal {
+    /// Personal goals an account without Royal saves toward at once. A goal
+    /// reached doesn't count: once it is, the next one can start.
+    static let freeLimit = 1
+
+    /// Whether one more personal goal can start, with `active` already in
+    /// progress. Goals kept from a lapsed Royal stay; only adding stops.
+    static func canAddAnother(active: Int, royal: Bool) -> Bool {
+        royal || active < freeLimit
+    }
+
+    /// "1 goal in progress", "3 goals in progress".
+    static func inProgressText(_ count: Int) -> String {
+        count == 1 ? loc("savings.active_goals_one") : String(format: loc("savings.active_goals"), count)
+    }
+}
+
 /// Whole numbers without a trailing ".0" for currencies that have no minor unit.
 enum SavingsNumber {
     static func edit(_ v: Double, currency: String) -> String {
@@ -201,6 +220,12 @@ struct WishlistView: View {
     @State private var pm = PremiumManager.shared
     @State private var session = UserSession.shared
 
+    private var isRoyal: Bool { pm.canAccess(.savingsGoals) }
+    /// Without Royal, one personal goal in progress at a time.
+    private var canAddPersonalGoal: Bool {
+        SavingsGoal.canAddAnother(active: activeGoals.count, royal: isRoyal)
+    }
+
     private var pref: String { CurrencyManager.shared.preferredCurrency }
     private func toPref(_ v: Double, _ from: String) -> Double {
         CurrencyManager.shared.convert(v, from: from, to: pref)
@@ -218,13 +243,11 @@ struct WishlistView: View {
         let _ = pm.plan
         let _ = session.userID
         Group {
-            if pm.canAccess(.savingsGoals) {
-                royalBody
-            } else if session.isLoggedIn {
-                // Target Bersama is open to anyone signed in — only a goal's
-                // creator needs Royal — so a member or someone invited gets
-                // here too. Personal goals stay Royal.
-                SharedGoalsOnlyView()
+            if session.isLoggedIn {
+                // Open to every account: one personal goal at a time without
+                // Royal, and Target Bersama to take part in — only a shared
+                // goal's creator needs Royal.
+                goalsBody
             } else {
                 PremiumGate(feature: .savingsGoals) { EmptyView() }
             }
@@ -232,7 +255,7 @@ struct WishlistView: View {
         .trackScreen(.savingsGoals)
     }
 
-    private var royalBody: some View {
+    private var goalsBody: some View {
         FeatureStack { pushed in
         ZStack {
             AppTheme.bg.ignoresSafeArea()
@@ -273,6 +296,9 @@ struct WishlistView: View {
                                     SeeAllLabel(count: activeGoals.count)
                                 }
                             }
+                            if !canAddPersonalGoal {
+                                GoalsRoyalRow { goalSheet = .paywall }
+                            }
                         }
                         .padding(.horizontal, 22)
                     } else if goals.isEmpty {
@@ -286,7 +312,8 @@ struct WishlistView: View {
                                 onDeposit: { goal, amount, card in deposit(goal, amount, card) })
                         .padding(.horizontal, 22)
 
-                    UnitySavingsSection(onCreate: { goalSheet = .shared })
+                    // Making a shared goal needs Royal; taking part does not.
+                    UnitySavingsSection(onCreate: { goalSheet = isRoyal ? .shared : .paywall })
 
                     if !completedGoals.isEmpty {
                         VStack(alignment: .leading, spacing: 12) {
@@ -323,8 +350,10 @@ struct WishlistView: View {
         .sheet(item: $goalSheet) { which in
             switch which {
             case .chooser:
-                GoalTypeChooserView(onPersonal: { goalSheet = .personal },
-                                    onShared:   { goalSheet = .shared })
+                GoalTypeChooserView(personalNeedsRoyal: !canAddPersonalGoal,
+                                    sharedNeedsRoyal: !isRoyal,
+                                    onPersonal: { goalSheet = canAddPersonalGoal ? .personal : .paywall },
+                                    onShared:   { goalSheet = isRoyal ? .shared : .paywall })
                     .presentationDetents([.medium])
                     .presentationDragIndicator(.visible)
                     .presentationBackground(AppTheme.bg)
@@ -338,6 +367,12 @@ struct WishlistView: View {
                     .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
                     .presentationBackground(AppTheme.bg)
+            case .paywall:
+                PaywallView()
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
+                    .presentationBackground(AppTheme.bg)
+                    .preferredColorScheme(appColorScheme())
             }
         }
         .sheet(item: $editingGoal) { goal in
@@ -356,12 +391,7 @@ struct WishlistView: View {
                 subtitle: String(format: loc("savings.saved_amount_row"),
                                  CurrencyManager.shared.formatted(goal.savedAmount, currency: goal.currency)),
                 items: [
-                    ActionItem(icon: "arrow.uturn.backward", title: loc("savings.reopen"),
-                               detail: loc("savings.reopen_sub"), tint: AppTheme.blue) {
-                        goal.isCompleted = false
-                        try? context.save()
-                        HapticManager.shared.success()
-                    },
+                    reopenItem(goal),
                     ActionItem(icon: "trash.fill", title: loc("common.delete"), destructive: true) {
                         deletingCompleted = goal
                     },
@@ -383,7 +413,7 @@ struct WishlistView: View {
                 Text(loc("profile.savings"))
                     .font(.system(.title, weight: .bold))
                     .foregroundStyle(AppTheme.textPrimary)
-                Text(String(format: loc("savings.active_goals"), activeGoals.count))
+                Text(SavingsGoal.inProgressText(activeGoals.count))
                     .font(.system(.footnote))
                     .foregroundStyle(AppTheme.textSecondary)
             }
@@ -399,6 +429,23 @@ struct WishlistView: View {
             }
             .accessibilityLabel(loc("a11y.add_goal"))
             .buttonStyle(ScaleButtonStyle())
+        }
+    }
+
+    /// Back in progress, a goal counts toward the one an account without
+    /// Royal saves for at a time; at that limit, the way to Royal instead.
+    private func reopenItem(_ goal: SavingsGoal) -> ActionItem {
+        guard canAddPersonalGoal else {
+            return ActionItem(icon: "arrow.uturn.backward", title: loc("savings.reopen"),
+                              detail: loc("savings.more_royal_sub"), tint: AppTheme.royalGoldText) {
+                goalSheet = .paywall
+            }
+        }
+        return ActionItem(icon: "arrow.uturn.backward", title: loc("savings.reopen"),
+                          detail: loc("savings.reopen_sub"), tint: AppTheme.blue) {
+            goal.isCompleted = false
+            try? context.save()
+            HapticManager.shared.success()
         }
     }
 
@@ -444,6 +491,39 @@ struct WishlistView: View {
         goal.isPinned.toggle()
         try? context.save()
         HapticManager.shared.select()
+    }
+}
+
+/// Under the goals in progress once an account without Royal has its one:
+/// what Royal adds, and the way to it.
+private struct GoalsRoyalRow: View {
+    let onUpgrade: () -> Void
+
+    var body: some View {
+        Button {
+            HapticManager.shared.tap(); onUpgrade()
+        } label: {
+            HStack(spacing: 12) {
+                Text("👑").font(.system(.body))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(loc("savings.more_royal"))
+                        .font(.system(.subheadline, weight: .semibold))
+                        .foregroundStyle(AppTheme.textPrimary)
+                    Text(loc("savings.more_royal_sub"))
+                        .font(.system(.caption))
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .multilineTextAlignment(.leading)
+                }
+                Spacer(minLength: 4)
+                Image(systemName: "chevron.right")
+                    .font(.system(.caption, weight: .semibold))
+                    .foregroundStyle(AppTheme.textSecondary)
+            }
+            .padding(14)
+            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+        }
+        .buttonStyle(ScaleButtonStyle())
     }
 }
 

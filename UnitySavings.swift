@@ -882,9 +882,13 @@ struct AllSharedGoalsView: View {
 
 // MARK: - Goal type chooser (New Goal page)
 
-enum GoalSheet: Int, Identifiable { case chooser, personal, shared; var id: Int { rawValue } }
+enum GoalSheet: Int, Identifiable { case chooser, personal, shared, paywall; var id: Int { rawValue } }
 
 struct GoalTypeChooserView: View {
+    /// Marks a kind that opens the paywall instead of its form: a second
+    /// personal goal at once, or starting a shared one, without Royal.
+    var personalNeedsRoyal = false
+    var sharedNeedsRoyal = false
     let onPersonal: () -> Void
     let onShared: () -> Void
     @Environment(\.dismiss) private var dismiss
@@ -901,10 +905,12 @@ struct GoalTypeChooserView: View {
                     optionCard(icon: "star.fill", tint: AppTheme.accent,
                                title: loc("savings.personal_goal"),
                                subtitle: loc("goal.chooser_personal_sub"),
+                               needsRoyal: personalNeedsRoyal,
                                action: onPersonal)
                     optionCard(icon: "person.2.fill", tint: AppTheme.blue,
                                title: loc("unity.title"),
                                subtitle: loc("goal.chooser_shared_sub"),
+                               needsRoyal: sharedNeedsRoyal,
                                action: onShared)
                     Spacer()
                 }
@@ -916,7 +922,8 @@ struct GoalTypeChooserView: View {
         }
     }
 
-    private func optionCard(icon: String, tint: Color, title: String, subtitle: String, action: @escaping () -> Void) -> some View {
+    private func optionCard(icon: String, tint: Color, title: String, subtitle: String,
+                            needsRoyal: Bool, action: @escaping () -> Void) -> some View {
         Button { HapticManager.shared.tap(); action() } label: {
             HStack(spacing: 14) {
                 ZStack {
@@ -929,7 +936,11 @@ struct GoalTypeChooserView: View {
                         .fixedSize(horizontal: false, vertical: true).multilineTextAlignment(.leading)
                 }
                 Spacer(minLength: 4)
-                Image(systemName: "chevron.right").font(.system(.footnote, weight: .semibold)).foregroundStyle(AppTheme.textSecondary)
+                if needsRoyal {
+                    PlanBadge(plan: .royal)
+                } else {
+                    Image(systemName: "chevron.right").font(.system(.footnote, weight: .semibold)).foregroundStyle(AppTheme.textSecondary)
+                }
             }
             .padding(16)
             .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))

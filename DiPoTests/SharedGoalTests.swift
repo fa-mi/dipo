@@ -149,8 +149,7 @@ final class SharedGoalTests: XCTestCase {
     func testNewStringsInBothLanguagesKeepTheirArguments() {
         let keys = ["unity.invite_legacy", "unity.kept_in", "unity.source_my_card", "unity.balance_after",
                     "unity.move_note", "unity.create_note_account", "unity.create_in_account_sub",
-                    "unity.set_aside", "unity.saved_of", "unity.free_sub", "unity.personal_royal",
-                    "savings.status_shared_only", "joint.entry.goal_kind", "joint.entry.to_goal"]
+                    "unity.set_aside", "unity.saved_of", "joint.entry.goal_kind", "joint.entry.to_goal"]
         for language in [LanguageManager.Language.english, .indonesian] {
             LanguageManager.shared.withLanguage(language) {
                 for k in keys { XCTAssertNotEqual(loc(k), k, "\(k) in \(language)") }
