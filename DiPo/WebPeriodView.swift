@@ -213,8 +213,10 @@ enum WebPeriodView {
         let day: (Date) -> String = { formatter.string(from: $0) }
 
         var w: [String: Any] = [
-            "balanceLabel": loc("stats.balance_now"),
-            "lines":        lines(book, cycle: cycle, ownLines: ownLines, money: money, day: day),
+            "balanceLabel": ScopeBalance.nowLabel(cards: pot.count),
+            "lines":        lines(book, cycle: cycle, ownLines: ownLines, money: money, day: day,
+                                  endLabel: ScopeBalance.todayLabel(cards: pot.count),
+                                  endCaption: ScopeBalance.split(pot, among: cards, currency: currency)),
         ]
         if let outlook {
             w["pill"] = String(format: loc(outlook.end >= 0.5 ? "stats.safe_until" : "stats.risk_until"),
@@ -252,7 +254,8 @@ enum WebPeriodView {
     /// is a magnitude with `op` carrying its direction, except the opening
     /// balance, which can itself be below zero.
     static func lines(_ book: PeriodCashBook, cycle: Cycle, ownLines: [OwnMoves.Line],
-                      money: (Double) -> String, day: (Date) -> String) -> [[String: Any]] {
+                      money: (Double) -> String, day: (Date) -> String,
+                      endLabel: String, endCaption: String?) -> [[String: Any]] {
         func line(_ kind: String, _ op: String, _ label: String, _ amount: Double, caption: String? = nil,
                   tone: String? = nil, total: Bool = false) -> [String: Any] {
             var l: [String: Any] = ["kind": kind, "op": op, "label": label, "amount": amount]
@@ -298,7 +301,7 @@ enum WebPeriodView {
             }
             out.append(own)
         }
-        out.append(line("end", "=", loc("stats.card_balance_now"), book.end, total: true))
+        out.append(line("end", "=", endLabel, book.end, caption: endCaption, total: true))
         return out
     }
 }

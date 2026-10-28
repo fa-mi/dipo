@@ -128,6 +128,37 @@ final class WebPeriodViewTests: XCTestCase {
         XCTAssertNil(en["scope"], "no bill cards")
     }
 
+    /// With bill cards in the pot, the balance adds them all up. It was called
+    /// "Main card balance now", and read Rp 10.587.000 beside Home's main card
+    /// at Rp 7.686.000: the words now say how many cards, and the last line
+    /// shows each card's part.
+    func testAPotOfCardsIsNamedByItsCount() throws {
+        let (bri, cycle) = fahmisCycle()
+        let bca = card("BCA", "0123456789019331", balance: 1_900_000)
+        let v = try XCTUnwrap(WebPeriodView.payload(pot: [bri, bca], cards: [bri, bca], cycle: cycle,
+                                                    currency: "IDR", extraIDs: []))
+        XCTAssertEqual(v["balance"] as? Double ?? 0, bri.computedBalance() + 1_900_000, accuracy: 0.5)
+        let en = words(v, "en"), id = words(v, "id")
+        XCTAssertEqual(en["balanceLabel"] as? String, "Balance now · 2 cards")
+        XCTAssertEqual(id["balanceLabel"] as? String, "Saldo sekarang · 2 kartu")
+        let end = try XCTUnwrap((en["lines"] as? [[String: Any]])?.last)
+        XCTAssertEqual(end["label"] as? String, "Balance today · 2 cards")
+        let split = try XCTUnwrap(end["caption"] as? String)
+        XCTAssertTrue(split.contains("••0969 Rp 5.517.619"), split)
+        XCTAssertTrue(split.contains("••9331 Rp 1.900.000"), split)
+    }
+
+    func testOneCardKeepsItsName() throws {
+        let (bri, cycle) = fahmisCycle()
+        let v = try XCTUnwrap(WebPeriodView.payload(pot: [bri], cards: [bri], cycle: cycle,
+                                                    currency: "IDR", extraIDs: []))
+        let en = words(v, "en")
+        XCTAssertEqual(en["balanceLabel"] as? String, "Main card balance now")
+        let end = try XCTUnwrap((en["lines"] as? [[String: Any]])?.last)
+        XCTAssertEqual(end["label"] as? String, "Card balance today")
+        XCTAssertNil(end["caption"], "its balance is the figure itself")
+    }
+
     /// Every line is printed with its sign; added up they make the balance.
     func testTheBookAddsUpToTheBalanceInBothLanguages() throws {
         let (bri, cycle) = fahmisCycle()

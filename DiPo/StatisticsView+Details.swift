@@ -621,6 +621,7 @@ extension StatisticsView {
                     NetBalanceSummary(net: filteredIncome - living, income: filteredIncome,
                                       expenses: living, currency: displayCurrency,
                                       cardBalanceNow: scopeBalanceNow,
+                                      cards: scopeCards.count,
                                       startBalance: periodStartBalance,
                                       transferNet: periodTransferNet,
                                       debtPaid: book?.debtPaid ?? 0,

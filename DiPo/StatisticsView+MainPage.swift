@@ -156,7 +156,7 @@ extension StatisticsView {
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(book == nil ? loc("stats.expenses")
-                     : loc(periodRunsToToday ? "stats.balance_now" : "stats.recon_end"))
+                     : periodRunsToToday ? ScopeBalance.nowLabel(cards: scopeCards.count) : loc("stats.recon_end"))
                     .font(.system(.footnote, weight: .medium))
                     .foregroundStyle(AppTheme.textSecondary)
                 Text(book.map { signedMoney($0.end) } ?? money(filteredExpenses))
@@ -389,8 +389,9 @@ extension StatisticsView {
                 ownMovesLine(book)
             }
             Rectangle().fill(AppTheme.cardMid).frame(height: 1).padding(.vertical, 2)
-            bookLine(loc(periodRunsToToday ? "stats.card_balance_now" : "stats.recon_end"),
-                     book.end, op: "=", total: true)
+            // With the bill cards in it, each card's part, to set beside Home.
+            bookLine(periodRunsToToday ? ScopeBalance.todayLabel(cards: scopeCards.count) : loc("stats.recon_end"),
+                     book.end, op: "=", caption: periodRunsToToday ? scopeBalanceSplit : nil, total: true)
 
             if let line = coverLine(book) {
                 Label(line, systemImage: "calendar.badge.clock")

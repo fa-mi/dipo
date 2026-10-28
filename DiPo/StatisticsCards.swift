@@ -129,6 +129,9 @@ struct NetBalanceSummary: View {
     /// footer so period-flow and account-stock sit side by side — users kept
     /// reading "Net this period" as the card balance and reporting a "bug".
     var cardBalanceNow: Double? = nil
+    /// How many cards that balance adds up: the main card and the cards it
+    /// pays bills from.
+    var cards: Int = 1
     /// Balance at the period's start + net transfer movement — together with
     /// `net` and the two lines below they RECONCILE exactly to the card
     /// balance: start + net − debt − invested + transfers = balance. Nil hides
@@ -250,7 +253,7 @@ struct NetBalanceSummary: View {
                     let isToday = abs(closing - balance) < 1
                     Divider().background(AppTheme.cardMid.opacity(0.6))
                     HStack {
-                        Text(loc(isToday ? "stats.card_balance_now" : "stats.recon_end"))
+                        Text(isToday ? ScopeBalance.todayLabel(cards: cards) : loc("stats.recon_end"))
                             .font(.system(.caption2, weight: .semibold)).foregroundStyle(AppTheme.textSecondary)
                         Spacer()
                         Text("= " + (closing < 0 ? "-" : "") + CurrencyManager.shared.formatted(abs(closing), currency: currency))
@@ -261,7 +264,7 @@ struct NetBalanceSummary: View {
             } else if let balance = cardBalanceNow {
                 Divider().background(AppTheme.cardMid)
                 HStack {
-                    Text(loc("stats.card_balance_now"))
+                    Text(ScopeBalance.todayLabel(cards: cards))
                         .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                     Spacer()
                     Text((balance < 0 ? "-" : "") + CurrencyManager.shared.formatted(abs(balance), currency: currency))
