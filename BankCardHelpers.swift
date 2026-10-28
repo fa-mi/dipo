@@ -141,6 +141,17 @@ extension BankCard {
         return max(creditLimit - bill().total, 0)
     }
 
+    /// Sets what the card owes as of now, from its edit form — when the
+    /// figure the form showed was changed. Saving the form unchanged, to
+    /// rename the card say, re-based the card on that figure anyway, and it
+    /// can't hold money paid beyond the bill: the Rp 250.000 overpaid on a
+    /// Tokopedia CC was dropped, and the card read Rp 10.250.000 owed again.
+    func setOwed(_ owed: Double, shown: Double, at date: Date = .now) {
+        guard abs(owed - shown) >= 0.5 else { return }
+        openingOwed = owed
+        creditSince = date
+    }
+
     /// Fraction of the limit used, 0…1 (for a usage bar), on the same total.
     var creditUtilization: Double {
         guard isCreditCard, creditLimit > 0 else { return 0 }

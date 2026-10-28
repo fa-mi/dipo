@@ -209,12 +209,34 @@ final class CardInstallmentBillingTests: XCTestCase {
         XCTAssertEqual(card.creditLimit - b.total, 40_000_000, accuracy: 0.5)
     }
 
+    /// Saving the card's form without touching what it owes — to rename it,
+    /// say — used to re-base the card on the figure shown, Rp 0, and the
+    /// Rp 250.000 paid ahead went with it.
+    func testSavingTheCardUnchangedKeepsTheOverpayment() {
+        let (card, ipad) = cardBeforeThePayment()
+        pay(4_699_000, on: card, at: day(10, 27).addingTimeInterval(60))
+        let shown = card.bill([ipad], asOf: day(10, 28)).bill
+        XCTAssertEqual(shown, 0, accuracy: 0.5, "what the form shows: nothing billed")
+        card.setOwed(shown, shown: shown, at: day(10, 28))
+        XCTAssertEqual(card.bill([ipad], asOf: day(10, 29)).total, 10_000_000, accuracy: 0.5)
+    }
+
+    /// A changed figure is the new start, from now.
+    func testChangingWhatTheCardOwesReBasesIt() {
+        let (card, ipad) = cardBeforeThePayment()
+        card.setOwed(1_000_000, shown: 4_449_000, at: day(10, 28))
+        XCTAssertEqual(card.openingOwed, 1_000_000)
+        XCTAssertEqual(card.creditSince, day(10, 28))
+        XCTAssertEqual(card.bill([ipad], asOf: day(10, 29)).total, 1_000_000 + 10_250_000, accuracy: 0.5)
+    }
+
     func testTheOverpaidWordsKeepTheirAmounts() {
         for language in [LanguageManager.Language.english, .indonesian] {
             LanguageManager.shared.withLanguage(language) {
                 let both = String(format: loc("cc.unbilled_less_credit"), "Rp 10.250.000", "Rp 250.000")
                 XCTAssertTrue(both.contains("Rp 10.250.000") && both.contains("Rp 250.000"), both)
                 XCTAssertTrue(String(format: loc("cc.credit_on_card"), "Rp 250.000").contains("Rp 250.000"))
+                XCTAssertTrue(String(format: loc("cc.current_owed_hint"), "Rp 10.250.000").contains("Rp 10.250.000"))
             }
         }
     }

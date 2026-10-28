@@ -383,6 +383,11 @@ extension StatisticsView {
     /// Every row in that pot.
     var scopeTransactions: [TxRecord] { scopeCards.flatMap(\.transactions) }
 
+    /// Each card's part of the balance, when there is more than one.
+    var scopeBalanceSplit: String? {
+        ScopeBalance.split(scopeCards, among: appVM.cards, currency: displayCurrency)
+    }
+
     /// The bill cards' names for the screen's subtitle, or nil when there are none.
     var billCardsLabel: String? {
         let bills = scopeCards.dropFirst()

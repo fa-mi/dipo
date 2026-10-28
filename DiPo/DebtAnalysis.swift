@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import UIKit
 
 // MARK: - Debt analysis by DiPo AI
 //
@@ -222,6 +223,14 @@ final class DebtAnalysisClient {
         /// `confirm`: logged in, but the Firebase account on this phone
         /// doesn't carry that login (see AccountReconnect.bind).
         case offline, signIn, confirm, royal, limit, credits, declined, generic
+        /// Cut off while waiting: DiPo closed, the phone locked, or the
+        /// connection dropped. The Worker gives the run back when it sees the
+        /// app go, but a phone that just lost signal can look connected to it
+        /// until the plan is done and counted, so the words promise nothing.
+        case interrupted
+        /// Longer than the app waits: no byte for 90 seconds, or five minutes
+        /// in all. Counted or not, as for `interrupted`.
+        case slow
 
         var messageKey: String {
             switch self {
@@ -233,6 +242,8 @@ final class DebtAnalysisClient {
             case .credits:  return "analysis.err.credits"
             case .declined: return "analysis.err.declined"
             case .generic:  return "analysis.err.generic"
+            case .interrupted: return "analysis.err.interrupted"
+            case .slow:     return "analysis.err.slow"
             }
         }
     }
@@ -249,6 +260,10 @@ final class DebtAnalysisClient {
 
     var quota: Quota?
     private(set) var isRunning = false
+    /// When the running analysis began, for the time shown while it works.
+    private(set) var startedAt: Date?
+    /// A little time in the background if the person switches app meanwhile.
+    private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
     private(set) var last: DebtAnalysis?
     /// Logged in, but this phone's Firebase account doesn't carry the login
     /// yet, so the Worker would refuse: the card asks for one confirmation.
@@ -259,10 +274,17 @@ final class DebtAnalysisClient {
     /// again up to three times — fine for a chat message, but here each
     /// attempt is a Claude Opus 5.5 run, and one that thinks for 40 seconds
     /// would be paid for three times and then reported as failed.
+    ///
+    /// A run takes a minute or three, and the Worker used to send nothing
+    /// until it was done: at 150 seconds of silence the app gave up, after
+    /// showing "Analysing…" all that time. It now writes a space every 10
+    /// seconds while it works (X-DiPo-Wait: stream), so 90 seconds without
+    /// a byte means the connection is gone, and five minutes is more than
+    /// any run takes.
     private let session: URLSession = {
         let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 150
-        config.timeoutIntervalForResource = 180
+        config.timeoutIntervalForRequest = 90
+        config.timeoutIntervalForResource = 300
         config.requestCachePolicy = .reloadIgnoringLocalCacheData
         return URLSession(configuration: config)
     }()
@@ -282,6 +304,7 @@ final class DebtAnalysisClient {
         let nextAnalysisCost: Int?
     }
     private struct ErrorReply: Decodable { let error: String? }
+    private struct StreamedStatus: Decodable { let status: Int? }
 
     private static func storeKey(_ userId: String) -> String { "debt_analysis_last.\(userId)" }
 
@@ -349,14 +372,21 @@ final class DebtAnalysisClient {
         guard let userId = UserSession.shared.userID else { return .failure(.signIn) }
         guard NetworkService.shared.isOnline else { return .failure(.offline) }
         isRunning = true
-        defer { isRunning = false }
+        startedAt = .now
+        holdOnInBackground()
+        defer {
+            isRunning = false
+            startedAt = nil
+            letGoInBackground()
+        }
 
         let payload = AnalyzeBody(userId: userId, snapshot: snapshot, language: LanguageManager.shared.current.rawValue)
         guard let body = try? JSONEncoder().encode(payload) else { return .failure(.generic) }
-        let req = await request(Self.analyzeURL, body: body)
+        var req = await request(Self.analyzeURL, body: body)
+        req.setValue("stream", forHTTPHeaderField: "X-DiPo-Wait")
         do {
             let (data, response) = try await session.data(for: req)
-            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+            let status = Self.status(http: (response as? HTTPURLResponse)?.statusCode ?? 0, body: data)
             guard status == 200 else {
                 let failure = Self.failure(status: status, body: data)
                 if failure == .confirm {
@@ -377,12 +407,38 @@ final class DebtAnalysisClient {
                           balance: reply.creditsLeft)
             return .success(analysis)
         } catch let error as URLError
-                    where [URLError.Code.notConnectedToInternet, .networkConnectionLost, .dataNotAllowed].contains(error.code) {
+                    where [URLError.Code.notConnectedToInternet, .dataNotAllowed].contains(error.code) {
             return .failure(.offline)
+        } catch let error as URLError where error.code == .timedOut {
+            return .failure(.slow)
+        } catch let error as URLError
+                    where [URLError.Code.networkConnectionLost, .cancelled, .backgroundSessionWasDisconnected].contains(error.code) {
+            return .failure(.interrupted)
         } catch {
             print("[DebtAnalysis] failed: \(error)")
             return .failure(.generic)
         }
+    }
+
+    /// The status of an answer. Waited for (X-DiPo-Wait: stream), the Worker
+    /// answers 200 at once and writes the real one into the JSON at the end;
+    /// a Worker from before answers with it as usual.
+    static func status(http: Int, body: Data) -> Int {
+        guard http == 200,
+              let written = try? JSONDecoder().decode(StreamedStatus.self, from: body).status else { return http }
+        return written
+    }
+
+    private func holdOnInBackground() {
+        backgroundTask = UIApplication.shared.beginBackgroundTask(withName: "DebtAnalysis") { [weak self] in
+            MainActor.assumeIsolated { self?.letGoInBackground() }
+        }
+    }
+
+    private func letGoInBackground() {
+        guard backgroundTask != .invalid else { return }
+        UIApplication.shared.endBackgroundTask(backgroundTask)
+        backgroundTask = .invalid
     }
 
     /// What the Worker's answer means for the person waiting.
@@ -474,10 +530,16 @@ struct DebtAnalysisCard: View {
             }
 
             if client.isRunning {
-                Text(loc("analysis.working"))
-                    .font(.system(.caption))
-                    .foregroundStyle(AppTheme.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                // How long it has been: a minute or three of a spinner alone
+                // read as stuck.
+                TimelineView(.periodic(from: .now, by: 1)) { context in
+                    Text(String(format: loc("analysis.working"),
+                                Self.elapsed(from: client.startedAt ?? context.date, to: context.date)))
+                        .font(.system(.caption))
+                        .monospacedDigit()
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             } else if let problem {
                 Label(loc(problem), systemImage: "exclamationmark.circle.fill")
                     .font(.system(.caption, weight: .medium))
@@ -569,6 +631,12 @@ struct DebtAnalysisCard: View {
         }
         .buttonStyle(ScaleButtonStyle())
         .disabled(client.isConfirming)
+    }
+
+    /// "0:42", "2:05".
+    static func elapsed(from start: Date, to now: Date) -> String {
+        let seconds = max(Int(now.timeIntervalSince(start)), 0)
+        return String(format: "%d:%02d", seconds / 60, seconds % 60)
     }
 
     private func confirm() {

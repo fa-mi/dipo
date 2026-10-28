@@ -137,6 +137,27 @@ final class DebtAnalysisTests: XCTestCase {
         XCTAssertNil(DebtAnalysisClient.open("{\"headline\":\"plain\"}"), "plaintext is not taken as a plan")
     }
 
+    /// Waited for, the answer is 200 at once, then spaces while Claude works,
+    /// then the JSON with the real status in it.
+    func testAWaitedAnswerCarriesItsStatusInItsBody() throws {
+        let refused = Data("     {\"error\":\"declined\",\"status\":422}".utf8)
+        XCTAssertEqual(DebtAnalysisClient.status(http: 200, body: refused), 422)
+        XCTAssertEqual(DebtAnalysisClient.failure(status: 422, body: refused), .declined)
+        XCTAssertEqual(DebtAnalysisClient.status(http: 402, body: Data("{\"error\":\"analysis_limit\"}".utf8)), 402,
+                       "a check that failed before the wait, or a Worker from before")
+        let plan = "   " + #"{"headline":"H","summary":"S","steps":[],"watchOut":[],"question":"","status":200}"#
+        XCTAssertEqual(DebtAnalysisClient.status(http: 200, body: Data(plan.utf8)), 200)
+        XCTAssertEqual(try JSONDecoder().decode(DebtAnalysis.self, from: Data(plan.utf8)).headline, "H",
+                       "the spaces before it don't get in the way")
+    }
+
+    func testTheTimeShownWhileItWorks() {
+        let start = date(2026, 10, 29)
+        XCTAssertEqual(DebtAnalysisCard.elapsed(from: start, to: start), "0:00")
+        XCTAssertEqual(DebtAnalysisCard.elapsed(from: start, to: start.addingTimeInterval(42)), "0:42")
+        XCTAssertEqual(DebtAnalysisCard.elapsed(from: start, to: start.addingTimeInterval(125)), "2:05")
+    }
+
     func testEachRefusalTellsThePersonWhatHappened() {
         let body = { (error: String) in Data("{\"error\":\"\(error)\"}".utf8) }
         XCTAssertEqual(DebtAnalysisClient.failure(status: 402, body: body("analysis_limit")), .limit)
@@ -177,9 +198,9 @@ final class DebtAnalysisTests: XCTestCase {
                     "analysis.err.credits", "analysis.err.declined", "analysis.err.generic",
                     "analysis.err.confirm", "analysis.err.other_account", "analysis.err.held_elsewhere",
                     "analysis.err.confirm_failed", "analysis.confirm_apple", "analysis.confirm_google",
-                    "analysis.confirming", "analysis.confirm_why"]
+                    "analysis.confirming", "analysis.confirm_why", "analysis.err.interrupted", "analysis.err.slow"]
         let failures: [DebtAnalysisClient.Failure] = [.offline, .signIn, .confirm, .royal, .limit, .credits,
-                                                      .declined, .generic]
+                                                      .declined, .generic, .interrupted, .slow]
         for language in [LanguageManager.Language.english, .indonesian] {
             LanguageManager.shared.withLanguage(language) {
                 for k in keys { XCTAssertNotEqual(loc(k), k, "\(k) in \(language)") }
@@ -188,6 +209,7 @@ final class DebtAnalysisTests: XCTestCase {
                 XCTAssertTrue(cost.contains("30") && cost.contains("45"), cost)
                 let confirm = String(format: loc("analysis.confirm_msg"), 30, 45)
                 XCTAssertTrue(confirm.contains("30") && confirm.contains("45"), confirm)
+                XCTAssertTrue(String(format: loc("analysis.working"), "1:05").contains("1:05"))
             }
         }
     }
