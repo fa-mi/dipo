@@ -276,6 +276,9 @@ struct CreditCardFormSheet: View {
     @State private var displayNumber = ""
     @State private var limitText = ""
     @State private var owedText = ""
+    /// What the form showed as owed when it opened: the card is re-based
+    /// only when this is changed.
+    @State private var shownOwedText = ""
     @State private var currency = CurrencyManager.shared.preferredCurrency
     @State private var showExplainer = false
 
@@ -319,7 +322,7 @@ struct CreditCardFormSheet: View {
                         }
 
                         amountField(label: loc("cc.limit"), text: $limitText)
-                        amountField(label: loc("cc.current_owed"), text: $owedText)
+                        amountField(label: loc("cc.current_owed"), text: $owedText, hint: owedHint)
 
                         // First-run explainer
                         HStack(spacing: 10) {
@@ -353,13 +356,25 @@ struct CreditCardFormSheet: View {
                     displayNumber = d.enumerated().map { $0.offset > 0 && $0.offset % 4 == 0 ? " \($0.element)" : String($0.element) }.joined()
                     limitText = String(Int(c.creditLimit))
                     owedText = String(Int(c.owedBalance()))
+                    shownOwedText = owedText
                     currency = c.resolvedCurrency
                 }
             }
         }
     }
 
-    private func amountField(label: String, text: Binding<String>) -> some View {
+    /// Instalments not billed yet are added to the card by DiPo, so they
+    /// aren't to be typed in here as well. The bank's "used" figure has
+    /// them in, and copying it over counted them twice.
+    private var owedHint: String? {
+        guard let c = editCard else { return nil }
+        let locked = c.bill().locked
+        guard locked >= 1 else { return nil }
+        return String(format: loc("cc.current_owed_hint"),
+                      CurrencyManager.shared.formatted(locked.rounded(), currency: c.resolvedCurrency))
+    }
+
+    private func amountField(label: String, text: Binding<String>, hint: String? = nil) -> some View {
         VStack(spacing: 8) {
             Text(label).font(.system(.footnote, weight: .semibold)).foregroundStyle(AppTheme.textSecondary)
                 .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 22)
@@ -371,6 +386,11 @@ struct CreditCardFormSheet: View {
                     .padding(.horizontal, 14).frame(height: 52)
                     .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.sm))
             }.padding(.horizontal, 22)
+            if let hint {
+                Text(hint).font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 22)
+            }
         }
     }
 
@@ -394,9 +414,8 @@ struct CreditCardFormSheet: View {
             card.holderName = name.trimmingCharacters(in: .whitespaces)
             card.cardNumber = CardNumber.stored(cardNumber)
             card.creditLimit = limit
-            // Re-baseline: owed becomes the entered value as of now.
-            card.openingOwed = owed
-            card.creditSince = Date()
+            // Re-based on the entered value as of now, only when it changed.
+            card.setOwed(owed, shown: NumberInput.amount(shownOwedText))
             card.gradientStart = g.start; card.gradientEnd = g.end
             card.issuerID = BankIssuer.detect(from: cardNumber)?.id ?? ""
         } else {
