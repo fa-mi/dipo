@@ -224,9 +224,12 @@ final class DebtAnalysisClient {
         /// doesn't carry that login (see AccountReconnect.bind).
         case offline, signIn, confirm, royal, limit, credits, declined, generic
         /// Cut off while waiting: DiPo closed, the phone locked, or the
-        /// connection dropped. The Worker stops the run and gives it back.
+        /// connection dropped. The Worker gives the run back when it sees the
+        /// app go, but a phone that just lost signal can look connected to it
+        /// until the plan is done and counted, so the words promise nothing.
         case interrupted
-        /// Longer than the app waits; also given back.
+        /// Longer than the app waits: no byte for 90 seconds, or five minutes
+        /// in all. Counted or not, as for `interrupted`.
         case slow
 
         var messageKey: String {
