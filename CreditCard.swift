@@ -61,6 +61,20 @@ struct CreditCardLiabilityRow: View {
     /// under the total, which otherwise read as a different "owed" from the
     /// bill on the pay screen.
     private var unbilled: Double { card.bill(installments).locked }
+    /// Paid beyond the bill: it is off the total already, and said under it
+    /// so the total adds up.
+    private var credit: Double { card.bill(installments).credit }
+    private var owedNote: String? {
+        let cm = CurrencyManager.shared
+        let locked = cm.formatted(unbilled.rounded(), currency: card.resolvedCurrency)
+        let paid = cm.formatted(credit.rounded(), currency: card.resolvedCurrency)
+        switch (unbilled >= 1, credit >= 1) {
+        case (true, true):   return String(format: loc("cc.unbilled_less_credit"), locked, paid)
+        case (true, false):  return String(format: loc("cc.unbilled_instalments"), locked)
+        case (false, true):  return String(format: loc("cc.credit_on_card"), paid)
+        case (false, false): return nil
+        }
+    }
     private var util: Double { card.utilisation(installments) }
     private var owedFmt: String {
         CurrencyManager.shared.formatted(owed, currency: card.resolvedCurrency)
@@ -123,9 +137,8 @@ struct CreditCardLiabilityRow: View {
                     Text(loc("cc.total_owed")).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                     Text(owedFmt).font(.system(.body, weight: .bold)).foregroundStyle(AppTheme.red)
                         .minimumScaleFactor(0.6).lineLimit(1)
-                    if unbilled >= 1 {
-                        Text(String(format: loc("cc.unbilled_instalments"),
-                                    CurrencyManager.shared.formatted(unbilled.rounded(), currency: card.resolvedCurrency)))
+                    if let owedNote {
+                        Text(owedNote)
                             .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -455,6 +468,9 @@ struct CreditCardPaymentSheet: View {
                                              since: cal.safeDate(byAdding: .month, value: -1, to: thisMonth))
         if carried >= 1 {
             parts.append(String(format: loc("cc.bill_interest"), cm.formatted(carried.rounded(), currency: currency)))
+        }
+        if b.credit >= 1 {
+            parts.append(String(format: loc("cc.credit_on_card"), cm.formatted(b.credit.rounded(), currency: currency)))
         }
         return parts
     }

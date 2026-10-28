@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 
 // MARK: - Month Flow Card
 
@@ -241,6 +242,14 @@ struct DeleteTransactionSheet: View {
     /// neither clips on large Dynamic Type nor leaves a half-empty panel.
     @State private var contentHeight: CGFloat = 420
 
+    @Environment(\.modelContext) private var context
+    /// Every row of the card payment `tx` is part of, which go with it
+    /// (deleteTransactionWithGoalRollback); just `tx` otherwise.
+    @State private var payment: [TxRecord] = []
+    private var isPayment: Bool { payment.count > 1 }
+    /// The payment's rows on the card shown here.
+    private var here: [TxRecord] { payment.filter { ($0.amount < 0) == (tx.amount < 0) } }
+
     private var isGoalDeposit: Bool { tx.notes == "tx.note.goal_deposit" && tx.amount < 0 }
 
     var body: some View {
@@ -256,7 +265,7 @@ struct DeleteTransactionSheet: View {
             .padding(.top, 8)
 
             VStack(spacing: 6) {
-                Text(loc("tx.delete_prompt"))
+                Text(loc(isPayment ? "tx.delete_payment_prompt" : "tx.delete_prompt"))
                     .font(.system(.title3, weight: .bold))
                     .foregroundStyle(AppTheme.textPrimary)
                 Text(loc("tx.delete_confirm"))
@@ -266,12 +275,25 @@ struct DeleteTransactionSheet: View {
             .multilineTextAlignment(.center)
 
             // The row itself, exactly as it looked in the list.
-            TxRow(tx: tx, sourceCard: card, showCard: false)
+            TxRow(tx: tx, sourceCard: card, showCard: false, parts: here.count > 1 ? here : [])
                 .padding(14)
                 .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
 
             if let card {
                 impactRow(card)
+            }
+
+            if isPayment {
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: "creditcard")
+                        .font(.system(.footnote))
+                        .foregroundStyle(AppTheme.textSecondary)
+                    Text(loc("tx.delete_payment_note"))
+                        .font(.system(.caption))
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 0)
+                }
             }
 
             if isGoalDeposit {
@@ -330,6 +352,7 @@ struct DeleteTransactionSheet: View {
         .presentationDragIndicator(.visible)
         .presentationBackground(AppTheme.bg)
         .presentationCornerRadius(28)
+        .onAppear { payment = CardPaymentLegs.all(of: tx, in: context) }
         // No haptic on appear: a full swipe has already fired its warning the
         // instant it crossed the threshold, and a second one here read as a
         // stutter. Each entry point owns its own feedback.
@@ -345,7 +368,8 @@ struct DeleteTransactionSheet: View {
     private func impactRow(_ card: BankCard) -> some View {
         let cur = card.resolvedCurrency
         let cm = CurrencyManager.shared
-        let v = cm.convert(tx.amount, from: tx.currency, to: cur)
+        // A card payment's parts on this card go together.
+        let v = isPayment ? CardPaymentLegs.total(here, in: cur) : cm.convert(tx.amount, from: tx.currency, to: cur)
 
         HStack(spacing: 12) {
             LinearGradient(colors: [Color(hex: card.gradientStart), Color(hex: card.gradientEnd)],

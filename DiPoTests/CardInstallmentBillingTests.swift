@@ -144,6 +144,81 @@ final class CardInstallmentBillingTests: XCTestCase {
         XCTAssertEqual(b.bill, 6_604_167, accuracy: 0.5)
     }
 
+    // MARK: Paying more than the bill
+
+    private func buy(_ amount: Double, on card: BankCard, at date: Date) {
+        let t = TxRecord(name: "Belanja", date: date, amount: -amount, type: "tx.type.purchase", icon: "BE",
+                         iconBgHex: TxCategory.shopping.iconBg, category: .shopping, currency: "IDR")
+        context.insert(t)
+        card.transactions.append(t)
+    }
+
+    /// Fahmi's card on 27 Oct, as the pay screen showed it: Rp 14.699.000
+    /// used, Rp 10.250.000 of it the iPad not billed yet, Rp 199.000 of
+    /// purchases and Rp 4.250.000 older on the bill.
+    private func cardBeforeThePayment() -> (BankCard, CardInstallment) {
+        let card = tokopediaCC()
+        let ipad = iPad(on: card, start: day(10, 9))
+        buy(250_000, on: card, at: day(10, 15))
+        pay(250_000, on: card, at: day(10, 17))
+        pay(1_500_000, on: card, at: day(10, 23))
+        buy(199_000, on: card, at: day(10, 27))
+        return (card, ipad)
+    }
+
+    /// He paid Rp 4.699.000, Rp 250.000 more than the bill. The pay screen
+    /// said the extra was kept on the card, and the card then read
+    /// Rp 10.250.000 owed: the extra had been dropped from the total.
+    func testPayingMoreThanTheBillComesOffTheTotal() {
+        let (card, ipad) = cardBeforeThePayment()
+        let before = card.bill([ipad], asOf: day(10, 27))
+        XCTAssertEqual(before.total, 14_699_000, accuracy: 0.5)
+        let split = CardPaymentDebt.split(payment: 4_699_000, on: card, installments: [ipad], asOf: day(10, 27))
+        XCTAssertEqual(split.purchases, 199_000, accuracy: 0.5)
+        XCTAssertEqual(split.debt, 4_250_000, accuracy: 0.5)
+        XCTAssertEqual(split.extra, 250_000, accuracy: 0.5)
+
+        pay(4_699_000, on: card, at: day(10, 27).addingTimeInterval(60))
+        let after = card.bill([ipad], asOf: day(10, 28))
+        XCTAssertEqual(after.bill, 0, accuracy: 0.5)
+        XCTAssertEqual(after.credit, 250_000, accuracy: 0.5)
+        XCTAssertEqual(after.locked, 10_250_000, accuracy: 0.5)
+        XCTAssertEqual(after.total, 10_000_000, accuracy: 0.5, "Rp 14.699.000 less the Rp 4.699.000 paid, not Rp 10.250.000")
+        XCTAssertEqual(card.creditLimit - after.total, 30_000_000, accuracy: 0.5, "the limit comes back by all of it")
+    }
+
+    /// The extra comes off the next bill: when the iPad is billed, Rp 250.000
+    /// of its Rp 854.167 is paid already, and the total holds.
+    func testTheExtraComesOffTheNextBill() {
+        let (card, ipad) = cardBeforeThePayment()
+        pay(4_699_000, on: card, at: day(10, 27).addingTimeInterval(60))
+        let next = card.bill([ipad], asOf: day(11, 12))
+        XCTAssertEqual(next.credit, 0, accuracy: 0.5)
+        XCTAssertEqual(next.bill, monthly - 250_000, accuracy: 0.5)
+        XCTAssertEqual(next.total, 10_000_000, accuracy: 0.5)
+    }
+
+    /// More paid than everything owed, instalments included: nothing is owed,
+    /// never less than nothing.
+    func testACreditBeyondEverythingOwedLeavesNothingOwed() {
+        let card = tokopediaCC()
+        pay(6_000_000, on: card, at: day(10, 17))
+        let b = card.bill([], asOf: day(10, 18))
+        XCTAssertEqual(b.credit, 250_000, accuracy: 0.5)
+        XCTAssertEqual(b.total, 0)
+        XCTAssertEqual(card.creditLimit - b.total, 40_000_000, accuracy: 0.5)
+    }
+
+    func testTheOverpaidWordsKeepTheirAmounts() {
+        for language in [LanguageManager.Language.english, .indonesian] {
+            LanguageManager.shared.withLanguage(language) {
+                let both = String(format: loc("cc.unbilled_less_credit"), "Rp 10.250.000", "Rp 250.000")
+                XCTAssertTrue(both.contains("Rp 10.250.000") && both.contains("Rp 250.000"), both)
+                XCTAssertTrue(String(format: loc("cc.credit_on_card"), "Rp 250.000").contains("Rp 250.000"))
+            }
+        }
+    }
+
     func testWithoutInstalmentsTheBillIsTheLoggedBalance() {
         let card = tokopediaCC()
         pay(250_000, on: card, at: day(10, 17))

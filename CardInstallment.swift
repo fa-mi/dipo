@@ -152,11 +152,17 @@ struct CardBill: Equatable {
     /// Instalment principal not billed yet: it holds the limit but is on no
     /// bill.
     let locked: Double
+    /// Paid beyond everything billed. The bank keeps it on the card and takes
+    /// it off the next bill, and the limit comes back by it now.
+    var credit: Double = 0
 
     /// What paying the card off today would take.
     var bill: Double { installmentDue + revolving }
-    /// What the card owes, the figure the limit is measured against.
-    var total: Double { bill + locked }
+    /// What the card owes, the figure the limit is measured against. Paying
+    /// Rp 4.699.000 on Rp 14.699.000 leaves Rp 10.000.000, even when Rp 250.000
+    /// of it went beyond the bill: that part used to be dropped, and the card
+    /// read Rp 10.250.000.
+    var total: Double { max(bill + locked - credit, 0) }
 }
 
 extension BankCard {
@@ -231,9 +237,14 @@ extension BankCard {
         let unbilled = mine.reduce(0.0) {
             $0 + cm.convert($1.outstandingPrincipal(asOf: now), from: $1.currency, to: resolvedCurrency)
         }
+        // What payments left beyond all of it is credit on the card. A later
+        // bill takes it up by itself: the next instalment billed is set
+        // against the same payments.
+        let net = openingOwed + charges + billedTotal - credits
         return CardBill(installmentDue: max(billedTotal - credits, 0),
                         revolving: max(openingOwed + charges - max(credits - billedTotal, 0), 0),
-                        locked: unbilled)
+                        locked: unbilled,
+                        credit: max(-net, 0))
     }
 
     /// What you can actually still spend.
