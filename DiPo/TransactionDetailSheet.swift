@@ -7,6 +7,16 @@ import SwiftData
 
 struct TransactionDetailSheet: View {
     @Bindable var tx: TxRecord
+    /// The parts of the card payment `tx` is one of, when a list showed them
+    /// as one row (CardPaymentLegs). Found on opening when one part comes on
+    /// its own, from Search say.
+    var parts: [TxRecord] = []
+    @State private var foundParts: [TxRecord] = []
+    private var cashParts: [TxRecord] { parts.count > 1 ? parts : foundParts }
+    /// Shown as the one payment it was: the whole amount, and its parts. Not
+    /// editable as one — a change to one part would leave the others behind.
+    private var isJoined: Bool { cashParts.count > 1 }
+    private var shownAmount: Double { isJoined ? CardPaymentLegs.total(cashParts, in: tx.currency) : tx.amount }
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
 
@@ -101,13 +111,13 @@ struct TransactionDetailSheet: View {
     }
 
     private var formattedAmount: String {
-        CurrencyManager.shared.formatted(abs(tx.amount), currency: tx.currency)
+        CurrencyManager.shared.formatted(abs(shownAmount), currency: tx.currency)
     }
 
     private var convertedLabel: String {
         let pref = CurrencyManager.shared.preferredCurrency
         let other = tx.currency == pref ? "USD" : pref
-        let converted = CurrencyManager.shared.convert(abs(tx.amount), from: tx.currency, to: other)
+        let converted = CurrencyManager.shared.convert(abs(shownAmount), from: tx.currency, to: other)
         return "= \(CurrencyManager.shared.formatted(converted, currency: other))"
     }
 
@@ -162,7 +172,7 @@ struct TransactionDetailSheet: View {
                 ToolbarItem(placement: .primaryAction) {
                     // While editing, Save lives at the bottom of the form, as it
                     // does when creating — not in two places at once.
-                    if !isEditing {
+                    if !isEditing && !isJoined {
                         Button {
                             loadEditState()
                             withAnimation { isEditing = true }
@@ -176,6 +186,9 @@ struct TransactionDetailSheet: View {
             }
         }
         .onAppear {
+            if parts.count < 2, CardPaymentLegs.isCashSide(tx) {
+                foundParts = CardPaymentLegs.all(of: tx, in: context).filter { CardPaymentLegs.isCashSide($0) }
+            }
             cachedRhythm = SpendingRhythm(history: detailHistory) { t in
                 CurrencyManager.shared.convert(
                     t.amount,
@@ -366,7 +379,7 @@ struct TransactionDetailSheet: View {
                     // been marked as Refund or Transfer. Visual cue that this tx
                     // is treated specially in budget calculations (refund
                     // subtracts from bucket; transfer is ignored entirely).
-                    if tx.txSubtype != .normal {
+                    if tx.txSubtype != .normal && !isJoined {
                         HStack(spacing: 5) {
                             Image(systemName: tx.txSubtype.icon)
                                 .font(.system(.caption2, weight: .semibold)).imageScale(.small)
@@ -380,10 +393,10 @@ struct TransactionDetailSheet: View {
                         .fixedSize()
                     }
 
-                    Text(tx.amount >= 0 ? "+\(formattedAmount)" : "-\(formattedAmount)")
+                    Text(shownAmount >= 0 ? "+\(formattedAmount)" : "-\(formattedAmount)")
                         .font(.system(.largeTitle, weight: .bold))
                         // The same money-in / money-out pair as Home's flow card.
-                        .foregroundStyle(tx.amount >= 0 ? AppTheme.flowIn : AppTheme.flowOut)
+                        .foregroundStyle(shownAmount >= 0 ? AppTheme.flowIn : AppTheme.flowOut)
                         .lineLimit(1).minimumScaleFactor(0.6)
 
                     Text(tx.name)
@@ -432,13 +445,23 @@ struct TransactionDetailSheet: View {
             } particulars: {
                 VStack(spacing: 0) {
                     ticketRow(loc("common.date"), tx.displayDate)
-                    ticketRow(loc("common.category"), tx.category.displayLabel)
-                    ticketRow(loc("common.type"), tx.displayType)
-                    if let r = linkedReceivable {
-                        ticketRow(loc("tx.loan.linked"), r.personName)
+                    if isJoined {
+                        // The parts, the debt one first: what the budget
+                        // counts, and what it leaves alone.
+                        ticketRow(loc("common.type"), loc("tx.card_payment"))
+                        ForEach(cashParts.sorted { $0.txSubtype != .transfer && $1.txSubtype == .transfer }) { part in
+                            ticketRow(loc(part.txSubtype == .transfer ? "tx.part_moved" : "tx.part_debt"),
+                                      CurrencyManager.shared.formatted(abs(part.amount), currency: part.currency))
+                        }
+                    } else {
+                        ticketRow(loc("common.category"), tx.category.displayLabel)
+                        ticketRow(loc("common.type"), tx.displayType)
+                        if let r = linkedReceivable {
+                            ticketRow(loc("tx.loan.linked"), r.personName)
+                        }
                     }
                     ticketRow(loc("common.currency"), tx.currency)
-                    if !tx.notes.isEmpty {
+                    if !tx.notes.isEmpty && !isJoined {
                         ticketRow(loc("common.notes"), tx.displayNotes)
                     }
                     ticketRow(loc("tx.reference"), reference)
@@ -454,6 +477,15 @@ struct TransactionDetailSheet: View {
             .padding(.horizontal, 22)
             .padding(.top, 8)
 
+            if isJoined {
+                Text(String(format: loc("tx.parts_note"), BudgetGroup.investDebt.label))
+                    .font(.system(.caption))
+                    .foregroundStyle(AppTheme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 26)
+            }
+
             // The engine's call on whether this is day-to-day spending, and a
             // way to disagree with it.
             //
@@ -462,7 +494,7 @@ struct TransactionDetailSheet: View {
             // correction is three-state on purpose: "automatic" has to remain
             // reachable, or the first tap is irreversible and people stop
             // tapping.
-            if tx.amount < 0, tx.txSubtype != .transfer,
+            if tx.amount < 0, tx.txSubtype != .transfer, !isJoined,
                !StatisticsView.fixedMonthlyCats.contains(tx.category) {
                 let amount = abs(CurrencyManager.shared.convert(
                     tx.amount, from: tx.currency.isEmpty ? CurrencyManager.shared.preferredCurrency : tx.currency,
@@ -497,8 +529,10 @@ struct TransactionDetailSheet: View {
             // the dedicated Transfer feature; they just don't expose a manual
             // tag/reset control here.
 
-            loanSection
-            extraFundSection
+            if !isJoined {
+                loanSection
+                extraFundSection
+            }
 
             // Delete button
             Button {
@@ -507,7 +541,7 @@ struct TransactionDetailSheet: View {
             } label: {
                 HStack(spacing: 10) {
                     Image(systemName: "trash").font(.system(.callout))
-                    Text(loc("tx.delete")).font(.system(.subheadline, weight: .semibold))
+                    Text(loc(isJoined ? "tx.delete_payment" : "tx.delete")).font(.system(.subheadline, weight: .semibold))
                 }
                 .foregroundStyle(AppTheme.red)
                 .frame(maxWidth: .infinity)

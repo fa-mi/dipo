@@ -790,6 +790,26 @@ struct DataSeeder {
 /// so removing it must not subtract either.
 @MainActor
 func deleteTransactionWithGoalRollback(_ tx: TxRecord, context: ModelContext) {
+    // A card payment goes whole: the cash side, in one or two parts, and the
+    // card's side. Deleting one part left the others saying money had moved.
+    let payment = CardPaymentLegs.all(of: tx, in: context)
+    if payment.count > 1 {
+        let side = payment.filter { ($0.amount < 0) == (tx.amount < 0) }
+        let total = CardPaymentLegs.total(side, in: tx.currency)
+        ActionFeedbackCenter.shared.removed(
+            String(format: loc("feedback.tx_deleted"),
+                   CurrencyManager.shared.formatted(abs(total), currency: tx.currency)),
+            detail: tx.name)
+        // Off both cards' lists first: a row has no link back to its card, so
+        // deleting it alone can leave the card still holding it.
+        let gone = Set(payment.map(\.id))
+        for card in (try? context.fetch(FetchDescriptor<BankCard>())) ?? []
+        where card.transactions.contains(where: { gone.contains($0.id) }) {
+            card.transactions.removeAll { gone.contains($0.id) }
+        }
+        for leg in payment { context.delete(leg) }
+        return
+    }
     if tx.notes == "tx.note.goal_deposit", tx.amount < 0,
        let goalUUID = UUID(uuidString: tx.linkedGoalID) {
         let descriptor = FetchDescriptor<SavingsGoal>(

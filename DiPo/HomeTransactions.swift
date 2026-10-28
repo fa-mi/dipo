@@ -144,7 +144,8 @@ struct TransactionSection: View {
             }
         }
     }
-    @State private var selectedTx: TxRecord? = nil
+    /// The row opened: for a card payment, all its parts (CardPaymentLegs).
+    @State private var selectedRow: TxListRow? = nil
     @State private var pendingDelete: TxRecord? = nil
     @Environment(\.modelContext) private var context
 
@@ -162,7 +163,7 @@ struct TransactionSection: View {
     /// The map is gone entirely — Home passes `sourceCard` in, because every
     /// row here belongs to the one selected card.
     private struct Derived {
-        var groups: [(key: String, date: Date, txs: [TxRecord], total: Double)] = []
+        var groups: [(key: String, date: Date, rows: [TxListRow], total: Double)] = []
         /// True when widening to the 7-day window would actually reveal
         /// something. Without this the toggle offered a wider view that turned
         /// out to be identical.
@@ -234,7 +235,9 @@ struct TransactionSection: View {
             if cal.isDateInToday(day)          { label = loc("common.today") }
             else if cal.isDateInYesterday(day) { label = loc("common.yesterday") }
             else { label = DateFormatterCache.template("EEEEdMMM").string(from: day) }
-            return (key: label, date: day, txs: byDay[day] ?? [], total: fullByDay[day] ?? 0)
+            // A card payment's parts, one row: it was one payment.
+            return (key: label, date: day, rows: CardPaymentLegs.joined(byDay[day] ?? []),
+                    total: fullByDay[day] ?? 0)
         }
         return out
     }
@@ -408,19 +411,20 @@ struct TransactionSection: View {
                                     .foregroundStyle(AppTheme.textSecondary)
                                 Spacer()
                                 Text(dayTotal >= 0
-                                     ? "+\(CurrencyManager.shared.formatted(dayTotal, currency: group.txs.first?.currency ?? CurrencyManager.shared.preferredCurrency))"
-                                     : CurrencyManager.shared.formatted(dayTotal, currency: group.txs.first?.currency ?? CurrencyManager.shared.preferredCurrency))
+                                     ? "+\(CurrencyManager.shared.formatted(dayTotal, currency: group.rows.first?.tx.currency ?? CurrencyManager.shared.preferredCurrency))"
+                                     : CurrencyManager.shared.formatted(dayTotal, currency: group.rows.first?.tx.currency ?? CurrencyManager.shared.preferredCurrency))
                                     .font(.system(.caption, weight: .medium))
                                     .foregroundStyle(dayTotal >= 0 ? AppTheme.accent.opacity(0.7) : AppTheme.red.opacity(0.7))
                             }
 
                             VStack(spacing: 10) {
-                                ForEach(Array(group.txs.enumerated()), id: \.element.id) { i, tx in
+                                ForEach(Array(group.rows.enumerated()), id: \.element.id) { i, row in
                                     SwipeToDeleteRow(
-                                        onTap: { selectedTx = tx },
-                                        onDelete: { pendingDelete = tx }
+                                        onTap: { selectedRow = row },
+                                        onDelete: { pendingDelete = row.tx }
                                     ) {
-                                        TxRow(tx: tx, sourceCard: sourceCard ?? cards.first, showCard: cards.count > 1)
+                                        TxRow(tx: row.tx, sourceCard: sourceCard ?? cards.first, showCard: cards.count > 1,
+                                              parts: row.parts)
                                     }
                                     // Rows used to vanish instantly, which reads
                                     // as a glitch — the eye can't tell a deleted
@@ -437,7 +441,7 @@ struct TransactionSection: View {
                                     // has none: the next day's header is the
                                     // break there, and a line above it would read
                                     // as belonging to that header.
-                                    if i < group.txs.count - 1 {
+                                    if i < group.rows.count - 1 {
                                         Rectangle()
                                             .fill(AppTheme.cardMid.opacity(0.6))
                                             .frame(height: 1)
@@ -469,8 +473,8 @@ struct TransactionSection: View {
                 onCancel: { pendingDelete = nil })
             .preferredColorScheme(appColorScheme())
         }
-        .sheet(item: $selectedTx) { tx in
-            TransactionDetailSheet(tx: tx)
+        .sheet(item: $selectedRow) { row in
+            TransactionDetailSheet(tx: row.tx, parts: row.parts)
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
                 .presentationBackground(AppTheme.bg)
@@ -610,6 +614,12 @@ struct TxRow: View {
     let tx: TxRecord
     var sourceCard: BankCard? = nil
     var showCard: Bool = false
+    /// The parts of one card payment this row stands for (CardPaymentLegs):
+    /// the row shows the whole payment. Empty for an ordinary row.
+    var parts: [TxRecord] = []
+
+    private var isJoined: Bool { parts.count > 1 }
+    private var amount: Double { isJoined ? CardPaymentLegs.total(parts, in: tx.currency) : tx.amount }
 
     /// Reused across rows — allocating a DateFormatter per row (per render) was
     /// a measurable scroll cost with a long history.
@@ -630,6 +640,9 @@ struct TxRow: View {
     /// where an unexpected charge came from. Shown in place of the type label,
     /// which for these rows says little ("Purchase" on a transfer misleads).
     private var badge: AnyView? {
+        // A card payment is part debt payment, part transfer: neither badge
+        // fits the whole, so it gets its own label instead.
+        if isJoined { return nil }
         if tx.txSubtype != .normal {
             return AnyView(Self.badge(icon: tx.txSubtype.icon, text: tx.txSubtype.displayLabel, tint: AppTheme.orange))
         }
@@ -696,15 +709,15 @@ struct TxRow: View {
             Spacer()
 
             VStack(alignment: .trailing, spacing: 3) {
-                Text(tx.amount >= 0
-                     ? "+\(CurrencyManager.shared.formatted(tx.amount, currency: tx.currency))"
-                     : CurrencyManager.shared.formatted(tx.amount, currency: tx.currency))
+                Text(amount >= 0
+                     ? "+\(CurrencyManager.shared.formatted(amount, currency: tx.currency))"
+                     : CurrencyManager.shared.formatted(amount, currency: tx.currency))
                     .font(.system(.subheadline, weight: .semibold))
-                    .foregroundStyle(tx.amount >= 0 ? AppTheme.green : AppTheme.textPrimary)
+                    .foregroundStyle(amount >= 0 ? AppTheme.green : AppTheme.textPrimary)
                 if let badge {
                     badge
                 } else {
-                    Text(tx.displayType)
+                    Text(isJoined ? loc("tx.card_payment") : tx.displayType)
                         .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                 }
             }
