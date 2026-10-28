@@ -207,6 +207,21 @@ final class PhysicalAssetTests: XCTestCase {
         }
     }
 
+    /// "Other" says what goes in it, and sends gold to the screen that
+    /// follows the gold price, by that screen's own name.
+    func testOtherSaysWhatGoesInIt() {
+        for language in [LanguageManager.Language.english, .indonesian] {
+            LanguageManager.shared.withLanguage(language) {
+                for key in ["asset.other_examples", "asset.field.name_ph_other"] {
+                    XCTAssertNotEqual(loc(key), key, "\(key) in \(language)")
+                }
+                XCTAssertTrue(loc("asset.other_examples").contains(loc("premium.feature.investments")),
+                              "names the Investments screen as it is called, in \(language)")
+            }
+        }
+        XCTAssertEqual(AssetKind.other.defaultAnnualRate, 0, "kept at the price paid, as the form says")
+    }
+
     /// A misspelt or too-new SF Symbol draws nothing at all, silently.
     func testEveryKindIconIsARealSymbol() {
         for kind in AssetKind.allCases {

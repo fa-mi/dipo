@@ -336,8 +336,18 @@ struct AssetFormSheet: View {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 16) {
                     kindPicker
+                    // "Other" is the one kind that doesn't say what goes in it.
+                    if kind == .other {
+                        Text(loc("asset.other_examples"))
+                            .font(.system(.caption))
+                            .foregroundStyle(AppTheme.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.horizontal, 4)
+                            .transition(.opacity)
+                    }
                     card {
-                        PlainField(label: loc("asset.field.name"), placeholder: loc("asset.field.name_ph"),
+                        PlainField(label: loc("asset.field.name"),
+                                   placeholder: loc(kind == .other ? "asset.field.name_ph_other" : "asset.field.name_ph"),
                                    bg: AppTheme.bg, text: $name)
                         if kind.firstYearDrop > 0 { conditionPicker }
                         MoneyField(label: loc("asset.field.price"), prefix: symbol,
