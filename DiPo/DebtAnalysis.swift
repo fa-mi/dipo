@@ -231,6 +231,11 @@ final class DebtAnalysisClient {
         /// Longer than the app waits: no byte for 90 seconds, or five minutes
         /// in all. Counted or not, as for `interrupted`.
         case slow
+        /// It now costs this many credits, more than the person agreed to:
+        /// one was counted since the card last heard, such as a run cut off
+        /// here that finished on the Worker. Nothing was run or charged, and
+        /// the card asks again at this cost.
+        case costChanged(Int)
 
         var messageKey: String {
             switch self {
@@ -244,6 +249,8 @@ final class DebtAnalysisClient {
             case .generic:  return "analysis.err.generic"
             case .interrupted: return "analysis.err.interrupted"
             case .slow:     return "analysis.err.slow"
+            // Never shown: the card asks again instead.
+            case .costChanged: return "analysis.err.generic"
             }
         }
     }
@@ -289,7 +296,12 @@ final class DebtAnalysisClient {
         return URLSession(configuration: config)
     }()
 
-    private struct AnalyzeBody: Encodable { let userId, snapshot, language: String }
+    struct AnalyzeBody: Encodable {
+        let userId, snapshot, language: String
+        /// The credits the person agreed to, 0 for the included one. The
+        /// Worker charges no more than this; it answers `cost_changed`.
+        let expectedCost: Int
+    }
     private struct AnalyzeReply: Decodable {
         let analysis: DebtAnalysis
         let analysesUsed: Int
@@ -303,7 +315,11 @@ final class DebtAnalysisClient {
         let analysesCap: Int?
         let nextAnalysisCost: Int?
     }
-    private struct ErrorReply: Decodable { let error: String? }
+    private struct ErrorReply: Decodable {
+        let error: String?
+        /// With cost_changed: what it costs now.
+        let cost: Int?
+    }
     private struct StreamedStatus: Decodable { let status: Int? }
 
     private static func storeKey(_ userId: String) -> String { "debt_analysis_last.\(userId)" }
@@ -367,7 +383,8 @@ final class DebtAnalysisClient {
         quota = Quota(used: reply.analysesUsed ?? 0, cap: cap, nextCost: reply.nextAnalysisCost, balance: reply.balance)
     }
 
-    func run(snapshot: String) async -> Result<DebtAnalysis, Failure> {
+    /// `cost`: the credits the person agreed to, 0 for the included one.
+    func run(snapshot: String, cost: Int) async -> Result<DebtAnalysis, Failure> {
         guard !isRunning else { return .failure(.generic) }
         guard let userId = UserSession.shared.userID else { return .failure(.signIn) }
         guard NetworkService.shared.isOnline else { return .failure(.offline) }
@@ -380,7 +397,8 @@ final class DebtAnalysisClient {
             letGoInBackground()
         }
 
-        let payload = AnalyzeBody(userId: userId, snapshot: snapshot, language: LanguageManager.shared.current.rawValue)
+        let payload = AnalyzeBody(userId: userId, snapshot: snapshot,
+                                  language: LanguageManager.shared.current.rawValue, expectedCost: cost)
         guard let body = try? JSONEncoder().encode(payload) else { return .failure(.generic) }
         var req = await request(Self.analyzeURL, body: body)
         req.setValue("stream", forHTTPHeaderField: "X-DiPo-Wait")
@@ -394,6 +412,8 @@ final class DebtAnalysisClient {
                     guard PremiumManager.shared.plan == .royal else { return .failure(.royal) }
                     needsAccount = true
                 }
+                // The balance the card shows when it asks again.
+                if case .costChanged = failure { await refreshQuota() }
                 return .failure(failure)
             }
             let reply = try JSONDecoder().decode(AnalyzeReply.self, from: data)
@@ -443,11 +463,14 @@ final class DebtAnalysisClient {
 
     /// What the Worker's answer means for the person waiting.
     static func failure(status: Int, body: Data) -> Failure {
-        let error = (try? JSONDecoder().decode(ErrorReply.self, from: body))?.error
+        let reply = try? JSONDecoder().decode(ErrorReply.self, from: body)
+        let error = reply?.error
         switch status {
         case 401: return .confirm
         case 403: return .royal
         case 402: return error == "analysis_limit" ? .limit : .credits
+        case 409 where error == "cost_changed":
+            return reply?.cost.map(Failure.costChanged) ?? .generic
         case 422: return .declined
         default:  return .generic
         }
@@ -569,12 +592,16 @@ struct DebtAnalysisCard: View {
             client.checkAccount()
             await client.refreshQuota()
         }
+        // The cost comes in through `presenting`: the binding can clear
+        // confirmingCost before a button's action runs, and an analysis sent
+        // as costing nothing would only be asked about again.
         .alert(String(format: loc("analysis.confirm_title"), confirmingCost ?? 0),
-               isPresented: Binding(get: { confirmingCost != nil }, set: { if !$0 { confirmingCost = nil } })) {
-            Button(loc("analysis.confirm_go")) { confirmingCost = nil; go() }
+               isPresented: Binding(get: { confirmingCost != nil }, set: { if !$0 { confirmingCost = nil } }),
+               presenting: confirmingCost) { cost in
+            Button(loc("analysis.confirm_go")) { confirmingCost = nil; go(cost: cost) }
             Button(loc("common.cancel"), role: .cancel) { confirmingCost = nil }
-        } message: {
-            Text(String(format: loc("analysis.confirm_msg"), confirmingCost ?? 0, client.quota?.balance ?? 0))
+        } message: { cost in
+            Text(String(format: loc("analysis.confirm_msg"), cost, client.quota?.balance ?? 0))
         }
         .sheet(isPresented: $showingPlan) {
             if let plan = client.last {
@@ -664,18 +691,23 @@ struct DebtAnalysisCard: View {
         if let cost = client.quota?.nextCost, cost > 0 {
             confirmingCost = cost
         } else {
-            go()
+            go(cost: 0)
         }
     }
 
-    private func go() {
+    /// `cost`: what the person agreed to, 0 for the included one.
+    private func go(cost: Int) {
         problem = nil
         let snapshot = makeSnapshot()
         Task {
-            switch await client.run(snapshot: snapshot) {
+            switch await client.run(snapshot: snapshot, cost: cost) {
             case .success:
                 HapticManager.shared.success()
                 showingPlan = true
+            case .failure(.costChanged(let now)):
+                // What the card showed was out of date. Nothing was spent:
+                // it asks again, at what it costs now.
+                confirmingCost = now
             case .failure(let f):
                 HapticManager.shared.warning()
                 // Asked for by the confirm button and its line instead.

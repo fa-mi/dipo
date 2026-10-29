@@ -170,6 +170,23 @@ final class DebtAnalysisTests: XCTestCase {
         XCTAssertEqual(DebtAnalysisClient.failure(status: 429, body: body("rate_limited")), .generic)
     }
 
+    /// The card asks before an analysis that uses credits, going by the cost
+    /// it last heard. A run cut off here can still finish on the Worker and
+    /// be counted; the retry then costs 30 credits, and the Worker asks again
+    /// instead of charging them.
+    func testAnAnalysisThatNowCostsMoreIsAskedAboutAgain() throws {
+        let changed = Data(#"{"error":"cost_changed","cost":30,"balance":60}"#.utf8)
+        XCTAssertEqual(DebtAnalysisClient.failure(status: 409, body: changed), .costChanged(30))
+        XCTAssertEqual(DebtAnalysisClient.failure(status: 409, body: Data(#"{"error":"cost_changed"}"#.utf8)), .generic,
+                       "no cost to ask about")
+        XCTAssertEqual(DebtAnalysisClient.failure(status: 409, body: Data(#"{"error":"other","cost":30}"#.utf8)), .generic)
+
+        let sent = try JSONEncoder().encode(DebtAnalysisClient.AnalyzeBody(userId: "apple-1", snapshot: "S",
+                                                                           language: "id", expectedCost: 30))
+        let fields = try XCTUnwrap(JSONSerialization.jsonObject(with: sent) as? [String: Any])
+        XCTAssertEqual(fields["expectedCost"] as? Int, 30, "the name the Worker reads")
+    }
+
     // MARK: Whose account the request may spend
 
     /// The Worker reads the Apple/Google identity out of the token; this is
@@ -200,7 +217,7 @@ final class DebtAnalysisTests: XCTestCase {
                     "analysis.err.confirm_failed", "analysis.confirm_apple", "analysis.confirm_google",
                     "analysis.confirming", "analysis.confirm_why", "analysis.err.interrupted", "analysis.err.slow"]
         let failures: [DebtAnalysisClient.Failure] = [.offline, .signIn, .confirm, .royal, .limit, .credits,
-                                                      .declined, .generic, .interrupted, .slow]
+                                                      .declined, .generic, .interrupted, .slow, .costChanged(30)]
         for language in [LanguageManager.Language.english, .indonesian] {
             LanguageManager.shared.withLanguage(language) {
                 for k in keys { XCTAssertNotEqual(loc(k), k, "\(k) in \(language)") }
