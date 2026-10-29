@@ -118,6 +118,8 @@ struct DiPoHomeSection: View {
     let payDate: Date?
     /// Assets whose value is due a look, by name (AssetMarketCheck).
     var assetCheck: [String] = []
+    /// DiPo Navigasi's turn, when the add-on is on and a trip has one.
+    var navigation: DiPoNudge.Navi? = nil
     var onAskDiPo: () -> Void
     var onAction: (DiPoNudge.Action) -> Void
     /// Royal gets to know DiPo better: interest guesses and ideas.
@@ -150,9 +152,10 @@ struct DiPoHomeSection: View {
     @State private var askingInterest: DiPoInterest?
 
     init(unread: Int, bill: DiPoNudge.Bill?, daysToPayday: Int?, payDate: Date?,
-         assetCheck: [String] = [], isRoyal: Bool = false,
+         assetCheck: [String] = [], navigation: DiPoNudge.Navi? = nil, isRoyal: Bool = false,
          onAskDiPo: @escaping () -> Void, onAction: @escaping (DiPoNudge.Action) -> Void) {
         self.assetCheck = assetCheck
+        self.navigation = navigation
         self.isRoyal = isRoyal
         self.unread = unread
         self.bill = bill
@@ -190,7 +193,7 @@ struct DiPoHomeSection: View {
                                   bill: bill, daysToPayday: daysToPayday, payDate: payDate,
                                   interestGuess: interestGuess, interestTip: interestTip?.preset,
                                   customInterestTip: interestTip?.custom,
-                                  assetCheck: assetCheck),
+                                  assetCheck: assetCheck, navigation: navigation),
             status: status,
             onAskDiPo: onAskDiPo,
             onNudge: { action in

@@ -192,6 +192,8 @@ enum PlanRoute: Hashable {
     case assets
     /// Debts & Credits: what is owed, what is owed to you, loan calculators.
     case obligations
+    /// DiPo Navigasi, the add-on: a savings goal as a trip.
+    case navigasi
     // A specific holding's detail. Carried as a PlanRoute (not a bare view push)
     // so it appends to the tab's typed `[PlanRoute]` path — a value-less
     // NavigationLink here crashes with AnyNavigationPath.comparisonTypeMismatch.

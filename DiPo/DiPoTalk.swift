@@ -122,6 +122,8 @@ struct DiPoNudge: Equatable, Identifiable {
         case customInterestTip(String)
         /// An asset's value has gone unchecked for half a year or more.
         case assetCheck
+        /// DiPo Navigasi's next turn: opens the trip.
+        case navigation
     }
     let id: String
     let mood: DiPoMood
@@ -154,11 +156,21 @@ struct DiPoNudge: Equatable, Identifiable {
         case .interestGuess:                   return "questionmark.bubble.fill"
         case .interestTip, .customInterestTip: return "lightbulb.fill"
         case .assetCheck:                      return "tag.fill"
+        case .navigation:                      return "location.north.circle.fill"
         }
     }
 
     /// Bills and payday are mentioned from this many days out.
     static let window = 3
+
+    /// DiPo Navigasi's turn to take, worded by Navigasi.nudge.
+    struct Navi: Equatable {
+        let id: String
+        let title: String
+        let detail: String
+        /// Off route, rather than a turn coming up.
+        let worry: Bool
+    }
 
     /// A bill DiPo can mention, without tying this to the model type.
     struct Bill: Equatable {
@@ -177,7 +189,7 @@ struct DiPoNudge: Equatable, Identifiable {
                     bill: Bill?, daysToPayday: Int?, payDate: Date?,
                     interestGuess: DiPoInterest? = nil, interestTip: DiPoInterest? = nil,
                     customInterestTip: String? = nil,
-                    assetCheck: [String] = []) -> [DiPoNudge] {
+                    assetCheck: [String] = [], navigation: Navi? = nil) -> [DiPoNudge] {
         var out: [DiPoNudge] = []
         // The streak greets the user when they open the app; two days is the
         // shortest run worth a word.
@@ -232,6 +244,13 @@ struct DiPoNudge: Equatable, Identifiable {
             out.append(DiPoNudge(id: "payday-\(days)", mood: days == 0 ? .cheer : .happy,
                                  exclamation: loc(days == 0 ? "dipo.sfx.payday_today" : "dipo.sfx.payday_soon"),
                                  text: text, action: .salary, link: loc("dipo.link.salary")))
+        }
+        // The trip's turn, with the other things that carry money and a date.
+        if let navigation {
+            out.append(DiPoNudge(id: navigation.id, mood: navigation.worry ? .worry : .info,
+                                 exclamation: loc("navi.sfx"), text: navigation.detail,
+                                 action: .navigation, link: loc("navi.link"),
+                                 title: navigation.title, detail: navigation.detail))
         }
         // An asset not looked at for a while: the curve has carried its value,
         // but only listings say what it would fetch now.
