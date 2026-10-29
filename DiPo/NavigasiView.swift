@@ -11,11 +11,8 @@ import SwiftData
 struct NavigasiView: View {
     /// The goal to plan a route to, when opened from that goal's screen.
     var goal: SavingsGoal? = nil
-    /// Opened as a sheet: it carries its own Done.
-    var inSheet = false
 
     @Environment(\.modelContext) private var context
-    @Environment(\.dismiss) private var dismiss
     @Query(sort: \SavingsGoal.createdAt) private var goals: [SavingsGoal]
     @Query(sort: \BankCard.sortOrder) private var cards: [BankCard]
     @Query(sort: \SalarySchedule.createdAt) private var salaries: [SalarySchedule]
@@ -47,20 +44,6 @@ struct NavigasiView: View {
         .navigationTitle(loc("navi.title"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(AppTheme.bg, for: .navigationBar)
-        .toolbar {
-            if inSheet {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button {
-                        HapticManager.shared.tap()
-                        dismiss()
-                    } label: {
-                        Text(loc("common.done"))
-                            .font(.system(.callout, weight: .semibold))
-                            .foregroundStyle(AppTheme.accent)
-                    }
-                }
-            }
-        }
         .onAppear(perform: open)
         .sheet(isPresented: $makingGoal) {
             GoalFormSheet(editGoal: nil)

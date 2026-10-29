@@ -1608,7 +1608,7 @@ struct GoalDetailView: View {
             Text(loc("savings.invest_cash_msg"))
         }
         .sheet(isPresented: $navigating) {
-            NavigationStack { NavigasiView(goal: goal, inSheet: true) }
+            NavigationStack { NavigasiView(goal: goal).doneToolbar { navigating = false } }
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
                 .presentationBackground(AppTheme.bg)
