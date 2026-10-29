@@ -76,6 +76,7 @@ HeldWant.readyAt: Date
 HeldWant.waitDays: Int
 InvestmentHolding.createdAt: Date
 InvestmentHolding.currency: String
+InvestmentHolding.goal -> SavingsGoal
 InvestmentHolding.id: UUID
 InvestmentHolding.lastPrice: Double
 InvestmentHolding.lots -> InvestmentLot[]
@@ -156,6 +157,7 @@ SalarySchedule.lastCreditedYear: Int
 SavingsGoal.createdAt: Date
 SavingsGoal.currency: String
 SavingsGoal.emoji: String
+SavingsGoal.holdings -> InvestmentHolding[]
 SavingsGoal.id: UUID
 SavingsGoal.isCompleted: Bool
 SavingsGoal.isPinned: Bool

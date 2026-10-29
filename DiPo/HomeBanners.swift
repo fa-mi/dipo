@@ -501,8 +501,9 @@ struct PinnedGoalBanner: View {
     let goal: SavingsGoal
     var tappable: Bool = false
 
-    private var progress: Double { goal.targetAmount > 0 ? min(goal.savedAmount / goal.targetAmount, 1.0) : 0 }
-    private var remaining: Double { max(goal.targetAmount - goal.savedAmount, 0) }
+    // The goal's own figures: its cash and any investments it is kept in.
+    private var progress: Double { goal.progress }
+    private var remaining: Double { goal.remaining }
 
     var body: some View {
         VStack(spacing: 10) {
@@ -539,7 +540,7 @@ struct PinnedGoalBanner: View {
                 Spacer()
 
                 HStack(spacing: 6) {
-                    Text("\(CurrencyManager.shared.formatted(goal.savedAmount, currency: goal.currency))")
+                    Text("\(CurrencyManager.shared.formatted(goal.currentValue, currency: goal.currency))")
                         .font(.system(.footnote, weight: .bold))
                         .foregroundStyle(AppTheme.accent)
                     if tappable {

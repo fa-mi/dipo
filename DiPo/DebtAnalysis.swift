@@ -164,7 +164,11 @@ enum DebtAnalysisSnapshot {
             lines.append("The app's Smart Budget advice on this screen: \"\(title)\".")
         }
         for g in i.goals where !g.isCompleted {
-            lines.append("Savings goal '\(g.name)': \(m(toCur(g.savedAmount, g.currency))) saved of \(m(toCur(g.targetAmount, g.currency))).")
+            var line = "Savings goal '\(g.name)': \(m(toCur(g.currentValue, g.currency))) saved of \(m(toCur(g.targetAmount, g.currency)))"
+            if g.isInvested {
+                line += ", \(m(toCur(g.investedValue, g.currency))) of it in investments at today's price"
+            }
+            lines.append(line + ".")
         }
 
         let text = lines.joined(separator: "\n")

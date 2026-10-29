@@ -1084,7 +1084,7 @@ final class SmartBudgetManager {
 
         // Pick the highest-priority active goal that's not yet complete.
         // Tie-break by largest remaining (= most meaningful tradeoff).
-        let activeGoals = goals.filter { !$0.isCompleted && $0.targetAmount > $0.savedAmount }
+        let activeGoals = goals.filter { !$0.isCompleted && $0.remaining > 0 }
         guard let goal = activeGoals
             .sorted(by: { ($0.priority, $1.remaining) < ($1.priority, $0.remaining) })
             .first else { return nil }

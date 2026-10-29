@@ -676,7 +676,7 @@ struct LetGoSheet: View {
                     .foregroundStyle(AppTheme.textPrimary)
                     .lineLimit(1)
                 Text(String(format: loc("savings.saved_of"),
-                            cm.formatted(goal.savedAmount, currency: goal.currency),
+                            cm.formatted(goal.currentValue, currency: goal.currency),
                             cm.formatted(goal.targetAmount, currency: goal.currency)))
                     .font(.system(.caption))
                     .foregroundStyle(AppTheme.textSecondary)

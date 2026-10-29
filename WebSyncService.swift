@@ -441,7 +441,8 @@ final class WebSyncService {
                 "id":            g.id.uuidString,
                 "name":          "\(g.emoji) \(g.name)".trimmingCharacters(in: .whitespaces),
                 "targetAmount":  cm.convert(g.targetAmount, from: g.currency, to: base),
-                "currentAmount": cm.convert(g.savedAmount, from: g.currency, to: base),
+                // Cash and investments together, as the goal's own screen shows it.
+                "currentAmount": cm.convert(g.currentValue, from: g.currency, to: base),
                 "currency":      base,
             ]
         }

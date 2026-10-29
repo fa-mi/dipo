@@ -126,8 +126,7 @@ struct CommitmentReview {
         }
 
         let goal = goals.first { !$0.isCompleted }
-        let remaining = goal.map { max(cm.convert($0.targetAmount - $0.savedAmount,
-                                                  from: $0.currency, to: currency), 0) } ?? 0
+        let remaining = goal.map { cm.convert($0.remaining, from: $0.currency, to: currency) } ?? 0
         let goalMonthly = goal.map { cm.convert($0.monthlyContribution, from: $0.currency, to: currency) } ?? 0
 
         var lines: [CommitmentLine] = []

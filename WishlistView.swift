@@ -19,6 +19,11 @@ final class SavingsGoal {
     var notes: String
     var monthlyContribution: Double
     var isPinned: Bool = false  // shows progress on home screen
+    /// Investments this goal is kept in (Royal). They count at their market
+    /// value on top of `savedAmount`, which stays the cash the goal holds
+    /// itself. Deleting the goal leaves them where they are, for no goal.
+    @Relationship(deleteRule: .nullify, inverse: \InvestmentHolding.goal)
+    var holdings: [InvestmentHolding] = []
 
 
     init(name: String, emoji: String = "🎯", targetAmount: Double,
@@ -40,9 +45,11 @@ final class SavingsGoal {
         self.isPinned = false
     }
 
-    var progress: Double { targetAmount > 0 ? min(savedAmount / targetAmount, 1.0) : 0 }
+    /// Against everything in the goal: its cash and, for one kept in
+    /// investments, their value at today's price (GoalInvestments.swift).
+    var progress: Double { targetAmount > 0 ? min(currentValue / targetAmount, 1.0) : 0 }
     var progressPercent: Double { progress * 100 }
-    var remaining: Double { max(targetAmount - savedAmount, 0) }
+    var remaining: Double { max(targetAmount - currentValue, 0) }
 
     // MARK: - Reconciliation with real transactions
     //
@@ -75,6 +82,8 @@ final class SavingsGoal {
     /// Savings are a pot of their own, kept separate from account balances, so
     /// the whole saved amount counts toward net worth. Deposits made through
     /// DiPo already reduced the funding account, so nothing is counted twice.
+    /// Only the cash: investments the goal is kept in are already in net
+    /// worth at their market value, on the investments line.
     func netWorthContribution(from allTransactions: [TxRecord]) -> Double {
         savedAmount
     }
@@ -232,7 +241,7 @@ struct WishlistView: View {
     }
     private var activeGoals: [SavingsGoal] { goals.filter { !$0.isCompleted } }
     private var completedGoals: [SavingsGoal] { goals.filter { $0.isCompleted } }
-    private var totalSaved: Double { activeGoals.reduce(0) { $0 + toPref($1.savedAmount, $1.currency) } }
+    private var totalSaved: Double { activeGoals.reduce(0) { $0 + toPref($1.currentValue, $1.currency) } }
     private var totalTarget: Double { activeGoals.reduce(0) { $0 + toPref($1.targetAmount, $1.currency) } }
     private var monthlyPlan: Double { activeGoals.reduce(0) { $0 + toPref($1.monthlyContribution, $1.currency) } }
     private var monthlyIncome: Double {
@@ -389,7 +398,7 @@ struct WishlistView: View {
                 icon: "checkmark.seal.fill",
                 title: goal.name,
                 subtitle: String(format: loc("savings.saved_amount_row"),
-                                 CurrencyManager.shared.formatted(goal.savedAmount, currency: goal.currency)),
+                                 CurrencyManager.shared.formatted(goal.currentValue, currency: goal.currency)),
                 items: [
                     reopenItem(goal),
                     ActionItem(icon: "trash.fill", title: loc("common.delete"), destructive: true) {
@@ -662,6 +671,9 @@ struct GoalCard: View {
 
     private var planLine: (icon: String, text: String, tint: Color)? {
         let cm = CurrencyManager.shared
+        if goal.reachedOnTodaysPrice {
+            return ("checkmark.seal", loc("savings.reached_today_price"), AppTheme.accent)
+        }
         if goal.progress >= 1.0 {
             return ("checkmark.seal.fill", loc("savings.reached"), AppTheme.accent)
         }
@@ -678,6 +690,28 @@ struct GoalCard: View {
                     AppTheme.orange)
         }
         return nil
+    }
+
+    /// "Rp 31.244.000 in investments, bought for Rp 44.500.000  ↘ 29.79%" —
+    /// one Text, so a long line wraps rather than shrinking.
+    private var investedLine: some View {
+        let cm = CurrencyManager.shared
+        let cost = goal.investedCost
+        let pct = cost > 0 ? (goal.investedValue - cost) / cost : 0
+        let tint = investPLColorPct(pct)
+        var line = Text(Image(systemName: "chart.line.uptrend.xyaxis")) + Text(" ")
+            + Text(String(format: loc("savings.invest_line"),
+                          cm.formatted(goal.investedValue, currency: goal.currency),
+                          cm.formatted(cost, currency: goal.currency))) + Text("  ")
+        if let arrow = investArrow(investTrendPct(pct)) {
+            line = line + Text(Image(systemName: arrow)).foregroundStyle(tint) + Text(" ")
+        }
+        line = line + Text(investPctAbs(pct)).fontWeight(.semibold).foregroundStyle(tint)
+        return line
+            .font(.system(.caption))
+            .foregroundStyle(AppTheme.textSecondary)
+            .lineLimit(2)
+            .fixedSize(horizontal: false, vertical: true)
     }
 
     var body: some View {
@@ -717,7 +751,7 @@ struct GoalCard: View {
 
             VStack(alignment: .leading, spacing: 8) {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Text(cm.formatted(goal.savedAmount, currency: goal.currency))
+                    Text(cm.formatted(goal.currentValue, currency: goal.currency))
                         .font(.system(.title2, weight: .bold))
                         .foregroundStyle(AppTheme.textPrimary)
                         .lineLimit(1).minimumScaleFactor(0.7)
@@ -732,6 +766,7 @@ struct GoalCard: View {
                         .foregroundStyle(AppTheme.textPrimary)
                 }
                 SavingsProgressBar(progress: goal.progress)
+                if goal.isInvested { investedLine }
                 if let line = planLine {
                     Label(line.text, systemImage: line.icon)
                         .font(.system(.caption))
@@ -774,7 +809,7 @@ struct GoalCard: View {
                 icon: "target",
                 title: goal.name,
                 subtitle: String(format: loc("savings.saved_of"),
-                                 cm.formatted(goal.savedAmount, currency: goal.currency),
+                                 cm.formatted(goal.currentValue, currency: goal.currency),
                                  cm.formatted(goal.targetAmount, currency: goal.currency)),
                 items: [
                     ActionItem(icon: "pencil", title: loc("common.edit"), tint: AppTheme.blue) { onEdit() },
@@ -840,7 +875,7 @@ struct DepositSheet: View {
                             .foregroundStyle(AppTheme.textPrimary)
                             .multilineTextAlignment(.center)
                         Text(String(format: loc("savings.saved_of"),
-                                    cm.formatted(goal.savedAmount, currency: goal.currency),
+                                    cm.formatted(goal.currentValue, currency: goal.currency),
                                     cm.formatted(goal.targetAmount, currency: goal.currency)))
                             .font(.system(.subheadline))
                             .foregroundStyle(AppTheme.textSecondary)
@@ -863,6 +898,14 @@ struct DepositSheet: View {
                         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
                         if let p = AmountInputHelper.preview(amountText, currency: goal.currency) {
                             Text(p).font(.system(.caption, weight: .medium)).foregroundStyle(AppTheme.textSecondary)
+                        }
+                        // Money added here is the goal's cash. Shares bought for
+                        // it are a buy on Investments, which counts by itself:
+                        // adding it here as well would take it off the card twice.
+                        if goal.isInvested {
+                            Label(loc("savings.invest_deposit_hint"), systemImage: "chart.line.uptrend.xyaxis")
+                                .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
                     }
                     .padding(.horizontal, 22)
@@ -1129,7 +1172,7 @@ struct CompletedGoalRow: View {
                 // The amount actually saved — this showed the TARGET, with the
                 // word "saved" hardcoded in English.
                 Text(String(format: loc("savings.saved_amount_row"),
-                            CurrencyManager.shared.formatted(goal.savedAmount, currency: goal.currency)))
+                            CurrencyManager.shared.formatted(goal.currentValue, currency: goal.currency)))
                     .font(.system(.caption))
                     .foregroundStyle(AppTheme.textSecondary)
             }
@@ -1212,7 +1255,7 @@ struct GoalFormSheet: View {
 
     private var monthsPreview: Int? {
         let target = NumberInput.amount(targetAmount)
-        let saved  = NumberInput.amount(savedAmount)
+        let saved  = NumberInput.amount(savedAmount) + (editGoal?.investedValue ?? 0)
         let mo     = NumberInput.amount(monthly)
         guard mo > 0, target > saved else { return nil }
         return Int(ceil((target - saved) / mo))
@@ -1234,6 +1277,14 @@ struct GoalFormSheet: View {
                         targetSection
                         VStack(spacing: 14) {
                             amountField(label: loc("savings.already"), icon: "tray.full", text: $savedAmount)
+                            if let g = editGoal, g.isInvested {
+                                // The field is the goal's cash; its investments count by themselves.
+                                Text(String(format: loc("savings.already_cash_hint"),
+                                            CurrencyManager.shared.formatted(g.investedValue, currency: g.currency)))
+                                    .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
                             amountField(label: loc("savings.monthly_sav"), icon: "repeat", text: $monthly)
                         }
                         .padding(.horizontal, 22)
@@ -1443,9 +1494,22 @@ struct GoalDetailView: View {
     @State private var showEdit = false
     @State private var showDelete = false
     @State private var animatedProgress: Double = 0
+    @State private var choosingHoldings = false
+    /// After the first investments are chosen for a goal that already holds
+    /// cash: is that cash the money now in them?
+    @State private var askingAboutCash = false
+    /// The cash asked about, kept so the question doesn't change as it closes.
+    @State private var cashAsked: Double = 0
     @Query(sort: \BankCard.sortOrder) private var cards: [BankCard]
+    @Query(sort: \InvestmentHolding.sortOrder) private var holdings: [InvestmentHolding]
+    @State private var pm = PremiumManager.shared
 
     private var currency: String { goal.currency }
+    /// Investments to keep it in: a Royal account that tracks some, or a goal
+    /// already kept in some (it stays visible after Royal lapses).
+    private var showsInvestments: Bool {
+        goal.isInvested || (pm.canAccess(.investments) && !holdings.isEmpty)
+    }
     private var allTx: [TxRecord] { cards.flatMap(\.transactions) }
     private func money(_ v: Double) -> String { CurrencyManager.shared.formatted(v, currency: currency) }
 
@@ -1456,6 +1520,9 @@ struct GoalDetailView: View {
                 VStack(spacing: 20) {
                     hero
                     numbers
+                    if showsInvestments {
+                        GoalInvestmentsCard(goal: goal) { choosingHoldings = true }
+                    }
                     sourceCard
                     actions
                     if !goal.notes.isEmpty {
@@ -1499,6 +1566,28 @@ struct GoalDetailView: View {
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
             .presentationBackground(AppTheme.bg)
+        }
+        .sheet(isPresented: $choosingHoldings) {
+            GoalHoldingsPicker(goal: goal, holdings: holdings) { firstTime in
+                if firstTime && goal.savedAmount > 0.5 {
+                    cashAsked = goal.savedAmount
+                    askingAboutCash = true
+                }
+            }
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+            .presentationBackground(AppTheme.bg)
+        }
+        .alert(String(format: loc("savings.invest_cash_title"), money(cashAsked)),
+               isPresented: $askingAboutCash) {
+            Button(loc("savings.invest_cash_yes")) {
+                // Counted at their price now; as cash too, it would count twice.
+                goal.savedAmount = 0
+                try? context.save()
+            }
+            Button(loc("savings.invest_cash_no"), role: .cancel) {}
+        } message: {
+            Text(loc("savings.invest_cash_msg"))
         }
         .sheet(isPresented: $showPastDepositSheet) {
             RecordPastDepositSheet(goal: goal)
@@ -1548,7 +1637,7 @@ struct GoalDetailView: View {
             .frame(width: 124, height: 124)
 
             VStack(spacing: 4) {
-                Text(money(goal.savedAmount))
+                Text(money(goal.currentValue))
                     .font(.system(.largeTitle, weight: .bold))
                     .foregroundStyle(AppTheme.textPrimary)
                     .lineLimit(1).minimumScaleFactor(0.6)
