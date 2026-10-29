@@ -177,6 +177,40 @@ final class GoalInvestmentsTests: XCTestCase {
         XCTAssertNil(goal.fallNote(now: now), "no date of its own, and the plan reaches it in ten years")
     }
 
+    // MARK: On the card
+
+    /// The card names what the goal is kept in, in a word: the kind when
+    /// there is one, "Investments" for a mix.
+    func testItsKindInAWord() throws {
+        let goal = mecca()
+        let b = brokers()
+        goal.keep(in: [b.ajaib, b.brights])
+        try context.save()
+        XCTAssertEqual(goal.investedKindLabel, InvestmentType.stock.displayName)
+
+        let gold = holding("Emas", .gold, units: 2, boughtAt: 1_500_000, price: 1_600_000)
+        goal.keep(in: [b.ajaib, gold])
+        try context.save()
+        XCTAssertEqual(goal.investedKindLabel, loc("savings.invest_kinds"))
+    }
+
+    // MARK: Prices
+
+    /// Opening a goal fetches only prices older than a quarter of an hour, and
+    /// never one the person keeps by hand.
+    func testOnlyStalePricesAreFetched() {
+        let now = Date(timeIntervalSince1970: 1_793_232_000)
+        let b = brokers()
+        b.ajaib.priceUpdatedAt = now.addingTimeInterval(-5 * 60)
+        b.brights.priceUpdatedAt = now.addingTimeInterval(-40 * 60)
+        let never = holding("Bibit", units: 100, boughtAt: 5_000, price: 5_200)
+        let byHand = holding("Emas", .gold, units: 2, boughtAt: 1_500_000, price: 1_600_000)
+        XCTAssertFalse(byHand.isAutoPriced, "gold typed in by hand")
+
+        let stale = GoalPrices.stale([b.ajaib, b.brights, never, byHand], now: now).map(\.name)
+        XCTAssertEqual(Set(stale), ["BRIGHTS", "Bibit"])
+    }
+
     // MARK: Backup
 
     /// A backup carries the goal a holding is kept for; one from before goals
@@ -207,7 +241,7 @@ final class GoalInvestmentsTests: XCTestCase {
     func testTheWordsAreInBothLanguages() {
         for language in [LanguageManager.Language.english, .indonesian] {
             LanguageManager.shared.withLanguage(language) {
-                for key in ["savings.reached_today_price", "savings.invest_line", "savings.invest_title",
+                for key in ["savings.reached_today_price", "savings.invest_kinds", "savings.invest_title",
                             "savings.invest_empty", "savings.invest_choose", "savings.invest_change",
                             "savings.invest_worth", "savings.invest_cost", "savings.invest_how",
                             "savings.invest_fall", "savings.invest_pick_title", "savings.invest_pick_sub",
@@ -218,8 +252,6 @@ final class GoalInvestmentsTests: XCTestCase {
                 }
                 let fall = String(format: loc("savings.invest_fall"), "Apr 2028", "Rp 6.248.800")
                 XCTAssertTrue(fall.contains("Apr 2028") && fall.contains("Rp 6.248.800") && fall.contains("20%"), fall)
-                let line = String(format: loc("savings.invest_line"), "Rp 31.244.000", "Rp 44.500.000")
-                XCTAssertTrue(line.contains("Rp 31.244.000") && line.contains("Rp 44.500.000"), line)
             }
         }
     }

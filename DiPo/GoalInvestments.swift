@@ -34,6 +34,13 @@ extension SavingsGoal {
 
     var isInvested: Bool { !holdings.isEmpty }
 
+    /// "Stocks" when every holding is one kind, "Investments" otherwise.
+    var investedKindLabel: String {
+        let kinds = Set(holdings.map(\.type))
+        if kinds.count == 1, let kind = kinds.first { return kind.displayName }
+        return loc("savings.invest_kinds")
+    }
+
     /// The holdings at today's price, in the goal's currency.
     var investedValue: Double {
         holdings.reduce(0) { $0 + inGoalCurrency($1.stats().marketValue, of: $1) }
@@ -71,6 +78,34 @@ extension SavingsGoal {
         let ids = Set(chosen.map(\.id))
         for h in holdings where !ids.contains(h.id) { h.goal = nil }
         for h in chosen where h.goal?.id != id { h.goal = self }
+    }
+}
+
+// MARK: - Fresh prices
+//
+// Prices were fetched only when the Investments screen opened, so a goal
+// showed whatever they were then. The goals' screens now fetch the ones their
+// goals count when they open, and every one of them on a pull.
+
+enum GoalPrices {
+    /// A quote older than this is fetched again when a goal is looked at. The
+    /// stock feed runs about 15 minutes behind the market anyway.
+    static let maxAge: TimeInterval = 15 * 60
+
+    /// The auto-priced holdings among `holdings` whose price is older than
+    /// `maxAge`, or was never fetched.
+    static func stale(_ holdings: [InvestmentHolding], now: Date = .now) -> [InvestmentHolding] {
+        holdings.filter { h in
+            h.isAutoPriced && (h.priceUpdatedAt.map { now.timeIntervalSince($0) > maxAge } ?? true)
+        }
+    }
+
+    /// Fetches the stale ones, or with `force` every auto-priced one. A
+    /// failed fetch leaves the last price as it was.
+    static func refresh(_ holdings: [InvestmentHolding], context: ModelContext, force: Bool = false) async {
+        let targets = force ? holdings.filter(\.isAutoPriced) : stale(holdings)
+        guard !targets.isEmpty else { return }
+        await PriceService.refresh(targets, context: context)
     }
 }
 
@@ -151,6 +186,11 @@ struct GoalInvestmentsCard: View {
         }
     }
 
+    /// When the oldest of the prices it counts was fetched.
+    private var pricedAt: Date? {
+        goal.holdings.filter(\.isAutoPriced).compactMap(\.priceUpdatedAt).min()
+    }
+
     /// Worth today, what it cost, and the difference, as the Investments
     /// screen words them.
     private var figures: some View {
@@ -159,6 +199,9 @@ struct GoalInvestmentsCard: View {
         return VStack(spacing: 6) {
             figure(loc("savings.invest_worth"), money(goal.investedValue))
             figure(loc("savings.invest_cost"), money(goal.investedCost))
+            if let t = pricedAt {
+                figure(loc("invest.last_updated"), t.formatted(date: .abbreviated, time: .shortened))
+            }
             HStack(spacing: 4) {
                 Text(loc("invest.pl_short")).font(.system(.subheadline)).foregroundStyle(AppTheme.textSecondary)
                 Spacer(minLength: 8)
