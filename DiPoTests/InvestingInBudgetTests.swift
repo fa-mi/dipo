@@ -60,10 +60,10 @@ final class InvestingInBudgetTests: XCTestCase {
         let spending = [tx(-1_200_000, .food), tx(-1_650_000, .commitment), tx(-420_000, .bills)]
         let withTransfer = spending + [tx(-2_650_000, .other, subtype: .transfer)]
         let sb = SmartBudgetManager.shared
-        let plain = sb.topInsight(allTransactions: spending, income: 10_000_000,
-                                  targetCurrency: "IDR", periodStart: start)
-        let moved = sb.topInsight(allTransactions: withTransfer, income: 10_000_000,
-                                  targetCurrency: "IDR", periodStart: start)
+        let plain = sb.evaluateAll(allTransactions: spending, income: 10_000_000,
+                                   targetCurrency: "IDR", periodStart: start).first
+        let moved = sb.evaluateAll(allTransactions: withTransfer, income: 10_000_000,
+                                   targetCurrency: "IDR", periodStart: start).first
         XCTAssertEqual(plain?.title, moved?.title)
         XCTAssertEqual(plain?.body, moved?.body)
     }

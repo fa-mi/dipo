@@ -106,13 +106,6 @@ final class DebtRecord {
         max(0, totalAmount - totalPaidFrom(allTransactions))
     }
     
-    /// Percentage paid based on linked transactions. Always reflects the current
-    /// state of the DB — deleted payments are auto-reverted.
-    func effectivePercentagePaid(from allTransactions: [TxRecord]) -> Double {
-        guard totalAmount > 0 else { return 0 }
-        return min(max((totalPaidFrom(allTransactions) / totalAmount) * 100, 0), 100)
-    }
-
     /// Months to payoff at minimum payment (returns nil if payment < interest
     /// or input is invalid). Delegates to `monthsToPayoff(monthlyPayment:)` so
     /// both paths share the same defensive guards and 0% APR handling.

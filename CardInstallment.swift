@@ -171,14 +171,6 @@ extension BankCard {
         all.filter { $0.cardID == id && $0.isActive && !$0.isFinished }
     }
 
-    /// Principal locked up by running instalments, in the card's currency.
-    func installmentPrincipal(_ all: [CardInstallment]) -> Double {
-        let cm = CurrencyManager.shared
-        return myInstallments(all).reduce(0.0) {
-            $0 + cm.convert($1.outstandingPrincipal(), from: $1.currency, to: resolvedCurrency)
-        }
-    }
-
     /// This month's instalment charges — the part of the bill that is fixed
     /// before you spend anything else.
     func installmentMonthlyCharge(_ all: [CardInstallment]) -> Double {

@@ -114,7 +114,6 @@ struct HomeView: View {
     /// Flagged money in this period, added to the flow card's budget.
     @State private var flowExtra: Double = 0
     @State private var showAllAttention = false
-    @State private var showGoalDetail: SavingsGoal? = nil
     @State private var headerAppeared    = false
     @State private var contentAppeared   = false
     // Memoized Smart-Budget analyses. Each engine iterates ALL transactions
@@ -995,18 +994,6 @@ struct HomeView: View {
                                   daysLeft: RecurringDateEngine.daysUntil(dayOfMonth: bill.dayOfMonth),
                                   autoRecord: bill.autoRecord,
                                   balanceAfter: after)
-        }
-    }
-
-    /// Route handler for `SmartInsight.action`. Each kind opens the matching
-    /// feature in its own tab — this lives on HomeView (not the engine) because
-    /// the engine is intentionally UI-agnostic.
-    private func routeInsightAction(_ kind: SmartInsightAction.Kind) {
-        switch kind {
-        case .openBudgetSettings: vm.open(PlanRoute.budget)
-        case .openSavingsGoals:   vm.open(PlanRoute.goals)
-        case .openDebt:           vm.open(PlanRoute.obligations)
-        case .acknowledge:        break  // banner state managed elsewhere
         }
     }
 }

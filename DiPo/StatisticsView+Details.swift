@@ -556,15 +556,6 @@ extension StatisticsView {
         }
     }
 
-    func chartCard(values: [Double], labels: [String], tint: Color,
-                           highlightLast: Bool) -> some View {
-        MiniBars(values: values, labels: labels, tint: tint,
-                 highlightLast: highlightLast, height: 130, maxBarWidth: 34)
-            .frame(maxWidth: .infinity)
-            .padding(16)
-            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.xl))
-    }
-
     func factTile(_ label: String, _ value: String, _ tint: Color) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(value).font(.system(.subheadline, weight: .bold)).foregroundStyle(tint)

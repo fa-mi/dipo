@@ -21,51 +21,6 @@ struct ScaleButtonStyle: ButtonStyle {
     }
 }
 
-// MARK: - Card Wave Background
-// The decorative curved highlight on all card visuals.
-// Usage: CardWaveBackground(accentColor: network.accentColor)
-
-struct CardWaveBackground: View {
-    var accentColor: Color
-    var cornerRadius: CGFloat = 22
-
-    var body: some View {
-        GeometryReader { g in
-            Path { p in
-                p.move(to: .init(x: g.size.width * 0.32, y: 0))
-                p.addCurve(
-                    to: .init(x: g.size.width, y: g.size.height * 0.7),
-                    control1: .init(x: g.size.width * 0.74, y: -12),
-                    control2: .init(x: g.size.width + 8, y: g.size.height * 0.32)
-                )
-                p.addLine(to: .init(x: g.size.width, y: 0))
-                p.closeSubpath()
-            }
-            .fill(LinearGradient(
-                colors: [accentColor.opacity(0.3), accentColor.opacity(0.05)],
-                startPoint: .top, endPoint: .bottom
-            ))
-        }
-        .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
-    }
-}
-
-// MARK: - Int Ordinal Extension
-// Formats an integer as an ordinal string: 1 → "1st", 22 → "22nd", etc.
-
-extension Int {
-    var ordinal: String {
-        let suffix: String
-        switch self % 10 {
-        case 1 where self % 100 != 11: suffix = "st"
-        case 2 where self % 100 != 12: suffix = "nd"
-        case 3 where self % 100 != 13: suffix = "rd"
-        default:                        suffix = "th"
-        }
-        return "\(self)\(suffix)"
-    }
-}
-
 // MARK: - Sheet Field
 // Styled label + text field used in all bottom sheets across the app.
 // Usage: SheetField(label: "Name", placeholder: "Enter name", text: $name)
@@ -724,45 +679,6 @@ struct CardFaceView: View {
     }
 }
 
-// MARK: - Animated Appearance Wrapper
-// Eliminates the repeated @State var appeared + onAppear pattern across views.
-//
-// Usage (replaces the boilerplate in every view):
-//
-//   AnimatedAppearance { appeared in
-//       MyContent(appeared: appeared)
-//   }
-//
-//   // With custom delay:
-//   AnimatedAppearance(delay: 0.3) { appeared in
-//       MyContent(appeared: appeared)
-//   }
-//
-// For views that need to reset their animation when re-entering (e.g. tab pages),
-// pass a `resetOn` value — the animation restarts whenever that value changes.
-
-struct AnimatedAppearance<Content: View>: View {
-    @State private var appeared = false
-    let delay: Double
-    let content: (Bool) -> Content
-
-    init(delay: Double = 0.1, @ViewBuilder content: @escaping (Bool) -> Content) {
-        self.delay = delay
-        self.content = content
-    }
-
-    var body: some View {
-        content(appeared)
-            .onAppear {
-                // Reset so re-appearing views (e.g. tab switches) animate again
-                appeared = false
-                withAnimation(.spring(response: 0.6, dampingFraction: 0.8).delay(delay)) {
-                    appeared = true
-                }
-            }
-    }
-}
-
 // MARK: - Safe Calendar Helpers
 // Calendar.date(from:) and date(byAdding:) return Optional — force-unwrapping
 // them crashes on pathological locale/timezone edge cases.
@@ -918,12 +834,6 @@ enum UserSwitchDetector {
             "checkin_snoozed_day",      // "ask me later" — per person, per day
             // Smart Budget settings + ephemeral state
             "sb_enabled", "sb_daily", "sb_lifestyle", "sb_invest", "sb_card_id",
-            // Per-user insight state — same-month dismissals and coaching
-            // "seen" flags shouldn't leak between accounts. Without these,
-            // user B sees user A's dismissed insights silently suppressed,
-            // which feels like the engine is broken (no insights showing).
-            "sb_dismissed_insights",
-            "sb_seen_coaching",
             // Backup reminder state — user B shouldn't inherit user A's
             // "last backed up" timestamp; that would suppress the reminder
             // banner inappropriately on a fresh account that just got the
@@ -933,10 +843,10 @@ enum UserSwitchDetector {
         for key in keysToWipe {
             UserDefaults.standard.removeObject(forKey: key)
         }
-        // Same reasoning as `sb_dismissed_insights` above, for the flags that
-        // record which pushes already went out. Keyed by cycle/debt/day rather
-        // than by user, so without this, user B inherits user A's "already
-        // warned" state and hears nothing for the rest of the cycle.
+        // The flags that record which pushes already went out. Keyed by
+        // cycle/debt/day rather than by user, so without this, user B inherits
+        // user A's "already warned" state and hears nothing for the rest of
+        // the cycle.
         NotificationManager.clearDeliveryDedupState()
         // The widget bridge lives in the App Group container, not in
         // `UserDefaults.standard` — so none of the keys above reach it. Without

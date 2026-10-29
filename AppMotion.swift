@@ -34,27 +34,3 @@ enum AppMotion {
     /// row makes the reader wait to read.
     static let appear = Animation.easeOut(duration: 0.22)
 }
-
-extension View {
-
-    /// Cross-fades a value in place without moving anything around it.
-    ///
-    /// `contentTransition(.numericText())` is the right tool for a figure and
-    /// the wrong one for a whole card: it forces a snapshot of the text every
-    /// change. Confined to the value itself it costs nothing; wrapped around a
-    /// layout it is measurable.
-    func animatedFigure<V: Equatable>(_ value: V) -> some View {
-        contentTransition(.numericText())
-            .animation(AppMotion.figure, value: value)
-    }
-
-    /// A one-shot appearance for a screen's content.
-    ///
-    /// Takes no delay parameter on purpose. Staggering is where "polished"
-    /// turns into "slow": eight cards at 0.06s apart is half a second before
-    /// the last one is readable, every single time the screen is opened.
-    func appearOnce(_ shown: Bool) -> some View {
-        opacity(shown ? 1 : 0)
-            .animation(AppMotion.appear, value: shown)
-    }
-}

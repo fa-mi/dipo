@@ -56,16 +56,6 @@ enum PremiumPlan: String, CaseIterable {
         case .royal: return loc("premium.trial_label")
         }
     }
-
-    /// Whether this plan currently offers a free trial period.
-    var hasTrial: Bool { !trialLabel.isEmpty }
-
-    var priceLabel: String {
-        switch self {
-        case .free:  return loc("premium.plan.free")
-        case .royal: return loc("premium.price.royal")
-        }
-    }
 }
 
 // MARK: - Premium Feature

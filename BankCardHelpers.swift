@@ -216,10 +216,6 @@ extension BankCard {
         return Calendar.current.dateComponents([.day], from: .now, to: exp).day
     }
 
-    var isExpired:      Bool { (daysUntilExpiry ?? 1) < 0 }
-    var expiresSoon:    Bool { (daysUntilExpiry ?? 999) <= 30 && !isExpired }
-    var expiresUrgent:  Bool { (daysUntilExpiry ?? 999) <= 7  && !isExpired }
-
     /// Human-readable status for UI badges.
     var expiryStatus: CardExpiryStatus {
         guard let days = daysUntilExpiry else { return .ok }

@@ -725,17 +725,3 @@ struct TransactionDetailSheet: View {
         withAnimation { isEditing = false }
     }
 }
-
-struct DetailRow: View {
-    let label: String
-    let value: String
-    var body: some View {
-        HStack {
-            Text(label).font(.system(.subheadline)).foregroundStyle(AppTheme.textSecondary)
-            Spacer()
-            Text(value).font(.system(.subheadline, weight: .medium)).foregroundStyle(AppTheme.textPrimary)
-                .multilineTextAlignment(.trailing)
-        }
-        .padding(.horizontal, 18).padding(.vertical, 14)
-    }
-}

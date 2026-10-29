@@ -385,7 +385,7 @@ struct AIChatView: View {
             // opens with what he has noticed.
             if vm.messages.isEmpty {
                 if !insights.isEmpty {
-                    for line in DiPoScript.lines(unread: 0, insights: insights, isRoyal: isRoyal) {
+                    for line in DiPoScript.lines(insights: insights, isRoyal: isRoyal) {
                         let head = [line.exclamation, line.title].filter { !$0.isEmpty }.joined(separator: " ")
                         vm.messages.append(AIChatMessage(role: .assistant, text: "\(head)\n\(line.text)"))
                         dipoMood = line.mood

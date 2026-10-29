@@ -14,7 +14,6 @@ final class SentenceCaseTests: XCTestCase {
     /// Short codes that are capitals in their own right.
     private let capitalsByNature: Set<String> = [
         "store_recovery.ok",         // OK
-        "cards.visa",                // VISA, the network's own mark
         "asset.tax.pbb",             // PBB, a tax's name
         "planner.row_jht",           // BPJS JHT (2%)
         "planner.row_jp",            // BPJS JP (1%)

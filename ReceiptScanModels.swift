@@ -70,26 +70,6 @@ struct ReceiptScanResult: Equatable {
     ///
     /// Empty when the receipt is a plain till slip with no payment rails on it.
     var issuer: String = ""
-
-    /// Convenience: human-readable confidence label.
-    var confidenceLabel: String {
-        switch confidence {
-        case 0.85...:    return loc("receipt.confidence.high")
-        case 0.6..<0.85: return loc("receipt.confidence.medium")
-        default:         return loc("receipt.confidence.low")
-        }
-    }
-
-    /// Convenience: color tied to confidence band.
-    var confidenceColorHex: String {
-        switch confidence {
-        // Mid-tone members of the app palette: this is a stored/fixed hex, so
-        // it cannot adapt, and these read in both modes.
-        case 0.85...:    return "#1DB87A"  // accent
-        case 0.6..<0.85: return "#F59E0B"  // amber
-        default:         return "#E5484D"  // red (light)
-        }
-    }
 }
 
 // MARK: - Scan Error
@@ -173,11 +153,4 @@ struct ReceiptScanConfig {
     /// JPEG compression for the version sent to Haiku. 0.7 is a good tradeoff
     /// between file size (token cost) and OCR-friendliness for thermal receipts.
     static let haikuJpegCompression: CGFloat = 0.7
-
-    /// Vision OCR timeout. If it exceeds this, we proceed with what we have.
-    static let visionTimeoutSeconds: TimeInterval = 8
-
-    /// Total timeout for the entire scan flow (Vision + optional Haiku).
-    /// Keep this under 30s — users get anxious past that.
-    static let totalTimeoutSeconds: TimeInterval = 25
 }

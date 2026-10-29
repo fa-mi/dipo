@@ -1506,18 +1506,6 @@ struct CardTransferSheet: View {
         .padding(.bottom, 2)
     }
 
-    /// Compact, breathing page indicator: the active card gets an accent pill.
-    private func pageDots(selected: Int) -> some View {
-        HStack(spacing: 6) {
-            ForEach(cards.indices, id: \.self) { i in
-                Capsule()
-                    .fill(i == selected ? AppTheme.accent : AppTheme.textSecondary.opacity(0.28))
-                    .frame(width: i == selected ? 18 : 6, height: 6)
-                    .animation(.spring(response: 0.3, dampingFraction: 0.75), value: selected)
-            }
-        }
-    }
-
     private var amountField: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(loc("transfer.amount")).font(.system(.caption, weight: .semibold)).foregroundStyle(AppTheme.textSecondary)
@@ -1611,94 +1599,5 @@ struct CardTransferSheet: View {
         try? context.save()
         HapticManager.shared.success()
         dismiss()
-    }
-}
-
-// MARK: - Transfer Card Tile
-//
-// Purpose-built gradient tile for the transfer carousel: shows the card's
-// identity + its available balance front-and-center (the number that matters
-// when moving money). Reuses the same gradient/network styling as the real
-// card previews so the deck feels like flipping through your own wallet.
-private struct TransferCardTile: View {
-    let card: BankCard
-    let title: String
-    let highlightInsufficient: Bool
-    let inUse: Bool
-
-    private var network: CardNetwork { CardNetwork.detect(from: card.cardNumber) }
-    private var gStart: String { card.gradientStart.isEmpty ? network.gradientStart : card.gradientStart }
-    private var gEnd:   String { card.gradientEnd.isEmpty   ? network.gradientEnd   : card.gradientEnd }
-
-    var body: some View {
-        ZStack(alignment: .topLeading) {
-            RoundedRectangle(cornerRadius: AppRadius.xl)
-                .fill(LinearGradient(
-                    colors: [Color(hex: gStart), Color(hex: gEnd)],
-                    startPoint: .topLeading, endPoint: .bottomTrailing))
-
-            // Soft gloss sweep.
-            GeometryReader { g in
-                Path { p in
-                    p.move(to: .init(x: g.size.width * 0.32, y: 0))
-                    p.addCurve(
-                        to: .init(x: g.size.width, y: g.size.height * 0.7),
-                        control1: .init(x: g.size.width * 0.74, y: -12),
-                        control2: .init(x: g.size.width + 8, y: g.size.height * 0.32))
-                    p.addLine(to: .init(x: g.size.width, y: 0))
-                    p.closeSubpath()
-                }
-                .fill(LinearGradient(
-                    colors: [Color.white.opacity(0.12), Color.white.opacity(0.02)],
-                    startPoint: .top, endPoint: .bottom))
-            }
-            .clipShape(RoundedRectangle(cornerRadius: AppRadius.xl))
-
-            VStack(alignment: .leading, spacing: 0) {
-                HStack(alignment: .top) {
-                    HStack(spacing: 7) {
-                        Image(systemName: card.isDigitalWallet ? "wallet.pass.fill" : "wave.3.right")
-                            .font(.system(.subheadline, weight: .semibold))
-                            .foregroundStyle(Color.white.opacity(0.75))
-                        Text(title)
-                            .font(.system(.subheadline, weight: .bold))
-                            .foregroundStyle(.white)
-                    }
-                    Spacer()
-                    if card.isCreditCard {
-                        Text(loc("cc.badge"))
-                            .font(.system(.caption2, weight: .heavy)).foregroundStyle(.white)
-                            .padding(.horizontal, 8).padding(.vertical, 3)
-                            .background(Color.white.opacity(0.22), in: Capsule())
-                    } else if inUse {
-                        Text(loc("transfer.in_use"))
-                            .font(.system(.caption2, weight: .heavy))
-                            .foregroundStyle(.white.opacity(0.9))
-                            .padding(.horizontal, 9).padding(.vertical, 4)
-                            .background(Color.white.opacity(0.20), in: Capsule())
-                    } else if !card.isDigitalWallet {
-                        CardNetworkLogo(network: network)
-                    }
-                }
-                Spacer()
-                // A credit card shows what's OWED + available (paying it reduces
-                // owed), not a cash balance.
-                Text(card.isCreditCard ? loc("cc.owed") : loc("transfer.available_label"))
-                    .font(.system(.caption, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.7))
-                Text(card.isCreditCard ? card.formattedOwed : card.formattedBalance)
-                    .font(.system(.title, weight: .heavy))
-                    .foregroundStyle(highlightInsufficient ? Color(hex: "#FFD1D1") : .white)
-                    .minimumScaleFactor(0.6)
-                    .lineLimit(1)
-                if card.isCreditCard {
-                    Text(String(format: loc("cc.avail_short"), card.formattedAvailable))
-                        .font(.system(.caption2, weight: .medium)).foregroundStyle(.white.opacity(0.8))
-                }
-            }
-            .padding(18)
-        }
-        .frame(height: 150)
-        .shadow(color: .black.opacity(0.28), radius: 14, y: 7)
     }
 }

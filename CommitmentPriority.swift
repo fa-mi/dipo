@@ -81,7 +81,6 @@ struct CommitmentReview {
 
     var total: Double { lines.reduce(0) { $0 + $1.monthly } }
     var discretionary: Double { lines.filter(\.isDiscretionary).reduce(0) { $0 + $1.monthly } }
-    var contractual: Double { total - discretionary }
     var shareOfIncome: Double { monthlyIncome > 0 ? total / monthlyIncome : 0 }
 
     /// Months to the goal at the current contribution, and at that contribution

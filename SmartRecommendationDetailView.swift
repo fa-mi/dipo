@@ -224,16 +224,6 @@ struct SmartRecommendationDetailView: View {
         }
     }
 
-    private func impactStat(_ value: String, _ label: String, _ color: Color) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(value).font(.system(.callout, weight: .bold)).foregroundStyle(color)
-                .minimumScaleFactor(0.6).lineLimit(1)
-            Text(label).font(.system(.caption2)).foregroundStyle(.white.opacity(0.65))
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
     // MARK: Saving
 
     private var savingTab: some View {

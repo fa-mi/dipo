@@ -70,7 +70,6 @@ final class FirebaseSupportService {
 
     var tickets: [SupportTicket] = []
     var isLoading = false
-    var submitError: String?
     var fetchError: String?      // ← shown in UI so user can see what went wrong
 
     // MARK: - Maintenance Mode (admin-controlled global gate)
