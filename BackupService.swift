@@ -297,6 +297,9 @@ struct BackupHolding: Codable {
     let priceHistory: [Double]
     let sortOrder: Int
     let lots: [BackupLot]
+    /// The savings goal the holding is kept for. Optional: backups from
+    /// before goals could be kept in investments have none.
+    var goalID: UUID? = nil
 }
 
 struct BackupLot: Codable {
@@ -768,7 +771,8 @@ enum BackupService {
                                   units: l.units, pricePerUnit: l.pricePerUnit, fee: l.fee,
                                   cashAmount: l.cashAmount, note: l.note,
                                   linkedCardTxID: l.linkedCardTxID)
-                    })
+                    },
+                    goalID: h.goal?.id)
             },
             receivables: receivables.map { r in
                 BackupReceivable(id: r.id.uuidString, personName: r.personName, amount: r.amount,
@@ -984,6 +988,8 @@ enum BackupService {
             context.insert(debt)
         }
 
+        // Kept by id, so the investments restored below find the goal they were for.
+        var restoredGoals: [UUID: SavingsGoal] = [:]
         for g in payload.goals {
             let goal = SavingsGoal(
                 name: g.name, emoji: g.emoji,
@@ -1000,6 +1006,7 @@ enum BackupService {
             goal.createdAt = g.createdAt
             goal.isPinned = g.isPinned
             context.insert(goal)
+            restoredGoals[goal.id] = goal
         }
 
         for ci in payload.cycleIntents ?? [] {
@@ -1026,6 +1033,7 @@ enum BackupService {
             holding.priceUpdatedAt = h.priceUpdatedAt
             holding.priceHistory = h.priceHistory
             context.insert(holding)
+            if let goalID = h.goalID { holding.goal = restoredGoals[goalID] }
             for l in h.lots {
                 guard let kind = InvestmentLotKind(rawValue: l.kindRaw) else { continue }
                 let lot = InvestmentLot(kind: kind, date: l.date, units: l.units,
@@ -1256,6 +1264,8 @@ enum BackupService {
             debt.manuallyClosed = d.manuallyClosed ?? false
             context.insert(debt)
         }
+        // Kept by id, so the investments restored below find the goal they were for.
+        var restoredGoals: [UUID: SavingsGoal] = [:]
         for g in payload.goals {
             let goal = SavingsGoal(
                 name: g.name, emoji: g.emoji,
@@ -1272,6 +1282,7 @@ enum BackupService {
             goal.createdAt = g.createdAt
             goal.isPinned = g.isPinned
             context.insert(goal)
+            restoredGoals[goal.id] = goal
         }
         for ci in payload.cycleIntents ?? [] {
             guard let kind = CycleIntentKind(rawValue: ci.kindRaw) else { continue }
@@ -1297,6 +1308,7 @@ enum BackupService {
             holding.priceUpdatedAt = h.priceUpdatedAt
             holding.priceHistory = h.priceHistory
             context.insert(holding)
+            if let goalID = h.goalID { holding.goal = restoredGoals[goalID] }
             for l in h.lots {
                 guard let kind = InvestmentLotKind(rawValue: l.kindRaw) else { continue }
                 let lot = InvestmentLot(kind: kind, date: l.date, units: l.units,

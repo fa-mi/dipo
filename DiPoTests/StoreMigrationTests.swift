@@ -72,6 +72,67 @@ final class StoreMigrationTests: XCTestCase {
                        v4.split(separator: "\n").filter { !$0.hasPrefix("HeldWant.") })
     }
 
+    /// Frozen V4 is the live models without what V5 added: the holding's goal
+    /// and its inverse.
+    func testFrozenV4MatchesTheLiveModelsMinusWhatV5Added() {
+        let v4 = SchemaFingerprintTests.fingerprint(Schema(versionedSchema: DiPoSchemaV4.self))
+        let v5 = SchemaFingerprintTests.fingerprint(Schema(versionedSchema: DiPoSchemaV5.self))
+        XCTAssertEqual(v4.split(separator: "\n"),
+                       v5.split(separator: "\n").filter {
+                           $0 != "InvestmentHolding.goal -> SavingsGoal" && $0 != "SavingsGoal.holdings -> InvestmentHolding[]"
+                       })
+    }
+
+    /// A phone on 3.3 (137–142) holds a V4 store. Its goals and holdings come
+    /// through V5 as they were, each holding kept for no goal until it is
+    /// chosen for one.
+    func testV4StoreOpensAsCurrentWithItsHoldingsForNoGoal() throws {
+        let url = dir.appendingPathComponent("default.store")
+        let schemaV4 = Schema(DiPoSchemaV4.models)
+        let holdingID: UUID
+        do {
+            let container = try ModelContainer(for: schemaV4,
+                                               configurations: ModelConfiguration(schema: schemaV4, url: url))
+            let context = ModelContext(container)
+            let goal = DiPoSchemaV1.SavingsGoal()
+            goal.name = "Trip to Mecca"
+            goal.targetAmount = 150_000_000
+            goal.savedAmount = 30_500_000
+            context.insert(goal)
+            let holding = DiPoSchemaV1.InvestmentHolding()
+            holding.typeRaw = "stock"
+            holding.name = "AJAIB"
+            holding.symbol = "BBRI"
+            holding.currency = "IDR"
+            holding.lastPrice = 2_628
+            context.insert(holding)
+            let want = DiPoSchemaV4.HeldWant()
+            want.name = "Sepatu lari"
+            want.amount = 450_000
+            context.insert(want)
+            try context.save()
+            holdingID = holding.id
+        }
+
+        let schema = Schema(versionedSchema: DiPoSchemaCurrent.self)
+        let container = try ModelContainer(for: schema, migrationPlan: DiPoMigrationPlan.self,
+                                           configurations: ModelConfiguration(schema: schema, url: url))
+        let context = ModelContext(container)
+        let goals = try context.fetch(FetchDescriptor<SavingsGoal>())
+        XCTAssertEqual(goals.map(\.name), ["Trip to Mecca"])
+        XCTAssertEqual(goals.first?.savedAmount, 30_500_000)
+        XCTAssertEqual(goals.first?.holdings.count, 0)
+        let holdings = try context.fetch(FetchDescriptor<InvestmentHolding>())
+        XCTAssertEqual(holdings.map(\.id), [holdingID])
+        XCTAssertNil(holdings.first?.goal)
+        XCTAssertEqual(try context.fetch(FetchDescriptor<HeldWant>()).map(\.name), ["Sepatu lari"])
+
+        let goal = try XCTUnwrap(goals.first), holding = try XCTUnwrap(holdings.first)
+        goal.keep(in: [holding])
+        try context.save()
+        XCTAssertTrue(holding.goal === goal)
+    }
+
     /// A phone on 3.3 (113–136) holds a V3 store. Its rows come through V4 as
     /// they were, with an empty list of held wants that takes new ones.
     func testV3StoreOpensAsCurrentWithAnEmptyHoldList() throws {

@@ -445,6 +445,8 @@ struct HoldingRow: View {
             parts.append(holding.manualPrice ? loc("invest.manual") : loc("invest.auto"))
         }
         if !holding.symbol.isEmpty { parts.append(holding.symbol.uppercased()) }
+        // The goal it is kept for, so the row says what the money is for.
+        if let goal = holding.goal { parts.append(goal.emoji + " " + goal.name) }
         return parts.joined(separator: " · ")
     }
 

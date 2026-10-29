@@ -123,9 +123,33 @@ nonisolated enum DiPoSchemaV3: VersionedSchema {
 }
 
 /// V4 adds the wants held before buying (`HeldWant`, DiPo/HeldWant.swift).
-/// Every other model is unchanged from V3, so the step is lightweight.
+/// Every other model is unchanged from V3, so the step is lightweight. Builds
+/// 3.3 (137) to (142). Frozen: V1's copies, V3's PhysicalAsset, and HeldWant
+/// as it was then (SchemaV4Frozen.swift).
 nonisolated enum DiPoSchemaV4: VersionedSchema {
     static let versionIdentifier = Schema.Version(4, 0, 0)
+
+    static var models: [any PersistentModel.Type] {
+        [
+            DiPoSchemaV1.BankCard.self, DiPoSchemaV1.TxRecord.self, DiPoSchemaV1.SalarySchedule.self,
+            DiPoSchemaV1.DebtRecord.self, DiPoSchemaV1.SavingsGoal.self, DiPoSchemaV1.RecurringExpense.self,
+            DiPoSchemaV1.Receivable.self, DiPoSchemaV1.CardInstallment.self, DiPoSchemaV1.CardBudgetConfig.self,
+            DiPoSchemaV1.CycleIntent.self, DiPoSchemaV1.InvestmentHolding.self, DiPoSchemaV1.InvestmentLot.self,
+            DiPoSchemaV1.DailyRollup.self, DiPoSchemaV1.DayCheckIn.self, DiPoSchemaV1.PendingTransaction.self,
+            DiPoSchemaV3.PhysicalAsset.self,
+            // Something wanted, waiting a few days before it is bought.
+            DiPoSchemaV4.HeldWant.self,
+        ]
+    }
+}
+
+/// V5 lets a savings goal be kept in investments: a holding belongs to one
+/// goal at most (`InvestmentHolding.goal`, with `SavingsGoal.holdings` its
+/// inverse), and the goal counts the holding at its market value. A new
+/// optional relationship only, so the step is lightweight: every holding
+/// comes through with no goal.
+nonisolated enum DiPoSchemaV5: VersionedSchema {
+    static let versionIdentifier = Schema.Version(5, 0, 0)
 
     static var models: [any PersistentModel.Type] {
         [
@@ -134,19 +158,17 @@ nonisolated enum DiPoSchemaV4: VersionedSchema {
             Receivable.self, CardInstallment.self, CardBudgetConfig.self,
             CycleIntent.self, InvestmentHolding.self, InvestmentLot.self,
             DailyRollup.self, DayCheckIn.self, PendingTransaction.self,
-            PhysicalAsset.self,
-            // Something wanted, waiting a few days before it is bought.
-            HeldWant.self,
+            PhysicalAsset.self, HeldWant.self,
         ]
     }
 }
 
 /// The version the app runs on. Move it forward with each new version.
-typealias DiPoSchemaCurrent = DiPoSchemaV4
+typealias DiPoSchemaCurrent = DiPoSchemaV5
 
 nonisolated enum DiPoMigrationPlan: SchemaMigrationPlan {
     static var schemas: [any VersionedSchema.Type] {
-        [DiPoSchemaV1.self, DiPoSchemaV2.self, DiPoSchemaV3.self, DiPoSchemaV4.self]
+        [DiPoSchemaV1.self, DiPoSchemaV2.self, DiPoSchemaV3.self, DiPoSchemaV4.self, DiPoSchemaV5.self]
     }
 
     static var stages: [MigrationStage] {
@@ -157,6 +179,8 @@ nonisolated enum DiPoMigrationPlan: SchemaMigrationPlan {
             .lightweight(fromVersion: DiPoSchemaV2.self, toVersion: DiPoSchemaV3.self),
             // A new model only, again.
             .lightweight(fromVersion: DiPoSchemaV3.self, toVersion: DiPoSchemaV4.self),
+            // A new optional relationship, holding → goal, with its inverse.
+            .lightweight(fromVersion: DiPoSchemaV4.self, toVersion: DiPoSchemaV5.self),
         ]
     }
 }

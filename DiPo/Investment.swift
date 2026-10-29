@@ -139,6 +139,10 @@ final class InvestmentHolding {
     @Relationship(deleteRule: .cascade)
     var lots: [InvestmentLot] = []
 
+    /// The savings goal this holding is kept for, if any. One goal at most: a
+    /// holding counted toward two goals would be counted twice.
+    var goal: SavingsGoal?
+
     init(type: InvestmentType, name: String, symbol: String = "",
          currency: String = CurrencyManager.shared.preferredCurrency,
          lastPrice: Double = 0, prevClose: Double = 0,
