@@ -88,7 +88,6 @@ struct HomeView: View {
     @State private var showAskDiPo          = false
     /// A question to send as Ask DiPo opens — from one of DiPo's ideas.
     @State private var askDiPoPrompt: String? = nil
-    @State private var showQuest = false
     @State private var showAddCard          = false
     @State private var showAddSalary        = false
     @State private var categoryFilter: TxCategory? = nil
@@ -690,9 +689,6 @@ struct HomeView: View {
                 .presentationBackground(AppTheme.bg)
                 .preferredColorScheme(appColorScheme())
         }
-        .fullScreenCover(isPresented: $showQuest) {
-            DiPoQuestView(isRoyal: dipoIsRoyal).preferredColorScheme(appColorScheme())
-        }
         .sheet(isPresented: $showAskDiPo) {
             // DiPo opens with the Smart Insights; Free hears the top one and
             // sees what Royal adds when it tries to chat.
@@ -767,8 +763,6 @@ struct HomeView: View {
                             case .bills:         vm.open(PlanRoute.bills)
                             case .salary:        vm.open(PlanRoute.salary)
                             case .checkIn, .streak, .interestGuess: break   // handled inside DiPo's section
-                            case .quest:
-                                showQuest = true
                             case .assetCheck:
                                 assetCheckSnoozedUntil = AssetMarketCheck.snoozed()
                                 vm.open(PlanRoute.assets)

@@ -63,7 +63,7 @@ final class DiPoTalkTests: XCTestCase {
                     "dipo.payday_tomorrow", "dipo.payday_in", "dipo.sfx.bill", "dipo.bill_today",
                     "dipo.bill_tomorrow", "dipo.bill_in", "dipo.bill_auto", "dipo.bill_manual",
                     "dipo.link.notifications", "dipo.link.bills", "dipo.link.salary", "dipo.link.checkin", "dipo.streak_title", "dipo.streak_keep", "dipo.streak_week", "dipo.streak_month", "dipo.streak_legend", "dipo.link.streak", "dipo.bill_balance_after",
-                    "ai.credits_left", "ai.credits_out", "ai.credits_placeholder", "game.play"]
+                    "ai.credits_left", "ai.credits_out", "ai.credits_placeholder"]
         keys += (0..<DiPoVoice.questionCount).map { "dipo.q.\($0)" }
         keys += (0..<DiPoScript.tipCount).map { "dipo.tip.\($0)" }
         for lang in LanguageManager.Language.allCases {
@@ -130,7 +130,7 @@ final class DiPoTalkTests: XCTestCase {
     func testEveryReminderHasAPlainIcon() {
         let actions: [DiPoNudge.Action] = [.notifications, .checkIn, .bills, .salary, .streak,
                                            .interestGuess(.coffee), .interestTip(.coffee),
-                                           .customInterestTip("Kopi"), .quest, .assetCheck]
+                                           .customInterestTip("Kopi"), .assetCheck]
         for action in actions {
             let nudge = DiPoNudge(id: "x", mood: .info, exclamation: "", text: "", action: action, link: "")
             XCTAssertNotNil(UIImage(systemName: nudge.symbol), "\(action): \(nudge.symbol)")

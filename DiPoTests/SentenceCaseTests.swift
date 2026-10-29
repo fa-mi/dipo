@@ -20,7 +20,6 @@ final class SentenceCaseTests: XCTestCase {
         "planner.row_jp",            // BPJS JP (1%)
         "invest.field.symbol_ph_us", // ticker symbols
         "unity.dipo_id_ph",          // an example DiPo ID
-        "quest.xp",                  // "%d XP"
     ]
 
     func testNoLabelIsWrittenInCapitals() throws {
