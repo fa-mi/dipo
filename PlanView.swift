@@ -192,6 +192,7 @@ struct PlanView: View {
         guard let trip = Navigasi.Trip.decode(naviTrip),
               let goal = goals.first(where: { $0.id == trip.goalID }) else { return loc("navi.status_pick") }
         let name = "\(goal.emoji) \(goal.name)"
+        guard goal.isCompleted || goal.monthlyContribution > 0 else { return loc("navi.choose_route") }
         let status = Navigasi.status(of: trip, goal: goal, cards: cards, salaries: schedules)
         switch status.leg {
         case .arrived:

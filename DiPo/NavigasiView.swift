@@ -32,16 +32,24 @@ struct NavigasiView: View {
         guard let trip else { return nil }
         return goals.first { $0.id == trip.goalID }
     }
+    /// The trip's goal when its monthly plan was cleared on the goal's own
+    /// screen: there is no route left to follow, so it asks for one again.
+    private var reroute: SavingsGoal? {
+        guard let goal = tripGoal, !goal.isCompleted, goal.monthlyContribution <= 0 else { return nil }
+        return goal
+    }
 
     var body: some View {
         ZStack {
             AppTheme.bg.ignoresSafeArea()
-            if let planning {
+            if let planning = planning ?? reroute {
                 NaviRoutePlanner(goal: planning,
                                  replacing: tripGoal.flatMap { $0.id == planning.id ? nil : $0 },
                                  cards: cards, salaries: salaries,
-                                 onCancel: tripGoal == nil ? nil : backToTrip,
+                                 onCancel: tripGoal == nil || reroute != nil ? nil : backToTrip,
                                  onStart: { start($0, to: planning) })
+                    // A fresh planner per goal: what it read is that goal's.
+                    .id(planning.id)
             } else if let trip, let tripGoal {
                 NaviGuidance(goal: tripGoal, trip: trip, cards: cards, salaries: salaries, bills: bills,
                              onAccept: accept, onEnd: end,
