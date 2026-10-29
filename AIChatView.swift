@@ -338,7 +338,6 @@ struct AIChatView: View {
     var isRoyal: Bool = true
     @State private var showVoiceCapture = false
     @State private var showPaywall = false
-    @State private var showGame = false
 
     // DiPo in 3D at the top, reacting to what he says.
     @State private var dipoMood: DiPoMood = .idle
@@ -454,11 +453,6 @@ struct AIChatView: View {
             }
             .preferredColorScheme(appColorScheme())
         }
-        // DiPo Quest: the levelled money game, with DiPo Run inside it as a bonus.
-        .fullScreenCover(isPresented: $showGame) {
-            DiPoQuestView(isRoyal: isRoyal)
-                .preferredColorScheme(appColorScheme())
-        }
         .sheet(isPresented: $showPaywall) {
             PaywallView()
                 .presentationDetents([.large]).presentationDragIndicator(.visible)
@@ -511,44 +505,16 @@ struct AIChatView: View {
 
             DiPoFrame(size: nil, cornerRadius: 28) {
                 HStack(spacing: 2) {
-                    DiPoDragonView(mood: dipoMood, line: dipoLine, talkSeconds: dipoTalk,
-                                   animates: !showGame)
+                    DiPoDragonView(mood: dipoMood, line: dipoLine, talkSeconds: dipoTalk)
                         .frame(width: 140, height: 140)
                     headerBubble
                         .padding(.trailing, 14)
-                        .padding(.bottom, 12)   // clear of the game button on the edge
                 }
             }
             .frame(height: 168)
             .padding(.horizontal, 18)
             .padding(.top, 10)
-            .overlay(alignment: .bottom) {
-                Button {
-                    HapticManager.shared.tap()
-                    showGame = true
-                } label: {
-                    HStack(spacing: 8) {
-                        Image(systemName: "gamecontroller.fill")
-                            .font(.system(.caption, weight: .bold))
-                            .foregroundStyle(AppTheme.royalGoldText)
-                            .frame(width: 26, height: 26)
-                            .background(AppTheme.royalGold.opacity(0.2), in: Circle())
-                        Text(loc("quest.play"))
-                            .font(.system(.footnote, weight: .semibold))
-                            .foregroundStyle(AppTheme.textPrimary)
-                        Image(systemName: "chevron.right")
-                            .font(.system(.caption2, weight: .bold))
-                            .foregroundStyle(AppTheme.textSecondary)
-                    }
-                    .padding(.leading, 6).padding(.trailing, 14).padding(.vertical, 6)
-                    .background(AppTheme.cardDark, in: Capsule())
-                    .overlay(Capsule().stroke(AppTheme.royalGold.opacity(0.55), lineWidth: 1))
-                    .shadow(color: .black.opacity(0.08), radius: 8, y: 4)
-                }
-                .buttonStyle(ScaleButtonStyle())
-                .offset(y: 18)
-            }
-            .padding(.bottom, 26)
+            .padding(.bottom, 8)
         }
     }
 

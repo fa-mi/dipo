@@ -205,8 +205,8 @@ final class AssetMarketCheckTests: XCTestCase {
     func testDiPoNamesTheAssetAfterMoneyAndDates() {
         LanguageManager.shared.withLanguage(.indonesian) {
             let one = DiPoNudge.all(unread: 0, bill: nil, daysToPayday: 2, payDate: .now,
-                                    assetCheck: ["Honda Brio RS"], questWaiting: true)
-            XCTAssertEqual(one.map(\.action), [.salary, .assetCheck, .quest])
+                                    assetCheck: ["Honda Brio RS"])
+            XCTAssertEqual(one.map(\.action), [.salary, .assetCheck])
             XCTAssertEqual(one[1].rowTitle, "Cek lagi harga Honda Brio RS")
             XCTAssertEqual(one[1].rowDetail, loc("dipo.asset_check_detail"))
             let two = DiPoNudge.all(unread: 0, bill: nil, daysToPayday: nil, payDate: nil,

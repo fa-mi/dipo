@@ -64,8 +64,8 @@ final class DiPoDragonRig {
     private let drop = SCNNode()
     private(set) var mood: DiPoMood = .idle
     /// Turning all the way round, slowly, instead of looking left and right —
-    /// for a place where he stands on his own, like the Quest path. Reduce
-    /// Motion keeps the slow look instead.
+    /// for a place where he stands on his own. Reduce Motion keeps the slow
+    /// look instead.
     let spins: Bool
     /// One full turn, in seconds. Slow enough to read as showing himself off
     /// rather than spinning.
@@ -300,9 +300,8 @@ struct DiPoDragonView: View {
     var talkSeconds: Double = 0
     /// Called after his hop when he is tapped, e.g. to open Ask DiPo.
     var onTap: (() -> Void)? = nil
-    /// False while something covers him (the game over Ask DiPo, Ask DiPo
-    /// over Home): he holds still and stops drawing, leaving the GPU to the
-    /// screen in front.
+    /// False while something covers him (Ask DiPo over Home): he holds still
+    /// and stops drawing, leaving the GPU to the screen in front.
     var animates = true
     /// Turn all the way round, slowly, instead of looking left and right.
     var spins = false
@@ -350,8 +349,8 @@ private struct DiPoDragonScene: UIViewRepresentable {
         view.addGestureRecognizer(UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.tapped)))
         if interactive {
             let pan = UIPanGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.dragged(_:)))
-            // Sideways only, so a DiPo inside a scrolling screen (the Quest
-            // path) never swallows the scroll that starts on him.
+            // Sideways only, so a DiPo inside a scrolling screen never
+            // swallows the scroll that starts on him.
             pan.delegate = context.coordinator
             view.addGestureRecognizer(pan)
         }

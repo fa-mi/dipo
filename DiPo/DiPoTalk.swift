@@ -144,8 +144,6 @@ struct DiPoNudge: Equatable, Identifiable {
         case interestTip(DiPoInterest)
         /// An interest the user wrote themselves: opens Ask DiPo with it.
         case customInterestTip(String)
-        /// Today's DiPo Quest has not been played yet.
-        case quest
         /// An asset's value has gone unchecked for half a year or more.
         case assetCheck
     }
@@ -179,7 +177,6 @@ struct DiPoNudge: Equatable, Identifiable {
         case .streak:                          return "flame.fill"
         case .interestGuess:                   return "questionmark.bubble.fill"
         case .interestTip, .customInterestTip: return "lightbulb.fill"
-        case .quest:                           return "gamecontroller.fill"
         case .assetCheck:                      return "tag.fill"
         }
     }
@@ -204,8 +201,7 @@ struct DiPoNudge: Equatable, Identifiable {
                     bill: Bill?, daysToPayday: Int?, payDate: Date?,
                     interestGuess: DiPoInterest? = nil, interestTip: DiPoInterest? = nil,
                     customInterestTip: String? = nil,
-                    assetCheck: [String] = [],
-                    questWaiting: Bool = false) -> [DiPoNudge] {
+                    assetCheck: [String] = []) -> [DiPoNudge] {
         var out: [DiPoNudge] = []
         // The streak greets the user when they open the app; two days is the
         // shortest run worth a word.
@@ -290,12 +286,6 @@ struct DiPoNudge: Equatable, Identifiable {
                                  text: String(format: loc("interest.custom.tip"), name),
                                  action: .customInterestTip(name), link: loc("interest.link_ask")))
         }
-        // Last of all: a nudge back to the game, whose daily quests include
-        // logging a transaction — the habit the rest of the app is for.
-        if questWaiting {
-            out.append(DiPoNudge(id: "quest", mood: .happy, exclamation: loc("dipo.quest_title"),
-                                 text: loc("dipo.quest_body"), action: .quest, link: loc("dipo.link.quest")))
-        }
         return out
     }
 
@@ -319,7 +309,7 @@ struct DiPoNudge: Equatable, Identifiable {
 ///
 /// He used to stand above the balance, a 3D figure beside a thought cloud,
 /// and took the top of the screen before any money did. The figure lives on
-/// in Ask DiPo and Quest, where a character helps; here he is an assistant.
+/// in Ask DiPo, where a character helps; here he is an assistant.
 struct DiPoHomeRow: View {
     let nudges: [DiPoNudge]
     /// Today in a few words ("Today is logged"), when there is no reminder.

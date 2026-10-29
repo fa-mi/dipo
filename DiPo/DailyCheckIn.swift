@@ -148,7 +148,6 @@ struct DiPoHomeSection: View {
     /// Read so a custom interest added in Profile takes its turn at once.
     @AppStorage("dipo_interests_custom") private var customRaw = ""
     @State private var askingInterest: DiPoInterest?
-    @State private var quest = QuestStore.shared
 
     init(unread: Int, bill: DiPoNudge.Bill?, daysToPayday: Int?, payDate: Date?,
          assetCheck: [String] = [], isRoyal: Bool = false,
@@ -191,8 +190,7 @@ struct DiPoHomeSection: View {
                                   bill: bill, daysToPayday: daysToPayday, payDate: payDate,
                                   interestGuess: interestGuess, interestTip: interestTip?.preset,
                                   customInterestTip: interestTip?.custom,
-                                  assetCheck: assetCheck,
-                                  questWaiting: questWaiting),
+                                  assetCheck: assetCheck),
             status: status,
             onAskDiPo: onAskDiPo,
             onNudge: { action in
@@ -276,12 +274,6 @@ struct DiPoHomeSection: View {
         let day = Calendar.current.ordinality(of: .day, in: .era, for: refreshedAt) ?? 0
         let i = day % count
         return i < liked.count ? (liked[i], nil) : (nil, custom[i - liked.count])
-    }
-
-    /// No DiPo Quest level finished today yet.
-    private var questWaiting: Bool {
-        _ = refreshedAt   // re-read on return to the app, the day may have changed
-        return !quest.state.quests(now: .now, loggedToday: false).played
     }
 
     private func refreshReminder() {

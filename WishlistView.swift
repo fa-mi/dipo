@@ -346,6 +346,10 @@ struct WishlistView: View {
                 }
                 .containerRelativeFrame(.horizontal)
             }
+            // Goals kept in investments are worth what their prices say:
+            // stale quotes are fetched on the way in, all of them on a pull.
+            .task { await GoalPrices.refresh(activeGoals.flatMap(\.holdings), context: context) }
+            .refreshable { await GoalPrices.refresh(activeGoals.flatMap(\.holdings), context: context, force: true) }
 
             if let goal = celebratingGoal {
                 GoalCelebration(goal: goal) {
@@ -692,26 +696,19 @@ struct GoalCard: View {
         return nil
     }
 
-    /// "Rp 31.244.000 in investments, bought for Rp 44.500.000  ↘ 29.79%" —
-    /// one Text, so a long line wraps rather than shrinking.
-    private var investedLine: some View {
-        let cm = CurrencyManager.shared
+    /// "· 📈 Stocks ↘ 33.07%" on the priority row: what the goal is kept in and
+    /// how that has done. The figures are on the goal's own screen; a row of
+    /// its own here made the card read busier than the goal is.
+    private var investTag: Text {
         let cost = goal.investedCost
         let pct = cost > 0 ? (goal.investedValue - cost) / cost : 0
         let tint = investPLColorPct(pct)
-        var line = Text(Image(systemName: "chart.line.uptrend.xyaxis")) + Text(" ")
-            + Text(String(format: loc("savings.invest_line"),
-                          cm.formatted(goal.investedValue, currency: goal.currency),
-                          cm.formatted(cost, currency: goal.currency))) + Text("  ")
+        var tag = Text("· ") + Text(Image(systemName: "chart.line.uptrend.xyaxis"))
+            + Text(" " + goal.investedKindLabel + " ")
         if let arrow = investArrow(investTrendPct(pct)) {
-            line = line + Text(Image(systemName: arrow)).foregroundStyle(tint) + Text(" ")
+            tag = tag + Text(Image(systemName: arrow)).foregroundStyle(tint) + Text(" ")
         }
-        line = line + Text(investPctAbs(pct)).fontWeight(.semibold).foregroundStyle(tint)
-        return line
-            .font(.system(.caption))
-            .foregroundStyle(AppTheme.textSecondary)
-            .lineLimit(2)
-            .fixedSize(horizontal: false, vertical: true)
+        return tag + Text(investPctAbs(pct)).fontWeight(.semibold).foregroundStyle(tint)
     }
 
     var body: some View {
@@ -731,6 +728,7 @@ struct GoalCard: View {
                         HStack(spacing: 6) {
                             Circle().fill(goal.priorityColor).frame(width: 6, height: 6)
                             Text(String(format: loc("savings.priority_fmt"), goal.priorityLabel))
+                            if goal.isInvested { investTag.layoutPriority(1) }
                             if goal.isPinned {
                                 Text("·")
                                 Image(systemName: "pin.fill").imageScale(.small)
@@ -739,6 +737,7 @@ struct GoalCard: View {
                         }
                         .font(.system(.caption))
                         .foregroundStyle(AppTheme.textSecondary)
+                        .lineLimit(1)
                     }
                     Spacer(minLength: 6)
                     Image(systemName: "chevron.right")
@@ -766,7 +765,6 @@ struct GoalCard: View {
                         .foregroundStyle(AppTheme.textPrimary)
                 }
                 SavingsProgressBar(progress: goal.progress)
-                if goal.isInvested { investedLine }
                 if let line = planLine {
                     Label(line.text, systemImage: line.icon)
                         .font(.system(.caption))
@@ -1540,6 +1538,8 @@ struct GoalDetailView: View {
                 .padding(.top, 12)
                 .containerRelativeFrame(.horizontal)
             }
+            .task { await GoalPrices.refresh(goal.holdings, context: context) }
+            .refreshable { await GoalPrices.refresh(goal.holdings, context: context, force: true) }
         }
         .navigationTitle(goal.name)
         .navigationBarTitleDisplayMode(.inline)

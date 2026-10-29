@@ -29,7 +29,6 @@ enum Screen: String {
     case salarySchedule, recurring, savingsGoals, unitySavings, jointAccount
     case cardForm, transfer, mainCardGate
     case askDiPo, receiptScan, backup, webSync, support, paywall
-    case quest, questLesson
 }
 
 @Observable
