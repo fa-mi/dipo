@@ -302,10 +302,7 @@ extension StatisticsView {
         let (start, end) = effectiveRange
         if selectedPeriod == .allTime { return loc("stats.all_tx") }
         if selectedPeriod == .thisMonth || selectedPeriod == .lastMonth {
-            let mfmt = DateFormatter()
-            mfmt.locale = locale
-            mfmt.dateFormat = DateFormatter.dateFormat(fromTemplate: "MMMMyyyy", options: 0, locale: locale)
-            return mfmt.string(from: start)
+            return DateFormatterCache.template("MMMMyyyy").string(from: start)
         }
         // A pay cycle runs from payday to the day BEFORE the next payday, and
         // the header should say so. `effectiveRange.end` is TODAY for a running
@@ -911,10 +908,7 @@ extension StatisticsView {
     func computeNetWorthTrend() -> [CycleTrendPoint] {
         let cal = Calendar.current
         let now = Date()
-        let locale = LanguageManager.shared.currentLocale
-        let fmt = DateFormatter()
-        fmt.locale = locale
-        fmt.dateFormat = DateFormatter.dateFormat(fromTemplate: "MMM", options: 0, locale: locale)
+        let fmt = DateFormatterCache.template("MMM")
         var points: [CycleTrendPoint] = []
 
         // Bucket boundaries: pay-cycle anchored (start of current cycle, then
