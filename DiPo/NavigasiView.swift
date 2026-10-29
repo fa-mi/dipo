@@ -42,23 +42,7 @@ struct NavigasiView: View {
     var body: some View {
         ZStack {
             AppTheme.bg.ignoresSafeArea()
-            if let planning = planning ?? reroute {
-                NaviRoutePlanner(goal: planning,
-                                 replacing: tripGoal.flatMap { $0.id == planning.id ? nil : $0 },
-                                 cards: cards, salaries: salaries,
-                                 onCancel: tripGoal == nil || reroute != nil ? nil : backToTrip,
-                                 onStart: { start($0, to: planning) })
-                    // A fresh planner per goal: what it read is that goal's.
-                    .id(planning.id)
-            } else if let trip, let tripGoal {
-                NaviGuidance(goal: tripGoal, trip: trip, cards: cards, salaries: salaries, bills: bills,
-                             onAccept: accept, onEnd: end,
-                             onChangeRoute: { withAnimation { planning = tripGoal } })
-            } else {
-                NaviDestinations(goals: goals.filter { !$0.isCompleted },
-                                 onPick: { picked in withAnimation { planning = picked } },
-                                 onNewGoal: { makingGoal = true })
-            }
+            content
         }
         .navigationTitle(loc("navi.title"))
         .navigationBarTitleDisplayMode(.inline)
@@ -84,6 +68,37 @@ struct NavigasiView: View {
                 .presentationDragIndicator(.visible)
                 .presentationBackground(AppTheme.bg)
         }
+    }
+
+    @ViewBuilder private var content: some View {
+        if let goal = planning ?? reroute {
+            planner(for: goal)
+        } else if let trip, let tripGoal {
+            guidance(trip: trip, goal: tripGoal)
+        } else {
+            destinations
+        }
+    }
+
+    private func planner(for goal: SavingsGoal) -> some View {
+        let replacing: SavingsGoal? = tripGoal?.id == goal.id ? nil : tripGoal
+        let cancel: (() -> Void)? = tripGoal == nil || reroute != nil ? nil : { backToTrip() }
+        return NaviRoutePlanner(goal: goal, replacing: replacing, cards: cards, salaries: salaries,
+                                onCancel: cancel, onStart: { start($0, to: goal) })
+            // A fresh planner per goal: what it read is that goal's.
+            .id(goal.id)
+    }
+
+    private func guidance(trip: Navigasi.Trip, goal: SavingsGoal) -> some View {
+        NaviGuidance(goal: goal, trip: trip, cards: cards, salaries: salaries, bills: bills,
+                     onAccept: { accept($0) }, onEnd: { end() },
+                     onChangeRoute: { withAnimation { planning = goal } })
+    }
+
+    private var destinations: some View {
+        NaviDestinations(goals: goals.filter { !$0.isCompleted },
+                         onPick: { picked in withAnimation { planning = picked } },
+                         onNewGoal: { makingGoal = true })
     }
 
     private func open() {

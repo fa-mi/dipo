@@ -1726,6 +1726,12 @@ struct GoalDetailView: View {
         return (months, date)
     }
 
+    /// Under "Navigate here": when the trip arrives, once it is headed here.
+    private var naviLinkDetail: String? {
+        guard navigatedHere != nil else { return loc("navi.go_here_sub") }
+        return reachedBy.map { String(format: loc("navi.arrive"), Navigasi.monthYear($0.date)) }
+    }
+
     /// The trip under way, when it is headed for this goal.
     private var navigatedHere: Navigasi.Trip? {
         guard naviOn, let trip = Navigasi.Trip.decode(naviTrip), trip.goalID == goal.id else { return nil }
@@ -1801,9 +1807,7 @@ struct GoalDetailView: View {
                 if naviOn && !goal.isCompleted {
                     divider.padding(.leading, 46)
                     linkRow("location.north.circle.fill", AppTheme.accent, loc("navi.go_here"),
-                            navigatedHere == nil ? loc("navi.go_here_sub")
-                                                 : reachedBy.map { String(format: loc("navi.arrive"),
-                                                                          Navigasi.monthYear($0.date)) }) {
+                            naviLinkDetail) {
                         navigating = true
                     }
                 }
