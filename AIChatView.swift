@@ -475,9 +475,8 @@ struct AIChatView: View {
 
     // MARK: Header
 
-    /// The title and the speak-aloud toggle; under them DiPo in his frame,
-    /// with the game's button resting on the frame's lower edge. The credit
-    /// count lives by the input now, where it matters.
+    /// The title and the speak-aloud toggle; under them DiPo in his frame.
+    /// The credit count lives by the input, where it matters.
     private var header: some View {
         VStack(spacing: 0) {
             HStack(spacing: 10) {

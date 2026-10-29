@@ -10,8 +10,8 @@ import UIKit
 // and the logo on the back of his phone painted out.
 //
 // The model holds no animation of its own, so he is moved as a whole through
-// SCNActions: a slow look left and right, breathing, a hop when tapped, and a
-// turn when dragged. 30 fps; Reduce Motion keeps only the slow look.
+// SCNActions: a slow look left and right, breathing, and a hop when tapped.
+// 30 fps; Reduce Motion keeps only the slow look.
 
 /// The model, read from the bundle once and cloned for each view. Reading
 /// the 1.2 MB file every time a DiPo appeared — on the main thread, as Ask
@@ -33,17 +33,6 @@ enum DiPoModel {
     }
 }
 
-private struct DiPoAnimatesKey: EnvironmentKey { static let defaultValue = true }
-
-extension EnvironmentValues {
-    /// False where DiPo cannot be seen — his tab is not the one showing — so
-    /// he stops drawing instead of rendering behind another screen.
-    var dipoAnimates: Bool {
-        get { self[DiPoAnimatesKey.self] }
-        set { self[DiPoAnimatesKey.self] = newValue }
-    }
-}
-
 /// What DiPo is feeling about what he is saying.
 enum DiPoMood: Equatable {
     case idle, happy, worry, cheer, info
@@ -52,7 +41,7 @@ enum DiPoMood: Equatable {
 @MainActor
 final class DiPoDragonRig {
     let scene = SCNScene()
-    private let turntable = SCNNode()   // the look and the drag
+    private let turntable = SCNNode()   // the look
     private let body = SCNNode()        // breathing and hops
     private let calm = UIAccessibility.isReduceMotionEnabled
     /// The artwork's three-quarter view.
@@ -63,18 +52,8 @@ final class DiPoDragonRig {
     private var headTop: Float = 0.7
     private let drop = SCNNode()
     private(set) var mood: DiPoMood = .idle
-    /// Turning all the way round, slowly, instead of looking left and right —
-    /// for a place where he stands on his own. Reduce Motion keeps the slow
-    /// look instead.
-    let spins: Bool
-    /// One full turn, in seconds. Slow enough to read as showing himself off
-    /// rather than spinning.
-    static let spinSeconds: Double = 9
 
-    var isSpinning: Bool { turntable.action(forKey: "spin") != nil }
-
-    init(spins: Bool = false) {
-        self.spins = spins
+    init() {
         let loaded = DiPoModel.template
         hasModel = loaded != nil
 
@@ -133,17 +112,10 @@ final class DiPoDragonRig {
             inhale.timingMode = .easeInEaseOut; exhale.timingMode = .easeInEaseOut
             body.runAction(.repeatForever(.sequence([inhale, exhale])), forKey: "breathe")
         }
-        if spins && !calm { spin() } else { look() }
+        look()
     }
 
-    /// Round and round, from wherever he is facing now.
-    private func spin() {
-        turntable.removeAction(forKey: "look")
-        let turn = SCNAction.rotateBy(x: 0, y: .pi * 2, z: 0, duration: Self.spinSeconds)
-        turntable.runAction(.repeatForever(turn), forKey: "spin")
-    }
-
-    /// Looking slowly left and right — stopped while dragged.
+    /// Looking slowly left and right.
     private func look() {
         let pace: Double = calm ? 2.5 : 1
         let rest = CGFloat(Self.restingTurn)
@@ -164,26 +136,6 @@ final class DiPoDragonRig {
         spin.timingMode = .easeInEaseOut
         let hop: SCNAction = calm ? SCNAction.sequence([up, down]) : SCNAction.group([SCNAction.sequence([up, down]), spin])
         body.runAction(hop, forKey: "hop")
-    }
-
-    func turn(by radians: Float) {
-        turntable.removeAction(forKey: "look")
-        turntable.removeAction(forKey: "spin")
-        turntable.eulerAngles.y += radians
-    }
-
-    func settle() {
-        // A spinning DiPo carries on from where the finger left him, rather
-        // than snapping back to face the front first.
-        if spins && !calm {
-            spin()
-            return
-        }
-        let back = SCNAction.rotateTo(x: 0, y: CGFloat(Self.restingTurn), z: 0, duration: 0.6)
-        back.timingMode = .easeOut
-        turntable.runAction(back) { [weak self] in
-            Task { @MainActor in self?.look() }
-        }
     }
 
     // MARK: Moods
@@ -288,47 +240,30 @@ final class DiPoDragonRig {
 
 // MARK: - SwiftUI
 
-/// DiPo in 3D. Tap to make him hop; with `interactive`, drag to turn him.
-/// Falls back to the mascot picture if the model cannot be loaded.
+/// DiPo in 3D, at the top of Ask DiPo. Tap to make him hop. Falls back to
+/// the mascot picture if the model cannot be loaded.
 struct DiPoDragonView: View {
-    var interactive = false
     /// How he feels about the current line. He reacts each time `line` changes.
     var mood: DiPoMood = .idle
     /// Identifies what he is saying now; a new value makes him react and nod.
     var line: String = ""
     /// How long the bubble takes to type the line, so he nods for that long.
     var talkSeconds: Double = 0
-    /// Called after his hop when he is tapped, e.g. to open Ask DiPo.
-    var onTap: (() -> Void)? = nil
-    /// False while something covers him (Ask DiPo over Home): he holds still
-    /// and stops drawing, leaving the GPU to the screen in front.
-    var animates = true
-    /// Turn all the way round, slowly, instead of looking left and right.
-    var spins = false
 
     var body: some View {
-        DiPoDragonScene(interactive: interactive, mood: mood, line: line,
-                        talkSeconds: talkSeconds, animates: animates, spins: spins, onTap: onTap)
+        DiPoDragonScene(mood: mood, line: line, talkSeconds: talkSeconds)
     }
 }
 
 private struct DiPoDragonScene: UIViewRepresentable {
-    var interactive: Bool
     var mood: DiPoMood
     var line: String
     var talkSeconds: Double
-    var animates: Bool
-    var spins: Bool
-    var onTap: (() -> Void)?
 
-    /// Drawing only while he can be seen: not covered, and on the tab showing.
-    private func active(_ context: Context) -> Bool { animates && context.environment.dipoAnimates }
-
-    func makeCoordinator() -> Coordinator { Coordinator(rig: DiPoDragonRig(spins: spins)) }
+    func makeCoordinator() -> Coordinator { Coordinator(rig: DiPoDragonRig()) }
 
     func makeUIView(context: Context) -> UIView {
         let rig = context.coordinator.rig
-        context.coordinator.onTap = onTap
         guard rig.hasModel else {
             let image = UIImageView(image: UIImage(named: "DiPoMascot"))
             image.contentMode = .scaleAspectFit
@@ -341,30 +276,16 @@ private struct DiPoDragonScene: UIViewRepresentable {
         view.backgroundColor = .clear
         view.antialiasingMode = .multisampling4X
         view.preferredFramesPerSecond = 30
-        view.isPlaying = active(context)
-        rig.scene.isPaused = !active(context)
+        view.isPlaying = true
         view.isAccessibilityElement = true
         view.accessibilityLabel = loc("mascot.a11y")
         view.accessibilityTraits = .image
         view.addGestureRecognizer(UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.tapped)))
-        if interactive {
-            let pan = UIPanGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.dragged(_:)))
-            // Sideways only, so a DiPo inside a scrolling screen never
-            // swallows the scroll that starts on him.
-            pan.delegate = context.coordinator
-            view.addGestureRecognizer(pan)
-        }
         return view
     }
 
     func updateUIView(_ view: UIView, context: Context) {
         let c = context.coordinator
-        c.onTap = onTap
-        let active = active(context)
-        if let scn = view as? SCNView, scn.isPlaying != active {
-            scn.isPlaying = active
-            c.rig.scene.isPaused = !active
-        }
         guard line != c.lastLine else { return }
         c.lastLine = line
         c.rig.react(mood)
@@ -372,35 +293,14 @@ private struct DiPoDragonScene: UIViewRepresentable {
     }
 
     @MainActor
-    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+    final class Coordinator: NSObject {
         let rig: DiPoDragonRig
         var lastLine = ""
-        var onTap: (() -> Void)?
-        private var lastX: CGFloat = 0
         init(rig: DiPoDragonRig) { self.rig = rig }
 
         @objc func tapped() {
             HapticManager.shared.tap()
             rig.bounce()
-            onTap?()
-        }
-
-        /// A drag turns him only when it is more sideways than up or down.
-        func gestureRecognizerShouldBegin(_ g: UIGestureRecognizer) -> Bool {
-            guard let pan = g as? UIPanGestureRecognizer else { return true }
-            let v = pan.velocity(in: pan.view)
-            return abs(v.x) > abs(v.y)
-        }
-
-        @objc func dragged(_ g: UIPanGestureRecognizer) {
-            let x = g.translation(in: g.view).x
-            switch g.state {
-            case .began: lastX = 0
-            case .changed:
-                rig.turn(by: Float(x - lastX) * 0.01)
-                lastX = x
-            default: rig.settle()
-            }
         }
     }
 }
