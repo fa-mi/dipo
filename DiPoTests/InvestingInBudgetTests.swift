@@ -80,7 +80,7 @@ final class InvestingInBudgetTests: XCTestCase {
             XCTAssertTrue(both.title.contains(idr(4_072_500)))
             XCTAssertTrue(both.body.contains(idr(1_500_000)), both.body)   // debt first
             XCTAssertTrue(both.body.contains(idr(500_000)), both.body)     // then the rest of the 2 jt
-            XCTAssertNotNil(both.action)
+            XCTAssertEqual(both.color, AppTheme.orange)
 
             // Instalments bigger than the share: all of it goes to debt, nothing to invest.
             let debtOnly = sb.surplusInsight(unspent: 4_000_000, debtPaid: 0, invested: 0, debtDue: 2_500_000,
@@ -101,7 +101,7 @@ final class InvestingInBudgetTests: XCTestCase {
             // Nothing due and the share met: just the surplus.
             let met = sb.surplusInsight(unspent: 1_000_000, debtPaid: 0, invested: 2_500_000, debtDue: 0,
                                         income: 10_000_000, investShare: 0.20, currency: "IDR")
-            XCTAssertNil(met.action)
+            XCTAssertEqual(met.color, AppTheme.blue)
         }
     }
 

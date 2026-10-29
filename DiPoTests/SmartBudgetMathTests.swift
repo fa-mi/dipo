@@ -230,7 +230,6 @@ final class SmartBudgetMathTests: XCTestCase {
                                        income: 10_000_000, investShare: 0.20, currency: "IDR",
                                        investPaused: true)
         XCTAssertEqual(paused.color, AppTheme.blue)
-        XCTAssertNil(paused.action)
     }
 
     /// Going all-in on debt is the point, not a warning.
