@@ -167,6 +167,7 @@ private struct NaviDestinations: View {
             .padding(.horizontal, 22)
             .padding(.top, 16)
             .padding(.bottom, 40)
+            .containerRelativeFrame(.horizontal)
         }
     }
 
@@ -291,6 +292,7 @@ private struct NaviRoutePlanner: View {
                     .padding(.horizontal, 2)
                 }
                 .padding(.top, 10).padding(.bottom, 14)
+                .containerRelativeFrame(.horizontal)
             }
             startButton
         }
