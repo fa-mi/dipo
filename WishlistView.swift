@@ -214,6 +214,11 @@ struct WishlistView: View {
     @Environment(\.modelContext) private var context
     @Query(sort: \SavingsGoal.priority) private var goals: [SavingsGoal]
     @Query(sort: \SalarySchedule.createdAt) private var salaries: [SalarySchedule]
+    /// DiPo Navigasi, the add-on: read here once for the one card a trip is
+    /// headed to, rather than queried in every card.
+    @Query(sort: \BankCard.sortOrder) private var cards: [BankCard]
+    @AppStorage(Navigasi.enabledKey) private var naviOn = false
+    @AppStorage(Navigasi.tripKey) private var naviTrip = Data()
 
     /// Drives the "New Goal" flow: chooser → personal / shared create form.
     @State private var goalSheet: GoalSheet? = nil
@@ -246,6 +251,12 @@ struct WishlistView: View {
     private var monthlyPlan: Double { activeGoals.reduce(0) { $0 + toPref($1.monthlyContribution, $1.currency) } }
     private var monthlyIncome: Double {
         MainCard.salaries(salaries).reduce(0) { $0 + toPref($1.amount, $1.currency) }
+    }
+
+    /// The trip's arrival for the goal it is headed to; nil for every other.
+    private func tripArrival(for goal: SavingsGoal) -> Date? {
+        guard naviOn, let trip = Navigasi.Trip.decode(naviTrip), trip.goalID == goal.id else { return nil }
+        return Navigasi.status(of: trip, goal: goal, cards: cards, salaries: salaries).arrival
     }
 
     var body: some View {
@@ -286,6 +297,7 @@ struct WishlistView: View {
                             sectionTitle(loc("savings.in_progress"))
                             ForEach(activeGoals.prefix(goalPreviewLimit)) { goal in
                                 GoalCard(goal: goal, monthlyIncome: monthlyIncome,
+                                         tripArrival: tripArrival(for: goal),
                                          onDeposit: { amount, card in deposit(goal, amount, card) },
                                          onEdit: { editingGoal = goal },
                                          onDelete: { deleteGoal(goal) },
@@ -296,6 +308,7 @@ struct WishlistView: View {
                                 NavigationLink {
                                     AllPersonalGoalsView(
                                         goals: activeGoals, monthlyIncome: monthlyIncome,
+                                        tripArrival: { tripArrival(for: $0) },
                                         onDeposit: { g, amt, card in deposit(g, amt, card) },
                                         onEdit: { editingGoal = $0 },
                                         onDelete: { deleteGoal($0) },
@@ -545,6 +558,7 @@ private struct GoalsRoyalRow: View {
 struct AllPersonalGoalsView: View {
     let goals: [SavingsGoal]
     let monthlyIncome: Double
+    let tripArrival: (SavingsGoal) -> Date?
     let onDeposit: (SavingsGoal, Double, BankCard?) -> Void
     let onEdit: (SavingsGoal) -> Void
     let onDelete: (SavingsGoal) -> Void
@@ -557,7 +571,7 @@ struct AllPersonalGoalsView: View {
             ScrollView(showsIndicators: false) {
                 LazyVStack(spacing: 14) {
                     ForEach(goals) { goal in
-                        GoalCard(goal: goal, monthlyIncome: monthlyIncome,
+                        GoalCard(goal: goal, monthlyIncome: monthlyIncome, tripArrival: tripArrival(goal),
                                  onDeposit: { amt, card in onDeposit(goal, amt, card) },
                                  onEdit: { onEdit(goal) },
                                  onDelete: { onDelete(goal) },
@@ -661,6 +675,9 @@ struct SavingsProgressBar: View {
 struct GoalCard: View {
     let goal: SavingsGoal
     let monthlyIncome: Double
+    /// While DiPo Navigasi is on its way to this goal, the trip's arrival:
+    /// the card says it, as the goal's screen and the trip do.
+    var tripArrival: Date? = nil
     let onDeposit: (Double, BankCard?) -> Void
     let onEdit: () -> Void
     let onDelete: () -> Void
@@ -670,21 +687,8 @@ struct GoalCard: View {
     @State private var showDepositSheet = false
     @State private var showActions      = false
     @State private var showDeleteConfirm = false
-    /// While DiPo Navigasi is on its way to this goal, the card says the
-    /// trip's arrival, as the goal's screen and the trip do.
-    @AppStorage(Navigasi.enabledKey) private var naviOn = false
-    @AppStorage(Navigasi.tripKey) private var naviTrip = Data()
-    @Query(sort: \BankCard.sortOrder) private var cards: [BankCard]
-    @Query(sort: \SalarySchedule.createdAt) private var salaries: [SalarySchedule]
 
     private var suggestedMonthly: Double { goal.remaining > 0 ? goal.remaining / 12 : 0 }
-
-    private var arrival: Date? {
-        if naviOn, let trip = Navigasi.Trip.decode(naviTrip), trip.goalID == goal.id {
-            return Navigasi.status(of: trip, goal: goal, cards: cards, salaries: salaries).arrival
-        }
-        return goal.estimatedDate
-    }
 
     private var planLine: (icon: String, text: String, tint: Color)? {
         let cm = CurrencyManager.shared
@@ -694,7 +698,7 @@ struct GoalCard: View {
         if goal.progress >= 1.0 {
             return ("checkmark.seal.fill", loc("savings.reached"), AppTheme.accent)
         }
-        if goal.monthlyContribution > 0, let date = arrival {
+        if goal.monthlyContribution > 0, let date = tripArrival ?? goal.estimatedDate {
             let when = date.formatted(.dateTime.month(.abbreviated).year())
             return ("calendar", String(format: loc("savings.goal_reached_around"), when)
                     + " · " + String(format: loc("savings.save_per_mo"),

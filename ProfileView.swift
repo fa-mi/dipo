@@ -741,7 +741,6 @@ struct ProfileView: View {
         .padding(.horizontal, 22)
     }
 
-    @ViewBuilder
     /// Features that stay out of the way until asked for. Off until switched
     /// on; switching one off hides it and keeps what was set up in it.
     private var addOnsCard: some View {
@@ -779,6 +778,7 @@ struct ProfileView: View {
         .padding(.horizontal, 22)
     }
 
+    @ViewBuilder
     private var featureLinksCard: some View {
         // Money features (budget, salary, bills, savings, Ask DiPo) moved to the
         // Plan tab and Debts & Credits to Wallet. What stays is how DiPo
