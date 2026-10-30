@@ -464,10 +464,7 @@ struct CycleTrendBreakdown: View {
         CurrencyManager.shared.formatted(v, currency: currency)
     }
     private func range(_ p: CycleTrendPoint) -> String {
-        let df = DateFormatter()
-        df.locale = LanguageManager.shared.currentLocale
-        df.dateFormat = DateFormatter.dateFormat(fromTemplate: "dMMM", options: 0,
-                                                 locale: LanguageManager.shared.currentLocale)
+        let df = DateFormatterCache.template("dMMM")
         // The window is half-open, so the last day it covers is the day before
         // it ends — the same convention the period header uses.
         let last = Calendar.current.safeDate(byAdding: .day, value: -1, to: p.end)

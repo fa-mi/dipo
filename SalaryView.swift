@@ -150,10 +150,6 @@ struct SalaryDateEngine {
         Calendar.current.isDateInToday(date)
     }
 
-    static func isTomorrow(_ date: Date) -> Bool {
-        Calendar.current.isDateInTomorrow(date)
-    }
-
     static func wasAdjusted(intended: Int, actual: Date) -> Bool {
         Calendar.current.component(.day, from: actual) != intended
     }
@@ -172,8 +168,6 @@ final class SalaryViewModel {
     var formCardID: UUID? = nil
     var formAutoRecord: Bool = true
     var formError: String? = nil
-
-    let currencies = ["USD", "IDR"]
 
     func resetForm() {
         formLabel    = ""

@@ -96,7 +96,6 @@ final class StatsViewModel {
     var selectedStatTab: StatTab = .expenses
     var chartProgress: Double = 0
     var selectedSliceIndex: Int? = nil
-    var filterPeriod: String = "This month"
 
     // NOTE: `categories` is populated by StatisticsView from real transactions
     // via the `realCategories` computed property. It is intentionally empty here —
@@ -109,13 +108,6 @@ final class StatsViewModel {
         chartProgress = 0
         withAnimation(.spring(response: 1.1, dampingFraction: 0.75).delay(0.2)) {
             chartProgress = 1
-        }
-    }
-
-    func selectSlice(_ index: Int?) {
-        HapticManager.shared.tap()
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-            selectedSliceIndex = (selectedSliceIndex == index) ? nil : index
         }
     }
 
@@ -200,6 +192,8 @@ enum PlanRoute: Hashable {
     case assets
     /// Debts & Credits: what is owed, what is owed to you, loan calculators.
     case obligations
+    /// DiPo Navigasi, the add-on: a savings goal as a trip.
+    case navigasi
     // A specific holding's detail. Carried as a PlanRoute (not a bare view push)
     // so it appends to the tab's typed `[PlanRoute]` path — a value-less
     // NavigationLink here crashes with AnyNavigationPath.comparisonTypeMismatch.

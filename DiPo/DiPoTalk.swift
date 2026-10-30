@@ -3,9 +3,8 @@ import AVFoundation
 
 // MARK: - DiPo talks
 //
-// On Home, DiPo stands at the top in his own frame. His speech bubble
-// reminds about unread notifications, a bill falling due and payday — and
-// replaces the banners that used to say the same; tapping DiPo opens Ask DiPo.
+// On Home, DiPo's row reminds about unread notifications, a bill falling due
+// and payday (DiPoNudge, below).
 //
 // In Ask DiPo he opens the conversation with the Smart Insights, most urgent
 // first, in place of the flat banners Home used to show. Free hears the top
@@ -16,49 +15,27 @@ import AVFoundation
 
 /// One thing DiPo says.
 struct DiPoLine: Identifiable, Equatable {
-    enum Action {
-        case notifications
-        case insight(SmartInsightAction.Kind?)
-        case royal
-        case none
-    }
-
     let id: String
     let mood: DiPoMood
     let exclamation: String
     /// Bold first line; empty when the line is a single sentence.
     let title: String
     let text: String
-    let action: Action
 
     static func == (a: DiPoLine, b: DiPoLine) -> Bool { a.id == b.id }
-
-    /// Whether tapping the bubble goes anywhere.
-    var opens: Bool {
-        if case .none = action { return false }
-        return true
-    }
 }
 
 enum DiPoScript {
     static let tipCount = 7
 
     /// What DiPo has to say, in the order he says it.
-    static func lines(unread: Int, insights: [SmartInsight], isRoyal: Bool,
+    static func lines(insights: [SmartInsight], isRoyal: Bool,
                       day: Date = .now, calendar: Calendar = .current) -> [DiPoLine] {
         var out: [DiPoLine] = []
-        if unread > 0 {
-            out.append(DiPoLine(
-                id: "unread-\(unread)", mood: .info, exclamation: loc("dipo.sfx.psst"), title: "",
-                text: unread == 1 ? loc("dipo.unread_one") : String(format: loc("dipo.unread_many"), unread),
-                action: .notifications))
-        }
-
         let said = insights.map { insight in
             DiPoLine(id: "insight-\(insight.title)", mood: mood(of: insight),
                      exclamation: exclamation(for: mood(of: insight)),
-                     title: insight.title, text: insight.body,
-                     action: .insight(insight.action?.kind))
+                     title: insight.title, text: insight.body)
         }
         if said.isEmpty {
             out.append(tip(on: day, calendar: calendar))
@@ -69,8 +46,7 @@ enum DiPoScript {
             if said.count > 1 {
                 out.append(DiPoLine(id: "royal-\(said.count)", mood: .info,
                                     exclamation: loc("dipo.sfx.tomorrow"), title: "",
-                                    text: String(format: loc("dipo.locked"), said.count - 1),
-                                    action: .royal))
+                                    text: String(format: loc("dipo.locked"), said.count - 1)))
             }
         }
         return out
@@ -96,7 +72,7 @@ enum DiPoScript {
     static func tip(on day: Date, calendar: Calendar = .current) -> DiPoLine {
         let n = (calendar.ordinality(of: .day, in: .era, for: day) ?? 0) % tipCount
         return DiPoLine(id: "tip-\(n)", mood: .happy, exclamation: loc("dipo.sfx.tip"), title: "",
-                        text: loc("dipo.tip.\(n)"), action: .none)
+                        text: loc("dipo.tip.\(n)"))
     }
 }
 
@@ -146,6 +122,8 @@ struct DiPoNudge: Equatable, Identifiable {
         case customInterestTip(String)
         /// An asset's value has gone unchecked for half a year or more.
         case assetCheck
+        /// DiPo Navigasi's next turn: opens the trip.
+        case navigation
     }
     let id: String
     let mood: DiPoMood
@@ -178,11 +156,21 @@ struct DiPoNudge: Equatable, Identifiable {
         case .interestGuess:                   return "questionmark.bubble.fill"
         case .interestTip, .customInterestTip: return "lightbulb.fill"
         case .assetCheck:                      return "tag.fill"
+        case .navigation:                      return "location.north.circle.fill"
         }
     }
 
     /// Bills and payday are mentioned from this many days out.
     static let window = 3
+
+    /// DiPo Navigasi's turn to take, worded by Navigasi.nudge.
+    struct Navi: Equatable {
+        let id: String
+        let title: String
+        let detail: String
+        /// Off route, rather than a turn coming up.
+        let worry: Bool
+    }
 
     /// A bill DiPo can mention, without tying this to the model type.
     struct Bill: Equatable {
@@ -201,7 +189,7 @@ struct DiPoNudge: Equatable, Identifiable {
                     bill: Bill?, daysToPayday: Int?, payDate: Date?,
                     interestGuess: DiPoInterest? = nil, interestTip: DiPoInterest? = nil,
                     customInterestTip: String? = nil,
-                    assetCheck: [String] = []) -> [DiPoNudge] {
+                    assetCheck: [String] = [], navigation: Navi? = nil) -> [DiPoNudge] {
         var out: [DiPoNudge] = []
         // The streak greets the user when they open the app; two days is the
         // shortest run worth a word.
@@ -256,6 +244,13 @@ struct DiPoNudge: Equatable, Identifiable {
             out.append(DiPoNudge(id: "payday-\(days)", mood: days == 0 ? .cheer : .happy,
                                  exclamation: loc(days == 0 ? "dipo.sfx.payday_today" : "dipo.sfx.payday_soon"),
                                  text: text, action: .salary, link: loc("dipo.link.salary")))
+        }
+        // The trip's turn, with the other things that carry money and a date.
+        if let navigation {
+            out.append(DiPoNudge(id: navigation.id, mood: navigation.worry ? .worry : .info,
+                                 exclamation: loc("navi.sfx"), text: navigation.detail,
+                                 action: .navigation, link: loc("navi.link"),
+                                 title: navigation.title, detail: navigation.detail))
         }
         // An asset not looked at for a while: the curve has carried its value,
         // but only listings say what it would fetch now.

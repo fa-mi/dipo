@@ -11,37 +11,25 @@ final class DiPoTalkTests: XCTestCase {
         SmartInsight(icon: "info.circle", color: color, title: title, body: "\(title) body")
     }
 
-    func testUnreadNotificationsComeFirst() {
-        let lines = DiPoScript.lines(unread: 3, insights: [insight("A", AppTheme.orange)], isRoyal: true)
-        XCTAssertEqual(lines.first?.id, "unread-3")
-        if case .notifications = lines[0].action {} else { XCTFail("tapping opens notifications") }
-        XCTAssertTrue(lines[0].text.contains("3"))
-    }
-
-    func testNoUnreadNoReminder() {
-        let lines = DiPoScript.lines(unread: 0, insights: [insight("A", AppTheme.orange)], isRoyal: true)
-        XCTAssertFalse(lines.contains { $0.id.hasPrefix("unread") })
-    }
-
     func testFreeHearsTheTopInsightThenTheRoyalNote() {
         let ins = [insight("A", AppTheme.red), insight("B", AppTheme.accent), insight("C", AppTheme.blue)]
-        let lines = DiPoScript.lines(unread: 0, insights: ins, isRoyal: false)
+        let lines = DiPoScript.lines(insights: ins, isRoyal: false)
         XCTAssertEqual(lines.count, 2)
         XCTAssertEqual(lines[0].title, "A")
-        if case .royal = lines[1].action {} else { XCTFail("second line points to Royal") }
+        XCTAssertTrue(lines[1].id.hasPrefix("royal-"), "second line points to Royal")
         XCTAssertTrue(lines[1].text.contains("2"), "says how many are waiting")
     }
 
     func testRoyalHearsEveryInsight() {
         let ins = [insight("A", AppTheme.red), insight("B", AppTheme.accent), insight("C", AppTheme.blue)]
-        let lines = DiPoScript.lines(unread: 1, insights: ins, isRoyal: true)
-        XCTAssertEqual(lines.map(\.title), ["", "A", "B", "C"])
+        let lines = DiPoScript.lines(insights: ins, isRoyal: true)
+        XCTAssertEqual(lines.map(\.title), ["A", "B", "C"])
     }
 
     func testNothingToSayGivesTheTipOfTheDay() {
         let day = Date(timeIntervalSince1970: 1_800_000_000)
-        let a = DiPoScript.lines(unread: 0, insights: [], isRoyal: false, day: day)
-        let b = DiPoScript.lines(unread: 0, insights: [], isRoyal: true, day: day)
+        let a = DiPoScript.lines(insights: [], isRoyal: false, day: day)
+        let b = DiPoScript.lines(insights: [], isRoyal: true, day: day)
         XCTAssertEqual(a.count, 1)
         XCTAssertEqual(a[0].id, b[0].id, "the same tip all day")
         XCTAssertTrue(a[0].id.hasPrefix("tip-"))
@@ -130,7 +118,7 @@ final class DiPoTalkTests: XCTestCase {
     func testEveryReminderHasAPlainIcon() {
         let actions: [DiPoNudge.Action] = [.notifications, .checkIn, .bills, .salary, .streak,
                                            .interestGuess(.coffee), .interestTip(.coffee),
-                                           .customInterestTip("Kopi"), .assetCheck]
+                                           .customInterestTip("Kopi"), .assetCheck, .navigation]
         for action in actions {
             let nudge = DiPoNudge(id: "x", mood: .info, exclamation: "", text: "", action: action, link: "")
             XCTAssertNotNil(UIImage(systemName: nudge.symbol), "\(action): \(nudge.symbol)")

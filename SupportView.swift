@@ -666,7 +666,9 @@ struct TicketThreadView: View {
             do { replies = try await FirebaseSupportService.shared.fetchReplies(ticketId: ticket.id) } catch {}
             isLoading = false
             await FirebaseSupportService.shared.markRepliesRead(ticketId: ticket.id)
-            // ✅ Start live listener for both new replies AND status changes
+            // Closed before the replies arrived: nothing left to listen for.
+            guard !Task.isCancelled else { return }
+            // Live updates for new replies AND status changes, until it closes.
             await FirebaseSupportService.shared.listenToTicket(
                 ticketId: ticket.id,
                 onReplyAdded: { newReplies in replies = newReplies },
@@ -681,6 +683,9 @@ struct TicketThreadView: View {
                 }
             )
         }
+        // The listeners outlive the view otherwise, and every change to the
+        // ticket would still be read, for nobody, until the app quits.
+        .onDisappear { FirebaseSupportService.shared.stopTicketListener() }
         .sheet(item: $fullscreenBase64) { item in FullscreenImageView(base64String: item.value) }
     }
 

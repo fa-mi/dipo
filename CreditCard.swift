@@ -280,7 +280,6 @@ struct CreditCardFormSheet: View {
     /// only when this is changed.
     @State private var shownOwedText = ""
     @State private var currency = CurrencyManager.shared.preferredCurrency
-    @State private var showExplainer = false
 
     private var isEditing: Bool { editCard != nil }
     private var gradient: BankGradient {

@@ -714,14 +714,6 @@ final class CurrencyManager {
         return "1 USD = IDR \(idrStr) · \(relativeTimeString(from: updated))"
     }
 
-    /// Label status untuk ditampilkan saat fetch gagal.
-    var statusLabel: String {
-        if isLoading { return loc("currency.fetching") }
-        if let err = lastError { return "⚠️ \(err)" }
-        guard let updated = lastUpdated else { return "" }
-        return "🟢 \(loc("currency.live")) · \(relativeTimeString(from: updated))"
-    }
-
     private func relativeTimeString(from date: Date) -> String {
         let seconds = Int(Date().timeIntervalSince(date))
         if seconds < 60  { return loc("currency.just_now") }
@@ -765,13 +757,6 @@ final class CardBudgetConfig {
         self.investDebtRatio = investDebtRatio
         self.updatedAt = .now
     }
-}
-
-// MARK: - Theme
-
-
-struct DataSeeder {
-    static func seedIfNeeded(context: ModelContext) {}
 }
 
 // MARK: - Transaction deletion with goal rollback

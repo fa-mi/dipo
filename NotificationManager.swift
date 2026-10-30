@@ -291,9 +291,8 @@ final class NotificationManager {
     /// keyed by cycle/debt/day — never by user — so after a reset, a restore,
     /// or a different account signing in, a flag set for the OLD data still
     /// reads as "already warned" and silences the alert for the rest of that
-    /// cycle. Same failure the `sb_dismissed_insights` entry in
-    /// `UserSwitchDetector.wipeLocalData` already guards against: the engine
-    /// looks broken because it has gone quiet for reasons the user can't see.
+    /// cycle: the engine looks broken because it has gone quiet for reasons
+    /// the user can't see.
     static let dedupKeyPrefixes = ["budget_alert_", "debt_due_", "overspend_push_day",
                                    "overspend_last_amount", "overspend_last_period"]
 
@@ -363,14 +362,6 @@ final class NotificationManager {
             body:  String(format: loc("notif.goal_reached_body"), name),
             time:  loc("notif.time.now"), isUrgent: true,
             advice: advice, route: NotificationRoute.savingsGoals.rawValue))
-    }
-
-    func postSmartInsight(title: String, body: String) {
-        // title/body are already provided localized by the caller (SmartBudget
-        // engine reads loc keys when building insights). The "Now" tag is the
-        // only thing this method controls.
-        post(AppNotificationItem(icon: "brain.fill", iconColorHex: "#A78BFA",
-            title: title, body: body, time: loc("notif.time.now")))
     }
 
     // Admin support reply — posted when Firestore listener detects a new unread reply.
@@ -675,14 +666,6 @@ final class NotificationManager {
                 ), pushToDevice: false)
             }
         }
-    }
-
-    /// Call when a card is successfully updated — cancels all its expiry reminders.
-    static func cancelCardExpiryReminders(for cardID: UUID) {
-        let id = "card_expiry_\(cardID.uuidString)"
-        UNUserNotificationCenter.current().removePendingNotificationRequests(
-            withIdentifiers: [id+"_now", id+"_daily", id+"_urgent", id+"_weekly", id+"_soon"]
-        )
     }
 
     /// Schedule both in-app + device notifications for upcoming salary.

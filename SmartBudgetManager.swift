@@ -27,7 +27,7 @@ final class SmartBudgetManager {
     ///   - they currently have Royal subscription (or active session that
     ///     `canAccess(.smartBudget)` returns true for).
     /// Use this — not `isEnabled` — anywhere you decide whether to render
-    /// budget allocation, run `topInsight`, or block transactions via
+    /// budget allocation, run `evaluateAll`, or block transactions via
     /// `wouldExceed`. This is the single point where premium gating happens
     /// for Smart Budget; new code paths only need to check this one flag.
     var hasActiveBudget: Bool {
@@ -255,15 +255,6 @@ final class SmartBudgetManager {
         return byCat.reduce(0.0) { $0 + (cats.contains($1.key) ? $1.value : 0) }
     }
 
-    func percentUsed(in group: BudgetGroup, buckets: [DailyBucket], income: Double,
-                     targetCurrency: String? = nil, periodStart: Date? = nil,
-                     cardID: String? = nil) -> Double {
-        let limit = monthlyLimit(for: group, income: income)
-        guard limit > 0 else { return 0 }
-        return min(spent(in: group, buckets: buckets, targetCurrency: targetCurrency,
-                         periodStart: periodStart, cardID: cardID) / limit, 1.5)
-    }
-
     func categories(for group: BudgetGroup) -> [TxCategory] {
         switch group {
         case .daily:      return Self.dailyCategories
@@ -275,41 +266,6 @@ final class SmartBudgetManager {
     /// Remaining budget for a group this month
     func remaining(in group: BudgetGroup, transactions: [TxRecord], income: Double) -> Double {
         monthlyLimit(for: group, income: income) - spent(in: group, transactions: transactions)
-    }
-
-    /// Splits this-month spend in the daily group into fixed (bills) vs
-    /// variable (food/transport/health). Surfaced in insights so users can
-    /// see "Bills 800k done, sisa 700k untuk makan/transport" instead of
-    /// just "Daily 1.5jt of 2jt used" which doesn't tell them what's
-    /// actually adjustable this week.
-    func dailySpendBreakdown(transactions: [TxRecord],
-                             targetCurrency: String? = nil,
-                             periodStart: Date? = nil) -> (fixed: Double, variable: Double) {
-        let cal = Calendar.current
-        let monthStart = periodStart
-            ?? cal.safeDate(from: cal.dateComponents([.year, .month], from: Date()))
-        let target = targetCurrency ?? CurrencyManager.shared.preferredCurrency
-        var fixed: Double = 0
-        var variable: Double = 0
-        for tx in transactions where tx.amount < 0 && tx.date >= monthStart {
-            guard Self.dailyCategories.contains(tx.category) else { continue }
-            let txCur = tx.currency.isEmpty ? target : tx.currency
-            let amt = CurrencyManager.shared.convert(abs(tx.amount), from: txCur, to: target)
-            if Self.isFixedCategory(tx.category) {
-                fixed += amt
-            } else {
-                variable += amt
-            }
-        }
-        return (fixed, variable)
-    }
-
-    /// % used for a group
-    func percentUsed(in group: BudgetGroup, transactions: [TxRecord], income: Double,
-                     periodStart: Date? = nil) -> Double {
-        let limit = monthlyLimit(for: group, income: income)
-        guard limit > 0 else { return 0 }
-        return min(spent(in: group, transactions: transactions, periodStart: periodStart) / limit, 1.5)
     }
 
     /// Check if a new transaction would exceed the group limit.
@@ -397,73 +353,30 @@ final class SmartBudgetManager {
         let payDebt = min(max(debtDue - debtPaid, 0), unspent)
         let invest = investPaused ? 0 : min(max(plan - filled - payDebt, 0), unspent - payDebt)
         let title = String(format: loc("insight.surplus_title"), money(unspent))
-        let action = SmartInsightAction(label: loc("insight.action.adjust_budget"), kind: .openBudgetSettings)
         let pct = Int((investShare * 100).rounded())
 
         switch (payDebt >= 1, invest >= 1) {
         case (true, true):
             return SmartInsight(icon: "tray.and.arrow.down", color: AppTheme.orange, title: title,
                                 body: String(format: loc("insight.surplus_debt_invest_body"),
-                                             money(filled), money(plan), pct, money(payDebt), money(invest)),
-                                action: action)
+                                             money(filled), money(plan), pct, money(payDebt), money(invest)))
         case (true, false):
             return SmartInsight(icon: "tray.and.arrow.down", color: AppTheme.orange, title: title,
-                                body: String(format: loc("insight.surplus_debt_body"), money(payDebt)),
-                                action: action)
+                                body: String(format: loc("insight.surplus_debt_body"), money(payDebt)))
         case (false, true):
             return SmartInsight(icon: "tray.and.arrow.down", color: AppTheme.orange, title: title,
                                 body: String(format: loc("insight.surplus_ratio_body"),
-                                             money(filled), money(plan), pct, money(invest)),
-                                action: action)
+                                             money(filled), money(plan), pct, money(invest)))
         case (false, false):
             return SmartInsight(icon: "tray.and.arrow.down", color: AppTheme.blue, title: title,
                                 body: String(format: loc("insight.surplus_body"), BudgetGroup.pct(unspent, of: income)))
         }
     }
 
-    /// Generate the top insight for the home screen.
-    ///
-    /// `cardID` and `configs` together let this method use per-card budget
-    /// ratios — when the user swipes to a different card on Home, this gets
-    /// called with that card's id and returns insights tuned to *that* card's
-    /// allocation strategy. Pass `cardID = nil` and any `configs` to use the
-    /// global default ratios (legacy behavior).
-    ///
-    /// `targetCurrency` is the currency that `income` is denominated in. All
-    /// spend amounts are converted to this currency before comparing against
-    /// limits. CRITICAL: caller MUST pass this when income is per-card. Without
-    /// it, spend defaults to user's preferredCurrency while income may be
-    /// USD, producing absurd ratios (4M IDR / $90 = "4,400,000% over").
-    /// Backwards-compatible wrapper around `evaluateAll`. Returns the first
-    /// (highest-priority) insight only — used by callers that just want a
-    /// single primary banner. New callers wanting multi-banner UX should
-    /// use `evaluateAll(...)` directly.
-    func topInsight(allTransactions: [TxRecord], income: Double,
-                    cardID: String? = nil,
-                    configs: [CardBudgetConfig] = [],
-                    targetCurrency: String? = nil,
-                    goals: [SavingsGoal] = [],
-                    periodStart: Date? = nil,
-                    periodEnd: Date? = nil,
-                    projectedSpend: Double? = nil) -> SmartInsight? {
-        evaluateAll(
-            allTransactions: allTransactions,
-            income: income,
-            cardID: cardID,
-            configs: configs,
-            targetCurrency: targetCurrency,
-            goals: goals,
-            periodStart: periodStart,
-            periodEnd: periodEnd,
-            projectedSpend: projectedSpend
-        ).first
-    }
-
-    /// Internal-or-future-use multi-insight evaluator. Returns insights ordered
-    /// by severity (errors → warnings → positive), deduped, capped at 3.
-    /// Reuses the existing single-match logic by collecting instead of
-    /// returning early on the first match. UI can render 1 primary + 2
-    /// "see more" entries when the count is >1.
+    /// The insights for Home, ordered by severity (errors → warnings →
+    /// positive), deduped, capped at 3: the first match of `primaryInsight`,
+    /// then the secondary positive ones. UI can render 1 primary + 2 "see
+    /// more" entries when the count is >1.
     func evaluateAll(allTransactions: [TxRecord], income: Double,
                      cardID: String? = nil,
                      configs: [CardBudgetConfig] = [],
@@ -478,12 +391,8 @@ final class SmartBudgetManager {
         // can't accidentally leak premium output. The wrapped methods
         // (primaryInsight, yearOverYearInsight) check independently too.
         guard hasActiveBudget else { return [] }
-        // Opportunistic cleanup of last month's dismissals so the new month
-        // resurfaces insights cleanly. Cheap, runs at most once per call.
-        sweepStaleDismissals()
-        // The current `topInsight` body uses `return` to short-circuit on
-        // first match; we keep that behavior for the primary insight, and
-        // run a separate lightweight pass for "secondary" positive ones.
+        // The primary insight short-circuits on its first match; a separate
+        // lightweight pass adds the "secondary" positive ones.
         var results: [SmartInsight] = []
         if let primary = primaryInsight(
             allTransactions: allTransactions, income: income,
@@ -587,24 +496,10 @@ final class SmartBudgetManager {
             results.append(yoy)
         }
 
-        // Filter dismissed insights — same type within current month is
-        // suppressed until the user resurfaces it via Settings or month rolls.
-        // Then attach confidence based on how much historical data we have:
-        // a "spike vs last month" insight from a 1-week-old account is
-        // necessarily low-confidence even if the math looks alarming.
-        let confidence = defaultConfidence(allTransactions: allTransactions)
-        let filtered = results
-            .filter { notDismissed($0) }
-            .map { (insight: SmartInsight) -> SmartInsight in
-                var copy = insight
-                copy.confidence = confidence
-                return copy
-            }
-        return Array(filtered.prefix(3))
+        return Array(results.prefix(3))
     }
 
-    /// Original first-match insight logic. Renamed from `topInsight` so the
-    /// new `topInsight` wrapper + `evaluateAll` aggregator can share it.
+    /// The first-match insight logic: the one insight `evaluateAll` leads with.
     private func primaryInsight(allTransactions: [TxRecord], income: Double,
                                 cardID: String?, configs: [CardBudgetConfig],
                                 targetCurrency: String?, goals: [SavingsGoal],
@@ -699,11 +594,7 @@ final class SmartBudgetManager {
                         icon: "creditcard.fill",
                         color: AppTheme.orange,
                         title: loc("insight.debt_high_title"),
-                        body: String(format: loc("insight.debt_high_body"), BudgetGroup.pct(debtSpent, of: income)),
-                        action: SmartInsightAction(
-                            label: loc("insight.action.view_debt"),
-                            kind: .openDebt
-                        )
+                        body: String(format: loc("insight.debt_high_body"), BudgetGroup.pct(debtSpent, of: income))
                     )
                 }
 
@@ -722,11 +613,7 @@ final class SmartBudgetManager {
                             color: AppTheme.orange,
                             title: loc("insight.invest_over_title"),
                             body: String(format: loc("insight.invest_over_body"),
-                                         CurrencyManager.shared.formatted(gap.rounded(), currency: target)),
-                            action: SmartInsightAction(
-                                label: loc("insight.action.adjust_budget"),
-                                kind: .openBudgetSettings
-                            )
+                                         CurrencyManager.shared.formatted(gap.rounded(), currency: target))
                         )
                     }
                 }
@@ -745,11 +632,7 @@ final class SmartBudgetManager {
                             icon: "exclamationmark.triangle.fill",
                             color: AppTheme.red,
                             title: String(format: loc("insight.group_over_title"), grp.label),
-                            body: String(format: loc("insight.group_unbudgeted_body"), grp.label),
-                            action: SmartInsightAction(
-                                label: loc("insight.action.adjust_budget"),
-                                kind: .openBudgetSettings
-                            )
+                            body: String(format: loc("insight.group_unbudgeted_body"), grp.label)
                         )
                     }
                     // The last day of the BUDGET window — the day before the
@@ -810,11 +693,7 @@ final class SmartBudgetManager {
                         icon: "exclamationmark.triangle.fill",
                         color: AppTheme.red,
                         title: String(format: loc("insight.group_over_title"), grp.label),
-                        body: bodyWithTarget,
-                        action: SmartInsightAction(
-                            label: loc("insight.action.adjust_budget"),
-                            kind: .openBudgetSettings
-                        )
+                        body: bodyWithTarget
                     )
                 }
             }
@@ -843,9 +722,7 @@ final class SmartBudgetManager {
                 title: loc("insight.pace_over_title"),
                 body: String(format: loc("stats.pace_over"),
                              cm.formatted(projected.rounded(), currency: target),
-                             cm.formatted((projected - income).rounded(), currency: target)),
-                action: SmartInsightAction(label: loc("insight.action.adjust_budget"),
-                                           kind: .openBudgetSettings))
+                             cm.formatted((projected - income).rounded(), currency: target)))
         }
 
         // Nothing wrong beyond what the user chose: say the choice.
@@ -932,11 +809,7 @@ final class SmartBudgetManager {
                 icon: "exclamationmark.triangle",
                 color: AppTheme.orange,
                 title: loc("insight.ratio_risky_title"),
-                body: String(format: loc("insight.ratio_risky_lifestyle_body"), lifestylePct),
-                action: SmartInsightAction(
-                    label: loc("insight.action.adjust_budget"),
-                    kind: .openBudgetSettings
-                )
+                body: String(format: loc("insight.ratio_risky_lifestyle_body"), lifestylePct)
             )
         }
         // Very low daily ratio (<25%) — essentials might not fit
@@ -946,11 +819,7 @@ final class SmartBudgetManager {
                 icon: "exclamationmark.triangle",
                 color: AppTheme.orange,
                 title: loc("insight.ratio_risky_title"),
-                body: String(format: loc("insight.ratio_risky_daily_body"), dailyPct),
-                action: SmartInsightAction(
-                    label: loc("insight.action.adjust_budget"),
-                    kind: .openBudgetSettings
-                )
+                body: String(format: loc("insight.ratio_risky_daily_body"), dailyPct)
             )
         }
 
@@ -1002,11 +871,7 @@ final class SmartBudgetManager {
                     icon: "creditcard.fill",
                     color: AppTheme.accent,
                     title: loc("insight.debt_progress_title"),
-                    body: String(format: loc("insight.debt_progress_body"), debtPct),
-                    action: SmartInsightAction(
-                        label: loc("insight.action.view_debt"),
-                        kind: .openDebt
-                    )
+                    body: String(format: loc("insight.debt_progress_body"), debtPct)
                 )
             }
         }
@@ -1125,11 +990,7 @@ final class SmartBudgetManager {
             title: String(format: loc("insight.goal_linked_title"),
                           goal.emoji.isEmpty ? "🎯" : goal.emoji,
                           goal.name),
-            body: body,
-            action: SmartInsightAction(
-                label: loc("insight.action.view_goal"),
-                kind: .openSavingsGoals
-            )
+            body: body
         )
     }
 
@@ -1241,25 +1102,6 @@ final class SmartBudgetManager {
           "crypto", "bitcoin", "ethereum", "binance", "indodax", "tokocrypto", "pintu",
           "deposito", "tabungan berjangka", "saving"], .investment),
     ]
-
-    /// Suggest tx subtype from merchant name keywords. Used by
-    /// AddTransactionSheet to pre-flag refunds/transfers without making the
-    /// user remember to tap the toggle. Returns `.normal` for non-matching
-    /// names so caller can use the result directly. Keywords are bilingual
-    /// (English + Bahasa Indonesia) since users mix freely.
-    static func suggestSubtype(for name: String) -> TxSubtype {
-        let lower = name.lowercased()
-        // Refund signals — merchant returning money for a prior purchase.
-        let refundKeywords = ["refund", "reversal", "return funds", "returned",
-                              "pengembalian", "kembali dana", "retur"]
-        if refundKeywords.contains(where: lower.contains) { return .refund }
-        // Transfer signals — moving money between user's own accounts.
-        let transferKeywords = ["transfer", "tarik tunai", "withdrawal",
-                                "atm", "topup", "top up", "top-up",
-                                "isi saldo", "moved to"]
-        if transferKeywords.contains(where: lower.contains) { return .transfer }
-        return .normal
-    }
 
     /// Suggest a category from merchant name. Default txType is "Expense" since
     /// receipt scans never produce income tx. Pass "Income" to skip suggestion.
@@ -1751,112 +1593,6 @@ final class SmartBudgetManager {
         return .low
     }
 
-    // MARK: - Coaching / First-Time Education
-
-    /// Returns the appropriate coaching topic key for an insight, if it's
-    /// the user's first time seeing this category. Returns nil for repeat
-    /// views — UI should hide the education panel after first time.
-    ///
-    /// "Category" here means the conceptual kind of insight (savings rate,
-    /// budget overspend, goal-linked, etc.), not the SwiftData TxCategory.
-    /// Maps from insight content via title prefix matching — keeps the
-    /// engine free of tight coupling to specific insight identifiers.
-    func coachingTopic(for insight: SmartInsight) -> String? {
-        let topic = topicID(for: insight)
-        guard !topic.isEmpty else { return nil }
-        let seen = Set(UserDefaults.standard.stringArray(forKey: "sb_seen_coaching") ?? [])
-        return seen.contains(topic) ? nil : topic
-    }
-
-    /// Mark a coaching topic as seen so it doesn't show again. Called from UI
-    /// after the user dismisses the education panel.
-    func markCoachingSeen(_ topic: String) {
-        var seen = Set(UserDefaults.standard.stringArray(forKey: "sb_seen_coaching") ?? [])
-        seen.insert(topic)
-        UserDefaults.standard.set(Array(seen), forKey: "sb_seen_coaching")
-    }
-
-    private func topicID(for insight: SmartInsight) -> String {
-        // Match by title-loc-key heuristic. Each topic maps to a coaching
-        // body string in LanguageManager.
-        let title = insight.title.lowercased()
-        if title.contains("savings rate") || title.contains("tabungan") {
-            return "savings_rate"
-        }
-        if title.contains("over budget") || title.contains("melebihi") {
-            return "overspend"
-        }
-        if title.contains("within reach") || title.contains("tinggal sedikit") {
-            return "goal_tradeoff"
-        }
-        if title.contains("debt") || title.contains("hutang") {
-            return "debt_focus"
-        }
-        if title.contains("risky") || title.contains("berisiko") {
-            return "ratio_risk"
-        }
-        return ""
-    }
-
-    // MARK: - Insight Dismissal & Frequency Cap
-
-    /// Stable hash for an insight type — used as the dismissal key. Keyed on
-    /// SF Symbol icon name (which is language-independent) + color rawValue
-    /// + month, NOT on the displayed title. The previous title-based hash
-    /// was language-sensitive: a user who dismissed "Lifestyle over budget"
-    /// in English would still see "Gaya hidup melebihi anggaran" appear
-    /// after switching to ID, because the hashed key differed. Icon + color
-    /// stays constant across translations and uniquely identifies each
-    /// insight family in practice (with minor collisions that are
-    /// acceptable — sharing dismissal between visually-identical insight
-    /// types matches user intent of "stop showing this kind of alert").
-    private func dismissalKey(for insight: SmartInsight) -> String {
-        let cal = Calendar.current
-        let now = Date()
-        let ymKey = String(format: "%04d-%02d",
-                           cal.component(.year, from: now),
-                           cal.component(.month, from: now))
-        // Color is a SwiftUI Color which doesn't have a stable rawValue, so
-        // we extract a coarse signature via its description (e.g.
-        // "DynamicColor(...)"). Good enough — the icon is the dominant
-        // discriminator and shared icons across insights are intentional.
-        let colorTag = String(describing: insight.color).hashValue
-        return "insight_\(ymKey)_\(insight.icon)_\(colorTag)"
-    }
-
-    /// User-dismissed an insight banner. Persists the dismissal so the same
-    /// insight type doesn't reappear this month. Survives across app launches
-    /// via UserDefaults.
-    func dismissInsight(_ insight: SmartInsight) {
-        let key = dismissalKey(for: insight)
-        var set = Set(UserDefaults.standard.stringArray(forKey: "sb_dismissed_insights") ?? [])
-        set.insert(key)
-        UserDefaults.standard.set(Array(set), forKey: "sb_dismissed_insights")
-    }
-
-    /// Filters insights against the dismissed set. Called from `evaluateAll`.
-    private func notDismissed(_ insight: SmartInsight) -> Bool {
-        let key = dismissalKey(for: insight)
-        let set = Set(UserDefaults.standard.stringArray(forKey: "sb_dismissed_insights") ?? [])
-        return !set.contains(key)
-    }
-
-    /// Clear dismissals when month rolls over so insights reappear in the
-    /// new month. Called opportunistically from any insight access — cheap
-    /// O(N) on a small UserDefaults set.
-    private func sweepStaleDismissals() {
-        let cal = Calendar.current
-        let now = Date()
-        let currentYM = String(format: "%04d-%02d",
-                               cal.component(.year, from: now),
-                               cal.component(.month, from: now))
-        let raw = UserDefaults.standard.stringArray(forKey: "sb_dismissed_insights") ?? []
-        let kept = raw.filter { $0.contains("_\(currentYM)_") }
-        if kept.count != raw.count {
-            UserDefaults.standard.set(kept, forKey: "sb_dismissed_insights")
-        }
-    }
-
     // MARK: - Spending Anomaly Detection
 
     /// Detects if any category is spending unusually high versus the same
@@ -2078,9 +1814,6 @@ final class SmartBudgetManager {
         set.insert(recurringKey(for: name))
         UserDefaults.standard.set(Array(set), forKey: Self.dismissedRecurringKey)
     }
-    func restoreDismissedRecurring() {
-        UserDefaults.standard.removeObject(forKey: Self.dismissedRecurringKey)
-    }
 
     func detectRecurring(allTransactions: [TxRecord]) -> [RecurringPattern] {
         // Royal-only gate — same rationale as spendingAnomalies.
@@ -2167,10 +1900,6 @@ final class SmartBudgetManager {
     private static let storageKeys = [
         "sb_enabled", "sb_daily", "sb_lifestyle", "sb_invest", "sb_card_id",
         "sb_bill_cards", "sb_extra_funds",
-        // Dismissed-insight keys are user-specific; clear on reset/logout so
-        // the next user starts fresh and old dismissals don't suppress new
-        // user's insights.
-        "sb_dismissed_insights",
     ]
 
     /// True only while `load()` is assigning. See `save()`.
@@ -2229,17 +1958,6 @@ final class SmartBudgetManager {
         // Setting `isEnabled = false` triggers didSet → save(), so the
         // off-state persists across launches.
         isEnabled = false
-    }
-
-    /// Apply one of the built-in profile presets to the global ratios. Does
-    /// NOT toggle `isEnabled` — caller decides if this is part of an "enable
-    /// + apply" or just "switch preset on already-enabled budget" flow.
-    /// Triggers a single save() at the end via didSet on the last property.
-    func applyPreset(_ preset: BudgetProfile) {
-        let r = preset.ratios
-        dailyRatio      = r.daily
-        lifestyleRatio  = r.lifestyle
-        investDebtRatio = r.investDebt
     }
 
     /// Called by ProfileView's "Reset All Data" flow. Wipes every persisted
@@ -2407,37 +2125,10 @@ struct BudgetAlert {
     var leftAfter: Double { max(limit - newTotal, 0) }
 }
 
-/// Action attached to an insight — drives an optional CTA button below the
-/// insight body. Adding `action` upgrades a descriptive insight ("you spent
-/// 25% over budget") into a prescriptive one ("you spent 25% over budget
-/// → [Adjust Budget]"). Each kind maps to a known navigation target so the
-/// caller (HomeView SmartInsightBanner) can route appropriately without
-/// hardcoding routes inside the engine.
-struct SmartInsightAction {
-    /// Localized button label, e.g. "Adjust Budget" or "View Goal".
-    let label: String
-    /// Where tapping leads. The receiving view is responsible for opening
-    /// the right sheet — engine stays UI-agnostic.
-    let kind: Kind
-
-    enum Kind {
-        /// Open the Smart Budget settings sheet (overspend → tweak ratio).
-        case openBudgetSettings
-        /// Open Wishlist / Savings Goals (goal-linked insight).
-        case openSavingsGoals
-        /// Open the Debt management screen.
-        case openDebt
-        /// Pure acknowledgement — no nav, just dismiss the banner.
-        /// Useful for celebration insights ("Great job!") where a route
-        /// would feel pushy.
-        case acknowledge
-    }
-}
-
-/// How much trust to put in this insight. New users with <1 month of data
-/// get rough heuristics flagged as `.low`; established users with 3+ months
-/// of clean data get `.high`. UI shows a discreet badge on low-confidence
-/// items so the user knows the recommendation is preliminary.
+/// How much trust to put in a recommendation. New users with <1 month of
+/// data get rough heuristics flagged as `.low`; established users with 3+
+/// months of clean data get `.high`. Smart Recommendations shows it as a
+/// badge, so the user knows the recommendation is preliminary.
 enum InsightConfidence {
     case high     // 3+ months data, low variance, stable income
     case medium   // 1-2 months data
@@ -2450,11 +2141,4 @@ struct SmartInsight: Identifiable {
     let color: Color
     let title: String
     let body: String
-    /// Optional CTA. nil = no button rendered. Most insights set this so
-    /// the user has a clear next step instead of just reading text.
-    var action: SmartInsightAction? = nil
-    /// Confidence the engine has in this insight. Defaults to `.high` for
-    /// existing call sites; new sites should pass an explicit value when
-    /// they have variance / data-age signal.
-    var confidence: InsightConfidence = .high
 }

@@ -16,7 +16,6 @@ final class SmartBudgetMathTests: XCTestCase {
                         card: String?, bills: [String], extra: [String])!
     private var savedUser: String?
     private var savedPlan: PremiumPlan = .free
-    private var savedDismissed: [String]?
 
     override func setUp() {
         super.setUp()
@@ -24,8 +23,6 @@ final class SmartBudgetMathTests: XCTestCase {
                  sb.budgetCardID, sb.billCardIDs, sb.extraFundTxIDs)
         savedUser = UserSession.shared.userID
         savedPlan = PremiumManager.shared.plan
-        savedDismissed = UserDefaults.standard.stringArray(forKey: "sb_dismissed_insights")
-        UserDefaults.standard.removeObject(forKey: "sb_dismissed_insights")
         sb.budgetCardID = nil
         sb.billCardIDs = []
         sb.extraFundTxIDs = []
@@ -41,7 +38,6 @@ final class SmartBudgetMathTests: XCTestCase {
         sb.extraFundTxIDs = saved.extra
         UserSession.shared.userID = savedUser
         PremiumManager.shared.plan = savedPlan
-        UserDefaults.standard.set(savedDismissed, forKey: "sb_dismissed_insights")
         super.tearDown()
     }
 
@@ -234,7 +230,6 @@ final class SmartBudgetMathTests: XCTestCase {
                                        income: 10_000_000, investShare: 0.20, currency: "IDR",
                                        investPaused: true)
         XCTAssertEqual(paused.color, AppTheme.blue)
-        XCTAssertNil(paused.action)
     }
 
     /// Going all-in on debt is the point, not a warning.

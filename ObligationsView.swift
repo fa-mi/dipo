@@ -72,10 +72,6 @@ struct ObligationLoad {
     static let healthyCeiling = 0.36
     static let stretchedCeiling = 0.43
 
-    var allocated: Double { monthlyIncome * Self.healthyCeiling }
-    /// Room left before crossing the healthy band.
-    var headroom: Double { allocated - total }
-
     enum Verdict { case healthy, tight, over }
 
     var verdict: Verdict {

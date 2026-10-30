@@ -52,11 +52,6 @@ final class IndonesianHolidayService {
     /// for us and updates itself, which is the only way this gets to be
     /// automatic rather than something the user has to keep filling in.
     private(set) var calendarHolidays: Set<String> = []
-    /// Dates the user added by hand. Authoritative — outranks the network.
-    private(set) var manualHolidays: Set<String> = []
-    /// Dates the user explicitly marked as ordinary working days, to undo a
-    /// wrong entry from any other source. Highest precedence of all.
-    private(set) var manualWorkdays: Set<String> = []
 
     /// Years whose data came back from a real, successful fetch. Nothing else
     /// ever writes to this — that is the whole point.
@@ -108,53 +103,12 @@ final class IndonesianHolidayService {
 
     func isHoliday(_ date: Date) -> Bool {
         let key = Self.key(for: date)
-        // User corrections win, in both directions, before anything else.
-        if manualWorkdays.contains(key) { return false }
-        if manualHolidays.contains(key) { return true }
-
         let year = Calendar.current.component(.year, from: date)
         scheduleFetchIfNeeded(year)
 
         return calendarHolidays.contains(key)
             || networkHolidays.contains(key)
             || Self.fixedHolidays(year: year).contains(key)
-    }
-
-    /// Whether this year's data came from a real fetch. False means DiPo is
-    /// running on fixed dates plus whatever the user entered — callers should
-    /// say so rather than present payday math as certain.
-    func hasConfirmedData(for year: Int) -> Bool { confirmedYears.contains(year) }
-
-    /// Every holiday DiPo currently believes in for a year, sorted. Powers the
-    /// settings screen so the user can see exactly what payday math is using.
-    func knownHolidays(year: Int) -> [String] {
-        let all = networkHolidays
-            .union(Self.fixedHolidays(year: year))
-            .union(manualHolidays)
-            .filter { $0.hasPrefix(String(format: "%04d-", year)) }
-            .subtracting(manualWorkdays)
-        return all.sorted()
-    }
-
-    func isManual(_ key: String) -> Bool { manualHolidays.contains(key) }
-
-    func addManualHoliday(_ date: Date) {
-        let key = Self.key(for: date)
-        manualHolidays.insert(key)
-        manualWorkdays.remove(key)
-        saveCache()
-    }
-
-    /// Removing works for any source: a user-added date is simply dropped, and
-    /// a date from the network or the fixed list is shadowed by an explicit
-    /// working-day marker, since we cannot delete from those.
-    func removeHoliday(_ key: String) {
-        if manualHolidays.contains(key) {
-            manualHolidays.remove(key)
-        } else {
-            manualWorkdays.insert(key)
-        }
-        saveCache()
     }
 
     /// Pre-fetch the current and next year so payday math is ready immediately.
@@ -215,16 +169,6 @@ final class IndonesianHolidayService {
         print("[DiPo] Holidays from system calendar: \(found.count) dates")
     }
 
-    /// Clears the backoff and refetches — for a manual "try again" control.
-    func forceRefresh() {
-        let year = Calendar.current.component(.year, from: .now)
-        for y in [year, year + 1] {
-            confirmedYears.remove(y)
-            lastAttempt[y] = nil
-            scheduleFetchIfNeeded(y)
-        }
-    }
-
     // MARK: - Fetch
 
     private func scheduleFetchIfNeeded(_ year: Int) {
@@ -280,15 +224,11 @@ final class IndonesianHolidayService {
     // MARK: - Persistence
 
     private let networkKey   = "dipo_id_holidays_network"
-    private let manualKey    = "dipo_id_holidays_manual"
-    private let workdayKey   = "dipo_id_workdays_manual"
     private let confirmedKey = "dipo_id_holidays_confirmed_years"
 
     private func saveCache() {
         let d = UserDefaults.standard
         d.set(Array(networkHolidays), forKey: networkKey)
-        d.set(Array(manualHolidays),  forKey: manualKey)
-        d.set(Array(manualWorkdays),  forKey: workdayKey)
         d.set(Array(confirmedYears),  forKey: confirmedKey)
     }
 
@@ -296,8 +236,6 @@ final class IndonesianHolidayService {
         let d = UserDefaults.standard
         networkHolidays  = Set(d.stringArray(forKey: networkKey) ?? [])
         calendarHolidays = Set(d.stringArray(forKey: Self.calendarSourceKey) ?? [])
-        manualHolidays  = Set(d.stringArray(forKey: manualKey)  ?? [])
-        manualWorkdays  = Set(d.stringArray(forKey: workdayKey) ?? [])
         // Confirmed years are stored explicitly. Inferring them from the
         // presence of cached dates — as the old loader did — is what let six
         // fallback entries masquerade as a complete year.

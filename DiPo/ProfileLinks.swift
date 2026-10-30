@@ -124,18 +124,3 @@ struct ProfileFeatureLink: View {
         .buttonStyle(ScaleButtonStyle())
     }
 }
-
-// MARK: - Card Manager From Profile
-
-struct CardManagerFromProfile: View {
-    @State private var vm = AppViewModel()
-    @Query(sort: \BankCard.sortOrder) private var liveCards: [BankCard]
-
-    var body: some View {
-        NavigationStack {
-            CardListView(vm: vm)
-        }
-        .onAppear { vm.cards = liveCards }
-        .onChange(of: liveCards) { _, new in vm.cards = new }
-    }
-}

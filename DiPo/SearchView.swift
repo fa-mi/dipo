@@ -559,17 +559,10 @@ struct SearchTxRow: View {
 
     private var formattedDate: String {
         let cal = Calendar.current
-        let locale = LanguageManager.shared.currentLocale
-        let df = DateFormatter()
-        df.locale = locale
-        df.dateFormat = DateFormatter.dateFormat(fromTemplate: "j:mm", options: 0, locale: locale)
-        let timeStr = df.string(from: tx.date)
+        let timeStr = DateFormatterCache.template("j:mm").string(from: tx.date)
         if cal.isDateInToday(tx.date)     { return "\(loc("common.today")), \(timeStr)" }
         if cal.isDateInYesterday(tx.date) { return "\(loc("common.yesterday")), \(timeStr)" }
-        let df2 = DateFormatter()
-        df2.locale = locale
-        df2.dateFormat = DateFormatter.dateFormat(fromTemplate: "d MMM j:mm", options: 0, locale: locale)
-        return df2.string(from: tx.date)
+        return DateFormatterCache.template("d MMM j:mm").string(from: tx.date)
     }
 
     var body: some View {

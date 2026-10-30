@@ -114,7 +114,6 @@ struct HomeView: View {
     /// Flagged money in this period, added to the flow card's budget.
     @State private var flowExtra: Double = 0
     @State private var showAllAttention = false
-    @State private var showGoalDetail: SavingsGoal? = nil
     @State private var headerAppeared    = false
     @State private var contentAppeared   = false
     // Memoized Smart-Budget analyses. Each engine iterates ALL transactions
@@ -124,6 +123,19 @@ struct HomeView: View {
     @State private var cachedInsights:  [SmartInsight] = []
     @State private var cachedAnomalies: [SmartInsight] = []
     @State private var cachedRecurring: [SmartBudgetManager.RecurringPattern] = []
+
+    /// DiPo Navigasi, the add-on: DiPo's row mentions the trip's turn.
+    @AppStorage(Navigasi.enabledKey) private var naviOn = false
+    @AppStorage(Navigasi.tripKey) private var naviTrip = Data()
+
+    /// The trip's turn for DiPo's row: worked out only while the add-on is on
+    /// and a trip is under way.
+    private var naviNudge: DiPoNudge.Navi? {
+        guard naviOn, let trip = Navigasi.Trip.decode(naviTrip),
+              let goal = activeGoals.first(where: { $0.id == trip.goalID }) else { return nil }
+        return Navigasi.nudge(Navigasi.status(of: trip, goal: goal, cards: queriedCards, salaries: salarySchedules),
+                              goal: goal)
+    }
 
     private var nearestSalary: SalarySchedule? {
         salarySchedules.filter { $0.isActive }
@@ -755,6 +767,7 @@ struct HomeView: View {
                         daysToPayday: nearestSalary.map { SalaryDateEngine.daysUntilPay(dayOfMonth: $0.dayOfMonth) },
                         payDate: nearestSalary.map { SalaryDateEngine.nextPayDate(dayOfMonth: $0.dayOfMonth) },
                         assetCheck: dipoAssetCheck,
+                        navigation: naviNudge,
                         isRoyal: dipoIsRoyal,
                         onAskDiPo: { askDiPoPrompt = nil; showAskDiPo = true },
                         onAction: { action in
@@ -762,6 +775,7 @@ struct HomeView: View {
                             case .notifications: showNotifications = true
                             case .bills:         vm.open(PlanRoute.bills)
                             case .salary:        vm.open(PlanRoute.salary)
+                            case .navigation:    vm.open(PlanRoute.navigasi)
                             case .checkIn, .streak, .interestGuess: break   // handled inside DiPo's section
                             case .assetCheck:
                                 assetCheckSnoozedUntil = AssetMarketCheck.snoozed()
@@ -995,18 +1009,6 @@ struct HomeView: View {
                                   daysLeft: RecurringDateEngine.daysUntil(dayOfMonth: bill.dayOfMonth),
                                   autoRecord: bill.autoRecord,
                                   balanceAfter: after)
-        }
-    }
-
-    /// Route handler for `SmartInsight.action`. Each kind opens the matching
-    /// feature in its own tab — this lives on HomeView (not the engine) because
-    /// the engine is intentionally UI-agnostic.
-    private func routeInsightAction(_ kind: SmartInsightAction.Kind) {
-        switch kind {
-        case .openBudgetSettings: vm.open(PlanRoute.budget)
-        case .openSavingsGoals:   vm.open(PlanRoute.goals)
-        case .openDebt:           vm.open(PlanRoute.obligations)
-        case .acknowledge:        break  // banner state managed elsewhere
         }
     }
 }

@@ -205,20 +205,6 @@ extension StatisticsView {
                              salaryDates: salaryTxDates)
     }
 
-    /// Income over the same elapsed length one period back.
-    var previousPeriodIncome: Double? {
-        previousPeriodTotal(positive: true)
-    }
-    /// Same length of time, one period earlier — the only fair thing to compare
-    /// a running period against.
-    var previousPeriodExpenses: Double? { previousPeriodTotal(positive: false) }
-
-    func previousPeriodTotal(positive: Bool) -> Double? {
-        guard let prevStart = previousWindowStart else { return nil }
-        return Self.stretchTotal(scopeTransactions, from: prevStart, to: previousCutoff(from: prevStart),
-                                 income: positive, convert: convertedAmount)
-    }
-
     /// Where the period before the selected one began. The previous window
     /// begins where the previous CYCLE actually began — see
     /// `previousCycleStart` for why that is not one calendar month back.
@@ -316,10 +302,7 @@ extension StatisticsView {
         let (start, end) = effectiveRange
         if selectedPeriod == .allTime { return loc("stats.all_tx") }
         if selectedPeriod == .thisMonth || selectedPeriod == .lastMonth {
-            let mfmt = DateFormatter()
-            mfmt.locale = locale
-            mfmt.dateFormat = DateFormatter.dateFormat(fromTemplate: "MMMMyyyy", options: 0, locale: locale)
-            return mfmt.string(from: start)
+            return DateFormatterCache.template("MMMMyyyy").string(from: start)
         }
         // A pay cycle runs from payday to the day BEFORE the next payday, and
         // the header should say so. `effectiveRange.end` is TODAY for a running
@@ -614,18 +597,6 @@ extension StatisticsView {
     }
     var trendTotal: Double { netWorthTrend.last?.expense ?? 0 }
 
-    /// What's left of the period's income after what's gone out. Nil when no
-    /// income landed in the window — then the hero reports spending instead of
-    /// inventing a budget the user never set.
-    var leftToSpend: Double? {
-        filteredIncome > 0 ? filteredIncome - filteredExpenses : nil
-    }
-
-    /// Share of the period's income already spent, 0...1.
-    var spentRatio: Double {
-        filteredIncome > 0 ? min(filteredExpenses / filteredIncome, 1) : 0
-    }
-
     /// Paid once a month rather than day to day: rent and kos, standing family
     /// transfers, subscriptions, investments, debt instalments.
     ///
@@ -788,8 +759,6 @@ extension StatisticsView {
     /// ONCE, never rated.
     var fixedSpend: Double { cachedFigures.fixed }
 
-    var variableDailyTotals: [Double] { cachedFigures.dailyTotals }
-
     /// What a typical day costs — the MEDIAN, not the mean.
     ///
     /// Excluding fixed categories was necessary and not sufficient. What was
@@ -939,10 +908,7 @@ extension StatisticsView {
     func computeNetWorthTrend() -> [CycleTrendPoint] {
         let cal = Calendar.current
         let now = Date()
-        let locale = LanguageManager.shared.currentLocale
-        let fmt = DateFormatter()
-        fmt.locale = locale
-        fmt.dateFormat = DateFormatter.dateFormat(fromTemplate: "MMM", options: 0, locale: locale)
+        let fmt = DateFormatterCache.template("MMM")
         var points: [CycleTrendPoint] = []
 
         // Bucket boundaries: pay-cycle anchored (start of current cycle, then
@@ -1319,21 +1285,5 @@ extension StatisticsView {
             guard let amt = totals[cat], amt > 0 else { return nil }
             return SpendCategory(name: cat.displayLabel, amount: amt, color: cat.color)
         }
-    }
-
-    var realTotal: Double { realCategories.reduce(0) { $0 + $1.amount } }
-
-    var displayedTx: [TxRecord] {
-        // List view still shows ALL transactions including refund/transfer
-        // so the user can see them in chronological order. Only the
-        // aggregated numbers (income/expenses/categories) filter by subtype.
-        // This keeps the audit trail visible.
-        let base = statsVM.selectedStatTab == .expenses
-            ? filteredTx.filter { $0.amount < 0 }
-            : filteredTx.filter { $0.amount > 0 }
-        // Sort newest-first — the section is labelled "Recent", but
-        // `card.transactions` is in insertion order, so `prefix(5)` was
-        // showing arbitrary rows, not the latest ones.
-        return base.sorted { $0.date > $1.date }
     }
 }

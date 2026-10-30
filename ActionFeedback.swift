@@ -134,15 +134,6 @@ final class ActionFeedbackCenter {
                            CurrencyManager.shared.formatted(remaining, currency: remainingCurrency)))
     }
 
-    /// Clearing a debt is the rarest and best thing that happens in this app.
-    /// It gets the trophy and the accent colour, not the red of a payment.
-    @MainActor
-    func debtCleared(debtName: String) {
-        show(icon: "checkmark.seal.fill",
-             tint: AppTheme.accent,
-             title: String(format: loc("feedback.debt_cleared"), debtName))
-    }
-
     @MainActor
     func cardSaved(name: String, isUpdate: Bool) {
         show(icon: isUpdate ? "pencil" : "creditcard.fill",

@@ -12,10 +12,7 @@ extension StatisticsView {
     var weekRangeLabel: String {
         let cal = weekCalendar
         guard let w = cal.dateInterval(of: .weekOfYear, for: Date()) else { return "" }
-        let df = DateFormatter()
-        df.locale = LanguageManager.shared.currentLocale
-        df.dateFormat = DateFormatter.dateFormat(fromTemplate: "dMMM", options: 0,
-                                                 locale: LanguageManager.shared.currentLocale)
+        let df = DateFormatterCache.template("dMMM")
         let last = cal.safeDate(byAdding: .day, value: -1, to: w.end)
         return "\(df.string(from: w.start)) – \(df.string(from: last))"
     }
@@ -285,10 +282,7 @@ extension StatisticsView {
     // figure on the screen so the days add up to the cycle.
 
     func rangeLabel(_ start: Date, _ end: Date) -> String {
-        let df = DateFormatter()
-        df.locale = LanguageManager.shared.currentLocale
-        df.dateFormat = DateFormatter.dateFormat(fromTemplate: "dMMM", options: 0,
-                                                 locale: LanguageManager.shared.currentLocale)
+        let df = DateFormatterCache.template("dMMM")
         // Half-open window: the last day covered is the day before it ends.
         let last = Calendar.current.safeDate(byAdding: .day, value: -1, to: end)
         return "\(df.string(from: start)) – \(df.string(from: last))"
@@ -554,15 +548,6 @@ extension StatisticsView {
                 }
                 .clipShape(RoundedRectangle(cornerRadius: AppRadius.xl))
         }
-    }
-
-    func chartCard(values: [Double], labels: [String], tint: Color,
-                           highlightLast: Bool) -> some View {
-        MiniBars(values: values, labels: labels, tint: tint,
-                 highlightLast: highlightLast, height: 130, maxBarWidth: 34)
-            .frame(maxWidth: .infinity)
-            .padding(16)
-            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.xl))
     }
 
     func factTile(_ label: String, _ value: String, _ tint: Color) -> some View {

@@ -27,6 +27,9 @@ struct PlanView: View {
     @State private var moreOpen = false
     /// Read from the whole history, so refreshed on save, not per render.
     @State private var ladder: LadderResult?
+    /// DiPo Navigasi, the add-on: its row shows only while it is on.
+    @AppStorage(Navigasi.enabledKey) private var naviOn = false
+    @AppStorage(Navigasi.tripKey) private var naviTrip = Data()
 
     var body: some View {
         NavigationStack(path: $vm.planPath) {
@@ -63,6 +66,12 @@ struct PlanView: View {
                             row(.goals, icon: "target", tint: AppTheme.teal,
                                 title: loc("profile.savings"), status: goalsStatus,
                                 feature: UserSession.shared.isLoggedIn ? nil : .savingsGoals)
+                            if naviOn {
+                                divider
+                                row(.navigasi, icon: "location.north.circle.fill", tint: AppTheme.accent,
+                                    title: loc("navi.title"), status: naviStatus,
+                                    feature: UserSession.shared.isLoggedIn ? nil : .savingsGoals)
+                            }
                             if !folded.contains(.investments) {
                                 divider
                                 investmentsRow
@@ -110,6 +119,7 @@ struct PlanView: View {
                 case .ladder: FinancialLadderView().pushedFeature()
                 case .assets: AssetsView().pushedFeature()
                 case .obligations: ObligationsView().pushedFeature()
+                case .navigasi: NavigasiView().pushedFeature()
                 }
             }
             .sheet(isPresented: $showPaywall) {
@@ -175,6 +185,24 @@ struct PlanView: View {
         guard UserSession.shared.isLoggedIn else { return loc("profile.requires_royal") }
         let active = goals.filter { !$0.isCompleted }.count
         return active == 0 ? loc("savings.no_goals") : SavingsGoal.inProgressText(active)
+    }
+
+    /// Where the trip is headed and when it arrives, or that it is off route.
+    private var naviStatus: String {
+        guard let trip = Navigasi.Trip.decode(naviTrip),
+              let goal = goals.first(where: { $0.id == trip.goalID }) else { return loc("navi.status_pick") }
+        let name = "\(goal.emoji) \(goal.name)"
+        guard goal.isCompleted || goal.monthlyContribution > 0 else { return loc("navi.choose_route") }
+        let status = Navigasi.status(of: trip, goal: goal, cards: cards, salaries: schedules)
+        switch status.leg {
+        case .arrived:
+            return String(format: loc("navi.arrived_sub"), name)
+        case .behind(let short, _):
+            return String(format: loc("navi.status_behind"),
+                          CurrencyManager.shared.formatted(short, currency: goal.currency))
+        case .setAside, .done, .accepted:
+            return String(format: loc("navi.status_on"), name, status.arrival.map(Navigasi.monthYear) ?? "")
+        }
     }
 
     private var investStatus: String {

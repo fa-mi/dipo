@@ -48,7 +48,7 @@ final class CopyTests: XCTestCase {
     func testTheBusiestScreensUseShortSentences() throws {
         let (en, id) = try tables()
         let keys = ["balance.review", "budget.ahead_but_over", "budget.ahead_detail", "budget.met_detail",
-                    "budget.over_detail", "home.debt_note", "home.declared_auto_off", "home.over_saved",
+                    "budget.over_detail", "home.debt_note", "home.over_saved",
                     "home.progress_to_go", "insight.cat_up_body", "insight.group_unbudgeted_body",
                     "insight.ratio_risky_daily_body", "insight.ratio_risky_lifestyle_body",
                     "insight.review_lifestyle_first", "insight.setaside_body", "insight.setaside_met_body",
