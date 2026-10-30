@@ -27,6 +27,7 @@ struct ProfileView: View {
     @State private var showWebSync        = false
     @State private var showCleanup        = false
     @State private var showPaywall        = false
+    @State private var showNotificationPrefs = false
     @State private var appearanceMode: String = UserDefaults.standard.string(forKey: "appearance_mode") ?? "system"
     /// DiPo Navigasi, the add-on (Navigasi.swift). Off until switched on here.
     @AppStorage(Navigasi.enabledKey) private var naviOn = false
@@ -151,6 +152,7 @@ struct ProfileView: View {
                     premiumBadge
                     featureLinksCard
                     addOnsCard
+                    notificationsLink
                     appearanceCard
                     authButtonSection
                     backupSection
@@ -336,6 +338,11 @@ struct ProfileView: View {
                 .presentationDragIndicator(.visible)
                 .presentationBackground(AppTheme.bg)
                 .preferredColorScheme(appColorScheme())
+        }
+        .sheet(isPresented: $showNotificationPrefs) {
+            NotificationSettingsView()
+                .presentationDetents([.large]).presentationDragIndicator(.visible)
+                .presentationBackground(AppTheme.bg).preferredColorScheme(appColorScheme())
         }
         .sheet(isPresented: $showInterests) {
             DiPoInterestsView()
@@ -774,6 +781,17 @@ struct ProfileView: View {
                 .foregroundStyle(AppTheme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.horizontal, 4)
+        }
+        .padding(.horizontal, 22)
+    }
+
+    /// Which reminders DiPo sends, a switch for each kind. Without it the only
+    /// way to quiet the budget alerts was to silence DiPo in iOS Settings, and
+    /// with them the debt due dates that save a late fee.
+    private var notificationsLink: some View {
+        ProfileFeatureLink(icon: "bell.badge.fill", color: AppTheme.orange,
+                           title: loc("notifpref.title"), subtitle: loc("notifpref.link_sub")) {
+            showNotificationPrefs = true
         }
         .padding(.horizontal, 22)
     }
