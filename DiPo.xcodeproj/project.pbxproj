@@ -10,7 +10,6 @@
 		9B04D3EC2F835EAC0015F772 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 9B04D3EB2F835EAC0015F772 /* GoogleService-Info.plist */; };
 		9B1C11D02FA029540032CD2C /* CryptoManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B1C11CB2FA029540032CD2C /* CryptoManager.swift */; };
 		9B1C11D12FA029540032CD2C /* NetworkLayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B1C11CD2FA029540032CD2C /* NetworkLayer.swift */; };
-		9B1C11D22FA029540032CD2C /* SecureDataLayerMigration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B1C11CE2FA029540032CD2C /* SecureDataLayerMigration.swift */; };
 		9B37C3972F7B71DC00035E23 /* UserSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B37C3952F7B71DC00035E23 /* UserSession.swift */; };
 		9B37C3982F7B7F3200035E23 /* AuthViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BE64C632F751CFD00662EC1 /* AuthViews.swift */; };
 		9B37C3992F7B7F3200035E23 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BCDED942F7978C5006F70F9 /* HomeView.swift */; };
@@ -28,7 +27,6 @@
 		9B50CD8A2F907E1400E384B6 /* AppShared.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B50CD7E2F907E1300E384B6 /* AppShared.swift */; };
 		9B50CD8B2F907E1400E384B6 /* AppTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B50CD7F2F907E1300E384B6 /* AppTheme.swift */; };
 		9B50CD8C2F907E1400E384B6 /* HapticManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B50CD812F907E1300E384B6 /* HapticManager.swift */; };
-		9B50CD8D2F907E1400E384B6 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B50CD832F907E1300E384B6 /* OnboardingView.swift */; };
 		9B638F742F8F8B84007868B9 /* BankCardHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B638F722F8F8B84007868B9 /* BankCardHelpers.swift */; };
 		9B6B0A8A2F75620F007D6B2D /* SalaryCreditEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B6B0A892F75620F007D6B2D /* SalaryCreditEngine.swift */; };
 		9B6B0A922F76262C007D6B2D /* WishlistView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B6B0A902F76262C007D6B2D /* WishlistView.swift */; };
@@ -152,7 +150,6 @@
 		9B04D3EB2F835EAC0015F772 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		9B1C11CB2FA029540032CD2C /* CryptoManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CryptoManager.swift; sourceTree = "<group>"; };
 		9B1C11CD2FA029540032CD2C /* NetworkLayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkLayer.swift; sourceTree = "<group>"; };
-		9B1C11CE2FA029540032CD2C /* SecureDataLayerMigration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecureDataLayerMigration.swift; sourceTree = "<group>"; };
 		9B37C3942F7B71DC00035E23 /* PremiumManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PremiumManager.swift; sourceTree = "<group>"; };
 		9B37C3952F7B71DC00035E23 /* UserSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserSession.swift; sourceTree = "<group>"; };
 		9B50CD7E2F907E1300E384B6 /* AppShared.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppShared.swift; sourceTree = "<group>"; };
@@ -160,7 +157,6 @@
 		9B50CD802F907E1300E384B6 /* AppViewModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppViewModels.swift; sourceTree = "<group>"; };
 		9B50CD812F907E1300E384B6 /* HapticManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HapticManager.swift; sourceTree = "<group>"; };
 		9B50CD822F907E1300E384B6 /* MainTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainTabView.swift; sourceTree = "<group>"; };
-		9B50CD832F907E1300E384B6 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		9B50CD842F907E1300E384B6 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		9B50CD852F907E1300E384B6 /* SupportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupportView.swift; sourceTree = "<group>"; };
 		9B638F722F8F8B84007868B9 /* BankCardHelpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BankCardHelpers.swift; sourceTree = "<group>"; };
@@ -360,7 +356,6 @@
 				9B50CD802F907E1300E384B6 /* AppViewModels.swift */,
 				9B50CD812F907E1300E384B6 /* HapticManager.swift */,
 				9B50CD822F907E1300E384B6 /* MainTabView.swift */,
-				9B50CD832F907E1300E384B6 /* OnboardingView.swift */,
 				9B50CD842F907E1300E384B6 /* RootView.swift */,
 				9B944DB82F94FCF100C5892D /* NetworkMonitor.swift */,
 				9B50CD852F907E1300E384B6 /* SupportView.swift */,
@@ -423,7 +418,6 @@
 				9BEA100A2F00000A0000E5E4 /* CycleIntent.swift */,
 				9B1C11CB2FA029540032CD2C /* CryptoManager.swift */,
 				9B1C11CD2FA029540032CD2C /* NetworkLayer.swift */,
-				9B1C11CE2FA029540032CD2C /* SecureDataLayerMigration.swift */,
 				9BCDED982F7978C5006F70F9 /* UtilityViews.swift */,
 				9BE64C772F75364800662EC1 /* SalaryView.swift */,
 				9BCAABF02F9C86F700897FF9 /* DateExtensions.swift */,
@@ -678,7 +672,6 @@
 				9BBA0001000000000000BACK /* BackupService.swift in Sources */,
 				9B50CD8B2F907E1400E384B6 /* AppTheme.swift in Sources */,
 				9B50CD8C2F907E1400E384B6 /* HapticManager.swift in Sources */,
-				9B50CD8D2F907E1400E384B6 /* OnboardingView.swift in Sources */,
 				9B83202D2F7BC446000CE046 /* DiPoLogo.swift in Sources */,
 				9B6B0A8A2F75620F007D6B2D /* SalaryCreditEngine.swift in Sources */,
 				9BCDED932F7976DB006F70F9 /* SmartBudgetManager.swift in Sources */,
@@ -686,7 +679,6 @@
 				9BCDED992F7978C5006F70F9 /* UtilityViews.swift in Sources */,
 				9B1C11D02FA029540032CD2C /* CryptoManager.swift in Sources */,
 				9B1C11D12FA029540032CD2C /* NetworkLayer.swift in Sources */,
-				9B1C11D22FA029540032CD2C /* SecureDataLayerMigration.swift in Sources */,
 				9B88EB8E2F7A1A34006966E4 /* CardManagementView.swift in Sources */,
 				9B944DBF2F95089200C5892D /* LanguageManager.swift in Sources */,
 				9B88EB8F2F7A1A34006966E4 /* StatisticsView.swift in Sources */,
