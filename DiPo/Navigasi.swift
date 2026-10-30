@@ -35,7 +35,9 @@ enum Navigasi {
         let categoryRaw: String
         /// Less to spend in it each month.
         let cut: Double
-        /// What it took a month when the route was chosen.
+        /// What it took in a usual month when the route was chosen (see
+        /// `toll(transactions:currency:now:calendar:)`). Named `average` in
+        /// trips already stored, so it keeps the name.
         let average: Double
 
         var category: TxCategory? { TxCategory(rawValue: categoryRaw) }
@@ -191,9 +193,14 @@ enum Navigasi {
     /// even when it is eating out — for many people it is the meal.
     static let tollCategories: [TxCategory] = [.shopping, .travel]
 
-    /// The category among `tollCategories` with the most spent a month over
-    /// the last three full months, and three tenths of it to give up — nil
-    /// when nothing there is worth cutting.
+    /// The category among `tollCategories` that takes the most in a usual
+    /// month, and three tenths of that to give up — nil when nothing there is
+    /// worth cutting.
+    ///
+    /// A usual month is the second-biggest of the last three full months:
+    /// going home for Lebaran, or a new phone, is one big month, not a habit
+    /// to spend less on. Averaged in, it promised a cut that never needed
+    /// making, and an arrival the trip could not keep.
     static func toll(transactions: [TxRecord], currency: String, now: Date,
                      calendar cal: Calendar = .current) -> Toll? {
         guard let thisMonth = cal.dateInterval(of: .month, for: now)?.start,
@@ -201,23 +208,26 @@ enum Navigasi {
         let spending = transactions.filter {
             $0.amount < 0 && $0.txSubtype == .normal && $0.date >= from && $0.date < thisMonth
         }
-        // Over the months that have any spending at all, so a phone with one
-        // month of history is not averaged over three.
-        let months = Set(spending.map { cal.dateComponents([.year, .month], from: $0.date) }).count
-        guard months > 0 else { return nil }
+        // Only the months with any spending at all, so someone who started a
+        // month ago is not judged on three.
+        let months = Set(spending.map { cal.dateComponents([.year, .month], from: $0.date) })
+        guard !months.isEmpty else { return nil }
         let cm = CurrencyManager.shared
         let best = tollCategories.map { cat -> (TxCategory, Double) in
-            let total = spending.filter { $0.category == cat }.reduce(0.0) {
-                $0 + cm.convert(abs($1.amount), from: $1.currency.isEmpty ? currency : $1.currency, to: currency)
+            var byMonth = Dictionary(uniqueKeysWithValues: months.map { ($0, 0.0) })
+            for tx in spending where tx.category == cat {
+                byMonth[cal.dateComponents([.year, .month], from: tx.date), default: 0] +=
+                    cm.convert(abs(tx.amount), from: tx.currency.isEmpty ? currency : tx.currency, to: currency)
             }
-            return (cat, total / Double(months))
+            let biggestFirst = byMonth.values.sorted(by: >)
+            return (cat, biggestFirst[min(1, biggestFirst.count - 1)])
         }.max { $0.1 < $1.1 }
         guard let best, best.1 >= minimumSpend(currency) else { return nil }
-        let (category, average) = best
-        let cut = nice(average * 0.3, currency: currency)
-        guard cut >= smallStep(currency), cut < average else { return nil }
+        let (category, usual) = best
+        let cut = nice(usual * 0.3, currency: currency)
+        guard cut >= smallStep(currency), cut < usual else { return nil }
         return Toll(categoryRaw: category.rawValue, cut: cut,
-                    average: SmartRecommendationEngine.measuredValue(average, currency: currency))
+                    average: SmartRecommendationEngine.measuredValue(usual, currency: currency))
     }
 
     // MARK: Where the trip stands

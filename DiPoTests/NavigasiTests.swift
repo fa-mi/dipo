@@ -194,8 +194,8 @@ final class NavigasiTests: XCTestCase {
 
     // MARK: The toll
 
-    /// Shopping, not food, and not a transfer; averaged over the months with
-    /// any spending, this month left out.
+    /// Shopping, not food, and not a transfer; a usual month among the ones
+    /// with any spending, this month left out.
     func testTheTollComesFromWantsNotNeeds() throws {
         var tx: [TxRecord] = []
         for month in [7, 8, 9] {
@@ -214,6 +214,24 @@ final class NavigasiTests: XCTestCase {
         let little = [spend(-150_000, .shopping, day(2026, 9, 5))]
         XCTAssertNil(Navigasi.toll(transactions: little, currency: "IDR", now: day(2026, 10, 15), calendar: cal),
                      "too little to be worth cutting")
+    }
+
+    /// Going home for Lebaran, or a new phone, is one big month, not a habit:
+    /// the toll counts a usual month, the second-biggest of the three.
+    func testOneBigMonthIsNotAHabit() throws {
+        var tx = [spend(-3_000_000, .travel, day(2026, 8, 20))]
+        for (month, amount) in [(7, 400_000.0), (8, 4_000_000.0), (9, 500_000.0)] {
+            tx.append(spend(-amount, .shopping, day(2026, month, 10)))
+        }
+        let toll = try XCTUnwrap(Navigasi.toll(transactions: tx, currency: "IDR", now: day(2026, 10, 15), calendar: cal))
+        XCTAssertEqual(toll.category, .shopping, "one trip home is not a monthly habit")
+        XCTAssertEqual(toll.average, 500_000, accuracy: 1, "the phone's month does not count")
+        XCTAssertEqual(toll.cut, 150_000)
+        XCTAssertEqual(toll.limit, 350_000, accuracy: 1)
+
+        let twoMonths = [spend(-2_000_000, .shopping, day(2026, 9, 3)), spend(-50_000, .food, day(2026, 8, 3))]
+        XCTAssertNil(Navigasi.toll(transactions: twoMonths, currency: "IDR", now: day(2026, 10, 15), calendar: cal),
+                     "with two months, it has to happen in both")
     }
 
     // MARK: Set aside this cycle

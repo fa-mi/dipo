@@ -118,17 +118,4 @@ final class CryptoManager {
             return ""
         }
     }
-    
-    // MARK: - Utilities
-    
-    /// Mask card number for display (show only last 4 digits)
-    /// - Parameter cardNumber: Full card number
-    /// - Returns: Masked card number (e.g., "**** **** **** 1234")
-    static func maskCardNumber(_ cardNumber: String) -> String {
-        let digits = cardNumber.filter { $0.isNumber }
-        guard digits.count >= 4 else { return "****" }
-        
-        let last4 = String(digits.suffix(4))
-        return "**** **** **** \(last4)"
-    }
 }
