@@ -32,7 +32,7 @@ struct WalletPocket: View {
                     Button { onOpen(card) } label: {
                         // Its own height for the width, not the stack's: the
                         // stack is shorter than a card and would shrink it.
-                        WalletPocketCard(card: card, isFront: i == cards.count - 1, strip: strip)
+                        WalletPocketCard(card: card)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     .buttonStyle(.plain)
@@ -91,14 +91,10 @@ struct WalletPocket: View {
 // MARK: - A card in the pocket
 
 /// A card lying sideways, as it sits in a wallet. Only its top strip shows in
-/// the pocket, so that is where everything it has to say goes.
+/// the pocket, so that is where everything it has to say goes, and nothing
+/// else: the bank, the card, and what is in it.
 struct WalletPocketCard: View {
     let card: BankCard
-    /// The card at the front shows more than its strip, so it carries the
-    /// principal there, where a real card prints it.
-    var isFront = false
-    /// How tall the strip is, for where the principal goes on the front card.
-    var strip: CGFloat = 64
 
     @Environment(\.colorScheme) private var colorScheme
     /// Observed so the main-card mark moves the moment the choice changes.
@@ -107,31 +103,17 @@ struct WalletPocketCard: View {
     /// ID-1, lying down.
     static let aspect: CGFloat = 85.6 / 53.98
 
-    private var network: CardNetwork { CardNetwork.detect(from: card.cardNumber) }
-
     var body: some View {
         ZStack(alignment: .topLeading) {
             WalletCardFace.gradient(for: card)
-            VStack(spacing: 0) {
-                WalletCardFace.header(card, isMain: WalletCardFace.isMain(card, sb), figures: true)
-                if isFront && !card.isDigitalWallet && network != .unknown {
-                    HStack {
-                        Spacer(minLength: 0)
-                        CardNetworkLogo(network: network)
-                            .scaleEffect(0.8, anchor: .topTrailing)
-                            .accessibilityHidden(true)
-                    }
-                    .padding(.top, max(strip - 54, 4))
-                }
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, 15).padding(.top, 12)
+            WalletCardFace.header(card, isMain: WalletCardFace.isMain(card, sb), figures: true)
+                .padding(.horizontal, 15).padding(.top, 13)
         }
         .aspectRatio(Self.aspect, contentMode: .fit)
         .clipShape(WalletCardFace.shape)
-        .overlay(WalletCardFace.shape.strokeBorder(.white.opacity(0.18), lineWidth: 0.5))
-        // Cast upward, onto the card behind: that is what tells the edges apart.
-        .shadow(color: .black.opacity(colorScheme == .dark ? 0.35 : 0.18), radius: 8, y: -3)
+        // A short shadow cast upward, onto the card behind: two cards of the
+        // same bank colour would otherwise read as one.
+        .shadow(color: .black.opacity(colorScheme == .dark ? 0.3 : 0.14), radius: 4, y: -1)
         .contentShape(WalletCardFace.shape)
         .accessibilityElement(children: .combine)
     }
@@ -179,22 +161,20 @@ struct WalletPocketFace: View {
         .background {
             WalletPocketShape(dip: WalletPocket.dip)
                 .fill(AppTheme.cardDark)
-                .shadow(color: .black.opacity(colorScheme == .dark ? 0.45 : 0.16), radius: 8, y: -4)
-        }
-        .overlay {
-            WalletPocketStitch(dip: WalletPocket.dip)
-                .stroke(AppTheme.textSecondary.opacity(0.45), style: StrokeStyle(lineWidth: 1.2, dash: [5, 4]))
+                .shadow(color: .black.opacity(colorScheme == .dark ? 0.3 : 0.1), radius: 5, y: -2)
         }
         .accessibilityElement(children: .combine)
     }
 
     /// One currency's total: the first large, any other one under it smaller.
+    /// In ink, not green: the money is the loudest thing here by its size, and
+    /// green is kept for the one action. Red only when it is below zero.
     private func figure(_ item: WalletPocket.Amount, lead: Bool) -> some View {
         Text((item.value < 0 ? "-" : "")
              + CurrencyManager.shared.formatted(Swift.abs(item.value), currency: item.currency))
             .font(.system(lead ? .title : .headline, weight: .bold))
             .monospacedDigit()
-            .foregroundStyle(item.value < 0 ? AppTheme.red : AppTheme.accent)
+            .foregroundStyle(item.value < 0 ? AppTheme.red : AppTheme.textPrimary)
             .lineLimit(1).minimumScaleFactor(0.6)
             .contentTransition(.numericText())
             .padding(.top, lead ? 2 : 4)
@@ -233,19 +213,6 @@ struct WalletPocketShape: Shape {
     }
 }
 
-/// The stitching along the pocket's lip.
-struct WalletPocketStitch: Shape {
-    var dip: CGFloat
-    var inset: CGFloat = 8
-
-    func path(in r: CGRect) -> Path {
-        var p = Path()
-        p.move(to: CGPoint(x: r.minX + inset, y: r.minY + inset))
-        WalletPocketShape.lip(&p, from: r.minX + inset, to: r.maxX - inset, y: r.minY + inset, dip: dip)
-        return p
-    }
-}
-
 // MARK: - What a face shows
 
 /// What the card in the pocket and the card in the sheet print alike, so the
@@ -277,21 +244,27 @@ enum WalletCardFace {
     }
 
     /// The bank and the card's own name on the left; with `figures`, what is
-    /// in it on the right.
+    /// in it on the right. A balance needs no label beside a bank's name; a
+    /// bill does, or it reads as money the person has.
     static func header(_ card: BankCard, isMain: Bool, figures: Bool) -> some View {
         HStack(alignment: .top, spacing: 10) {
             VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
+                HStack(spacing: 5) {
                     Text(WalletCard.title(for: card))
                         .font(.system(.headline, weight: .bold))
                         .lineLimit(1).minimumScaleFactor(0.7)
-                    if isMain { mainChip }
+                    // The main account: a star, which the card's sheet names.
+                    if isMain {
+                        Image(systemName: "star.fill")
+                            .font(.system(.caption2))
+                            .accessibilityLabel(loc("main.is_main"))
+                    }
                 }
                 let sub = WalletCard.subtitle(for: card)
                 if !sub.isEmpty {
                     Text(sub)
                         .font(.system(.caption))
-                        .foregroundStyle(.white.opacity(0.78))
+                        .foregroundStyle(.white.opacity(0.75))
                         .lineLimit(1)
                 }
             }
@@ -302,24 +275,17 @@ enum WalletCardFace {
                         .font(.system(.headline, weight: .semibold))
                         .monospacedDigit()
                         .lineLimit(1).minimumScaleFactor(0.6)
-                    Text(amountLabel(card))
-                        .font(.system(.caption))
-                        .foregroundStyle(.white.opacity(0.78))
-                        .lineLimit(1)
+                    if card.isCreditCard {
+                        Text(amountLabel(card))
+                            .font(.system(.caption))
+                            .foregroundStyle(.white.opacity(0.75))
+                            .lineLimit(1)
+                    }
                 }
                 .layoutPriority(1)
             }
         }
         .foregroundStyle(.white)
-    }
-
-    static var mainChip: some View {
-        Label(loc("main.badge"), systemImage: "star.fill")
-            .font(.system(.caption2, weight: .semibold))
-            .labelStyle(.titleAndIcon)
-            .padding(.horizontal, 6).padding(.vertical, 2)
-            .background(.white.opacity(0.22), in: Capsule())
-            .lineLimit(1).fixedSize()
     }
 }
 
@@ -333,7 +299,6 @@ struct WalletCardSheet: View {
     var onDelete: () -> Void
 
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.colorScheme) private var colorScheme
     @State private var sb = SmartBudgetManager.shared
     @State private var showMatchBalance = false
 
@@ -400,7 +365,6 @@ struct WalletCardSheet: View {
         }
         .aspectRatio(WalletPocketCard.aspect, contentMode: .fit)
         .clipShape(WalletCardFace.shape)
-        .shadow(color: .black.opacity(colorScheme == .dark ? 0.35 : 0.14), radius: 10, y: 6)
         .accessibilityElement(children: .combine)
     }
 
@@ -434,14 +398,14 @@ struct WalletCardSheet: View {
             if !card.isCreditCard {
                 if isMain {
                     // A status, not a button: there is nothing left to decide.
-                    actionLabel("star.fill", loc("main.badge"), fill: AppTheme.accentFill, tint: AppTheme.bg)
+                    actionLabel("star.fill", loc("main.badge"), tint: AppTheme.accent)
                         .accessibilityLabel(loc("main.is_main"))
                 } else {
                     Button {
                         HapticManager.shared.success()
                         withAnimation(AppMotion.move) { MainCard.set(card) }
                     } label: {
-                        actionLabel("star", loc("wallet.act_main"), fill: AppTheme.accent.opacity(0.12), tint: AppTheme.accent)
+                        actionLabel("star", loc("wallet.act_main"))
                     }
                     .buttonStyle(ScaleButtonStyle())
                     .accessibilityLabel(loc("main.make_main"))
@@ -450,7 +414,7 @@ struct WalletCardSheet: View {
                     HapticManager.shared.tap()
                     showMatchBalance = true
                 } label: {
-                    actionLabel("equal.circle", loc("wallet.act_match"), fill: AppTheme.cardDark, tint: AppTheme.textSecondary)
+                    actionLabel("equal.circle", loc("wallet.act_match"))
                 }
                 .buttonStyle(ScaleButtonStyle())
                 .accessibilityLabel(loc("match.title"))
@@ -459,33 +423,36 @@ struct WalletCardSheet: View {
                 HapticManager.shared.tap()
                 onEdit()
             } label: {
-                actionLabel("pencil", loc("common.edit"), fill: AppTheme.cardDark, tint: AppTheme.textSecondary)
+                actionLabel("pencil", loc("common.edit"))
             }
             .buttonStyle(ScaleButtonStyle())
             Button {
                 HapticManager.shared.warning()
                 onDelete()
             } label: {
-                actionLabel("trash", loc("common.delete"), fill: AppTheme.red.opacity(0.12), tint: AppTheme.red, label: AppTheme.red)
+                actionLabel("trash", loc("common.delete"), tint: AppTheme.red, label: AppTheme.red)
             }
             .buttonStyle(ScaleButtonStyle())
         }
     }
 
-    private func actionLabel(_ icon: String, _ title: String, fill: Color, tint: Color,
-                             label: Color = AppTheme.textPrimary) -> some View {
+    /// A glyph over its name, and nothing behind them: the row is the
+    /// card's toolbar, not four more things to look at.
+    private func actionLabel(_ icon: String, _ title: String, tint: Color = AppTheme.textPrimary,
+                             label: Color = AppTheme.textSecondary) -> some View {
         VStack(spacing: 6) {
             Image(systemName: icon)
-                .font(.system(.body, weight: .semibold))
+                .font(.system(.title3))
                 .foregroundStyle(tint)
-                .frame(width: 48, height: 48)
-                .background(fill, in: Circle())
+                .frame(height: 28)
             Text(title)
                 .font(.system(.caption))
                 .foregroundStyle(label)
                 .lineLimit(1).minimumScaleFactor(0.8)
         }
         .frame(maxWidth: .infinity)
+        .padding(.vertical, 6)
+        .contentShape(Rectangle())
     }
 
     // MARK: The page

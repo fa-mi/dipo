@@ -252,10 +252,9 @@ struct CardListView: View {
                                         Circle()
                                             .fill(AppTheme.cardDark)
                                             .frame(width: 42, height: 42)
-                                            .overlay(Circle().stroke(AppTheme.accent.opacity(0.3), lineWidth: 1))
                                         Image(systemName: "arrow.left.arrow.right")
                                             .font(.system(.callout, weight: .semibold))
-                                            .foregroundStyle(AppTheme.accent)
+                                            .foregroundStyle(AppTheme.textPrimary)
                                         if !pm.canAccess(.cardTransfer) {
                                             Image(systemName: "crown.fill")
                                                 .font(.system(.caption2, weight: .bold)).imageScale(.small)
