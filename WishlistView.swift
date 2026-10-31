@@ -219,6 +219,8 @@ struct WishlistView: View {
     @Query(sort: \BankCard.sortOrder) private var cards: [BankCard]
     @AppStorage(Navigasi.enabledKey) private var naviOn = false
     @AppStorage(Navigasi.tripKey) private var naviTrip = Data()
+    /// Opens sign-in, for someone who reaches this screen signed out.
+    var onSignIn: () -> Void = {}
 
     /// Drives the "New Goal" flow: chooser → personal / shared create form.
     @State private var goalSheet: GoalSheet? = nil
@@ -269,7 +271,7 @@ struct WishlistView: View {
                 // goal's creator needs Royal.
                 goalsBody
             } else {
-                PremiumGate(feature: .savingsGoals) { EmptyView() }
+                SavingsSignInPrompt(onSignIn: onSignIn)
             }
         }
         .trackScreen(.savingsGoals)
@@ -1992,5 +1994,50 @@ struct RecordPastDepositSheet: View {
         card.transactions.append(tx)
         try? context.save()
         dismiss()
+    }
+}
+
+// MARK: - Signed out
+
+/// Savings goals live on an account, as Target Bersama does, so a person
+/// signed out is asked to sign in. Not to buy Royal: one goal at a time is
+/// free with any account.
+struct SavingsSignInPrompt: View {
+    var onSignIn: () -> Void
+
+    var body: some View {
+        ZStack {
+            AppTheme.bg.ignoresSafeArea()
+            VStack(spacing: 12) {
+                Spacer()
+                Image(systemName: "target")
+                    .font(.system(size: 44, weight: .semibold))
+                    .foregroundStyle(AppTheme.teal)
+                    .accessibilityHidden(true)
+                Text(loc("profile.savings"))
+                    .font(.system(.title2, weight: .bold))
+                    .foregroundStyle(AppTheme.textPrimary)
+                    .padding(.top, 6)
+                Text(loc("savings.sign_in_body"))
+                    .font(.system(.subheadline))
+                    .foregroundStyle(AppTheme.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 32)
+                Button {
+                    HapticManager.shared.tap()
+                    onSignIn()
+                } label: {
+                    Text(loc("profile.login"))
+                        .font(.system(.callout, weight: .bold))
+                        .foregroundStyle(AppTheme.onVividFill)
+                        .frame(maxWidth: .infinity).padding(.vertical, 15)
+                        .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+                }
+                .buttonStyle(ScaleButtonStyle())
+                .padding(.horizontal, 32).padding(.top, 10)
+                Spacer()
+            }
+        }
     }
 }
