@@ -118,7 +118,7 @@ final class DiPoTalkTests: XCTestCase {
     func testEveryReminderHasAPlainIcon() {
         let actions: [DiPoNudge.Action] = [.notifications, .checkIn, .bills, .salary, .streak,
                                            .interestGuess(.coffee), .interestTip(.coffee),
-                                           .customInterestTip("Kopi"), .assetCheck, .navigation]
+                                           .customInterestTip("Kopi"), .assetCheck]
         for action in actions {
             let nudge = DiPoNudge(id: "x", mood: .info, exclamation: "", text: "", action: action, link: "")
             XCTAssertNotNil(UIImage(systemName: nudge.symbol), "\(action): \(nudge.symbol)")

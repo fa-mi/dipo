@@ -214,11 +214,6 @@ struct WishlistView: View {
     @Environment(\.modelContext) private var context
     @Query(sort: \SavingsGoal.priority) private var goals: [SavingsGoal]
     @Query(sort: \SalarySchedule.createdAt) private var salaries: [SalarySchedule]
-    /// DiPo Navigasi, the add-on: read here once for the one card a trip is
-    /// headed to, rather than queried in every card.
-    @Query(sort: \BankCard.sortOrder) private var cards: [BankCard]
-    @AppStorage(Navigasi.enabledKey) private var naviOn = false
-    @AppStorage(Navigasi.tripKey) private var naviTrip = Data()
     /// Opens sign-in, for someone who reaches this screen signed out.
     var onSignIn: () -> Void = {}
 
@@ -253,12 +248,6 @@ struct WishlistView: View {
     private var monthlyPlan: Double { activeGoals.reduce(0) { $0 + toPref($1.monthlyContribution, $1.currency) } }
     private var monthlyIncome: Double {
         MainCard.salaries(salaries).reduce(0) { $0 + toPref($1.amount, $1.currency) }
-    }
-
-    /// The trip's arrival for the goal it is headed to; nil for every other.
-    private func tripArrival(for goal: SavingsGoal) -> Date? {
-        guard naviOn, let trip = Navigasi.Trip.decode(naviTrip), trip.goalID == goal.id else { return nil }
-        return Navigasi.status(of: trip, goal: goal, cards: cards, salaries: salaries).arrival
     }
 
     var body: some View {
@@ -299,7 +288,6 @@ struct WishlistView: View {
                             sectionTitle(loc("savings.in_progress"))
                             ForEach(activeGoals.prefix(goalPreviewLimit)) { goal in
                                 GoalCard(goal: goal, monthlyIncome: monthlyIncome,
-                                         tripArrival: tripArrival(for: goal),
                                          onDeposit: { amount, card in deposit(goal, amount, card) },
                                          onEdit: { editingGoal = goal },
                                          onDelete: { deleteGoal(goal) },
@@ -310,7 +298,6 @@ struct WishlistView: View {
                                 NavigationLink {
                                     AllPersonalGoalsView(
                                         goals: activeGoals, monthlyIncome: monthlyIncome,
-                                        tripArrival: { tripArrival(for: $0) },
                                         onDeposit: { g, amt, card in deposit(g, amt, card) },
                                         onEdit: { editingGoal = $0 },
                                         onDelete: { deleteGoal($0) },
@@ -560,7 +547,6 @@ private struct GoalsRoyalRow: View {
 struct AllPersonalGoalsView: View {
     let goals: [SavingsGoal]
     let monthlyIncome: Double
-    let tripArrival: (SavingsGoal) -> Date?
     let onDeposit: (SavingsGoal, Double, BankCard?) -> Void
     let onEdit: (SavingsGoal) -> Void
     let onDelete: (SavingsGoal) -> Void
@@ -573,7 +559,7 @@ struct AllPersonalGoalsView: View {
             ScrollView(showsIndicators: false) {
                 LazyVStack(spacing: 14) {
                     ForEach(goals) { goal in
-                        GoalCard(goal: goal, monthlyIncome: monthlyIncome, tripArrival: tripArrival(goal),
+                        GoalCard(goal: goal, monthlyIncome: monthlyIncome,
                                  onDeposit: { amt, card in onDeposit(goal, amt, card) },
                                  onEdit: { onEdit(goal) },
                                  onDelete: { onDelete(goal) },
@@ -677,9 +663,6 @@ struct SavingsProgressBar: View {
 struct GoalCard: View {
     let goal: SavingsGoal
     let monthlyIncome: Double
-    /// While DiPo Navigasi is on its way to this goal, the trip's arrival:
-    /// the card says it, as the goal's screen and the trip do.
-    var tripArrival: Date? = nil
     let onDeposit: (Double, BankCard?) -> Void
     let onEdit: () -> Void
     let onDelete: () -> Void
@@ -700,7 +683,7 @@ struct GoalCard: View {
         if goal.progress >= 1.0 {
             return ("checkmark.seal.fill", loc("savings.reached"), AppTheme.accent)
         }
-        if goal.monthlyContribution > 0, let date = tripArrival ?? goal.estimatedDate {
+        if let date = goal.estimatedDate {
             let when = date.formatted(.dateTime.month(.abbreviated).year())
             return ("calendar", String(format: loc("savings.goal_reached_around"), when)
                     + " · " + String(format: loc("savings.save_per_mo"),
@@ -1519,12 +1502,7 @@ struct GoalDetailView: View {
     @State private var cashAsked: Double = 0
     @Query(sort: \BankCard.sortOrder) private var cards: [BankCard]
     @Query(sort: \InvestmentHolding.sortOrder) private var holdings: [InvestmentHolding]
-    @Query(sort: \SalarySchedule.createdAt) private var salaries: [SalarySchedule]
     @State private var pm = PremiumManager.shared
-    /// DiPo Navigasi, the add-on: a way here when it is on.
-    @AppStorage(Navigasi.enabledKey) private var naviOn = false
-    @AppStorage(Navigasi.tripKey) private var naviTrip = Data()
-    @State private var navigating = false
 
     private var currency: String { goal.currency }
     /// Investments to keep it in: a Royal account that tracks some, or a goal
@@ -1613,12 +1591,6 @@ struct GoalDetailView: View {
         } message: {
             Text(loc("savings.invest_cash_msg"))
         }
-        .sheet(isPresented: $navigating) {
-            NavigationStack { NavigasiView(goal: goal).doneToolbar { navigating = false } }
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-                .presentationBackground(AppTheme.bg)
-        }
         .sheet(isPresented: $showPastDepositSheet) {
             RecordPastDepositSheet(goal: goal)
                 .presentationDetents([.large])
@@ -1706,11 +1678,11 @@ struct GoalDetailView: View {
                        ? "  ·  " + String(format: loc("savings.pct_of_income"),
                                           String(format: "%.0f", goal.monthlyContribution / monthlyIncome * 100))
                        : ""))
-                if let reached = reachedBy {
+                if let months = goal.monthsToGoal, let date = goal.estimatedDate {
                     divider
                     row(loc("savings.reached_label"),
-                        String(format: loc("savings.months_left_fmt"), reached.months) + "  ·  "
-                        + reached.date.formatted(.dateTime.month(.abbreviated).year()))
+                        String(format: loc("savings.months_left_fmt"), months) + "  ·  "
+                        + date.formatted(.dateTime.month(.abbreviated).year()))
                 }
             } else if goal.remaining > 0 {
                 divider
@@ -1718,30 +1690,6 @@ struct GoalDetailView: View {
             }
         }
         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
-    }
-
-    /// When the plan gets there. While DiPo Navigasi is on its way here, the
-    /// trip's arrival, which holds still through a pay cycle; otherwise the
-    /// goal's own estimate, which counts from today.
-    private var reachedBy: (months: Int, date: Date)? {
-        if let trip = navigatedHere,
-           let date = Navigasi.status(of: trip, goal: goal, cards: cards, salaries: salaries).arrival {
-            return (Navigasi.monthsUntil(date, from: .now), date)
-        }
-        guard let months = goal.monthsToGoal, let date = goal.estimatedDate else { return nil }
-        return (months, date)
-    }
-
-    /// Under "Navigate here": when the trip arrives, once it is headed here.
-    private var naviLinkDetail: String? {
-        guard navigatedHere != nil else { return loc("navi.go_here_sub") }
-        return reachedBy.map { String(format: loc("navi.arrive"), Navigasi.monthYear($0.date)) }
-    }
-
-    /// The trip under way, when it is headed for this goal.
-    private var navigatedHere: Navigasi.Trip? {
-        guard naviOn, let trip = Navigasi.Trip.decode(naviTrip), trip.goalID == goal.id else { return nil }
-        return trip
     }
 
     private var divider: some View {
@@ -1809,13 +1757,6 @@ struct GoalDetailView: View {
                         goal.isPinned ? loc("savings.unpin") : loc("savings.pin"),
                         goal.isPinned ? nil : loc("savings.pin_sub")) {
                     goal.isPinned.toggle(); try? context.save(); HapticManager.shared.select()
-                }
-                if naviOn && !goal.isCompleted {
-                    divider.padding(.leading, 46)
-                    linkRow("location.north.circle.fill", AppTheme.accent, loc("navi.go_here"),
-                            naviLinkDetail) {
-                        navigating = true
-                    }
                 }
                 divider.padding(.leading, 46)
                 linkRow("clock.arrow.circlepath", AppTheme.teal, loc("savings.record_past"),

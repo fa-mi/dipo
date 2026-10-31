@@ -33,8 +33,6 @@ struct ProfileView: View {
     @State private var showPaywall        = false
     @State private var showNotificationPrefs = false
     @State private var appearanceMode: String = UserDefaults.standard.string(forKey: "appearance_mode") ?? "system"
-    /// DiPo Navigasi, the add-on (Navigasi.swift). Off until switched on here.
-    @AppStorage(Navigasi.enabledKey) private var naviOn = false
     @State private var voiceLanguage = VoiceLanguage.saved
     /// DiPo's face on Home (his row and the stand-in avatar). On this device.
     @State private var premiumMgr  = PremiumManager.shared
@@ -155,7 +153,6 @@ struct ProfileView: View {
                     if session.isLoggedIn { dipoIDSection }
                     premiumBadge
                     featureLinksCard
-                    addOnsCard
                     notificationsLink
                     appearanceCard
                     authButtonSection
@@ -754,43 +751,6 @@ struct ProfileView: View {
                         lineWidth: premiumMgr.plan == .free ? 1 : 1.5))
         }
         .buttonStyle(ScaleButtonStyle())
-        .padding(.horizontal, 22)
-    }
-
-    /// Features that stay out of the way until asked for. Off until switched
-    /// on; switching one off hides it and keeps what was set up in it.
-    private var addOnsCard: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(loc("navi.addons"))
-                .font(.system(.subheadline, weight: .semibold))
-                .foregroundStyle(AppTheme.textPrimary)
-                .padding(.horizontal, 4)
-            HStack(spacing: 12) {
-                Image(systemName: "location.north.circle.fill")
-                    .font(.system(.body))
-                    .foregroundStyle(AppTheme.accent)
-                    .frame(width: 36, height: 36)
-                    .background(AppTheme.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: AppRadius.sm))
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(loc("navi.title"))
-                        .font(.system(.subheadline, weight: .medium))
-                        .foregroundStyle(AppTheme.textPrimary)
-                    Text(loc("navi.addon_sub"))
-                        .font(.system(.caption))
-                        .foregroundStyle(AppTheme.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                Spacer(minLength: 8)
-                DiPoSwitch(isOn: $naviOn, onIcon: "location.north.fill")
-            }
-            .padding(16)
-            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
-            Text(loc("navi.addon_note"))
-                .font(.system(.caption2))
-                .foregroundStyle(AppTheme.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal, 4)
-        }
         .padding(.horizontal, 22)
     }
 
