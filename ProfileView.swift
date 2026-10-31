@@ -8,6 +8,10 @@ import UniformTypeIdentifiers   // for `.json` UTType in fileImporter
 struct ProfileView: View {
     @Environment(\.colorScheme) private var colorScheme
     @Bindable var authVM: AuthViewModel
+    /// Arrived from a feature that needs an account: the sign-in sheet opens
+    /// once, on arrival, for someone not signed in.
+    var opensSignIn = false
+    @State private var offeredSignIn = false
     @Environment(\.modelContext) private var context
 
     /// Live card list — used by `shouldShowBackupReminder` to decide
@@ -365,6 +369,11 @@ struct ProfileView: View {
         .sheet(isPresented: $showContact) {
             ContactAdminSheet().presentationDetents([.large]).presentationDragIndicator(.visible)
                 .presentationBackground(AppTheme.bg).preferredColorScheme(appColorScheme())
+        }
+        .onAppear {
+            guard opensSignIn, !offeredSignIn, !session.isLoggedIn else { return }
+            offeredSignIn = true
+            showSignInSheet = true
         }
         .sheet(isPresented: $showSignInSheet) {
             ProfileSignInSheet(

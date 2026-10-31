@@ -60,17 +60,19 @@ struct PlanView: View {
                                 title: loc("profile.recurring"), status: billsStatus)
                         }
                         section(loc("plan.section_goals")) {
-                            // Open when signed in: one personal goal at a time
-                            // is free, and Target Bersama needs no Royal to take
-                            // part in.
+                            // Open to every signed-in account: one personal goal
+                            // at a time is free, and Target Bersama needs no Royal
+                            // to take part in. Signed out, the way in is signing
+                            // in, not Royal.
                             row(.goals, icon: "target", tint: AppTheme.teal,
                                 title: loc("profile.savings"), status: goalsStatus,
-                                feature: UserSession.shared.isLoggedIn ? nil : .savingsGoals)
+                                needsSignIn: !UserSession.shared.isLoggedIn)
                             if naviOn {
                                 divider
                                 row(.navigasi, icon: "location.north.circle.fill", tint: AppTheme.accent,
-                                    title: loc("navi.title"), status: naviStatus,
-                                    feature: UserSession.shared.isLoggedIn ? nil : .savingsGoals)
+                                    title: loc("navi.title"),
+                                    status: UserSession.shared.isLoggedIn ? naviStatus : loc("plan.sign_in_first"),
+                                    needsSignIn: !UserSession.shared.isLoggedIn)
                             }
                             if !folded.contains(.investments) {
                                 divider
@@ -113,7 +115,7 @@ struct PlanView: View {
                 case .budget: SmartBudgetSettingsSheet().pushedFeature()
                 case .salary: SalaryView().pushedFeature()
                 case .bills:  RecurringExpensesView().pushedFeature()
-                case .goals:  WishlistView().pushedFeature()
+                case .goals:  WishlistView(onSignIn: { vm.openSignIn() }).pushedFeature()
                 case .investments: InvestmentView().pushedFeature()
                 case .holding(let h): HoldingDetailView(holding: h).pushedFeature()
                 case .ladder: FinancialLadderView().pushedFeature()
@@ -182,7 +184,7 @@ struct PlanView: View {
     }
 
     private var goalsStatus: String {
-        guard UserSession.shared.isLoggedIn else { return loc("profile.requires_royal") }
+        guard UserSession.shared.isLoggedIn else { return loc("plan.sign_in_first") }
         let active = goals.filter { !$0.isCompleted }.count
         return active == 0 ? loc("savings.no_goals") : SavingsGoal.inProgressText(active)
     }
@@ -301,12 +303,15 @@ struct PlanView: View {
         Rectangle().fill(AppTheme.cardMid.opacity(0.7)).frame(height: 1).padding(.leading, 68)
     }
 
+    /// `needsSignIn`: the feature is free with an account, so tapping it
+    /// signed out opens sign-in rather than the paywall.
     private func row(_ route: PlanRoute, icon: String, tint: Color, title: String,
-                     status: String, feature: PremiumFeature? = nil) -> some View {
+                     status: String, feature: PremiumFeature? = nil, needsSignIn: Bool = false) -> some View {
         let locked = feature.map { !pm.canAccess($0) } ?? false
         return Button {
             HapticManager.shared.tap()
-            if locked { showPaywall = true } else { vm.planPath.append(route) }
+            if needsSignIn { vm.openSignIn() }
+            else if locked { showPaywall = true } else { vm.planPath.append(route) }
         } label: {
             PlanRowLabel(icon: icon, tint: tint, title: title, status: status,
                          lockedPlan: locked ? feature?.requiredPlan : nil)

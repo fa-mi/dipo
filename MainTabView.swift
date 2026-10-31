@@ -268,8 +268,8 @@ struct MainTabView: View {
             HomeView(vm: vm)
                 .navigationTitle(loc("tab.home"))
                 .toolbar(.hidden, for: .navigationBar)
-                .navigationDestination(for: HomeRoute.self) { _ in
-                    ProfileView(authVM: authVM).phoneColumn()
+                .navigationDestination(for: HomeRoute.self) { route in
+                    ProfileView(authVM: authVM, opensSignIn: route == .signIn).phoneColumn()
                 }
         }
     }

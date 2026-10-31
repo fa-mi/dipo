@@ -189,33 +189,17 @@ struct CardListView: View {
     @State private var showTransfer        = false
     @State private var showPaywall = false
     @State private var pm = PremiumManager.shared
-    /// Which card the carousel is centred on. Drives the actions beneath it.
-    @State private var carouselID: UUID? = nil
+    /// The card pulled out of the pocket, shown in its sheet.
+    @State private var openCard: BankCard? = nil
     @State private var deletingCard: BankCard? = nil
+    /// The "tap a card" line under the pocket stays until a card is opened.
+    @AppStorage("wallet_card_opened") private var openedACard = false
 
-
-    /// Kelompokkan saldo per mata uang kartu. Tiap kartu dijumlah dalam currency-nya sendiri
-    /// sehingga IDR tidak dicampur dengan USD — display jujur tanpa estimasi kurs.
-    private var balancePerCurrency: [(currency: String, total: Double)] {
-        var dict: [String: Double] = [:]
-        // Credit cards are liabilities, not cash — exclude them from the cash
-        // totals shown here (they appear as owed in the Debt Tracker instead).
-        for card in vm.cards where !card.isCreditCard {
-            let cardCur = card.currency.isEmpty
-                ? CurrencyManager.shared.preferredCurrency
-                : card.currency
-            let txBalance = card.transactions.reduce(0.0) { sum, tx in
-                sum + CurrencyManager.shared.convert(tx.amount, from: tx.currency, to: cardCur)
-            }
-            dict[cardCur, default: 0] += card.balance + txBalance
-        }
-        // Urutkan: preferred currency dulu, sisanya alphabetical
-        let preferred = CurrencyManager.shared.preferredCurrency
-        return dict.sorted { a, b in
-            if a.key == preferred { return true }
-            if b.key == preferred { return false }
-            return a.key < b.key
-        }.map { (currency: $0.key, total: $0.value) }
+    /// Closes the card's sheet, then runs `go`: edit and delete open sheets
+    /// of their own, which cannot rise while the card's is still up.
+    private func afterClosingCard(_ go: @escaping () -> Void) {
+        openCard = nil
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35, execute: go)
     }
 
     /// Same cascade CardDetailRow used to perform. A card's salary schedules,
@@ -229,11 +213,9 @@ struct CardListView: View {
         if SmartBudgetManager.shared.budgetCardID == card.id.uuidString {
             SmartBudgetManager.shared.budgetCardID = nil
         }
-        let nextID = vm.cards.first(where: { $0.id != card.id })?.id
         modelContext.delete(card)          // cascade removes its transactions
         try? modelContext.save()
         HapticManager.shared.warning()
-        carouselID = nextID
     }
 
     var body: some View {
@@ -270,10 +252,9 @@ struct CardListView: View {
                                         Circle()
                                             .fill(AppTheme.cardDark)
                                             .frame(width: 42, height: 42)
-                                            .overlay(Circle().stroke(AppTheme.accent.opacity(0.3), lineWidth: 1))
                                         Image(systemName: "arrow.left.arrow.right")
                                             .font(.system(.callout, weight: .semibold))
-                                            .foregroundStyle(AppTheme.accent)
+                                            .foregroundStyle(AppTheme.textPrimary)
                                         if !pm.canAccess(.cardTransfer) {
                                             Image(systemName: "crown.fill")
                                                 .font(.system(.caption2, weight: .bold)).imageScale(.small)
@@ -307,70 +288,22 @@ struct CardListView: View {
                     .padding(.horizontal, 22)
                     .padding(.top, 20)
 
-                    // Cards, standing up and swipeable. The actions used to sit
-                    // under every card in a long stack; now they follow the one
-                    // you are looking at, which is the only one they can apply to.
-                    VStack(spacing: 14) {
-                        WalletCarousel(cards: vm.cards, selectedID: $carouselID)
-                            .padding(.top, 18)
-                        if vm.cards.count > 1 {
-                            WalletPageDots(cards: vm.cards, selectedID: carouselID)
-                        }
-                        if let card = vm.cards.first(where: { $0.id == carouselID }) ?? vm.cards.first {
-                            // Actions only. CardDetailRow used to sit here and it
-                            // redrew the whole card plus its balance — the same
-                            // figure the carousel shows directly above it.
-                            WalletCardActions(card: card,
-                                              onEdit: { editingCard = card },
-                                              onDelete: { deletingCard = card })
-                                .padding(.horizontal, 22)
-                                .id(card.id)
-                                .transition(.opacity)
-                        }
-                    }
-                    .animation(.easeOut(duration: 0.2), value: carouselID)
-                    .padding(.horizontal, 22)
-                    .padding(.top, 24)
-
-                    // Total balance per currency
+                    // The cards in their pocket, each with what is in it, and
+                    // the total on the pocket. Tapping one opens it.
                     if !vm.cards.isEmpty {
-                        VStack(spacing: 0) {
-                            HStack {
-                                Text(loc("cards.total_balance"))
-                                    .font(.system(.footnote))
-                                    .foregroundStyle(AppTheme.textSecondary)
-                                Spacer()
-                                Image(systemName: "creditcard.fill")
-                                    .font(.system(.body))
-                                    .foregroundStyle(AppTheme.accent.opacity(0.4))
-                            }
-                            .padding(.bottom, balancePerCurrency.count > 1 ? 10 : 6)
-
-                            ForEach(Array(balancePerCurrency.enumerated()), id: \.element.currency) { i, item in
-                                if i > 0 {
-                                    Divider()
-                                        .background(AppTheme.cardMid)
-                                        .padding(.vertical, 8)
-                                }
-                                HStack(alignment: .firstTextBaseline) {
-                                    Text(item.currency)
-                                        .font(.system(.caption2, weight: .medium))
-                                        .foregroundStyle(AppTheme.textSecondary)
-                                        .frame(width: 36, alignment: .leading)
-                                    Spacer()
-                                    Text((item.total < 0 ? "-" : "") +
-                                         CurrencyManager.shared.formatted(Swift.abs(item.total), currency: item.currency))
-                                        .font(.system(size: item.total < 0 ? 18 : 20, weight: .bold))
-                                        .foregroundStyle(item.total < 0 ? AppTheme.red : AppTheme.accent)
-                                        .contentTransition(.numericText())
-                                }
-                            }
+                        WalletPocket(cards: vm.cards) { card in
+                            HapticManager.shared.tap()
+                            openedACard = true
+                            openCard = card
                         }
-                        .padding(18)
-                        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
-                        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.accent.opacity(0.2), lineWidth: 1))
                         .padding(.horizontal, 22)
-                        .padding(.top, 24)
+                        .padding(.top, 22)
+                        if !openedACard {
+                            Text(loc("wallet.tap_hint"))
+                                .font(.system(.caption))
+                                .foregroundStyle(AppTheme.textSecondary)
+                                .padding(.top, 10)
+                        }
                     }
 
                     // Rekening Bersama: shared wallets, and invitations to one.
@@ -422,8 +355,17 @@ struct CardListView: View {
                 .presentationBackground(AppTheme.bg)
                 .preferredColorScheme(appColorScheme())
         }
-        // Deletion moved up here with the actions bar. The confirmation used to
-        // live inside CardDetailRow, which no longer exists.
+        .sheet(item: $openCard) { card in
+            WalletCardSheet(card: card,
+                            onEdit: { afterClosingCard { editingCard = card } },
+                            onDelete: { afterClosingCard { deletingCard = card } })
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+                .presentationBackground(AppTheme.bg)
+                .preferredColorScheme(appColorScheme())
+        }
+        // Deletion lives here, with the card's other sheets. The confirmation
+        // used to live inside CardDetailRow, which no longer exists.
         // A sheet, not an alert. An alert has room for one line, and one line
         // cannot say that 385 transactions, the salary schedule and the
         // recurring plans leave with the card.
@@ -1433,7 +1375,7 @@ struct CardTransferSheet: View {
                     .font(.system(.footnote, weight: .semibold))
                     .foregroundStyle(AppTheme.textSecondary)
                 if let card {
-                    WalletCard(card: card, width: 96, compact: true)
+                    WalletCard(card: card, width: 96)
                         .frame(width: 96)
                     Text(CurrencyManager.shared.formatted(card.computedBalance(),
                                                           currency: card.resolvedCurrency))

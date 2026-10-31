@@ -82,6 +82,12 @@ final class AppViewModel {
         homePath = [.profile]
     }
 
+    /// Profile, with its sign-in sheet open.
+    func openSignIn() {
+        activeTab = .home
+        homePath = [.signIn]
+    }
+
     func selectCard(_ index: Int) {
         guard index != selectedCardIndex else { return }
         HapticManager.shared.tap()
@@ -182,7 +188,12 @@ enum AppTab: Int, CaseIterable {
     }
 }
 
-enum HomeRoute: Hashable { case profile }
+enum HomeRoute: Hashable {
+    case profile
+    /// Profile with its sign-in sheet up: where a feature that needs an
+    /// account, and nothing more, sends someone who has not signed in.
+    case signIn
+}
 enum WalletRoute: Hashable { case obligations }
 enum PlanRoute: Hashable {
     case budget, salary, bills, goals, investments
