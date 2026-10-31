@@ -27,15 +27,13 @@ final class RetiredDataTests: XCTestCase {
     }
 
     func testTheOtherRetiredKeysGo() {
-        for key in ["sb_dismissed_insights", "sb_seen_coaching", "dipo_id_holidays_manual", "dipo_id_workdays_manual"] {
-            defaults.set(["x"], forKey: key)
-        }
+        let keys = ["sb_dismissed_insights", "sb_seen_coaching", "dipo_id_holidays_manual",
+                    "dipo_id_workdays_manual", "addon_navigasi", "navi_trip"]
+        for key in keys { defaults.set(["x"], forKey: key) }
 
         RetiredData.forget(in: defaults)
 
-        for key in ["sb_dismissed_insights", "sb_seen_coaching", "dipo_id_holidays_manual", "dipo_id_workdays_manual"] {
-            XCTAssertNil(defaults.object(forKey: key), key)
-        }
+        for key in keys { XCTAssertNil(defaults.object(forKey: key), key) }
     }
 
     func testEverythingElseStays() {

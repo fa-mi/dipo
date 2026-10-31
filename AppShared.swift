@@ -834,9 +834,6 @@ enum UserSwitchDetector {
             "checkin_snoozed_day",      // "ask me later" — per person, per day
             // Smart Budget settings + ephemeral state
             "sb_enabled", "sb_daily", "sb_lifestyle", "sb_invest", "sb_card_id",
-            // DiPo Navigasi's trip names a goal of the previous person's. The
-            // add-on's switch is the phone's, like language, and stays.
-            Navigasi.tripKey,
             // Backup reminder state — user B shouldn't inherit user A's
             // "last backed up" timestamp; that would suppress the reminder
             // banner inappropriately on a fresh account that just got the
