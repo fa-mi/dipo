@@ -157,8 +157,6 @@ struct NetBalanceSummary: View {
             Text(text).font(.system(.caption2, weight: .semibold))
         }
         .foregroundStyle(tint)
-        .padding(.horizontal, 8).padding(.vertical, 4)
-        .background(tint.opacity(0.12), in: Capsule())
     }
 
     private var spentPct: Double {
@@ -343,12 +341,9 @@ struct SmartInsightsCard: View {
         VStack(alignment: .leading, spacing: 16) {
             // Header
             HStack(spacing: 8) {
-                ZStack {
-                    Circle().fill(AppTheme.purple.opacity(0.15)).frame(width: 32, height: 32)
-                    Image(systemName: "sparkles")
-                        .font(.system(.subheadline, weight: .semibold))
-                        .foregroundStyle(AppTheme.purple)
-                }
+                Image(systemName: "sparkles")
+                    .font(.system(.subheadline, weight: .semibold))
+                    .foregroundStyle(AppTheme.purple)
                 Text(loc("stats.insights"))
                     .font(.system(.subheadline, weight: .bold))
                     .foregroundStyle(AppTheme.textPrimary)
@@ -373,8 +368,6 @@ struct SmartInsightsCard: View {
                                 .font(.system(.caption2, weight: .semibold))
                         }
                         .foregroundStyle(AppTheme.orange)
-                        .padding(.horizontal, 6).padding(.vertical, 2)
-                        .background(AppTheme.orange.opacity(0.12), in: Capsule())
                     }
                 }
                 Text(CurrencyManager.shared.formatted(weeklyAverage, currency: currency))
@@ -430,16 +423,9 @@ struct SmartInsightsCard: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
+            // On the card itself, not in a purple box inside it.
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(14)
-            .background(
-                LinearGradient(
-                    colors: [AppTheme.purple.opacity(0.18), AppTheme.purple.opacity(0.05)],
-                    startPoint: .topLeading, endPoint: .bottomTrailing
-                ),
-                in: RoundedRectangle(cornerRadius: AppRadius.md)
-            )
-            
+
         }
         .padding(.vertical, 16).padding(.horizontal, 18)
         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
@@ -495,8 +481,6 @@ struct CycleTrendBreakdown: View {
                                                 Text(loc("stats.trend_running"))
                                                     .font(.system(.caption2, weight: .bold))
                                                     .foregroundStyle(AppTheme.orange)
-                                                    .padding(.horizontal, 5).padding(.vertical, 2)
-                                                    .background(AppTheme.orange.opacity(0.15), in: Capsule())
                                             }
                                         }
                                         Text(range(p))

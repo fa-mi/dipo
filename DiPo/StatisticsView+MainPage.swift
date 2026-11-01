@@ -605,8 +605,10 @@ extension StatisticsView {
                         .foregroundStyle(AppTheme.textSecondary.opacity(0.6))
                 }
                 Text(subtitle).font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
+                // In ink: the bars carry the card's colour; green is kept
+                // for money coming in, and this is money going out.
                 Text(money(value)).font(.system(.title3, weight: .bold))
-                    .foregroundStyle(tint).lineLimit(1).minimumScaleFactor(0.5)
+                    .foregroundStyle(AppTheme.textPrimary).lineLimit(1).minimumScaleFactor(0.5)
                     .padding(.bottom, 2)
                 MiniBars(values: bars.map(\.value), labels: bars.map(\.label),
                          tint: tint, highlightLast: highlightLast)
@@ -940,7 +942,7 @@ extension StatisticsView {
                     VStack(spacing: 0) {
                         ForEach(Array(rows.enumerated()), id: \.offset) { i, row in
                             if i > 0 {
-                                Rectangle().fill(AppTheme.cardMid.opacity(0.7)).frame(height: 1).padding(.leading, 48)
+                                Rectangle().fill(AppTheme.cardMid.opacity(0.7)).frame(height: 1).padding(.leading, 40)
                             }
                             noteRow(row.icon, row.tint, row.title, row.detail)
                         }
@@ -956,11 +958,12 @@ extension StatisticsView {
 
     func noteRow(_ icon: String, _ tint: Color, _ title: String, _ detail: String) -> some View {
         HStack(alignment: .top, spacing: 12) {
+            // The glyph in its colour, nothing behind it.
             Image(systemName: icon)
-                .font(.system(.footnote, weight: .semibold))
+                .font(.system(.body, weight: .semibold))
                 .foregroundStyle(tint)
-                .frame(width: 34, height: 34)
-                .background(tint.opacity(0.14), in: RoundedRectangle(cornerRadius: AppRadius.sm))
+                .frame(width: 28)
+                .padding(.top, 1)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .font(.system(.subheadline, weight: .semibold))
@@ -999,7 +1002,7 @@ extension StatisticsView {
                 .foregroundStyle(PremiumPlan.royal.color)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 11)
-                .background(PremiumPlan.royal.color.opacity(0.12), in: RoundedRectangle(cornerRadius: AppRadius.md))
+                .contentShape(Rectangle())
             }
         }
         .buttonStyle(.plain)
