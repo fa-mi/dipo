@@ -235,6 +235,11 @@ final class DebtAnalysisClient {
         /// Longer than the app waits: no byte for 90 seconds, or five minutes
         /// in all. Counted or not, as for `interrupted`.
         case slow
+        /// DiPo AI can't run for anyone just now (the Worker's 503): the
+        /// account behind it is out of balance or past a limit, or the day's
+        /// brake is on. Nothing was counted, and the owner has been emailed,
+        /// so "try again in a moment" would be the wrong advice.
+        case unavailable
         /// It now costs this many credits, more than the person agreed to:
         /// one was counted since the card last heard, such as a run cut off
         /// here that finished on the Worker. Nothing was run or charged, and
@@ -253,6 +258,7 @@ final class DebtAnalysisClient {
             case .generic:  return "analysis.err.generic"
             case .interrupted: return "analysis.err.interrupted"
             case .slow:     return "analysis.err.slow"
+            case .unavailable: return "analysis.err.unavailable"
             // Never shown: the card asks again instead.
             case .costChanged: return "analysis.err.generic"
             }
@@ -476,6 +482,7 @@ final class DebtAnalysisClient {
         case 409 where error == "cost_changed":
             return reply?.cost.map(Failure.costChanged) ?? .generic
         case 422: return .declined
+        case 503: return .unavailable
         default:  return .generic
         }
     }

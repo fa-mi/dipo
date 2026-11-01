@@ -355,6 +355,10 @@ final class ReceiptScannerEngine {
             if case .httpError(let code) = netError, code == 402 {
                 throw ReceiptScanError.outOfCredits
             }
+            // 503: DiPo AI is down for everyone just now, with nothing spent.
+            if case .httpError(let code) = netError, code == 503 {
+                throw ReceiptScanError.aiPaused
+            }
             throw ReceiptScanError.aiServiceUnavailable(underlying: netError.localizedDescription)
         } catch {
             throw ReceiptScanError.aiServiceUnavailable(underlying: error.localizedDescription)

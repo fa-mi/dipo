@@ -98,6 +98,10 @@ enum ReceiptScanError: Error, LocalizedError {
     case notAReceipt
     /// User has run out of monthly AI credits (worker returned HTTP 402).
     case outOfCredits
+    /// DiPo AI is down for everyone just now (worker returned HTTP 503: the
+    /// account behind it, or the day's brake). No credit was spent; another
+    /// photo won't help, so this one isn't offered as a retry.
+    case aiPaused
     /// Generic catch-all with a debug message.
     case unknown(String)
 
@@ -110,6 +114,7 @@ enum ReceiptScanError: Error, LocalizedError {
         case .aiServiceUnavailable:  return loc("receipt.error.ai_unavailable")
         case .premiumRequired:       return loc("receipt.error.premium")
         case .outOfCredits:          return loc("receipt.error.out_of_credits")
+        case .aiPaused:              return loc("receipt.error.ai_paused")
         case .notAReceipt:           return loc("receipt.error.not_receipt")
         // The message is the underlying error's own text, often English and
         // technical; it is kept for logs, not shown.

@@ -286,7 +286,11 @@ final class AIChatViewModel {
     /// User-facing error text. Release builds always show the friendly,
     /// generic message — no scary HTTP codes. DEBUG builds append the
     /// status so developers can diagnose on-device during testing.
-    private static func userErrorText(for error: NetworkError) -> String {
+    static func userErrorText(for error: NetworkError) -> String {
+        // The Worker's 503: DiPo AI is down for everyone (the account behind
+        // it, or the day's brake), no credit was spent, and trying again in a
+        // moment won't help. Said plainly, in release and debug alike.
+        if case .httpError(let code) = error, code == 503 { return loc("ai.error.unavailable") }
         let base = loc("ai.error.generic")
         #if DEBUG
         if case .httpError(let code) = error { return base + " (HTTP \(code))" }
