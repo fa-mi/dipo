@@ -48,10 +48,11 @@ struct HomeTotalRow: View {
         HStack(alignment: .bottom, spacing: 10) {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
-                    Text(String(format: loc("home.total_accounts"), accounts)
-                            .uppercased(with: LanguageManager.shared.currentLocale))
-                        .font(.system(.caption2, weight: .semibold))
-                        .tracking(1.1)
+                    // In sentence case, like every other label: spaced-out
+                    // capitals were harder to read and shouted the one word
+                    // above the money.
+                    Text(String(format: loc("home.total_accounts"), accounts))
+                        .font(.system(.caption, weight: .medium))
                         .foregroundStyle(AppTheme.textSecondary)
                         .lineLimit(1)
                     Button {

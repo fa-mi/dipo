@@ -896,7 +896,6 @@ struct HomeView: View {
             }
             .padding(.horizontal, 16).padding(.vertical, 11)
             .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
-            .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.purple.opacity(0.15), lineWidth: 1))
             .padding(.horizontal, 22).padding(.top, 12)
             .opacity(contentAppeared ? 1 : 0)
         }

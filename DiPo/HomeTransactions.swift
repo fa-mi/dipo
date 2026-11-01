@@ -47,7 +47,7 @@ struct CategoryFilterBar: View {
                             .rotationEffect(.degrees(expanded ? 90 : 0))
                     }
                     .font(.system(.footnote, weight: .semibold))
-                    .foregroundStyle(AppTheme.accent)
+                    .foregroundStyle(AppTheme.textSecondary)
                 }
                 .buttonStyle(.plain)
             }
@@ -66,7 +66,7 @@ struct CategoryFilterBar: View {
             HapticManager.shared.tap()
             withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) { expanded = true }
         } label: {
-            tile(icon: "ellipsis", tint: AppTheme.textSecondary, label: loc("home.more"), active: false, neutral: true)
+            tile(icon: "ellipsis", tint: AppTheme.textSecondary, label: loc("home.more"), active: false)
         }
         .buttonStyle(ScaleButtonStyle())
     }
@@ -80,23 +80,24 @@ struct CategoryFilterBar: View {
                 selectedFilter = isActive ? nil : cat
             }
         } label: {
-            tile(icon: cat.icon, tint: cat.color, label: cat.shortLabel, active: isActive, neutral: false)
+            tile(icon: cat.icon, tint: cat.color, label: cat.shortLabel, active: isActive)
         }
         .buttonStyle(ScaleButtonStyle())
         .accessibilityAddTraits(isActive ? .isSelected : [])
     }
 
-    /// A tinted square with the category's own hue, its name under it.
-    private func tile(icon: String, tint: Color, label: String, active: Bool, neutral: Bool) -> some View {
+    /// The category's glyph in its own hue, its name under it. Nothing sits
+    /// behind it but a disc of that hue on the one chosen, so the fill means
+    /// something: it is the filter that is on.
+    private func tile(icon: String, tint: Color, label: String, active: Bool) -> some View {
         VStack(spacing: 6) {
             Image(systemName: icon)
                 .font(.system(.title3, weight: .semibold))
                 .foregroundStyle(tint)
                 .frame(width: 46, height: 46)
-                .background(neutral ? AppTheme.cardMid : tint.opacity(active ? 0.3 : 0.15),
-                            in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(active ? tint.opacity(0.8) : .clear, lineWidth: 1.5))
+                .background {
+                    if active { Circle().fill(tint.opacity(0.2)) }
+                }
                 .scaleEffect(active ? 1.06 : 1)
             Text(label)
                 .font(.system(size: 11, weight: active ? .semibold : .regular))
@@ -105,6 +106,7 @@ struct CategoryFilterBar: View {
                 .minimumScaleFactor(0.75)
         }
         .frame(maxWidth: .infinity)
+        .contentShape(Rectangle())
     }
 }
 
@@ -242,7 +244,8 @@ struct TransactionSection: View {
         return out
     }
 
-    /// All · Out · In · Transfer, as one capsule control.
+    /// All · Out · In · Transfer, as one capsule control. The chosen one is
+    /// an ink pill: green is kept for the one action, the add button.
     private var kindPicker: some View {
         HStack(spacing: 2) {
             ForEach(Kind.allCases, id: \.self) { k in
@@ -253,9 +256,9 @@ struct TransactionSection: View {
                 } label: {
                     Text(k.label)
                         .font(.system(.caption, weight: on ? .bold : .medium))
-                        .foregroundStyle(on ? AppTheme.onVividFill : AppTheme.textSecondary)
+                        .foregroundStyle(on ? AppTheme.bg : AppTheme.textSecondary)
                         .padding(.horizontal, 12).padding(.vertical, 6)
-                        .background { if on { Capsule().fill(AppTheme.accentFill) } }
+                        .background { if on { Capsule().fill(AppTheme.textPrimary) } }
                 }
                 .buttonStyle(.plain)
                 .accessibilityAddTraits(on ? .isSelected : [])
@@ -328,10 +331,8 @@ struct TransactionSection: View {
                     }
 .accessibilityLabel(loc("a11y.clear_filter"))
                 }
-                .padding(.horizontal, 12).padding(.vertical, 8)
-                .background(filter.color.opacity(0.08), in: RoundedRectangle(cornerRadius: AppRadius.sm))
-                .overlay(RoundedRectangle(cornerRadius: AppRadius.sm).stroke(filter.color.opacity(0.2), lineWidth: 1))
-                .padding(.bottom, 10)
+                .padding(.vertical, 4)
+                .padding(.bottom, 8)
                 .transition(.opacity)
             }
 
@@ -366,9 +367,7 @@ struct TransactionSection: View {
                                 Text(loc("home.search_older")).font(.system(.footnote, weight: .semibold))
                             }
                             .foregroundStyle(AppTheme.accent)
-                            .padding(.horizontal, 16).padding(.vertical, 9)
-                            .background(AppTheme.accent.opacity(0.12), in: Capsule())
-                            .overlay(Capsule().stroke(AppTheme.accent.opacity(0.3), lineWidth: 1))
+                            .padding(.vertical, 6)
                         }
                         .buttonStyle(ScaleButtonStyle())
                         .padding(.top, 4)
@@ -389,9 +388,7 @@ struct TransactionSection: View {
                                 Text(loc("home.add_first_tx")).font(.system(.footnote, weight: .semibold))
                             }
                             .foregroundStyle(AppTheme.accent)
-                            .padding(.horizontal, 16).padding(.vertical, 9)
-                            .background(AppTheme.accent.opacity(0.12), in: Capsule())
-                            .overlay(Capsule().stroke(AppTheme.accent.opacity(0.3), lineWidth: 1))
+                            .padding(.vertical, 6)
                         }
                         .buttonStyle(ScaleButtonStyle())
                         .padding(.top, 4)
@@ -681,9 +678,15 @@ struct TxRow: View {
                 .lineLimit(1)
         }
         .foregroundStyle(tint)
-        .padding(.horizontal, 5).padding(.vertical, 2)
-        .background(tint.opacity(0.15), in: Capsule())
         .fixedSize()
+    }
+
+    /// Whether a row names its type under the amount. Purchase and income
+    /// go without saying beside a signed amount in ink or green, and saying
+    /// "Purchase" under nearly every row was noise; a debt payment, or a type
+    /// the person wrote themselves, is worth the line.
+    static func showsType(_ raw: String) -> Bool {
+        !["tx.type.purchase", "Purchase", "tx.type.income", "Income"].contains(raw)
     }
 
     var body: some View {
@@ -717,8 +720,6 @@ struct TxRow: View {
                                 .font(.system(.caption2, weight: .medium))
                                 .foregroundStyle(AppTheme.textSecondary)
                         }
-                        .padding(.horizontal, 6).padding(.vertical, 2)
-                        .background(AppTheme.cardMid, in: Capsule())
                     }
                 }
             }
@@ -733,7 +734,7 @@ struct TxRow: View {
                     .foregroundStyle(amount >= 0 ? AppTheme.green : AppTheme.textPrimary)
                 if let badge {
                     badge
-                } else {
+                } else if isJoined || Self.showsType(tx.type) {
                     Text(isJoined ? loc("tx.card_payment") : tx.displayType)
                         .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                 }

@@ -32,27 +32,23 @@ struct HomeHeader: View {
         }
     }
 
-    /// Royal wears its colour as a ring — purple running into a warm gold, the
-    /// crown's own pairing — with the crown tucked at the edge. Free keeps a
-    /// quiet hairline, so the difference is a badge, not a demotion.
+    /// Royal shows as the crown at the photo's edge, and nothing more: the
+    /// ring that ran round the photo as well said the same thing twice. Free
+    /// has nothing there, so the difference is a badge, not a demotion. The
+    /// page's colour round the crown cuts it out of the photo.
     private var avatarRing: some View {
         ZStack(alignment: .bottomTrailing) {
+            Color.clear
             if isRoyal {
-                Circle()
-                    .strokeBorder(AngularGradient(colors: [PremiumPlan.royal.color, Color(hex: "#E879F9"),
-                                                           Color(hex: "#FBBF24"), PremiumPlan.royal.color],
-                                                  center: .center, angle: .degrees(-60)),
-                                  lineWidth: 2.5)
                 Image(systemName: "crown.fill")
                     .font(.system(size: 8, weight: .bold))
                     .foregroundStyle(.white)
                     .frame(width: 18, height: 18)
                     .background(PremiumPlan.royal.color, in: Circle())
-                    .overlay(Circle().stroke(AppTheme.bg, lineWidth: 2))
-                    .offset(x: 3, y: 3)
+                    .padding(2)
+                    .background(AppTheme.bg, in: Circle())
+                    .offset(x: 5, y: 5)
                     .accessibilityHidden(true)
-            } else {
-                Circle().strokeBorder(AppTheme.cardMid, lineWidth: 1.5)
             }
         }
         .frame(width: 54, height: 54)
@@ -70,8 +66,7 @@ struct HomeHeader: View {
                 HStack(spacing: 12) {
                     ZStack {
                         Circle()
-                            .fill(LinearGradient(colors: [AppTheme.cardMid, AppTheme.cardDark],
-                                                startPoint: .topLeading, endPoint: .bottomTrailing))
+                            .fill(AppTheme.cardDark)
                             .frame(width: 45, height: 45)
                         if let avatar {
                             Image(uiImage: avatar)
@@ -177,17 +172,8 @@ struct CardCarousel: View {
     var hideAll = false
     var onShowAll: () -> Void = {}
 
-    /// The page clips its content, and the glow under a card reaches about
-    /// 74pt below it: the glow sits 14pt lower than the card and its blur
-    /// spreads some 60pt past that. With 30pt of room it stopped in a straight
-    /// line just above the dots. The page now runs this much lower so the glow
-    /// fades out completely inside it. The dots move up by the same amount, so
-    /// they sit where they did, over the fading glow. The carousel's height is
-    /// unchanged, so nothing below it on Home moves.
-    private let glowRoom: CGFloat = 44
-
     var body: some View {
-        VStack(spacing: 2 - glowRoom) {
+        VStack(spacing: 2) {
             TabView(selection: Binding(
                 get: { vm.selectedCardIndex },
                 set: { vm.selectCard($0) }
@@ -196,17 +182,18 @@ struct CardCarousel: View {
                     BankCardView(card: card, hideAll: hideAll, onShowAll: onShowAll)
                         .padding(.horizontal, 22)
                         .padding(.top, 4)
-                        .padding(.bottom, 30 + glowRoom)
+                        .padding(.bottom, 30)
                         .tag(index)
                 }
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
-            .frame(height: 216 + glowRoom)
+            .frame(height: 216)
 
             HStack(spacing: 5) {
                 ForEach(0..<max(vm.cards.count, 1), id: \.self) { i in
                     Capsule()
-                        .fill(i == vm.selectedCardIndex ? AppTheme.accent : AppTheme.textSecondary.opacity(0.35))
+                        // Ink, not green: green is kept for the one action.
+                        .fill(i == vm.selectedCardIndex ? AppTheme.textPrimary : AppTheme.textSecondary.opacity(0.35))
                         .frame(width: i == vm.selectedCardIndex ? 22 : 6, height: 6)
                         .animation(.spring(response: 0.35, dampingFraction: 0.7), value: vm.selectedCardIndex)
                 }
@@ -224,7 +211,6 @@ struct BankCardView: View {
     /// whose effect the Home-wide one would cover.
     var hideAll = false
     var onShowAll: () -> Void = {}
-    @Environment(\.colorScheme) private var colorScheme
     @State private var isPressed = false
     /// Drives the balance count-up. Starts at 0 and animates to the real
     /// balance on appear; re-counts smoothly whenever the balance changes.
@@ -266,54 +252,12 @@ struct BankCardView: View {
                        startPoint: .topLeading, endPoint: .bottomTrailing)
     }
 
-    /// The face: the card's own gradient, lit like a surface rather than
-    /// painted flat — a soft glow from the top right, depth pooling at the
-    /// bottom left, a light sheen across the top and a hairline edge that
-    /// catches it. The network's colour still tints the corner curve.
-    ///
-    /// Gone: a black drop shadow (it clipped flat against the carousel page
-    /// and read as a smudge in dark mode) and a sparkline drawn from a fixed
-    /// array of numbers — a chart of nothing, on the card showing real money.
+    /// The face: the card's own gradient, flat, like the cards in the
+    /// wallet. The light it used to carry — a glow at the top right, shade
+    /// at the bottom left, a sheen, a rim and a coloured glow under the card —
+    /// was decoration on the thing that shows real money.
     private var face: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: AppRadius.xl).fill(gradient)
-
-            GeometryReader { g in
-                let w = g.size.width, h = g.size.height
-                ZStack {
-                    Circle()
-                        .fill(Color.white.opacity(0.22))
-                        .frame(width: w * 0.75, height: w * 0.75)
-                        .blur(radius: 38)
-                        .offset(x: w * 0.42, y: -h * 0.55)
-                    Circle()
-                        .fill(Color.black.opacity(0.22))
-                        .frame(width: w * 0.7, height: w * 0.7)
-                        .blur(radius: 44)
-                        .offset(x: -w * 0.42, y: h * 0.62)
-                    Path { p in
-                        p.move(to: .init(x: w * 0.46, y: 0))
-                        p.addCurve(to: .init(x: w, y: h * 0.62),
-                                   control1: .init(x: w * 0.8, y: -8),
-                                   control2: .init(x: w + 6, y: h * 0.3))
-                        p.addLine(to: .init(x: w, y: 0))
-                        p.closeSubpath()
-                    }
-                    .fill(LinearGradient(colors: [network.accentColor.opacity(0.28), network.accentColor.opacity(0.02)],
-                                         startPoint: .top, endPoint: .bottom))
-                    LinearGradient(colors: [Color.white.opacity(0.16), .clear],
-                                   startPoint: .top, endPoint: .center)
-                }
-                .frame(width: w, height: h)
-            }
-            .clipShape(RoundedRectangle(cornerRadius: AppRadius.xl))
-
-            RoundedRectangle(cornerRadius: AppRadius.xl)
-                .strokeBorder(LinearGradient(colors: [Color.white.opacity(0.45), Color.white.opacity(0.06),
-                                                      Color.white.opacity(0.18)],
-                                             startPoint: .topLeading, endPoint: .bottomTrailing),
-                              lineWidth: 1)
-        }
+        RoundedRectangle(cornerRadius: AppRadius.xl).fill(gradient)
     }
 
     var body: some View {
@@ -342,14 +286,6 @@ struct BankCardView: View {
                         .buttonStyle(ScaleButtonStyle())
                     }
                     Spacer()
-                    if !card.isDigitalWallet {
-                        Image(systemName: "wave.3.right")
-                            .font(.system(.caption, weight: .semibold))
-                            .foregroundStyle(.white.opacity(0.7))
-                            .padding(.trailing, 8)
-                            .padding(.top, 3)
-                            .accessibilityHidden(true)
-                    }
                     if card.isDigitalWallet, let wp = WalletProvider(rawValue: card.walletProvider) {
                         HStack(spacing: 4) {
                             Image(systemName: wp.icon)
@@ -423,17 +359,6 @@ struct BankCardView: View {
             .padding(20)
         }
         .frame(height: 182)
-        // A glow in the card's own colours, not a black shadow: it lifts the
-        // card off the page in both themes and belongs to the card it sits under.
-        .background(alignment: .bottom) {
-            RoundedRectangle(cornerRadius: AppRadius.xl)
-                .fill(gradient)
-                .frame(height: 150)
-                .padding(.horizontal, 20)
-                .offset(y: 14)
-                .blur(radius: 20)
-                .opacity(colorScheme == .dark ? 0.55 : 0.45)
-        }
         .scaleEffect(isPressed ? 0.97 : 1)
         .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isPressed)
         .onLongPressGesture(minimumDuration: .infinity, pressing: { p in
