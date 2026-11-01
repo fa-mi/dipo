@@ -73,11 +73,9 @@ struct FinancialLadderCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 14) {
-                Image(systemName: (result.current ?? .future).icon)
-                    .font(.system(.body, weight: .semibold))
-                    .foregroundStyle(AppTheme.accent)
-                    .frame(width: 40, height: 40)
-                    .background(AppTheme.accent.opacity(0.14), in: RoundedRectangle(cornerRadius: AppRadius.sm))
+                // No tile behind it, like every row below the card.
+                ListIcon(name: (result.current ?? .future).icon, tint: AppTheme.accent)
+                    .frame(width: ListRowMetrics.icon)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(loc("ladder.title"))
                         .font(.system(.subheadline, weight: .semibold))
