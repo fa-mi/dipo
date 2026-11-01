@@ -563,10 +563,6 @@ struct PaydayHeroCard: View {
             PayCycleBar(cycle: cycle)
         }
         .padding(18)
-        .background(
-            LinearGradient(colors: [AppTheme.accent.opacity(0.20), AppTheme.cardDark],
-                           startPoint: .topLeading, endPoint: .bottomTrailing),
-            in: RoundedRectangle(cornerRadius: AppRadius.xl))
         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.xl))
     }
 }
@@ -1506,10 +1502,6 @@ struct SalaryDetailView: View {
                         }
                     }
                     .padding(18)
-                    .background(
-                        LinearGradient(colors: [AppTheme.accent.opacity(0.20), AppTheme.cardDark],
-                                       startPoint: .topLeading, endPoint: .bottomTrailing),
-                        in: RoundedRectangle(cornerRadius: AppRadius.xl))
                     .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.xl))
                     .padding(.horizontal, 22)
 

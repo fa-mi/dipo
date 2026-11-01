@@ -388,8 +388,6 @@ struct TransactionDetailSheet: View {
                                 .lineLimit(1)
                         }
                         .foregroundStyle(AppTheme.orange)
-                        .padding(.horizontal, 10).padding(.vertical, 4)
-                        .background(AppTheme.orange.opacity(0.15), in: Capsule())
                         .fixedSize()
                     }
 
@@ -546,8 +544,7 @@ struct TransactionDetailSheet: View {
                 .foregroundStyle(AppTheme.red)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 16)
-                .background(AppTheme.red.opacity(0.1), in: RoundedRectangle(cornerRadius: AppRadius.md))
-                .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.red.opacity(0.3), lineWidth: 1))
+                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
             }
             .buttonStyle(ScaleButtonStyle())
             .padding(.horizontal, 22)
@@ -683,7 +680,7 @@ struct TransactionDetailSheet: View {
                 }
                 .foregroundStyle(canSave ? AppTheme.onVividFill : AppTheme.textSecondary)
                 .frame(maxWidth: .infinity).padding(.vertical, 17)
-                .background(canSave ? editType.color : AppTheme.textSecondary.opacity(0.25),
+                .background(canSave ? AppTheme.accentFill : AppTheme.textSecondary.opacity(0.25),
                             in: RoundedRectangle(cornerRadius: AppRadius.lg))
             }
             .buttonStyle(ScaleButtonStyle())

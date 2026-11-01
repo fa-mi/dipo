@@ -1719,8 +1719,6 @@ struct PhantomAutoChargesView: View {
                             Text(loc("recurring.phantom_income_badge"))
                                 .font(.system(.caption2, weight: .semibold))
                                 .foregroundStyle(AppTheme.accent)
-                                .padding(.horizontal, 5).padding(.vertical, 2)
-                                .background(AppTheme.accent.opacity(0.15), in: Capsule())
                         }
                     }
                     // The whole point of the row: the charge date sits before

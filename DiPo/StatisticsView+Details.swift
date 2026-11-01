@@ -127,8 +127,6 @@ extension StatisticsView {
                                 Text(loc("common.today"))
                                     .font(.system(.caption2, weight: .bold))
                                     .foregroundStyle(AppTheme.blue)
-                                    .padding(.horizontal, 6).padding(.vertical, 2)
-                                    .background(AppTheme.blue.opacity(0.15), in: Capsule())
                             }
                         }
                         Text(d.isFuture ? loc("stats.day_ahead")
@@ -237,8 +235,6 @@ extension StatisticsView {
                                                 Text(loc("stats.trend_running"))
                                                     .font(.system(.caption2, weight: .bold))
                                                     .foregroundStyle(AppTheme.orange)
-                                                    .padding(.horizontal, 5).padding(.vertical, 2)
-                                                    .background(AppTheme.orange.opacity(0.15), in: Capsule())
                                             }
                                         }
                                         Spacer()
@@ -336,15 +332,7 @@ extension StatisticsView {
                     }
                     .frame(maxWidth: .infinity)
                     .padding(18)
-                    .background {
-                        RoundedRectangle(cornerRadius: AppRadius.xl).fill(AppTheme.cardDark)
-                            .overlay {
-                                LinearGradient(colors: [AppTheme.accent.opacity(0.18),
-                                                        AppTheme.accent.opacity(0.04), .clear],
-                                               startPoint: .topTrailing, endPoint: .bottomLeading)
-                            }
-                            .clipShape(RoundedRectangle(cornerRadius: AppRadius.xl))
-                    }
+                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.xl))
 
                     if groups.isEmpty {
                         Text(loc(cycleFilter == .all ? "stats.cycle_empty" : "stats.cycle_empty_cat"))
@@ -530,8 +518,6 @@ extension StatisticsView {
                         Text(String(format: "%.0f%%", abs(c))).font(.system(.caption2, weight: .bold))
                     }
                     .foregroundStyle(c >= 0 ? AppTheme.red : AppTheme.accent)
-                    .padding(.horizontal, 8).padding(.vertical, 4)
-                    .background((c >= 0 ? AppTheme.red : AppTheme.accent).opacity(0.15), in: Capsule())
                     Text("\(changeCaption) · \(money(previous))")
                         .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                         .lineLimit(1).minimumScaleFactor(0.7)
@@ -540,14 +526,9 @@ extension StatisticsView {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(18)
-        .background {
-            RoundedRectangle(cornerRadius: AppRadius.xl).fill(AppTheme.cardDark)
-                .overlay {
-                    LinearGradient(colors: [tint.opacity(0.20), tint.opacity(0.05), .clear],
-                                   startPoint: .topTrailing, endPoint: .bottomLeading)
-                }
-                .clipShape(RoundedRectangle(cornerRadius: AppRadius.xl))
-        }
+        // The card's colour, plain: the wash of the figure's colour across
+        // it said again what the figure's own colour says.
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.xl))
     }
 
     func factTile(_ label: String, _ value: String, _ tint: Color) -> some View {
