@@ -512,6 +512,8 @@ struct SwipeToDeleteRow<Content: View>: View {
     private let actionWidth: CGFloat = 88
     private let openThreshold: CGFloat = 44
     private let fullSwipeThreshold: CGFloat = 230   // drag this far → delete on release
+    /// How wide the soft leading edge of a pushed-aside row is.
+    private let edgeFade: CGFloat = 28
 
     /// Positive width of the red action currently revealed.
     private var revealed: CGFloat { max(0, -offset) }
@@ -606,6 +608,21 @@ struct SwipeToDeleteRow<Content: View>: View {
                         onTap()
                     }
                 }
+        }
+        // The row stays inside its own bounds. Pushed aside, it slides under
+        // its leading edge and fades over the last few points there, instead
+        // of poking out past the card the list sits in as a slab of the
+        // card's colour with the avatar cut off. The fade grows with the
+        // swipe, so a closed row is untouched. The mask reaches past the top
+        // and bottom so nothing hanging over them is cut.
+        .mask {
+            HStack(spacing: 0) {
+                LinearGradient(colors: [.black.opacity(Double(1 - min(revealed / edgeFade, 1))), .black],
+                               startPoint: .leading, endPoint: .trailing)
+                    .frame(width: edgeFade)
+                Rectangle()
+            }
+            .padding(.vertical, -12)
         }
     }
 }
