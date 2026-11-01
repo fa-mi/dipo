@@ -78,8 +78,7 @@ struct MonthFlowCard: View {
                 Image(systemName: "calendar")
                     .font(.system(.subheadline, weight: .semibold))
                     .foregroundStyle(AppTheme.accent)
-                    .frame(width: 34, height: 34)
-                    .background(AppTheme.accent.opacity(0.14), in: RoundedRectangle(cornerRadius: 10))
+                    .frame(width: 28)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(loc("home.this_period"))
                         .font(.system(.subheadline, weight: .bold))
@@ -120,24 +119,24 @@ struct MonthFlowCard: View {
             // Money coming IN points in, money going OUT points out — the
             // same directions the add-transaction form and Statistics use.
             //
-            // Three tiles, each with its badge above its label. Side by side
-            // in one row, a 28pt badge beside every label left the third
-            // 67pt, and "Left of income" was cut to "Left of inc…". Stacked,
-            // a label has the tile's width and may take a second line
-            // ("Sisa / pemasukan"); the figures sit on one baseline below.
-            HStack(alignment: .top, spacing: 8) {
-                tile(icon: "arrow.down.left", label: loc("home.income"), amount: income, tint: AppTheme.flowIn)
-                tile(icon: "arrow.up.right", label: loc("home.spending"), amount: living, tint: AppTheme.flowOut)
+            // Three figures side by side, each under its label, so a label
+            // has its column's width and may take a second line ("Sisa /
+            // pemasukan"); the figures sit on one baseline below.
+            HStack(alignment: .top, spacing: 12) {
+                tile(icon: "arrow.down.left", label: loc("home.income"), amount: income,
+                     tint: AppTheme.flowIn, ink: AppTheme.flowIn)
+                tile(icon: "arrow.up.right", label: loc("home.spending"), amount: living,
+                     tint: AppTheme.flowOut, ink: AppTheme.textPrimary)
                 // Never a minus. What is left of income, or how far living
-                // costs went past it — said in words, in blue or orange.
+                // costs went past it — said in words, the second in orange.
                 // "Remaining −Rp 2.311.881" under a Rp 4,5 jt balance read as
                 // being in debt.
                 if remaining >= -0.5 {
                     tile(icon: "equal", label: loc("home.left_of_income"), amount: max(remaining, 0),
-                         tint: AppTheme.blue)
+                         tint: AppTheme.blue, ink: AppTheme.textPrimary)
                 } else {
                     tile(icon: "exclamationmark", label: loc("home.over_income_label"), amount: -remaining,
-                         tint: AppTheme.orange)
+                         tint: AppTheme.orange, ink: AppTheme.orange)
                 }
             }
             .fixedSize(horizontal: false, vertical: true)
@@ -162,15 +161,14 @@ struct MonthFlowCard: View {
                                     Image(systemName: "chevron.right").imageScale(.small)
                                 }
                                 .font(.system(.caption, weight: .semibold))
-                                .foregroundStyle(AppTheme.accent)
+                                .foregroundStyle(AppTheme.textPrimary)
                             }
                             .buttonStyle(.plain)
                         }
                     }
                     Spacer(minLength: 0)
                 }
-                .padding(10)
-                .background(noteTint.opacity(0.08), in: RoundedRectangle(cornerRadius: AppRadius.sm))
+                .padding(.top, 2)
                 .transition(.opacity)
             }
         }
@@ -178,28 +176,28 @@ struct MonthFlowCard: View {
         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
     }
 
-    /// One figure: its badge, what it is, and the amount, on a quiet wash of
-    /// its own colour. Equal heights across the row, figures at the bottom.
-    private func tile(icon: String, label: String, amount: Double, tint: Color,
+    /// One figure: what it is, with its direction in its own colour, and the
+    /// amount. Nothing behind it: the badge and the wash each tile wore said
+    /// the colour again. Only money coming in is green (`ink`); spending and
+    /// what is left are in ink, and going past income is orange.
+    private func tile(icon: String, label: String, amount: Double, tint: Color, ink: Color,
                       signed: Bool = false) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            // A SOLID badge: a pale tint of the green washes out to near-white
-            // on a light card. The glyph takes `onVividFill`, like every label
-            // on a solid semantic fill.
-            Image(systemName: icon)
-                .font(.system(.caption2, weight: .bold))
-                .foregroundStyle(AppTheme.onVividFill)
-                .frame(width: 24, height: 24)
-                .background(tint, in: Circle())
-            Text(label)
-                .font(.system(.caption2))
-                .foregroundStyle(AppTheme.textSecondary)
-                .lineLimit(3)
-                .fixedSize(horizontal: false, vertical: true)
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                Image(systemName: icon)
+                    .font(.system(.caption2, weight: .bold))
+                    .foregroundStyle(tint)
+                    .accessibilityHidden(true)
+                Text(label)
+                    .font(.system(.caption2))
+                    .foregroundStyle(AppTheme.textSecondary)
+                    .lineLimit(3)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             Spacer(minLength: 0)
             Text(isHidden ? "••••" : figure(amount, signed: signed))
                 .font(.system(.footnote, weight: .bold))
-                .foregroundStyle(tint)
+                .foregroundStyle(ink)
                 .lineLimit(1)
                 .minimumScaleFactor(0.55)
                 // Roll the digits when a new transaction moves them, so the
@@ -208,8 +206,6 @@ struct MonthFlowCard: View {
                 .animation(.easeOut(duration: 0.4), value: amount)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .padding(10)
-        .background(tint.opacity(0.08), in: RoundedRectangle(cornerRadius: AppRadius.md))
         .accessibilityElement(children: .combine)
     }
 

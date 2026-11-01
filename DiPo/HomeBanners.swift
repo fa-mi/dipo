@@ -156,19 +156,15 @@ struct RecurringReminderBanner: View {
     private var badgeText: String { isBill ? loc("tx.recurring") : loc("recurring.badge.habit") }
 
     var body: some View {
-        HStack(spacing: 12) {
-            ZStack {
-                Circle().fill(tint.opacity(0.15)).frame(width: 40, height: 40)
-                Image(systemName: iconName)
-                    .font(.system(.body)).foregroundStyle(tint)
-            }
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: iconName)
+                .font(.system(.body, weight: .semibold)).foregroundStyle(tint)
+                .frame(width: 28)
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     Text(badgeText)
                         .font(.system(.caption2, weight: .semibold))
                         .foregroundStyle(tint)
-                        .padding(.horizontal, 6).padding(.vertical, 2)
-                        .background(tint.opacity(0.15), in: Capsule())
                     Text(pattern.frequencyLabel)
                         .font(.system(.caption2, weight: .medium))
                         .foregroundStyle(AppTheme.textSecondary)
@@ -178,8 +174,6 @@ struct RecurringReminderBanner: View {
                         Text(loc("tx.due_today"))
                             .font(.system(.caption2, weight: .semibold))
                             .foregroundStyle(AppTheme.red)
-                            .padding(.horizontal, 6).padding(.vertical, 2)
-                            .background(AppTheme.red.opacity(0.15), in: Capsule())
                     }
                 }
                 // Merchant name gets the whole line. Appending the cadence here
@@ -224,15 +218,17 @@ struct RecurringReminderBanner: View {
                         .font(.system(.caption, weight: .bold))
                         .foregroundStyle(AppTheme.textSecondary)
                         .frame(width: 26, height: 26)
-                        .background(AppTheme.cardMid, in: Circle())
+                        .contentShape(Rectangle())
                 }
-.accessibilityLabel(loc("a11y.dismiss"))
+                .accessibilityLabel(loc("a11y.dismiss"))
+                .hitTarget(26)
                 .buttonStyle(ScaleButtonStyle())
             }
         }
-        .padding(12)
-        .background(tint.opacity(0.06), in: RoundedRectangle(cornerRadius: AppRadius.md))
-        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(tint.opacity(0.2), lineWidth: 1))
+        // On the page's card colour like everything else on Home: the wash
+        // and border in its own colour said "reminder" a second time.
+        .padding(14)
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
     }
 
     /// "14 Aug – 21 Aug" for the sightings this pattern was built from.
@@ -263,11 +259,10 @@ struct SetupSalaryBanner: View {
     @Binding var showAddSalary: Bool
 
     var body: some View {
-        HStack(spacing: 14) {
-            ZStack {
-                Circle().fill(AppTheme.blue.opacity(0.15)).frame(width: 42, height: 42)
-                Image(systemName: "banknote").font(.system(.body)).foregroundStyle(AppTheme.blue)
-            }
+        HStack(spacing: 12) {
+            Image(systemName: "banknote")
+                .font(.system(.body, weight: .semibold)).foregroundStyle(AppTheme.blue)
+                .frame(width: 28)
             VStack(alignment: .leading, spacing: 3) {
                 Text(loc("home.setup_salary"))
                     .font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
@@ -288,8 +283,7 @@ struct SetupSalaryBanner: View {
             .buttonStyle(ScaleButtonStyle())
         }
         .padding(14)
-        .background(AppTheme.blue.opacity(0.06), in: RoundedRectangle(cornerRadius: AppRadius.md))
-        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.blue.opacity(0.2), lineWidth: 1))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
     }
 }
 
@@ -353,17 +347,14 @@ struct PinnedGoalBanner: View {
                 ZStack(alignment: .leading) {
                     RoundedRectangle(cornerRadius: 3).fill(AppTheme.cardMid).frame(height: 5)
                     RoundedRectangle(cornerRadius: 3)
-                        .fill(LinearGradient(colors: [AppTheme.accent, AppTheme.accent.opacity(0.6)],
-                                             startPoint: .leading, endPoint: .trailing))
+                        .fill(AppTheme.accent)
                         .frame(width: g.size.width * progress, height: 5)
                 }
             }
             .frame(height: 5)
         }
         .padding(14)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
-        .overlay(RoundedRectangle(cornerRadius: AppRadius.md)
-            .stroke(AppTheme.accent.opacity(0.2), lineWidth: 1))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
     }
 }
 
@@ -374,12 +365,10 @@ struct NegativeBalanceBanner: View {
     var currency: String = CurrencyManager.shared.preferredCurrency
 
     var body: some View {
-        HStack(spacing: 14) {
-            ZStack {
-                Circle().fill(AppTheme.red.opacity(0.15)).frame(width: 42, height: 42)
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .font(.system(.body)).foregroundStyle(AppTheme.red)
-            }
+        HStack(spacing: 12) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(.body, weight: .semibold)).foregroundStyle(AppTheme.red)
+                .frame(width: 28)
             VStack(alignment: .leading, spacing: 3) {
                 Text(loc("home.negative"))
                     .font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.red)
@@ -395,8 +384,7 @@ struct NegativeBalanceBanner: View {
             Spacer()
         }
         .padding(14)
-        .background(AppTheme.red.opacity(0.06), in: RoundedRectangle(cornerRadius: AppRadius.md))
-        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.red.opacity(0.25), lineWidth: 1))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
     }
 }
 
