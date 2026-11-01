@@ -36,69 +36,17 @@ struct ProfileSignInSheet: View {
     var body: some View {
         VStack(spacing: 0) {
             VStack(spacing: 14) {
+                // DiPo's face on a plain disc, as Profile shows it. The glow,
+                // ring and sheen that used to sit round it carried nothing.
                 ZStack {
-                    // 🔥 Outer glow (lebih halus & luas)
-                    Circle()
-                        .fill(
-                            RadialGradient(
-                                colors: [
-                                    AppTheme.accent.opacity(0.25),
-                                    AppTheme.accent.opacity(0.1),
-                                    .clear
-                                ],
-                                center: .center,
-                                startRadius: 0,
-                                endRadius: 80
-                            )
-                        )
-                        .frame(width: 140, height: 140)
-
-                    // 🟣 Gradient ring (biar tidak flat)
-                    Circle()
-                        .stroke(
-                            LinearGradient(
-                                colors: [
-                                    AppTheme.accent.opacity(0.6),
-                                    AppTheme.accent.opacity(0.2)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ),
-                            lineWidth: 2
-                        )
-                        .frame(width: 90, height: 90)
-
-                    // 🧱 Base circle (glass feel)
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    AppTheme.cardDark,
-                                    AppTheme.cardDark.opacity(0.85)
-                                ],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
-                        .frame(width: 76, height: 76)
-
-                    // 🧊 Highlight (fake light reflection)
-                    Circle()
-                        .stroke(.white.opacity(0.15), lineWidth: 1)
-                        .frame(width: 76, height: 76)
-                        .blur(radius: 1)
-
-                    // 🐣 Mascot
+                    Circle().fill(AppTheme.cardDark)
                     Image("DiPoMascot")
                         .resizable()
                         .scaledToFill()
-                        .frame(width: 76, height: 76)
                         .clipShape(Circle())
-                        .overlay(
-                            Circle().stroke(.white.opacity(0.08), lineWidth: 1)
-                        )
                         .blendMode(colorScheme == .dark ? .screen : .normal)
                 }
+                .frame(width: 84, height: 84)
                 .scaleEffect(appeared ? 1 : 0.75)
                 .rotationEffect(.degrees(appeared ? 0 : -8))
                 .opacity(appeared ? 1 : 0)

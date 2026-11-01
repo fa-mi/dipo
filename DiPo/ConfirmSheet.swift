@@ -56,19 +56,13 @@ struct DangerConfirmSheet: View {
         VStack(spacing: 0) {
             Spacer(minLength: 8)
 
-            // Icon
-            ZStack {
-                Circle()
-                    .fill(tone.color.opacity(0.12))
-                    .frame(width: 84, height: 84)
-                Circle()
-                    .stroke(tone.color.opacity(0.25), lineWidth: 1.5)
-                    .frame(width: 84, height: 84)
-                Image(systemName: icon)
-                    .font(.system(size: 36, weight: .semibold))
-                    .foregroundStyle(tone.color)
-            }
-            .padding(.top, 14)
+            // The glyph in the tone's colour says how serious this is; the
+            // disc and ring round it said it twice more.
+            Image(systemName: icon)
+                .font(.system(size: 40, weight: .semibold))
+                .foregroundStyle(tone.color)
+                .frame(height: 84)
+                .padding(.top, 14)
 
             // Title + message
             VStack(spacing: 10) {
@@ -100,10 +94,6 @@ struct DangerConfirmSheet: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 15)
                         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: AppRadius.md)
-                                .stroke(AppTheme.cardMid, lineWidth: 1)
-                        )
                 }
                 .buttonStyle(ScaleButtonStyle())
 

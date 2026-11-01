@@ -22,15 +22,11 @@ struct BackupPreviewSheet: View {
         VStack(spacing: 0) {
             // Header
             VStack(spacing: 10) {
-                ZStack {
-                    Circle()
-                        .fill(AppTheme.blue.opacity(0.12))
-                        .frame(width: 70, height: 70)
-                    Image(systemName: "doc.text.magnifyingglass")
-                        .font(.system(.title, weight: .semibold))
-                        .foregroundStyle(AppTheme.blue)
-                }
-                .padding(.top, 12)
+                Image(systemName: "doc.text.magnifyingglass")
+                    .font(.system(.largeTitle, weight: .semibold))
+                    .foregroundStyle(AppTheme.blue)
+                    .frame(height: 70)
+                    .padding(.top, 12)
 
                 Text(loc("backup.preview.title"))
                     .font(.system(.title3, weight: .bold))
@@ -58,7 +54,6 @@ struct BackupPreviewSheet: View {
                 )
             }
             .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
-            .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.cardMid, lineWidth: 1))
             .padding(.horizontal, 22)
             .padding(.top, 18)
 
@@ -100,7 +95,6 @@ struct BackupPreviewSheet: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 14)
                         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
-                        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.cardMid, lineWidth: 1))
                 }
                 .buttonStyle(ScaleButtonStyle())
 
@@ -151,12 +145,10 @@ struct BackupPreviewSheet: View {
 
     private func countTile(icon: String, count: Int, label: String, color: Color) -> some View {
         HStack(spacing: 10) {
-            ZStack {
-                Circle().fill(color.opacity(0.15)).frame(width: 32, height: 32)
-                Image(systemName: icon)
-                    .font(.system(.footnote, weight: .semibold))
-                    .foregroundStyle(color)
-            }
+            Image(systemName: icon)
+                .font(.system(.subheadline, weight: .semibold))
+                .foregroundStyle(color)
+                .frame(width: 24)
             VStack(alignment: .leading, spacing: 1) {
                 Text("\(count)")
                     .font(.system(.subheadline, weight: .bold))
@@ -170,6 +162,5 @@ struct BackupPreviewSheet: View {
         }
         .padding(.horizontal, 10).padding(.vertical, 8)
         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.sm))
-        .overlay(RoundedRectangle(cornerRadius: AppRadius.sm).stroke(AppTheme.cardMid.opacity(0.4), lineWidth: 1))
     }
 }

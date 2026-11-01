@@ -720,9 +720,6 @@ struct CardFormSheet: View {
                                                     ? provider.color
                                                     : AppTheme.cardMid,
                                                     in: Capsule())
-                                                .overlay(Capsule().stroke(
-                                                    walletProvider == provider ? provider.color.opacity(0.5) : AppTheme.cardMid,
-                                                    lineWidth: 1))
                                             }
                                             .buttonStyle(ScaleButtonStyle())
                                         }
@@ -823,8 +820,6 @@ struct CardFormSheet: View {
                                 }
                                 .padding(14)
                                 .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
-                                .overlay(RoundedRectangle(cornerRadius: AppRadius.md)
-                                    .stroke(AppTheme.cardMid.opacity(0.5), lineWidth: 1))
                                 .padding(.horizontal, 22)
 
                                 // Live digit counter — local digits (excluding +62 country code)
@@ -925,14 +920,10 @@ struct CardFormSheet: View {
                                     }
                                 } label: {
                                     HStack(spacing: 10) {
-                                        ZStack {
-                                            RoundedRectangle(cornerRadius: AppRadius.sm)
-                                                .fill(AppTheme.green.opacity(0.12))
-                                                .frame(width: 38, height: 38)
-                                            Image(systemName: "dollarsign.circle.fill")
-                                                .font(.system(.body))
-                                                .foregroundStyle(AppTheme.green)
-                                        }
+                                        Image(systemName: "dollarsign.circle.fill")
+                                            .font(.system(.body))
+                                            .foregroundStyle(AppTheme.green)
+                                            .frame(width: 28)
                                         VStack(alignment: .leading, spacing: 2) {
                                             Text(loc("common.currency"))
                                                 .font(.system(.subheadline, weight: .medium))
@@ -954,8 +945,6 @@ struct CardFormSheet: View {
                                     }
                                     .padding(14)
                                     .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
-                                    .overlay(RoundedRectangle(cornerRadius: AppRadius.md)
-                                        .stroke(AppTheme.cardMid.opacity(0.5), lineWidth: 1))
                                     .padding(.horizontal, 22)
                                 }
                                 .buttonStyle(ScaleButtonStyle())
@@ -963,14 +952,10 @@ struct CardFormSheet: View {
                         } else {
                             // Locked currency display when editing
                             HStack(spacing: 10) {
-                                ZStack {
-                                    RoundedRectangle(cornerRadius: AppRadius.sm)
-                                        .fill(AppTheme.textSecondary.opacity(0.08))
-                                        .frame(width: 38, height: 38)
-                                    Image(systemName: "lock.fill")
-                                        .font(.system(.callout))
-                                        .foregroundStyle(AppTheme.textSecondary)
-                                }
+                                Image(systemName: "lock.fill")
+                                    .font(.system(.callout))
+                                    .foregroundStyle(AppTheme.textSecondary)
+                                    .frame(width: 28)
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(loc("common.currency"))
                                         .font(.system(.subheadline, weight: .medium))
@@ -990,8 +975,6 @@ struct CardFormSheet: View {
                             }
                             .padding(14)
                             .background(AppTheme.cardDark.opacity(0.5), in: RoundedRectangle(cornerRadius: AppRadius.md))
-                            .overlay(RoundedRectangle(cornerRadius: AppRadius.md)
-                                .stroke(AppTheme.cardMid.opacity(0.3), lineWidth: 1))
                             .padding(.horizontal, 22)
                         }
 

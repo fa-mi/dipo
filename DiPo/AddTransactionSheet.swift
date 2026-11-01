@@ -217,7 +217,6 @@ struct AddTransactionSheet: View {
         // and cardDark on cardDark is white on white in light mode.
         .padding(.horizontal, 13).padding(.vertical, 12)
         .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: AppRadius.md))
-        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.accent.opacity(0.3), lineWidth: 1))
     }
 
     var convertedPreview: String {
@@ -250,14 +249,10 @@ struct AddTransactionSheet: View {
                 }
             } label: {
                 HStack(spacing: 12) {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: AppRadius.sm)
-                            .fill(AppTheme.accent.opacity(0.14))
-                            .frame(width: 38, height: 38)
-                        Image(systemName: "doc.text.viewfinder")
-                            .font(.system(.body, weight: .semibold))
-                            .foregroundStyle(AppTheme.accent)
-                    }
+                    Image(systemName: "doc.text.viewfinder")
+                        .font(.system(.body, weight: .semibold))
+                        .foregroundStyle(AppTheme.accent)
+                        .frame(width: 28)
                     VStack(alignment: .leading, spacing: 1) {
                         HStack(spacing: 6) {
                             Text(loc("receipt.entry.title"))
@@ -266,9 +261,7 @@ struct AddTransactionSheet: View {
                             if !PremiumManager.shared.canAccess(.scanReceipt) {
                                 Image(systemName: "crown.fill")
                                     .font(.system(.caption2, weight: .bold)).imageScale(.small)
-                                    .foregroundStyle(AppTheme.onVividFill)
-                                    .padding(3)
-                                    .background(PremiumPlan.royal.color, in: Circle())
+                                    .foregroundStyle(PremiumPlan.royal.color)
                             }
                         }
                         Text(loc("receipt.entry.subtitle"))
@@ -283,8 +276,6 @@ struct AddTransactionSheet: View {
                 }
                 .padding(12)
                 .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
-                .overlay(RoundedRectangle(cornerRadius: AppRadius.md)
-                    .stroke(AppTheme.accent.opacity(0.22), lineWidth: 1))
             }
             .buttonStyle(ScaleButtonStyle())
             .padding(.horizontal, 22)
@@ -401,12 +392,10 @@ struct AddTransactionSheet: View {
     private var conversionPanel: some View {
         VStack(spacing: 10) {
             HStack(spacing: 10) {
-                ZStack {
-                    Circle().fill(AppTheme.accent.opacity(0.12)).frame(width: 36, height: 36)
-                    Image(systemName: "arrow.triangle.2.circlepath")
-                        .font(.system(.subheadline, weight: .semibold))
-                        .foregroundStyle(AppTheme.accent)
-                }
+                Image(systemName: "arrow.triangle.2.circlepath")
+                    .font(.system(.subheadline, weight: .semibold))
+                    .foregroundStyle(AppTheme.accent)
+                    .frame(width: 28)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(loc("tx.smart_convert"))
                         .font(.system(.footnote, weight: .semibold))
@@ -420,9 +409,7 @@ struct AddTransactionSheet: View {
                 // MUST be converted, or the balance stops meaning anything.
                 Text(loc("tx.required"))
                     .font(.system(.caption2, weight: .semibold))
-                    .foregroundStyle(AppTheme.accent)
-                    .padding(.horizontal, 8).padding(.vertical, 4)
-                    .background(AppTheme.accent.opacity(0.12), in: Capsule())
+                    .foregroundStyle(AppTheme.textSecondary)
             }
 
             if saveInPreferred {
@@ -435,13 +422,14 @@ struct AddTransactionSheet: View {
                             .font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.textSecondary)
                     }
                     Image(systemName: "arrow.right")
-                        .font(.system(.caption)).foregroundStyle(AppTheme.accent)
+                        .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                         .padding(.horizontal, 8)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(loc("tx.saved_as"))
                             .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
+                        // Ink: green says money coming in, and this may be going out.
                         Text(CurrencyManager.shared.formatted(convertedAmount, currency: selectedCardCurrency))
-                            .font(.system(.subheadline, weight: .bold)).foregroundStyle(AppTheme.accent)
+                            .font(.system(.subheadline, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
                     }
                     Spacer()
                 }
@@ -451,9 +439,7 @@ struct AddTransactionSheet: View {
             }
         }
         .padding(14)
-        .background(AppTheme.accent.opacity(0.06), in: RoundedRectangle(cornerRadius: AppRadius.md))
-        .overlay(RoundedRectangle(cornerRadius: AppRadius.md)
-            .stroke(AppTheme.accent.opacity(saveInPreferred ? 0.4 : 0.15), lineWidth: 1))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
         .animation(.spring(response: 0.35, dampingFraction: 0.8), value: saveInPreferred)
     }
 
@@ -601,7 +587,9 @@ struct AddTransactionSheet: View {
                 }
                 .foregroundStyle(canSubmit ? AppTheme.onVividFill : AppTheme.textSecondary)
                 .frame(maxWidth: .infinity).padding(.vertical, 17)
-                .background(canSubmit ? txType.color : AppTheme.textSecondary.opacity(0.25),
+                // Green for either kind: it is the form's one action, and red
+                // is kept for deleting. The type above says which kind it is.
+                .background(canSubmit ? AppTheme.accentFill : AppTheme.textSecondary.opacity(0.25),
                             in: RoundedRectangle(cornerRadius: AppRadius.lg))
             }
             .buttonStyle(ScaleButtonStyle())
