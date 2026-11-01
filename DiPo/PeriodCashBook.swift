@@ -60,8 +60,10 @@ struct PeriodCashBook: Equatable {
     var end: Double { start + income + otherInTotal - spent - otherOutTotal + ownMoves }
 
     /// The book for `txs` (one card, one window), opened at `start`.
+    /// `movedFrom`: see CoverTimeline.walk.
     static func build(_ txs: [TxRecord], start: Double,
-                      convert: (TxRecord) -> Double) -> PeriodCashBook {
+                      convert: (TxRecord) -> Double,
+                      movedFrom: ((TxRecord) -> String?)? = nil) -> PeriodCashBook {
         let income = StatisticsView.income(txs, convert: convert)
         let spent = StatisticsView.expenses(txs, convert: convert)
         let transfers = txs.filter { $0.txSubtype == .transfer }.reduce(0.0) { $0 + convert($1) }
@@ -74,7 +76,7 @@ struct PeriodCashBook: Equatable {
                               debtPaid: categorySpend(txs, .debtPayment, convert: convert),
                               invested: categorySpend(txs, .investment, convert: convert),
                               otherOut: outs, ownMoves: abs(own) < 0.5 ? 0 : own,
-                              cover: CoverTimeline.walk(txs, start: start, convert: convert))
+                              cover: CoverTimeline.walk(txs, start: start, convert: convert, movedFrom: movedFrom))
     }
 
     /// Spending in one category by Statistics' rules: transfers skipped, a
@@ -93,11 +95,12 @@ struct PeriodCashBook: Equatable {
     /// The book closed against a known end balance — for a window that runs to
     /// today, where the card's balance is the end. The start is what makes it add up.
     static func build(_ txs: [TxRecord], end: Double,
-                      convert: (TxRecord) -> Double) -> PeriodCashBook {
+                      convert: (TxRecord) -> Double,
+                      movedFrom: ((TxRecord) -> String?)? = nil) -> PeriodCashBook {
         var book = build(txs, start: 0, convert: convert)
         book.start = end - book.end
         // The walk depends on the balance carried in, known only now.
-        book.cover = CoverTimeline.walk(txs, start: book.start, convert: convert)
+        book.cover = CoverTimeline.walk(txs, start: book.start, convert: convert, movedFrom: movedFrom)
         return book
     }
 

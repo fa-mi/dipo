@@ -103,6 +103,53 @@ final class OwnMovesTests: XCTestCase {
         XCTAssertTrue(lines[0].sources.isEmpty)
     }
 
+    // MARK: What paid for the spending, on a card read on its own
+
+    /// Fahmi's Mandiri on Home, 1 Nov: no income since payday, Rp 1.020.000
+    /// spent, and Rp 1.000.000 of it moved in from BRI first. The note said
+    /// all of it "came out of money already on the card".
+    func testMoneyMovedInFromACardOutsideIsWhatPaid() {
+        let bri = card("Fahmi Aquinas BRI", "5221845086220969")
+        let mandiri = card("Fahmi Aquinas Mandiri", "4616991234563661")
+        let cards = [bri, mandiri]
+        move(1_000_000, from: bri, to: mandiri, at: day(10, 25))
+        mandiri.transactions.append(row("Listrik", -1_020_000, day(10, 26), .bills))
+
+        let window = mandiri.transactions.filter { $0.date >= day(10, 23, 0) }
+        let book = PeriodCashBook.build(window, start: 100_000, convert: { $0.amount },
+                                        movedFrom: OwnMoves.arrivals(into: [mandiri], cards: cards))
+        let from = bri.shortName(among: cards)
+        XCTAssertTrue(from.hasPrefix("BRI"), from)
+        XCTAssertEqual(book.cover.coveredBy, [CoverTimeline.Source(label: from, amount: 1_000_000)])
+        XCTAssertEqual(book.cover.fromSavings, 20_000, accuracy: 0.5)
+        XCTAssertEqual(book.overspend(deficit: 1_020_000), .partly(label: from, amount: 1_000_000))
+    }
+
+    /// The same move read over the pot it stays inside (BRI with Mandiri as
+    /// a bill card) cancels out, as before.
+    func testAMoveBetweenTheCardsReadStillCancelsOut() {
+        let bri = card("Fahmi Aquinas BRI", "5221845086220969")
+        let mandiri = card("Fahmi Aquinas Mandiri", "4616991234563661")
+        move(1_000_000, from: bri, to: mandiri, at: day(10, 25))
+        mandiri.transactions.append(row("Listrik", -1_020_000, day(10, 26), .bills))
+
+        let window = (bri.transactions + mandiri.transactions).filter { $0.date >= day(10, 23, 0) }
+        let book = PeriodCashBook.build(window, start: 2_000_000, convert: { $0.amount },
+                                        movedFrom: OwnMoves.arrivals(into: [bri, mandiri], cards: [bri, mandiri]))
+        XCTAssertTrue(book.cover.coveredBy.isEmpty)
+        XCTAssertEqual(book.overspend(deficit: 1_020_000), .savings)
+    }
+
+    /// Money that left a card is never what paid for that card's spending.
+    func testOnlyMoneyComingInIsNamed() {
+        let bri = card("Fahmi Aquinas BRI", "5221845086220969")
+        let mandiri = card("Fahmi Aquinas Mandiri", "4616991234563661")
+        move(300_000, from: mandiri, to: bri, at: day(10, 25))
+        let arrivals = OwnMoves.arrivals(into: [mandiri], cards: [bri, mandiri])
+        XCTAssertNil(arrivals(mandiri.transactions[0]), "the leg leaving Mandiri")
+        XCTAssertNotNil(OwnMoves.arrivals(into: [bri], cards: [bri, mandiri])(bri.transactions[0]))
+    }
+
     func testStringsExist() {
         for key in ["stats.own_from", "stats.own_to", "stats.own_source", "stats.own_show", "stats.own_hide"] {
             XCTAssertNotEqual(loc(key), key, "missing \(key)")

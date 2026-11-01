@@ -21,6 +21,13 @@ import Foundation
 // Only spending is paid for here: what the cash book counts as spent, debt
 // payments included. Moves between the person's own accounts and money lent
 // out are movements, not spending, and the cash book lists them on their own.
+//
+// Except one kind of move: money moved in from one of the person's cards that
+// isn't among the cards being read. Mandiri, shown on its own, is paid into
+// from BRI; to Mandiri that money arrived like any other, and calling the
+// spending it paid for "money already on the card" was wrong. The caller says
+// which moves those are (`movedFrom`, see OwnMoves.arrivals); a move between
+// the cards being read still cancels out.
 
 enum CoverTimeline {
 
@@ -49,7 +56,10 @@ enum CoverTimeline {
     }
 
     /// `start` is the balance carried in; only a positive one can pay.
-    static func walk(_ txs: [TxRecord], start: Double, convert: (TxRecord) -> Double) -> Result {
+    /// `movedFrom` names the card a move between own cards came from, when it
+    /// came from outside the cards being read; nil leaves it a move inside them.
+    static func walk(_ txs: [TxRecord], start: Double, convert: (TxRecord) -> Double,
+                     movedFrom: ((TxRecord) -> String?)? = nil) -> Result {
         // On the same instant, money in before money out: a salary and a bill
         // posted at the same midnight are paid in that order.
         let ordered = txs.sorted { a, b in
@@ -73,8 +83,12 @@ enum CoverTimeline {
                 continue
             }
             if tx.txSubtype == .transfer {
-                if tx.amount > 0, !NonFlowMovements.isOwnAccountMove(tx, incoming: true) {
-                    arrived.append((NonFlowMovements.label(for: tx), amount))
+                if tx.amount > 0 {
+                    if !NonFlowMovements.isOwnAccountMove(tx, incoming: true) {
+                        arrived.append((NonFlowMovements.label(for: tx), amount))
+                    } else if let card = movedFrom?(tx) {
+                        arrived.append((card, amount))
+                    }
                 }
                 continue
             }

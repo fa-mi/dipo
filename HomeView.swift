@@ -331,12 +331,15 @@ struct HomeView: View {
         let cm = CurrencyManager.shared
         // Over the whole pot when the main card has bill cards: the kos paid
         // from BCA is in the spending, so the balance that covers it is too.
+        // Money moved in from a card outside it (BRI into Mandiri, with
+        // Mandiri on screen) is named as where the spending's money came from.
         let book = PeriodCashBook.build(scope.flatMap(\.transactions).filter { $0.date >= start },
                                         end: scope.reduce(0.0) {
                                             $0 + cm.convert($1.computedBalance(), from: $1.resolvedCurrency, to: cur)
                                         },
                                         convert: { cm.convert(
-                                            $0.amount, from: $0.currency.isEmpty ? cur : $0.currency, to: cur) })
+                                            $0.amount, from: $0.currency.isEmpty ? cur : $0.currency, to: cur) },
+                                        movedFrom: OwnMoves.arrivals(into: scope, cards: queriedCards))
         let putAway = book.debtPaid + book.invested
         let over = max(expense - putAway, 0) - income - extra
         // A credit card's "balance" is what is owed; nothing there "covers" anything.
