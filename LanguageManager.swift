@@ -275,7 +275,6 @@ final class LanguageManager {
         "delete_acct.relogin": "For your security, please sign out and sign in again, then retry deleting your account. Nothing has been deleted yet.",
         "delete_acct.failed":  "Couldn't delete your account: %@",
         "profile.upgrade":    "Upgrade",
-        "profile.requires_royal":   "Requires Royal",
         "profile.budget_active":    "On. Your split is set.",
         "profile.signin_support":   "Sign in to Contact Support",
         "support.login_required":   "Please sign in to contact support.",
@@ -289,6 +288,8 @@ final class LanguageManager {
         "profile.support_needs_email": "Add your email to contact support",
         "profile.signing_in":       "Signing in...",
         "profile.account":       "Account",
+        "profile.section_features": "Features",
+        "profile.section_settings": "Settings",
         "profile.subcs":       "Report bugs, feature requests & billing",
         
         // Appearance
@@ -3436,7 +3437,6 @@ final class LanguageManager {
         "delete_acct.relogin": "Demi keamanan, silakan keluar lalu masuk lagi, kemudian coba hapus akun sekali lagi. Belum ada data yang dihapus.",
         "delete_acct.failed":  "Gagal menghapus akun: %@",
         "profile.upgrade":    "Tingkatkan",
-        "profile.requires_royal":   "Khusus Royal",
         "profile.budget_active":    "Aktif. Pembagian sudah diatur.",
         "profile.signin_support":   "Masuk untuk Menghubungi Dukungan",
         "support.login_required":   "Silakan masuk untuk menghubungi dukungan.",
@@ -3450,6 +3450,8 @@ final class LanguageManager {
         "profile.support_needs_email": "Tambahkan email untuk menghubungi dukungan",
         "profile.signing_in":       "Sedang masuk...",
         "profile.account":       "Akun",
+        "profile.section_features": "Fitur",
+        "profile.section_settings": "Pengaturan",
         "profile.subcs":       "Laporkan adanya kesalahan, request fitur & tangguhan",
 
         // Appearance

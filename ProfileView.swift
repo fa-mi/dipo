@@ -95,72 +95,31 @@ struct ProfileView: View {
         NotificationCenter.default.post(name: .profilePhotoDidChange, object: nil)
     }
 
-    private var initials: String {
-        authVM.savedName.split(separator: " ")
-            .prefix(2).compactMap { $0.first }.map(String.init).joined().uppercased()
-    }
-
-    // MARK: - Style Helpers
-    // Extracted so the type-checker doesn't resolve complex ShapeStyle ternaries inside body.
-
-    private var planIconFill: some ShapeStyle {
-        if premiumMgr.plan == .free {
-            return AnyShapeStyle(AppTheme.textSecondary.opacity(0.1))
-        }
-        return AnyShapeStyle(LinearGradient(
-            colors: [premiumMgr.plan.color.opacity(0.25), premiumMgr.plan.color.opacity(0.08)],
-            startPoint: .topLeading, endPoint: .bottomTrailing))
-    }
-
-    private var planCardFill: some ShapeStyle {
-        if premiumMgr.plan == .free {
-            return AnyShapeStyle(AppTheme.cardDark)
-        }
-        return AnyShapeStyle(LinearGradient(
-            colors: [premiumMgr.plan.color.opacity(0.12), AppTheme.cardDark],
-            startPoint: .topLeading, endPoint: .bottomTrailing))
-    }
-
-    private var planTaglineFill: some ShapeStyle {
-        if premiumMgr.plan == .free {
-            return AnyShapeStyle(LinearGradient(colors: [.green, .yellow], startPoint: .leading, endPoint: .trailing))
-        }
-        return AnyShapeStyle(premiumMgr.plan.color)
-    }
-
-    private var avatarRingFill: some ShapeStyle {
-        if premiumMgr.plan == .free {
-            return AnyShapeStyle(AppTheme.accent.opacity(0.35))
-        }
-        return AnyShapeStyle(LinearGradient(
-            colors: [premiumMgr.plan.color, premiumMgr.plan.color.opacity(0.4)],
-            startPoint: .topLeading, endPoint: .bottomTrailing))
-    }
-
     // MARK: - Body
 
     var body: some View {
         ZStack {
             AppTheme.bg.ignoresSafeArea()
             ScrollView(showsIndicators: false) {
-                VStack(spacing: 24) {
-                    Spacer(minLength: 4)
-                    avatarSection
-                    nameSection
-                    securityCard
-                    if session.isLoggedIn { accountCard }
-                    if session.isLoggedIn { emailSection }
-                    if session.isLoggedIn { dipoIDSection }
-                    premiumBadge
-                    featureLinksCard
-                    notificationsLink
-                    appearanceCard
-                    authButtonSection
-                    backupSection
-                    resetButton
-                    supportSection
+                VStack(spacing: 0) {
+                    header
+                        .padding(.top, 8)
+                    if !session.isLoggedIn {
+                        signInSection
+                            .padding(.top, 22)
+                    }
+                    VStack(alignment: .leading, spacing: 26) {
+                        accountSection
+                        featuresSection
+                        settingsSection
+                        backupSection
+                        helpSection
+                        leaveSection
+                    }
+                    .padding(.top, 28)
                     Spacer(minLength: 110)
                 }
+                .padding(.horizontal, 22)
                 // Hard-clamp the column to the scroll viewport. A card without
                 // maxWidth takes its content's natural width, so one unbreakable
                 // string (an email address, a long translated line) widened the
@@ -407,43 +366,46 @@ struct ProfileView: View {
     }
 
     // MARK: - Sub-Views
+    //
+    // The screen is a few grouped lists (DiPo/ListRows.swift): a quiet title,
+    // rows on one card, a coloured icon with nothing behind it. It used to be
+    // a card per setting, most with a border, a tinted tile and a tinted pill
+    // of a button, and the feature rows were cards inside a card.
+
+    /// Photo, name, and the plan or DiPo's tagline. No glow and no ring round
+    /// the photo: the plan is said in words under the name.
+    @ViewBuilder
+    private var header: some View {
+        VStack(spacing: 14) {
+            avatarSection
+            nameSection
+        }
+        .frame(maxWidth: .infinity)
+    }
 
     @ViewBuilder
     private var avatarSection: some View {
         ZStack {
-            Circle()
-                .fill(RadialGradient(colors: [AppTheme.accent.opacity(0.22), .clear],
-                                     center: .center, startRadius: 0, endRadius: 90))
-                .frame(width: 90, height: 90)
-            Circle()
-                .fill(RadialGradient(colors: [AppTheme.accent.opacity(0.10), .clear],
-                                     center: .center, startRadius: 0, endRadius: 120))
-                .frame(width: 120, height: 120)
-            Circle()
-                .strokeBorder(avatarRingFill, lineWidth: premiumMgr.plan == .free ? 2 : 3)
-                .frame(width: 118, height: 118)
-            ZStack {
-                Circle().fill(AppTheme.cardDark).frame(width: 110, height: 110)
-                if let img = profileImage {
-                    Image(uiImage: img).resizable().scaledToFill()
-                        .frame(width: 110, height: 110).clipShape(Circle())
-                } else {
-                    Image("DiPoMascot").resizable().scaledToFill()
-                        .frame(width: 110, height: 110).clipShape(Circle())
-                        .blendMode(colorScheme == .dark ? .screen : .multiply)
-                }
+            Circle().fill(AppTheme.cardDark).frame(width: 96, height: 96)
+            if let img = profileImage {
+                Image(uiImage: img).resizable().scaledToFill()
+                    .frame(width: 96, height: 96).clipShape(Circle())
+            } else {
+                Image("DiPoMascot").resizable().scaledToFill()
+                    .frame(width: 96, height: 96).clipShape(Circle())
+                    .blendMode(colorScheme == .dark ? .screen : .multiply)
             }
             Button { showPhotoOptions = true } label: {
-                ZStack {
-                    Circle().fill(AppTheme.accentFill).frame(width: 32, height: 32)
-                    Image(systemName: "camera.fill")
-                        .font(.system(.footnote, weight: .semibold)).foregroundStyle(AppTheme.onVividFill)
-                }
+                Image(systemName: "camera.fill")
+                    .font(.system(.footnote, weight: .semibold))
+                    .foregroundStyle(AppTheme.textPrimary)
+                    .frame(width: 30, height: 30)
+                    .background(AppTheme.cardMid, in: Circle())
             }
-.accessibilityLabel(loc("a11y.change_photo"))
-.hitTarget(32)
+            .accessibilityLabel(loc("a11y.change_photo"))
+            .hitTarget(30)
             .buttonStyle(ScaleButtonStyle())
-            .offset(x: 36, y: 36)
+            .offset(x: 34, y: 34)
         }
         .photosPicker(isPresented: $showPhotoOptions, selection: $photoItem,
                       matching: .images, photoLibrary: .shared())
@@ -459,7 +421,7 @@ struct ProfileView: View {
 
     @ViewBuilder
     private var nameSection: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 6) {
             if isEditingName {
                 HStack(spacing: 8) {
                     TextField(loc("auth.name_placeholder"), text: $editNameText)
@@ -468,18 +430,16 @@ struct ProfileView: View {
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 16).padding(.vertical, 10)
                         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
-                        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.accent.opacity(0.5), lineWidth: 1.5))
                         .submitLabel(.done).onSubmit { saveName() }
                     Button { saveName() } label: {
                         Image(systemName: "checkmark.circle.fill").font(.system(.title)).foregroundStyle(AppTheme.accent)
                     }
-.accessibilityLabel(loc("a11y.save_name")).buttonStyle(ScaleButtonStyle())
+                    .accessibilityLabel(loc("a11y.save_name")).buttonStyle(ScaleButtonStyle())
                     Button { isEditingName = false; editNameText = authVM.savedName } label: {
                         Image(systemName: "xmark.circle.fill").font(.system(.title)).foregroundStyle(AppTheme.textSecondary)
                     }
-.accessibilityLabel(loc("common.cancel")).buttonStyle(ScaleButtonStyle())
+                    .accessibilityLabel(loc("common.cancel")).buttonStyle(ScaleButtonStyle())
                 }
-                .padding(.horizontal, 28)
                 .transition(.scale(scale: 0.95).combined(with: .opacity))
             } else {
                 Button {
@@ -497,59 +457,109 @@ struct ProfileView: View {
                 .buttonStyle(ScaleButtonStyle())
                 .transition(.scale(scale: 0.95).combined(with: .opacity))
             }
-            HStack(spacing: 5) {
-                if premiumMgr.plan != .free {
-                    Image(systemName: premiumMgr.plan.icon).font(.system(.caption2, weight: .bold)).imageScale(.small)
-                        .foregroundStyle(premiumMgr.plan.color)
+            if premiumMgr.plan == .free {
+                Text(loc("auth.tagline"))
+                    .font(.system(.caption, weight: .medium))
+                    .foregroundStyle(AppTheme.textSecondary)
+            } else {
+                HStack(spacing: 4) {
+                    Image(systemName: premiumMgr.plan.icon).imageScale(.small)
+                    Text("DiPo \(premiumMgr.plan.label)")
                 }
-                Text(premiumMgr.plan == .free ? loc("auth.tagline") : "DiPo \(premiumMgr.plan.label)")
-                    .font(.system(.caption, weight: .semibold))
-                    .foregroundStyle(planTaglineFill)
-                    .tracking(premiumMgr.plan == .free ? 1.4 : 0.5)
+                .font(.system(.caption, weight: .semibold))
+                .foregroundStyle(premiumMgr.plan.color)
             }
-            .padding(.horizontal, premiumMgr.plan == .free ? 0 : 10)
-            .padding(.vertical, premiumMgr.plan == .free ? 0 : 4)
-            .background(premiumMgr.plan == .free ? .clear : premiumMgr.plan.color.opacity(0.12), in: Capsule())
         }
     }
 
+    /// Signed out, signing in is what this screen is for — it turns on
+    /// backup, support and savings goals — so it is the one green button.
     @ViewBuilder
-    private var emailSection: some View {
-        let hasEmail = !(session.email ?? "").isEmpty
-        HStack(spacing: 12) {
-            let c: Color = hasEmail ? AppTheme.accent : AppTheme.orange
-            Image(systemName: hasEmail ? "envelope.fill" : "envelope.badge")
-                .font(.system(.body)).foregroundStyle(c)
-                .frame(width: 36, height: 36)
-                .background(c.opacity(0.12), in: RoundedRectangle(cornerRadius: AppRadius.sm))
-            VStack(alignment: .leading, spacing: 2) {
-                Text(loc("profile.email_title"))
-                    .font(.system(.subheadline, weight: .medium)).foregroundStyle(AppTheme.textPrimary)
-                Text(hasEmail ? (session.email ?? "") : loc("profile.email_not_set"))
-                    .font(.system(.caption))
-                    .foregroundStyle(hasEmail ? AppTheme.textSecondary : AppTheme.orange)
-                    .lineLimit(1)
+    private var signInSection: some View {
+        VStack(spacing: 10) {
+            if isSigningIn {
+                HStack(spacing: 10) {
+                    ProgressView().tint(AppTheme.accent)
+                    Text(loc("profile.signing_in")).font(.system(.subheadline)).foregroundStyle(AppTheme.textSecondary)
+                }
+                .frame(maxWidth: .infinity).padding(.vertical, 16)
+            } else {
+                Button {
+                    HapticManager.shared.tap()
+                    showSignInSheet = true
+                } label: {
+                    Text(loc("profile.login"))
+                        .font(.system(.body, weight: .semibold))
+                        .foregroundStyle(AppTheme.onVividFill)
+                        .frame(maxWidth: .infinity).padding(.vertical, 16)
+                        .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+                }
+                .buttonStyle(ScaleButtonStyle())
             }
-            Spacer()
-            Button {
-                HapticManager.shared.tap()
-                emailText = session.email ?? ""
-                showEmailEdit = true
-            } label: {
-                Text(hasEmail ? loc("common.edit") : loc("profile.add_email"))
-                    .font(.system(.caption, weight: .semibold))
-                    .foregroundStyle(hasEmail ? AppTheme.accent : .white)
-                    .padding(.horizontal, 14).padding(.vertical, 7)
-                    .background(hasEmail ? AppTheme.accent.opacity(0.12) : AppTheme.accent, in: Capsule())
-                    .overlay(Capsule().stroke(AppTheme.accent.opacity(hasEmail ? 0.3 : 0), lineWidth: 1))
+            if let err = loginError {
+                InlineBanner(tone: .error, message: err)
             }
-            .buttonStyle(ScaleButtonStyle())
         }
-        .padding(16)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
-        .overlay(RoundedRectangle(cornerRadius: AppRadius.md)
-            .stroke((hasEmail ? AppTheme.accent : AppTheme.orange).opacity(0.18), lineWidth: 1))
-        .padding(.horizontal, 22)
+    }
+
+    // MARK: Account
+
+    /// Who is signed in, the address support replies to, the DiPo ID, and
+    /// the plan. Signed out, only the plan.
+    @ViewBuilder
+    private var accountSection: some View {
+        ListSection(loc("profile.account")) {
+            if session.isLoggedIn {
+                accountRow
+                ListDivider()
+                emailRow
+                ListDivider()
+                dipoIDRow
+                ListDivider()
+            }
+            planRow
+        }
+    }
+
+    /// The account and what it signs in with. Signing out is at the bottom
+    /// of the screen, once; this row used to carry a second Log Out button.
+    private var accountRow: some View {
+        let isApple = session.provider == .apple
+        return ListRow(title: session.displayName ?? loc("profile.account"),
+                       subtitle: isApple ? "Apple" : "Google") {
+            if isApple {
+                Image(systemName: "apple.logo")
+                    .font(.system(.body, weight: .medium))
+                    .foregroundStyle(AppTheme.textPrimary)
+            } else {
+                Text("G")
+                    .font(.system(.body, weight: .bold))
+                    .foregroundStyle(Color(hex: "#4285F4"))
+            }
+        } trailing: {
+            EmptyView()
+        }
+    }
+
+    /// The address support replies to. A tap edits it; without one, the
+    /// line under it says why it is needed.
+    private var emailRow: some View {
+        let email = session.email ?? ""
+        let hasEmail = !email.isEmpty
+        return Button {
+            HapticManager.shared.tap()
+            emailText = email
+            showEmailEdit = true
+        } label: {
+            ListRow(icon: hasEmail ? "envelope.fill" : "envelope.badge",
+                    tint: hasEmail ? AppTheme.accent : AppTheme.orange,
+                    title: loc("profile.email_title"),
+                    subtitle: hasEmail ? email : loc("profile.email_not_set"),
+                    subtitleTint: hasEmail ? AppTheme.textSecondary : AppTheme.orange) {
+                ListAction(title: hasEmail ? loc("common.edit") : loc("profile.add_email"))
+            }
+        }
+        .buttonStyle(.plain)
         .alert(loc("profile.email_title"), isPresented: $showEmailEdit) {
             TextField("you@example.com", text: $emailText)
                 .keyboardType(.emailAddress)
@@ -562,86 +572,142 @@ struct ProfileView: View {
         }
     }
 
-    /// Shows the user's stable, shareable DiPo ID with a tap-to-copy button.
-    /// Read-only — derived from the account, not editable. Uses a distinct
-    /// sky→indigo gradient so it stands out from the green (security/email) and
-    /// purple (Royal) cards around it.
-    @ViewBuilder
-    private var dipoIDSection: some View {
+    /// The user's stable, shareable DiPo ID, read-only. A tap copies it.
+    private var dipoIDRow: some View {
         let id = session.dipoID ?? "—"
-        let brandA = AppTheme.blue // sky
-        let brandB = Color(hex: "#6366F1") // indigo
-        let grad = LinearGradient(colors: [brandA, brandB],
-                                  startPoint: .topLeading, endPoint: .bottomTrailing)
-        HStack(spacing: 12) {
-            Image(systemName: "person.text.rectangle.fill")
-                .font(.system(.body)).foregroundStyle(.white)
-                .frame(width: 36, height: 36)
-                .background(grad, in: RoundedRectangle(cornerRadius: AppRadius.sm))
-            VStack(alignment: .leading, spacing: 2) {
-                Text(loc("profile.dipo_id_title"))
-                    .font(.system(.subheadline, weight: .medium)).foregroundStyle(AppTheme.textPrimary)
-                Text(id)
-                    .font(.system(.footnote, design: .monospaced, weight: .bold))
-                    .foregroundStyle(brandB)
-                    .lineLimit(1)
+        return Button {
+            HapticManager.shared.tap()
+            UIPasteboard.general.string = id
+            withAnimation(.spring(response: 0.3)) { idCopied = true }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) {
+                withAnimation(.easeOut) { idCopied = false }
             }
-            Spacer()
-            Button {
-                HapticManager.shared.tap()
-                UIPasteboard.general.string = id
-                withAnimation(.spring(response: 0.3)) { idCopied = true }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) {
-                    withAnimation(.easeOut) { idCopied = false }
-                }
-            } label: {
-                HStack(spacing: 4) {
-                    Image(systemName: idCopied ? "checkmark" : "doc.on.doc")
-                        .font(.system(.caption2, weight: .semibold))
-                    Text(idCopied ? loc("common.copied") : loc("common.copy"))
-                        .font(.system(.caption, weight: .semibold))
-                }
-                .foregroundStyle(.white)
-                .padding(.horizontal, 14).padding(.vertical, 7)
-                .background(idCopied ? AnyShapeStyle(AppTheme.accent) : AnyShapeStyle(grad), in: Capsule())
+        } label: {
+            ListRow(icon: "person.text.rectangle.fill", tint: AppTheme.blue,
+                    title: loc("profile.dipo_id_title"), subtitle: id,
+                    subtitleTint: AppTheme.textPrimary,
+                    subtitleFont: .system(.footnote, design: .monospaced, weight: .semibold)) {
+                ListAction(title: idCopied ? loc("common.copied") : loc("common.copy"),
+                           icon: idCopied ? "checkmark" : "doc.on.doc",
+                           tint: idCopied ? AppTheme.accent : AppTheme.textSecondary)
             }
-            .buttonStyle(ScaleButtonStyle())
         }
-        .padding(16)
-        .background(
-            LinearGradient(colors: [brandA.opacity(0.10), brandB.opacity(0.10)],
-                           startPoint: .topLeading, endPoint: .bottomTrailing),
-            in: RoundedRectangle(cornerRadius: AppRadius.md))
-        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(brandB.opacity(0.30), lineWidth: 1))
-        .padding(.horizontal, 22)
+        .buttonStyle(.plain)
+        .disabled(session.dipoID == nil)
     }
 
-    @ViewBuilder
-    private var securityCard: some View {
-        HStack(spacing: 12) {
-            let bioColor = authVM.isBiometricAvailable ? AppTheme.accent : AppTheme.textSecondary
-            Image(systemName: authVM.biometricIcon).font(.system(.body)).foregroundStyle(bioColor)
-                .frame(width: 36, height: 36)
-                .background(bioColor.opacity(0.12), in: RoundedRectangle(cornerRadius: AppRadius.sm))
-            VStack(alignment: .leading, spacing: 2) {
-                Text(authVM.biometricLabel).font(.system(.subheadline, weight: .medium)).foregroundStyle(AppTheme.textPrimary)
-                Text(
-                    authVM.isBiometricAvailable
-                    ? (biometricEnabled
-                        ? loc("biometric.auto_unlock")
-                        : loc("biometric.disabled"))
-                    : loc("biometric.unavailable")
-                )
-                .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
-                // One line, always. The three states are short enough to fit,
-                // and a status that wraps on one of them resizes the card under
-                // the switch mid-animation.
-                .lineLimit(1).minimumScaleFactor(0.85)
+    /// Free with the way to Royal, or Royal. Opens the plans.
+    private var planRow: some View {
+        let plan = premiumMgr.plan
+        return Button {
+            HapticManager.shared.tap()
+            showPaywall = true
+        } label: {
+            ListRow(icon: plan.icon, tint: plan.color,
+                    title: plan == .free ? loc("free.user") : "DiPo \(plan.label)",
+                    subtitle: plan == .free ? loc("free.title") : loc("royal.title")) {
+                if plan == .free {
+                    // The screen's one ask to pay, in Royal's colour.
+                    Text(loc("profile.upgrade"))
+                        .font(.system(.caption, weight: .bold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 14).padding(.vertical, 7)
+                        .background(PremiumPlan.royal.color, in: Capsule())
+                        .fixedSize()
+                } else {
+                    ListChevron()
+                }
             }
-            Spacer()
-            if authVM.isBiometricAvailable {
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: Features
+
+    /// How DiPo connects to things outside the app, and how it is tuned. Money
+    /// features (budget, salary, bills, savings, Ask DiPo) live on the Plan
+    /// tab. One list: these were a card of cards, with Notifications in a card
+    /// of its own beneath.
+    @ViewBuilder
+    private var featuresSection: some View {
+        ListSection(loc("profile.section_features")) {
+            // Gated by Smart Budget's Royal entitlement — the same one the
+            // Worker checks before serving the dashboard, so the row can't
+            // offer something the server will refuse — but badged as itself,
+            // a phone-to-laptop glyph, so it stops reading as a second Smart
+            // Budget row.
+            PremiumLockedFeatureLink(
+                feature: .smartBudget, title: loc("profile.websync"),
+                subtitle: loc("profile.websync_sub"),
+                iconOverride: "laptopcomputer.and.iphone", tintOverride: AppTheme.teal,
+                showPaywall: $showPaywall) { showWebSync = true }
+            ListDivider()
+            // Scanning is the Royal-gated part, so the row is gated the same
+            // way — the walkthrough would otherwise teach a gesture that dies
+            // at the last step.
+            PremiumLockedFeatureLink(
+                feature: .scanReceipt, title: loc("profile.backtap"),
+                subtitle: loc("profile.backtap_sub"),
+                iconOverride: "hand.tap.fill", tintOverride: AppTheme.orange,
+                showPaywall: $showPaywall) { showBackTapGuide = true }
+            ListDivider()
+            // What DiPo knows the user enjoys; he guesses, they decide.
+            PremiumLockedFeatureLink(
+                feature: .aiAdvisor, title: loc("interest.profile_title"),
+                subtitle: loc("interest.profile_sub"),
+                iconOverride: "heart.text.square.fill", tintOverride: AppTheme.orange,
+                showPaywall: $showPaywall) { showInterests = true }
+            ListDivider()
+            // Tidy and the spending audit moved off Statistics: that screen
+            // reports conclusions, and rewriting the rows behind them is a
+            // separate job. Gated as it was there — the audit only ever
+            // appeared inside the Royal-locked insights card.
+            PremiumLockedFeatureLink(
+                feature: .smartBudget, title: loc("cleanup.title"),
+                subtitle: loc("cleanup.sub"),
+                iconOverride: "wand.and.stars", tintOverride: AppTheme.purple,
+                showPaywall: $showPaywall) { showCleanup = true }
+            ListDivider()
+            // Which reminders DiPo sends, a switch for each kind. Without it the
+            // only way to quiet the budget alerts was to silence DiPo in iOS
+            // Settings, and with them the debt due dates that save a late fee.
+            ProfileFeatureLink(icon: "bell.badge.fill", color: AppTheme.orange,
+                               title: loc("notifpref.title"), subtitle: loc("notifpref.link_sub")) {
+                showNotificationPrefs = true
+            }
+        }
+    }
+
+    // MARK: Settings
+
+    /// This phone's settings: the lock, the look, the languages.
+    @ViewBuilder
+    private var settingsSection: some View {
+        ListSection(loc("profile.section_settings")) {
+            securityRow
+            ListDivider()
+            appearanceBlock
+            ListDivider()
+            languageBlock
+            ListDivider()
+            voiceLanguageBlock
+        }
+    }
+
+    private var securityRow: some View {
+        let available = authVM.isBiometricAvailable
+        let status = available
+            ? (biometricEnabled ? loc("biometric.auto_unlock") : loc("biometric.disabled"))
+            : loc("biometric.unavailable")
+        // One line, always. The three states are short enough to fit, and a
+        // status that wraps on one of them resizes the row under the switch
+        // mid-animation.
+        return ListRow(icon: authVM.biometricIcon,
+                       tint: available ? AppTheme.accent : AppTheme.textSecondary,
+                       title: authVM.biometricLabel, subtitle: status, subtitleLines: 1) {
+            if available {
                 // The glyph in the knob says WHICH protection this is, which a
-                // bare capsule beside three other capsules cannot.
+                // bare capsule beside the other switches cannot.
                 DiPoSwitch(isOn: $biometricEnabled,
                            onIcon: authVM.biometricIcon, offIcon: "lock.open.fill")
                     .onChange(of: biometricEnabled) { _, on in
@@ -649,182 +715,6 @@ struct ProfileView: View {
                     }
             }
         }
-        .padding(16)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
-        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.accent.opacity(0.18), lineWidth: 1))
-        .padding(.horizontal, 22)
-    }
-
-    @ViewBuilder
-    private var accountCard: some View {
-        HStack(spacing: 14) {
-            ZStack {
-                let isApple = session.provider == .apple
-                RoundedRectangle(cornerRadius: AppRadius.sm)
-                    .fill(isApple
-                        ? LinearGradient(colors: [Color(hex: "#1C1C1E"), Color(hex: "#3A3A3C")], startPoint: .topLeading, endPoint: .bottomTrailing)
-                        : LinearGradient(colors: [Color(hex: "#4285F4").opacity(0.2), Color(hex: "#34A853").opacity(0.15)], startPoint: .topLeading, endPoint: .bottomTrailing))
-                    .frame(width: 44, height: 44)
-                    .overlay(RoundedRectangle(cornerRadius: AppRadius.sm)
-                        .stroke(isApple ? Color.white.opacity(0.08) : Color(hex: "#4285F4").opacity(0.3), lineWidth: 1))
-                if session.provider == .apple {
-                    Image(systemName: "apple.logo").font(.system(.body, weight: .medium)).foregroundStyle(.white)
-                } else {
-                    Text("G").font(.system(.body, weight: .bold)).foregroundStyle(Color(hex: "#4285F4"))
-                }
-            }
-            VStack(alignment: .leading, spacing: 3) {
-                Text(session.displayName ?? loc("profile.account"))
-                    .font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
-                HStack(spacing: 4) {
-                    let isApple = session.provider == .apple
-                    Text(isApple ? "Apple" : "Google")
-                        .font(.system(.caption2, weight: .bold))
-                        .foregroundStyle(isApple ? .white : Color(hex: "#4285F4"))
-                        .padding(.horizontal, 6).padding(.vertical, 2)
-                        .background(isApple ? Color(hex: "#3A3A3C") : Color(hex: "#4285F4").opacity(0.15), in: Capsule())
-                    if let email = session.email, !email.isEmpty {
-                        Text("· \(email)").font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary).lineLimit(1)
-                    }
-                }
-            }
-            Spacer()
-            Button { HapticManager.shared.tap(); showSignOut = true } label: {
-                Text(loc("profile.logout")).font(.system(.caption, weight: .semibold)).foregroundStyle(AppTheme.red)
-                    .padding(.horizontal, 12).padding(.vertical, 6)
-                    .background(AppTheme.red.opacity(0.1), in: Capsule())
-                    .overlay(Capsule().stroke(AppTheme.red.opacity(0.3), lineWidth: 1))
-            }.buttonStyle(ScaleButtonStyle())
-        }
-        .padding(16)
-        .background(
-            LinearGradient(colors: [AppTheme.cardDark, AppTheme.cardDark.opacity(0.8)],
-                           startPoint: .topLeading, endPoint: .bottomTrailing),
-            in: RoundedRectangle(cornerRadius: AppRadius.lg))
-        .overlay(RoundedRectangle(cornerRadius: AppRadius.lg).stroke(AppTheme.cardMid.opacity(0.6), lineWidth: 1))
-        .padding(.horizontal, 22)
-    }
-
-    @ViewBuilder
-    private var premiumBadge: some View {
-        Button { HapticManager.shared.tap(); showPaywall = true } label: {
-            HStack(spacing: 14) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: AppRadius.sm).fill(planIconFill).frame(width: 44, height: 44)
-                        .overlay(RoundedRectangle(cornerRadius: AppRadius.sm)
-                            .stroke(premiumMgr.plan == .free ? Color.clear : premiumMgr.plan.color.opacity(0.4), lineWidth: 1))
-                    Image(systemName: premiumMgr.plan.icon).font(.system(.body, weight: .medium))
-                        .foregroundStyle(premiumMgr.plan == .free ? AppTheme.textSecondary : premiumMgr.plan.color)
-                }
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(premiumMgr.plan == .free ? loc("free.user") : "DiPo \(premiumMgr.plan.label)")
-                        .font(.system(.subheadline, weight: .bold))
-                        .foregroundStyle(premiumMgr.plan == .free ? AppTheme.textPrimary : premiumMgr.plan.color)
-                    // Subtitle ternary collapsed from 3-tier to 2-tier
-                    // (Premium plan removed). Only Free or Royal possible.
-                    let subtitle = premiumMgr.plan == .free
-                        ? loc("free.title")
-                        : loc("royal.title")
-                    Text(subtitle).font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                Spacer()
-                if premiumMgr.plan == .free {
-                    // Upgrade chip uses Royal's color now — Premium's
-                    // amber tone is gone with the tier. Consistent purple
-                    // throughout the upgrade journey is also clearer
-                    // branding ("this color = paid feature").
-                    Text(loc("profile.upgrade")).font(.system(.caption, weight: .bold)).foregroundStyle(.white)
-                        .padding(.horizontal, 14).padding(.vertical, 7)
-                        .background(
-                            LinearGradient(colors: [PremiumPlan.royal.color, PremiumPlan.royal.color.opacity(0.75)],
-                                           startPoint: .topLeading, endPoint: .bottomTrailing), in: Capsule())
-                } else {
-                    Image(systemName: "chevron.right").font(.system(.footnote, weight: .semibold))
-                        .foregroundStyle(premiumMgr.plan.color.opacity(0.7))
-                }
-            }
-            .padding(16)
-            .background(planCardFill, in: RoundedRectangle(cornerRadius: AppRadius.lg))
-            .overlay(RoundedRectangle(cornerRadius: AppRadius.lg)
-                .stroke(premiumMgr.plan == .free ? AppTheme.cardMid.opacity(0.5) : premiumMgr.plan.color.opacity(0.4),
-                        lineWidth: premiumMgr.plan == .free ? 1 : 1.5))
-        }
-        .buttonStyle(ScaleButtonStyle())
-        .padding(.horizontal, 22)
-    }
-
-    /// Which reminders DiPo sends, a switch for each kind. Without it the only
-    /// way to quiet the budget alerts was to silence DiPo in iOS Settings, and
-    /// with them the debt due dates that save a late fee.
-    private var notificationsLink: some View {
-        ProfileFeatureLink(icon: "bell.badge.fill", color: AppTheme.orange,
-                           title: loc("notifpref.title"), subtitle: loc("notifpref.link_sub")) {
-            showNotificationPrefs = true
-        }
-        .padding(.horizontal, 22)
-    }
-
-    @ViewBuilder
-    private var featureLinksCard: some View {
-        // Money features (budget, salary, bills, savings, Ask DiPo) moved to the
-        // Plan tab and Debts & Credits to Wallet. What stays is how DiPo
-        // connects to things outside the app.
-        VStack(spacing: 12) {
-            // Gated on .smartBudget — the same entitlement the Worker checks
-            // before serving the dashboard, so the button can't offer something
-            // the server will refuse.
-            // Gated by Smart Budget's Royal entitlement, but badged as itself —
-            // a phone-to-laptop glyph in blue, so it stops reading as a second
-            // Smart Budget row three places below the first one.
-            PremiumLockedFeatureLink(
-                feature: .smartBudget, title: loc("profile.websync"),
-                subtitle: premiumMgr.canAccess(.smartBudget)
-                    ? loc("profile.websync_sub")
-                    : loc("profile.requires_royal"),
-                iconOverride: "laptopcomputer.and.iphone",
-                tintOverride: AppTheme.teal,
-                showPaywall: $showPaywall) { showWebSync = true }
-
-            // Scanning is the Royal-gated part, so the row is gated the same
-            // way — the walkthrough would otherwise teach a gesture that dies
-            // at the last step.
-            PremiumLockedFeatureLink(
-                feature: .scanReceipt, title: loc("profile.backtap"),
-                subtitle: premiumMgr.canAccess(.scanReceipt)
-                    ? loc("profile.backtap_sub")
-                    : loc("profile.requires_royal"),
-                iconOverride: "hand.tap.fill",
-                tintOverride: AppTheme.orange,
-                showPaywall: $showPaywall) { showBackTapGuide = true }
-
-            // What DiPo knows the user enjoys; he guesses, they decide.
-            PremiumLockedFeatureLink(
-                feature: .aiAdvisor, title: loc("interest.profile_title"),
-                subtitle: premiumMgr.canAccess(.aiAdvisor)
-                    ? loc("interest.profile_sub")
-                    : loc("profile.requires_royal"),
-                iconOverride: "heart.text.square.fill",
-                tintOverride: AppTheme.orange,
-                showPaywall: $showPaywall) { showInterests = true }
-
-            // Tidy and the spending audit moved off Statistics: that screen
-            // reports conclusions, and rewriting the rows behind them is a
-            // separate job. Gated as it was there — the audit only ever
-            // appeared inside the Royal-locked insights card.
-            PremiumLockedFeatureLink(
-                feature: .smartBudget, title: loc("cleanup.title"),
-                subtitle: premiumMgr.canAccess(.smartBudget)
-                    ? loc("cleanup.sub")
-                    : loc("profile.requires_royal"),
-                iconOverride: "wand.and.stars",
-                tintOverride: AppTheme.purple,
-                showPaywall: $showPaywall) { showCleanup = true }
-        }
-        .padding(16)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
-        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.green.opacity(0.18), lineWidth: 1))
-        .padding(.horizontal, 22)
     }
 
     /// What the screen is actually showing right now. While the mode is
@@ -834,22 +724,19 @@ struct ProfileView: View {
         appearanceMode == "dark" || (appearanceMode != "light" && colorScheme == .dark)
     }
 
-    @ViewBuilder
-    private var appearanceCard: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 12) {
-                Image(systemName: "circle.lefthalf.filled").font(.system(.body)).foregroundStyle(AppTheme.textPrimary)
-                    .frame(width: 36, height: 36)
-                    .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: AppRadius.sm))
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(loc("profile.appearance")).font(.system(.subheadline, weight: .medium)).foregroundStyle(AppTheme.textPrimary)
-                    Text(appearanceMode == "system" ? loc("appearance.following_system") : appearanceMode == "dark" ? loc("appearance.dark_mode") : loc("appearance.light_mode"))
-                        .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
-                }
-                Spacer()
-            }
-            Divider().background(AppTheme.cardMid).padding(.vertical, 10)
+    private var appearanceStatus: String {
+        switch appearanceMode {
+        case "system": return loc("appearance.following_system")
+        case "dark":   return loc("appearance.dark_mode")
+        default:       return loc("appearance.light_mode")
+        }
+    }
 
+    @ViewBuilder
+    private var appearanceBlock: some View {
+        VStack(spacing: 0) {
+            ListRow(icon: "circle.lefthalf.filled", tint: AppTheme.textPrimary,
+                    title: loc("profile.appearance"), subtitle: appearanceStatus)
             // The scene carries the two modes a switch can hold. Which side it
             // shows is always the truth about the screen, including while the
             // system is choosing — then it is muted, and a tap means "I'll take
@@ -862,18 +749,10 @@ struct ProfileView: View {
                 performAppearanceTransition(to: next)
             }
             .frame(maxWidth: .infinity)
-            .padding(.top, 2).padding(.bottom, 12)
-
+            .padding(.bottom, 2)
             // The third mode, as its own switch rather than a third position on
             // a two-position control.
-            HStack(spacing: 10) {
-                Image(systemName: "circle.lefthalf.filled")
-                    .font(.system(.footnote))
-                    .foregroundStyle(AppTheme.textSecondary)
-                Text(loc("appearance.system"))
-                    .font(.system(.subheadline))
-                    .foregroundStyle(AppTheme.textPrimary)
-                Spacer()
+            ListRow(icon: "iphone", tint: AppTheme.textSecondary, title: loc("appearance.system")) {
                 DiPoSwitch(isOn: Binding(
                     get: { appearanceMode == "system" },
                     set: { on in
@@ -884,41 +763,17 @@ struct ProfileView: View {
                         performAppearanceTransition(to: next)
                     }), onIcon: "gearshape.fill", offIcon: "hand.point.up.left.fill")
             }
-            .padding(.horizontal, 12).padding(.vertical, 10)
-            .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: AppRadius.md))
         }
-        .padding(16)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
-        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.textSecondary.opacity(0.12), lineWidth: 1))
-        .padding(.horizontal, 22)
-
-        // ── Language Toggle ──────────────────────────────────────────────
-        languageSection
-            .padding(.horizontal, 22)
-
-        voiceLanguageSection
-            .padding(.horizontal, 22)
     }
 
+    /// The choices below the title name the language, so the row doesn't
+    /// repeat it in a line of its own.
     @ViewBuilder
-    private var languageSection: some View {
-        // LanguageManager is @Observable — accessing it directly creates automatic dependency tracking
+    private var languageBlock: some View {
+        // LanguageManager is @Observable — reading it here tracks it.
         let lang = LanguageManager.shared
         VStack(spacing: 0) {
-            HStack(spacing: 12) {
-                Text("🌐")
-                    .font(.system(.body))
-                    .frame(width: 36, height: 36)
-                    .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: AppRadius.sm))
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(loc("profile.language"))
-                        .font(.system(.subheadline, weight: .medium)).foregroundStyle(AppTheme.textPrimary)
-                    Text(lang.current.flag + " " + lang.current.nativeName)
-                        .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
-                }
-                Spacer()
-            }
-            Divider().background(AppTheme.cardMid).padding(.vertical, 10)
+            ListRow(icon: "globe", tint: AppTheme.textPrimary, title: loc("profile.language"))
             SlidingSegments(options: LanguageManager.Language.allCases,
                             selection: lang.current,
                             onSelect: { LanguageManager.shared.current = $0 }) { language, on in
@@ -930,35 +785,19 @@ struct ProfileView: View {
                         .lineLimit(1).minimumScaleFactor(0.7)
                 }
             }
-
+            .padding([.horizontal, .bottom], ListRowMetrics.inset)
         }
-        .padding(16)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
-        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.textSecondary.opacity(0.12), lineWidth: 1))
-    }   // ← closing brace was missing, causing all subsequent vars to fall inside
+    }
 
-    /// Same control as the language card above it — a row of three choices —
-    /// because it is the same kind of decision. It was a menu tucked under the
-    /// language picker, which read as a detail of it rather than its own setting.
+    /// Same control as the language above it — a row of choices — because it
+    /// is the same kind of decision. It was a menu tucked under the language
+    /// picker, which read as a detail of it rather than its own setting.
     @ViewBuilder
-    private var voiceLanguageSection: some View {
+    private var voiceLanguageBlock: some View {
         let lang = LanguageManager.shared
         VStack(spacing: 0) {
-            HStack(spacing: 12) {
-                Image(systemName: "waveform")
-                    .font(.system(.body)).foregroundStyle(AppTheme.textPrimary)
-                    .frame(width: 36, height: 36)
-                    .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: AppRadius.sm))
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(loc("voice.lang_title"))
-                        .font(.system(.subheadline, weight: .medium)).foregroundStyle(AppTheme.textPrimary)
-                    Text(loc("voice.lang_sub"))
-                        .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                Spacer()
-            }
-            Divider().background(AppTheme.cardMid).padding(.vertical, 10)
+            ListRow(icon: "waveform", tint: AppTheme.textPrimary,
+                    title: loc("voice.lang_title"), subtitle: loc("voice.lang_sub"))
             SlidingSegments(options: VoiceLanguage.allCases,
                             selection: voiceLanguage,
                             onSelect: { voiceLanguage = $0; VoiceLanguage.saved = $0 }) { option, on in
@@ -981,61 +820,8 @@ struct ProfileView: View {
                 }
                 .accessibilityLabel(option.label)
             }
+            .padding([.horizontal, .bottom], ListRowMetrics.inset)
         }
-        .padding(16)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
-        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.textSecondary.opacity(0.12), lineWidth: 1))
-    }
-
-    @ViewBuilder
-    private var authButtonSection: some View {
-        Group {
-            if isSigningIn {
-                HStack(spacing: 10) {
-                    ProgressView().tint(AppTheme.accent)
-                    Text(loc("profile.signing_in")).font(.system(.subheadline)).foregroundStyle(AppTheme.textSecondary)
-                }
-                .frame(maxWidth: .infinity).padding(.vertical, 16)
-            } else {
-                let loggedIn = session.isLoggedIn
-                Button {
-                    HapticManager.shared.tap()
-                    if loggedIn { showSignOut = true } else { showSignInSheet = true }
-                } label: {
-                    HStack(spacing: 10) {
-                        Image(systemName: loggedIn ? "person.crop.circle.badge.xmark" : "person.crop.circle.badge.checkmark")
-                            .font(.system(.callout))
-                        Text(loggedIn ? loc("profile.logout") : loc("profile.login")).font(.system(.subheadline, weight: .medium))
-                    }
-                    .foregroundStyle(loggedIn ? AppTheme.red : AppTheme.accent)
-                    .frame(maxWidth: .infinity).padding(.vertical, 16)
-                    .background((loggedIn ? AppTheme.red : AppTheme.accent).opacity(0.08),
-                                in: RoundedRectangle(cornerRadius: AppRadius.md))
-                    .overlay(RoundedRectangle(cornerRadius: AppRadius.md)
-                        .stroke((loggedIn ? AppTheme.red : AppTheme.accent).opacity(0.25), lineWidth: 1))
-                }
-                .buttonStyle(ScaleButtonStyle())
-
-                // Account deletion. Deliberately understated (a text link, not a
-                // button) — it's irreversible — but always reachable, which the
-                // App Store requires for any app that creates accounts.
-                Button {
-                    HapticManager.shared.tap()
-                    showDeleteAccount = true
-                } label: {
-                    Text(loc("profile.delete"))
-                        .font(.system(.footnote, weight: .semibold))
-                        .foregroundStyle(AppTheme.red.opacity(0.85))
-                        .underline()
-                        .padding(.vertical, 6)
-                }
-                .buttonStyle(.plain)
-            }
-            if let err = loginError {
-                InlineBanner(tone: .error, message: err)
-            }
-        }
-        .padding(.horizontal, 22)
     }
 
     private func runDeleteAccount() {
@@ -1062,155 +848,106 @@ struct ProfileView: View {
 
     // MARK: - Backup / Restore Section
 
-    /// Two paired buttons that let the user save a snapshot of their entire
-    /// dataset to a JSON file (Backup) or replace local data with a previously
-    /// saved file (Restore). This is the recommended migration path when
-    /// changing devices since the app intentionally has no server-side mirror.
+    /// Save a snapshot of the entire dataset to a JSON file (Back up), or
+    /// replace local data with a saved one (Restore). This is the recommended
+    /// migration path when changing devices since the app intentionally has no
+    /// server-side mirror.
     @ViewBuilder
     private var backupSection: some View {
-        VStack(spacing: 10) {
-            // Reminder banner — surfaces ONLY when the user has data worth
-            // protecting but hasn't backed up recently. Solves the worst-case
-            // "user never exports → loses everything" failure mode without
-            // nagging users who don't need it.
-            if shouldShowBackupReminder {
-                Button {
-                    HapticManager.shared.tap()
-                    runExport()
-                } label: {
-                    HStack(spacing: 10) {
-                        Image(systemName: lastExportDate == nil ? "exclamationmark.circle.fill" : "clock.arrow.circlepath")
-                            .font(.system(.body))
-                            .foregroundStyle(AppTheme.orange)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(lastExportDate == nil
-                                 ? loc("backup.reminder.never_title")
-                                 : loc("backup.reminder.stale_title"))
-                                .font(.system(.footnote, weight: .semibold))
-                                .foregroundStyle(AppTheme.textPrimary)
-                            Text(backupReminderSubtitle)
-                                .font(.system(.caption2))
-                                .foregroundStyle(AppTheme.textSecondary)
-                                .multilineTextAlignment(.leading)
-                                .fixedSize(horizontal: false, vertical: true)
+        // Backups are tied to the logged-in user (each export embeds `userID`,
+        // each import checks it). Every row waits for sign-in, so the user
+        // can't even attempt an operation that would just throw `.notLoggedIn`.
+        let isLoggedIn = session.isLoggedIn
+        let isDisabled = backupBusyLabel != nil || !isLoggedIn
+        VStack(alignment: .leading, spacing: 10) {
+            ListSection(loc("backup.section_title")) {
+                // Reminder — surfaces ONLY when the user has data worth
+                // protecting but hasn't backed up recently. Solves the
+                // worst-case "user never exports → loses everything" failure
+                // mode without nagging users who don't need it.
+                if shouldShowBackupReminder {
+                    Button {
+                        HapticManager.shared.tap()
+                        runExport()
+                    } label: {
+                        ListRow(icon: lastExportDate == nil ? "exclamationmark.circle.fill" : "clock.arrow.circlepath",
+                                tint: AppTheme.orange,
+                                title: lastExportDate == nil
+                                    ? loc("backup.reminder.never_title")
+                                    : loc("backup.reminder.stale_title"),
+                                subtitle: backupReminderSubtitle) {
+                            ListChevron()
                         }
-                        Spacer()
-                        Image(systemName: "chevron.right")
-                            .font(.system(.caption2, weight: .semibold))
-                            .foregroundStyle(AppTheme.textSecondary)
+                        .opacity(isDisabled ? 0.5 : 1)
                     }
-                    .padding(12)
-                    .background(AppTheme.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: AppRadius.sm))
-                    .overlay(RoundedRectangle(cornerRadius: AppRadius.sm).stroke(AppTheme.orange.opacity(0.3), lineWidth: 1))
+                    .buttonStyle(.plain)
+                    .disabled(isDisabled)
+                    ListDivider()
                 }
-                .buttonStyle(ScaleButtonStyle())
-            }
-
-            // Section header so users understand what they're touching
-            HStack(spacing: 6) {
-                Image(systemName: "externaldrive.fill")
-                    .font(.system(.caption))
-                    .foregroundStyle(AppTheme.textSecondary)
-                Text(loc("backup.section_title"))
-                    .font(.system(.caption, weight: .semibold))
-                    .foregroundStyle(AppTheme.textSecondary)
-                Spacer()
-            }
-
-            HStack(spacing: 10) {
-                // Backups are tied to the logged-in user (each export
-                // embeds `userID`, each import checks it). Gate both
-                // buttons behind login so the user can't even attempt an
-                // operation that would just throw `.notLoggedIn`.
-                let isLoggedIn = UserSession.shared.isLoggedIn
-                let isDisabled = backupBusyLabel != nil || !isLoggedIn
-                // Export
                 Button {
                     HapticManager.shared.tap()
                     runExport()
                 } label: {
-                    HStack(spacing: 8) {
-                        Image(systemName: "square.and.arrow.up").font(.system(.subheadline, weight: .semibold))
-                        Text(loc("backup.export")).font(.system(.subheadline, weight: .semibold))
+                    ListRow(icon: "square.and.arrow.up", tint: AppTheme.accent, title: loc("backup.export")) {
+                        ListChevron()
                     }
-                    .foregroundStyle(AppTheme.accent)
-                    .frame(maxWidth: .infinity).padding(.vertical, 14)
-                    .background(AppTheme.accent.opacity(0.1), in: RoundedRectangle(cornerRadius: AppRadius.md))
-                    .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.accent.opacity(0.25), lineWidth: 1))
                     .opacity(isDisabled ? 0.5 : 1)
                 }
-                .buttonStyle(ScaleButtonStyle())
+                .buttonStyle(.plain)
                 .disabled(isDisabled)
-
-                // Import
+                ListDivider()
                 Button {
                     HapticManager.shared.tap()
                     showImportPicker = true
                 } label: {
-                    HStack(spacing: 8) {
-                        Image(systemName: "square.and.arrow.down").font(.system(.subheadline, weight: .semibold))
-                        Text(loc("backup.import")).font(.system(.subheadline, weight: .semibold))
+                    ListRow(icon: "square.and.arrow.down", tint: AppTheme.blue, title: loc("backup.import")) {
+                        ListChevron()
                     }
-                    .foregroundStyle(AppTheme.blue)
-                    .frame(maxWidth: .infinity).padding(.vertical, 14)
-                    .background(AppTheme.blue.opacity(0.1), in: RoundedRectangle(cornerRadius: AppRadius.md))
-                    .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.blue.opacity(0.25), lineWidth: 1))
                     .opacity(isDisabled ? 0.5 : 1)
                 }
-                .buttonStyle(ScaleButtonStyle())
+                .buttonStyle(.plain)
                 .disabled(isDisabled)
             }
 
-            // DiPo's own daily copies (DiPo/AutoBackup.swift). Restoring one
-            // goes through the same preview → confirm steps as a picked file.
-            if UserSession.shared.isLoggedIn, let latest = autoBackups.first {
-                HStack(spacing: 8) {
-                    Image(systemName: "clock.arrow.circlepath")
-                        .font(.system(.caption))
-                        .foregroundStyle(AppTheme.textSecondary)
-                    Text(String(format: loc("backup.auto.last"), Self.autoBackupDate(latest.date)))
-                        .font(.system(.caption, weight: .medium))
-                        .foregroundStyle(AppTheme.textSecondary)
-                    Spacer()
-                    Menu {
-                        ForEach(autoBackups) { entry in
-                            Button {
-                                previewAutoBackup(entry)
-                            } label: {
-                                Text(entry.reason == .beforeRestore
-                                     ? String(format: loc("backup.auto.before_restore"), Self.autoBackupDate(entry.date))
-                                     : Self.autoBackupDate(entry.date))
+            Group {
+                // DiPo's own daily copies (DiPo/AutoBackup.swift). Restoring one
+                // goes through the same preview → confirm steps as a picked file.
+                if isLoggedIn, let latest = autoBackups.first {
+                    HStack(spacing: 8) {
+                        Text(String(format: loc("backup.auto.last"), Self.autoBackupDate(latest.date)))
+                            .font(.system(.caption, weight: .medium))
+                            .foregroundStyle(AppTheme.textSecondary)
+                        Spacer()
+                        Menu {
+                            ForEach(autoBackups) { entry in
+                                Button {
+                                    previewAutoBackup(entry)
+                                } label: {
+                                    Text(entry.reason == .beforeRestore
+                                         ? String(format: loc("backup.auto.before_restore"), Self.autoBackupDate(entry.date))
+                                         : Self.autoBackupDate(entry.date))
+                                }
                             }
+                        } label: {
+                            Text(loc("backup.auto.restore"))
+                                .font(.system(.caption, weight: .semibold))
+                                .foregroundStyle(AppTheme.textPrimary)
                         }
-                    } label: {
-                        Text(loc("backup.auto.restore"))
-                            .font(.system(.caption, weight: .semibold))
-                            .foregroundStyle(AppTheme.blue)
+                        .disabled(backupBusyLabel != nil)
                     }
-                    .disabled(backupBusyLabel != nil)
+                    Text(loc("backup.auto.note"))
                 }
-                Text(loc("backup.auto.note"))
-                    .font(.system(.caption2))
-                    .foregroundStyle(AppTheme.textSecondary.opacity(0.8))
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                if !isLoggedIn {
+                    // Says why the rows are dimmed instead of leaving the user
+                    // to wonder. Not an error, so not red.
+                    Text(loc("backup.login_required"))
+                }
+                Text(loc("backup.subtitle"))
             }
-
-            if !UserSession.shared.isLoggedIn {
-                // Tell the user why the buttons are dimmed instead of
-                // letting them silently wonder. Subtle inline hint —
-                // matches existing `backup.subtitle` styling.
-                Text(loc("backup.login_required"))
-                    .font(.system(.caption2, weight: .medium))
-                    .foregroundStyle(AppTheme.red.opacity(0.85))
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: .infinity)
-            }
-
-            Text(loc("backup.subtitle"))
-                .font(.system(.caption2))
-                .foregroundStyle(AppTheme.textSecondary.opacity(0.8))
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: .infinity)
+            .font(.system(.caption2))
+            .foregroundStyle(AppTheme.textSecondary)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, 4)
 
             if let toast = backupToast {
                 // Tone comes from the banner's own flag, set by whichever path
@@ -1220,61 +957,36 @@ struct ProfileView: View {
                 InlineBanner(tone: toast.isError ? .error : .success, message: toast.message)
             }
         }
-        .padding(.horizontal, 22)
     }
 
-    @ViewBuilder
-    private var resetButton: some View {
-        Button { HapticManager.shared.warning(); showResetConfirm = true } label: {
-            HStack(spacing: 10) {
-                Image(systemName: "trash.fill").font(.system(.callout))
-                Text(loc("profile.reset_all")).font(.system(.subheadline, weight: .medium))
-            }
-            .foregroundStyle(AppTheme.red).frame(maxWidth: .infinity).padding(.vertical, 16)
-            .background(AppTheme.red.opacity(0.08), in: RoundedRectangle(cornerRadius: AppRadius.md))
-            .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.red.opacity(0.25), lineWidth: 1))
-        }
-        .buttonStyle(ScaleButtonStyle()).padding(.horizontal, 22)
-    }
+    // MARK: - Help
 
+    /// Support requires both login AND an email on file — the email is how
+    /// we reply. Signed in without one, the row asks for the email first.
     @ViewBuilder
-    private var supportSection: some View {
-        // Support requires both login AND an email on file — the email is how
-        // we reply. When logged in but email is missing, the row is DISABLED
-        // and points the user to set their email first.
+    private var helpSection: some View {
         let needsEmail = session.isLoggedIn && (session.email ?? "").isEmpty
-        VStack(spacing: 12) {
+        ListSection(loc("plan.section_help")) {
             if needsEmail {
                 Button {
                     HapticManager.shared.tap()
                     emailText = ""
                     showEmailEdit = true
                 } label: {
-                    HStack(spacing: 14) {
-                        Image(systemName: "headphones.circle.fill")
-                            .font(.system(.body)).foregroundStyle(AppTheme.textSecondary)
-                            .frame(width: 36, height: 36)
-                            .background(AppTheme.textSecondary.opacity(0.12), in: RoundedRectangle(cornerRadius: AppRadius.sm))
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(loc("profile.support"))
-                                .font(.system(.subheadline, weight: .medium)).foregroundStyle(AppTheme.textSecondary)
-                            Text(loc("profile.support_needs_email"))
-                                .font(.system(.caption)).foregroundStyle(AppTheme.orange)
-                        }
-                        Spacer()
-                        Image(systemName: "lock.fill").font(.system(.footnote)).foregroundStyle(AppTheme.textSecondary)
+                    ListRow(icon: "headphones.circle.fill", tint: AppTheme.textSecondary,
+                            title: loc("profile.support"),
+                            subtitle: loc("profile.support_needs_email"),
+                            subtitleTint: AppTheme.orange) {
+                        ListChevron()
                     }
-                    .padding(14)
-                    .background(AppTheme.cardDark.opacity(0.6), in: RoundedRectangle(cornerRadius: AppRadius.md))
-                    .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.orange.opacity(0.2), lineWidth: 1))
                 }
-                .buttonStyle(ScaleButtonStyle())
+                .buttonStyle(.plain)
             } else {
                 ProfileFeatureLink(icon: "headphones.circle.fill", color: AppTheme.blue,
                                    title: loc("profile.support"),
                                    subtitle: loc("profile.subcs")) {
-                    // ✅ Require login before opening support — Firestore rules
-                    // need request.auth != null to allow writes.
+                    // Signed in before support opens: Firestore rules need
+                    // request.auth != null to allow writes.
                     if session.isLoggedIn {
                         showContact = true
                     } else {
@@ -1284,7 +996,55 @@ struct ProfileView: View {
                 }
             }
         }
-        .padding(.horizontal, 22)
+    }
+
+    // MARK: - Leaving
+
+    /// At the end of the screen, where they can't be hit on the way to
+    /// something else: sign out (the data stays on this phone), erase this
+    /// phone's data, and delete the account.
+    @ViewBuilder
+    private var leaveSection: some View {
+        VStack(spacing: 12) {
+            ListSection {
+                if session.isLoggedIn {
+                    Button {
+                        HapticManager.shared.tap()
+                        showSignOut = true
+                    } label: {
+                        ListButtonLabel(title: loc("profile.logout"))
+                    }
+                    .buttonStyle(.plain)
+                    ListDivider(flush: true)
+                }
+                Button {
+                    HapticManager.shared.warning()
+                    showResetConfirm = true
+                } label: {
+                    ListButtonLabel(title: loc("profile.reset_all"))
+                }
+                .buttonStyle(.plain)
+            }
+            // Account deletion. Deliberately understated (a text link, not a
+            // button) — it's irreversible — but always there while signed in,
+            // which the App Store requires for any app that creates accounts.
+            // Signed out there is no account here to delete: the link only
+            // ever ended in "Not signed in."
+            if session.isLoggedIn {
+                Button {
+                    HapticManager.shared.tap()
+                    showDeleteAccount = true
+                } label: {
+                    Text(loc("profile.delete"))
+                        .font(.system(.footnote, weight: .semibold))
+                        .foregroundStyle(AppTheme.red.opacity(0.85))
+                        .underline()
+                        .padding(.vertical, 6)
+                }
+                .buttonStyle(.plain)
+                .frame(maxWidth: .infinity)
+            }
+        }
     }
 
     // MARK: - Actions
