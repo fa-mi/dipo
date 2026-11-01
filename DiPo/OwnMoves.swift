@@ -60,6 +60,29 @@ enum OwnMoves {
         return best.map { ($0.card, $0.tx) }
     }
 
+    /// For the cover walk (CoverTimeline): the card a move into `scope` came
+    /// from, by its short name ("BRI ••0969"), when that card is outside
+    /// `scope`. Nil for a move between `scope`'s own cards, which cancels out,
+    /// and for one whose other leg can't be found.
+    ///
+    /// Cheap until a move comes in: Statistics builds its cash book on every
+    /// render, and most periods have no move to look up.
+    static func arrivals(into scope: [BankCard], cards: [BankCard]) -> (TxRecord) -> String? {
+        let scopeIDs = Set(scope.map(\.id))
+        var owner: [UUID: UUID]? = nil
+        return { tx in
+            guard tx.amount > 0, tx.txSubtype == .transfer, tx.icon == "⇄" else { return nil }
+            if owner == nil {
+                var built: [UUID: UUID] = [:]
+                for card in scope { for row in card.transactions { built[row.id] = card.id } }
+                owner = built
+            }
+            guard let pair = counterpart(of: tx, ownCardID: owner?[tx.id], in: cards),
+                  !scopeIDs.contains(pair.card.id) else { return nil }
+            return pair.card.shortName(among: cards)
+        }
+    }
+
     /// Money in on `card` in the week up to `move` (same day included):
     /// anything that isn't itself a move between own cards. Largest first.
     static func sources(before move: TxRecord, on card: BankCard,

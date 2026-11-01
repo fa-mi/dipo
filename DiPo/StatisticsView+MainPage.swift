@@ -350,7 +350,8 @@ extension StatisticsView {
     /// Nil without a card to read a balance from.
     var cashBook: PeriodCashBook? {
         guard let start = periodStartBalance else { return nil }
-        var book = PeriodCashBook.build(filteredTx, start: start, convert: convertedAmount)
+        var book = PeriodCashBook.build(filteredTx, start: start, convert: convertedAmount,
+                                        movedFrom: OwnMoves.arrivals(into: scopeCards, cards: appVM.cards))
         book.extraFunds = periodExtraFunds
         return book
     }

@@ -36,8 +36,9 @@ enum WebPeriodView {
     /// Statistics' `cashBook` for a caller that is not the screen: the pot's
     /// balance when the cycle opened, every row in it since, and the money in
     /// the person added to this period's budget. `pot` is the main card first,
-    /// then the cards it pays bills from.
-    static func book(pot: [BankCard], from start: Date, to end: Date, currency: String,
+    /// then the cards it pays bills from; `cards` is every card, so money moved
+    /// in from one outside the pot is named where it came from.
+    static func book(pot: [BankCard], cards: [BankCard] = [], from start: Date, to end: Date, currency: String,
                      extraIDs: [String] = SmartBudgetManager.shared.extraFundTxIDs) -> PeriodCashBook? {
         guard let main = pot.first else { return nil }
         let convert = converter(main: main, currency: currency)
@@ -50,7 +51,8 @@ enum WebPeriodView {
             return sum + seed + before
         }
         let window = pot.flatMap(\.transactions).filter { $0.date >= start && $0.date <= end }
-        var book = PeriodCashBook.build(window, start: opening, convert: convert)
+        var book = PeriodCashBook.build(window, start: opening, convert: convert,
+                                        movedFrom: OwnMoves.arrivals(into: pot, cards: cards))
         book.extraFunds = ExtraFunds.total(in: window, from: .distantPast, currency: currency, ids: extraIDs)
         return book
     }
@@ -59,7 +61,7 @@ enum WebPeriodView {
     static func payload(pot: [BankCard], cards: [BankCard], cycle: Cycle, currency: String,
                         extraIDs: [String] = SmartBudgetManager.shared.extraFundTxIDs) -> [String: Any]? {
         guard let main = pot.first,
-              let book = Self.book(pot: pot, from: cycle.start, to: cycle.now, currency: currency,
+              let book = Self.book(pot: pot, cards: cards, from: cycle.start, to: cycle.now, currency: currency,
                                    extraIDs: extraIDs)
         else { return nil }
 
