@@ -1,7 +1,8 @@
 import XCTest
 @testable import DiPo
 
-/// The wallet's pocket: what the cards add up to, printed on the pocket.
+/// The wallet's pockets: which card goes in which, and what the cards add up
+/// to, printed on each pocket.
 @MainActor
 final class WalletPocketTests: XCTestCase {
 
@@ -53,9 +54,51 @@ final class WalletPocketTests: XCTestCase {
         XCTAssertEqual(totals.cash, [.init(currency: "IDR", value: -200_000)])
     }
 
+    // MARK: Two pockets
+
+    private func issued(_ issuer: String, wallet: Bool = false) -> BankCard {
+        let c = card(100_000)
+        c.issuerID = issuer
+        c.isDigitalWallet = wallet
+        return c
+    }
+
+    /// Digital banks and e-wallets share a pocket. Every other bank, and a
+    /// card whose bank DiPo doesn't know, goes in the conventional one.
+    func testCardsSortIntoTheirPockets() {
+        XCTAssertEqual(WalletPocketKind.of(issued("jago")), .digital)
+        XCTAssertEqual(WalletPocketKind.of(issued("seabank")), .digital)
+        XCTAssertEqual(WalletPocketKind.of(issued("blu")), .digital)
+        XCTAssertEqual(WalletPocketKind.of(issued("", wallet: true)), .digital, "an e-wallet")
+        XCTAssertEqual(WalletPocketKind.of(issued("bri")), .conventional)
+        XCTAssertEqual(WalletPocketKind.of(issued("bca")), .conventional)
+        XCTAssertEqual(WalletPocketKind.of(issued("")), .conventional, "a bank DiPo doesn't know")
+    }
+
+    /// Every digital bank named is one the card form offers: a typo would
+    /// quietly send its cards to the other pocket.
+    func testEveryDigitalBankIsAKnownIssuer() {
+        let known = Set(BankIssuer.all.map(\.id))
+        XCTAssertTrue(WalletPocketKind.digitalBanks.isSubset(of: known),
+                      "\(WalletPocketKind.digitalBanks.subtracting(known))")
+    }
+
+    /// Only a pocket that holds a card is shown, conventional first, and
+    /// every card is in exactly one, in the wallet's order.
+    func testPocketsHoldEveryCardOnce() {
+        let bri = issued("bri"), jago = issued("jago"), dana = issued("", wallet: true), bca = issued("bca")
+        let groups = WalletPocketKind.groups([jago, bri, dana, bca])
+        XCTAssertEqual(groups.map(\.kind), [.conventional, .digital])
+        XCTAssertEqual(groups[0].cards.map(\.id), [bri.id, bca.id])
+        XCTAssertEqual(groups[1].cards.map(\.id), [jago.id, dana.id])
+        XCTAssertEqual(WalletPocketKind.groups([dana]).map(\.kind), [.digital])
+        XCTAssertTrue(WalletPocketKind.groups([]).isEmpty)
+    }
+
     func testTheWalletsWordsInBothLanguages() {
         let keys = ["wallet.total_cash", "wallet.cc_bills", "wallet.tap_hint", "wallet.recent",
-                    "wallet.act_main", "wallet.act_match"]
+                    "wallet.act_main", "wallet.act_match", "wallet.pocket_conventional",
+                    "wallet.pocket_digital"]
         for language in [LanguageManager.Language.english, .indonesian] {
             LanguageManager.shared.withLanguage(language) {
                 for key in keys { XCTAssertNotEqual(loc(key), key, "\(key) in \(language)") }

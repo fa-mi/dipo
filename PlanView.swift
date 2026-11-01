@@ -150,8 +150,11 @@ struct PlanView: View {
 
     // MARK: Status lines — what each feature would tell you if you opened it
 
+    // A locked feature says what it does, not that it is locked: the Royal
+    // mark at the row's end says that once.
+
     private var budgetStatus: String {
-        guard pm.canAccess(.smartBudget) else { return loc("profile.requires_royal") }
+        guard pm.canAccess(.smartBudget) else { return PremiumFeature.smartBudget.description }
         return budget.isEnabled ? loc("profile.budget_active") : loc("budget.off")
     }
 
@@ -179,7 +182,7 @@ struct PlanView: View {
     }
 
     private var investStatus: String {
-        guard pm.canAccess(.investments) else { return loc("profile.requires_royal") }
+        guard pm.canAccess(.investments) else { return PremiumFeature.investments.description }
         guard !holdings.isEmpty else { return loc("invest.status.empty") }
         let cm = CurrencyManager.shared
         let pref = cm.preferredCurrency
@@ -193,13 +196,13 @@ struct PlanView: View {
     }
 
     private var debtsStatus: String {
-        guard pm.canAccess(.smartDebt) else { return loc("profile.requires_royal") }
+        guard pm.canAccess(.smartDebt) else { return loc("oblig.entry_sub") }
         let active = debts.filter(\.isActive).count
         return active > 0 ? String(format: loc("wallet.debts_status"), active) : loc("oblig.entry_sub")
     }
 
     private var assetsStatus: String {
-        guard pm.canAccess(.assets) else { return loc("profile.requires_royal") }
+        guard pm.canAccess(.assets) else { return PremiumFeature.assets.description }
         guard !physicalAssets.isEmpty else { return loc("asset.status.empty") }
         let pref = CurrencyManager.shared.preferredCurrency
         let total = AssetSummary.of(physicalAssets, currency: pref).totalValue
@@ -233,7 +236,7 @@ struct PlanView: View {
         var names: [String] = []
         if folded.contains(.investments) { names.append(loc("premium.feature.investments")) }
         if folded.contains(.assets) { names.append(loc("premium.feature.assets")) }
-        return VStack(spacing: 0) {
+        return ListSection {
             Button {
                 HapticManager.shared.tap()
                 withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) { moreOpen.toggle() }
@@ -255,24 +258,15 @@ struct PlanView: View {
                 }
             }
         }
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
     }
 
     // MARK: Building blocks
 
     private func section<Rows: View>(_ title: String, @ViewBuilder rows: () -> Rows) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(title)
-                .font(.system(.body, weight: .bold))
-                .foregroundStyle(AppTheme.textPrimary)
-            VStack(spacing: 0) { rows() }
-                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
-        }
+        ListSection(title, rows: rows)
     }
 
-    private var divider: some View {
-        Rectangle().fill(AppTheme.cardMid.opacity(0.7)).frame(height: 1).padding(.leading, 68)
-    }
+    private var divider: some View { ListDivider() }
 
     /// `needsSignIn`: the feature is free with an account, so tapping it
     /// signed out opens sign-in rather than the paywall.
@@ -298,15 +292,16 @@ struct PlanView: View {
         } label: {
             PlanRowLabel(icon: "sparkles", tint: AppTheme.purple,
                          title: loc("profile.ai_advisor"),
-                         status: locked ? loc("profile.requires_royal") : loc("profile.ai_advisor_sub"),
+                         status: loc("profile.ai_advisor_sub"),
                          lockedPlan: locked ? PremiumFeature.aiAdvisor.requiredPlan : nil)
         }
         .buttonStyle(.plain)
     }
 }
 
-/// One feature row: icon tile, name, a live status line, and a chevron — or the
-/// plan it needs, when it is locked.
+/// One feature row: its icon, name, a live status line, and a chevron — or,
+/// when it is locked, the plan it needs. The icon keeps its colour either way:
+/// the Royal mark is the one thing that says a row is locked.
 struct PlanRowLabel: View {
     let icon: String
     let tint: Color
@@ -317,24 +312,7 @@ struct PlanRowLabel: View {
     var disclosure: Bool? = nil
 
     var body: some View {
-        HStack(spacing: 14) {
-            Image(systemName: icon)
-                .font(.system(.body, weight: .semibold))
-                .foregroundStyle(lockedPlan == nil ? tint : AppTheme.textSecondary)
-                .frame(width: 40, height: 40)
-                .background((lockedPlan == nil ? tint : AppTheme.textSecondary).opacity(0.14),
-                            in: RoundedRectangle(cornerRadius: AppRadius.sm))
-            VStack(alignment: .leading, spacing: 3) {
-                Text(title)
-                    .font(.system(.subheadline, weight: .semibold))
-                    .foregroundStyle(AppTheme.textPrimary)
-                Text(status)
-                    .font(.system(.caption))
-                    .foregroundStyle(AppTheme.textSecondary)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.leading)
-            }
-            Spacer(minLength: 8)
+        ListRow(icon: icon, tint: tint, title: title, subtitle: status) {
             if let plan = lockedPlan {
                 PlanBadge(plan: plan)
             } else if let open = disclosure {
@@ -343,17 +321,14 @@ struct PlanRowLabel: View {
                     .foregroundStyle(AppTheme.textSecondary)
                     .rotationEffect(.degrees(open ? 180 : 0))
             } else {
-                Image(systemName: "chevron.right")
-                    .font(.system(.caption, weight: .semibold))
-                    .foregroundStyle(AppTheme.textSecondary)
+                ListChevron()
             }
         }
-        .padding(.horizontal, 14).padding(.vertical, 14)
-        .contentShape(Rectangle())
     }
 }
 
-/// The plan a locked thing needs, in place of its chevron.
+/// The plan a locked thing needs, in place of its chevron: the crown and the
+/// plan's name in its colour, with nothing behind them.
 struct PlanBadge: View {
     let plan: PremiumPlan
 
@@ -362,10 +337,8 @@ struct PlanBadge: View {
             Image(systemName: plan.icon).imageScale(.small)
             Text(plan.label)
         }
-        .font(.system(.caption2, weight: .bold))
+        .font(.system(.caption, weight: .bold))
         .foregroundStyle(plan.color)
-        .padding(.horizontal, 7).padding(.vertical, 3)
-        .background(plan.color.opacity(0.12), in: Capsule())
         .fixedSize()
     }
 }

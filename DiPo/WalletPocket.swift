@@ -10,6 +10,140 @@ import SwiftUI
 //
 // Tapping a card pulls it out: its whole face, what can be done with it, and
 // its latest entries, in a sheet (`WalletCardSheet`).
+//
+// There are two pockets, swiped between: one for conventional banks, one for
+// digital banks and e-wallets (`WalletPockets`). The pocket is dark leather in
+// both themes, the cards sit inside it with its lining showing at their sides,
+// as in a card holder.
+
+// MARK: - Two pockets
+
+/// Which pocket a card sits in: digital banks and e-wallets in one, every
+/// other bank in the other. Read from what the card already knows — its bank,
+/// or that it is an e-wallet — so nothing new is stored, and a card whose bank
+/// DiPo doesn't know goes with the conventional banks, where most cards are.
+enum WalletPocketKind: String, CaseIterable, Identifiable {
+    case conventional, digital
+
+    var id: String { rawValue }
+
+    /// Banks that are digital banks, by `BankIssuer` id: an app is the bank,
+    /// with no branches. Jenius is BTPN's digital bank.
+    static let digitalBanks: Set<String> = ["jago", "seabank", "blu", "allo", "linebank", "neo", "jenius"]
+
+    static func of(_ card: BankCard) -> WalletPocketKind {
+        if card.isDigitalWallet { return .digital }
+        return digitalBanks.contains(card.issuerID) ? .digital : .conventional
+    }
+
+    var title: String {
+        loc(self == .conventional ? "wallet.pocket_conventional" : "wallet.pocket_digital")
+    }
+
+    /// The pockets that hold a card, conventional first, in the wallet's order.
+    static func groups(_ cards: [BankCard]) -> [WalletPocketGroup] {
+        allCases.compactMap { kind in
+            let held = cards.filter { of($0) == kind }
+            return held.isEmpty ? nil : WalletPocketGroup(kind: kind, cards: held)
+        }
+    }
+}
+
+struct WalletPocketGroup: Identifiable {
+    let kind: WalletPocketKind
+    let cards: [BankCard]
+    var id: WalletPocketKind { kind }
+}
+
+/// The pockets side by side, swiped between. The names above say which one is
+/// in front, and a tap on the other brings it forward the way a swipe does. As
+/// a pocket slides away it shrinks a little toward its foot and its cards sink
+/// into it; the arriving pocket's cards rise.
+struct WalletPockets: View {
+    let cards: [BankCard]
+    var onOpen: (BankCard) -> Void
+
+    /// The pocket in front. Nil until the first swipe or tap: the first one.
+    @State private var shown: WalletPocketKind?
+    @Namespace private var underline
+
+    private static let move = Animation.spring(response: 0.42, dampingFraction: 0.86)
+
+    var body: some View {
+        let groups = WalletPocketKind.groups(cards)
+        // A pocket emptied by a deletion falls back to the first.
+        let current = groups.first { $0.kind == shown }?.kind ?? groups.first?.kind
+        VStack(alignment: .leading, spacing: 16) {
+            if groups.count > 1 {
+                tabs(groups.map(\.kind), current: current)
+                    .padding(.horizontal, 22)
+            }
+            ScrollView(.horizontal) {
+                // Bottom-aligned: the pockets stand side by side, so one with
+                // fewer cards is shorter at the top and its total stays level
+                // with the other's.
+                HStack(alignment: .bottom, spacing: 0) {
+                    ForEach(groups) { group in
+                        WalletPocket(cards: group.cards, onOpen: onOpen)
+                            .padding(.horizontal, 22)
+                            .containerRelativeFrame(.horizontal)
+                            .scrollTransition(.interactive, axis: .horizontal) { content, phase in
+                                content.scaleEffect(CGFloat(1 - 0.05 * abs(phase.value)), anchor: .bottom)
+                            }
+                    }
+                }
+                .scrollTargetLayout()
+                // Room inside the scroll view, which clips, for the top card's
+                // shadow and the pocket's own on the page, taken back outside
+                // so the layout doesn't move.
+                .padding(.top, Self.shadowRoom.top)
+                .padding(.bottom, Self.shadowRoom.bottom)
+            }
+            .scrollTargetBehavior(.paging)
+            .scrollIndicators(.hidden)
+            .scrollPosition(id: $shown)
+            .scrollDisabled(groups.count < 2)
+            .padding(.top, -Self.shadowRoom.top)
+            .padding(.bottom, -Self.shadowRoom.bottom)
+        }
+    }
+
+    private static let shadowRoom = (top: CGFloat(8), bottom: CGFloat(22))
+
+    /// The pockets by name, the one in front in ink and underlined.
+    private func tabs(_ kinds: [WalletPocketKind], current: WalletPocketKind?) -> some View {
+        HStack(spacing: 20) {
+            ForEach(kinds) { kind in
+                let on = kind == current
+                Button {
+                    guard !on else { return }
+                    HapticManager.shared.tap()
+                    withAnimation(Self.move) { shown = kind }
+                } label: {
+                    Text(kind.title)
+                        .font(.system(.subheadline, weight: .semibold))
+                        .foregroundStyle(on ? AppTheme.textPrimary : AppTheme.textSecondary)
+                        .lineLimit(1).minimumScaleFactor(0.75)
+                        .padding(.bottom, 7)
+                        .overlay(alignment: .bottom) {
+                            if on {
+                                Capsule()
+                                    .fill(AppTheme.textPrimary)
+                                    .frame(height: 2)
+                                    .matchedGeometryEffect(id: "underline", in: underline)
+                            }
+                        }
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(on ? .isSelected : [])
+            }
+        }
+        .animation(Self.move, value: current)
+    }
+}
+
+// MARK: - One pocket
 
 struct WalletPocket: View {
     let cards: [BankCard]
@@ -20,8 +154,16 @@ struct WalletPocket: View {
     @ScaledMetric(relativeTo: .headline) private var strip: CGFloat = 64
     /// How much of the front card shows above the pocket's sides.
     @ScaledMetric(relativeTo: .headline) private var front: CGFloat = 104
-    /// How far the pocket's lip dips in the middle.
-    static let dip: CGFloat = 26
+    @Environment(\.colorScheme) private var colorScheme
+    /// How far the pocket's lip dips in the middle: a thumb notch.
+    static let dip: CGFloat = 18
+    /// How far the cards sit in from the pocket's sides, so its lining shows
+    /// beside them.
+    static let inset: CGFloat = 12
+    /// The pocket's corners, lining and front alike.
+    static let corner: CGFloat = 20
+    /// How far the cards sink into a pocket that is sliding away.
+    static let sink: CGFloat = 26
 
     private var stackHeight: CGFloat { CGFloat(max(cards.count - 1, 0)) * strip + front }
 
@@ -40,14 +182,28 @@ struct WalletPocket: View {
                     .zIndex(Double(i))
                 }
             }
+            .padding(.horizontal, Self.inset)
+            .scrollTransition(.interactive, axis: .horizontal) { content, phase in
+                content.offset(y: CGFloat(abs(phase.value)) * Self.sink)
+            }
             // The front card runs on under the pocket; it ends at the lip's
-            // lowest point, so a short pocket never shows its lower edge. The
-            // mask reaches past the sides and the top to keep the shadows.
+            // lowest point, so a short pocket never shows its lower edge, and
+            // a card sinking in disappears behind the front. The mask reaches
+            // past the sides and the top to keep the shadows.
             .frame(height: stackHeight + Self.dip, alignment: .top)
             .mask { Rectangle().padding(.horizontal, -24).padding(.top, -24) }
 
             WalletPocketFace(totals: Self.totals(of: cards, preferred: CurrencyManager.shared.preferredCurrency))
                 .padding(.top, -Self.dip)
+        }
+        // The lining, behind the cards from just under the first one's name
+        // down to the front, whose corners it shares. Dark in both themes, so
+        // in the light one it casts a soft shadow on the page.
+        .background(alignment: .top) {
+            RoundedRectangle(cornerRadius: Self.corner, style: .continuous)
+                .fill(AppTheme.flowGround)
+                .padding(.top, strip * 0.55)
+                .shadow(color: .black.opacity(colorScheme == .dark ? 0 : 0.16), radius: 12, y: 6)
         }
     }
 
@@ -121,16 +277,19 @@ struct WalletPocketCard: View {
 
 // MARK: - The pocket
 
-/// The pocket's face: the total cash, and what the credit cards owe.
+/// The pocket's face: the total cash, and what the credit cards owe. The
+/// pocket is dark in both themes, so its words are white.
 struct WalletPocketFace: View {
     let totals: (cash: [WalletPocket.Amount], bills: [WalletPocket.Amount])
-    @Environment(\.colorScheme) private var colorScheme
+
+    /// A label on the pocket.
+    private var quiet: Color { Color.white.opacity(0.62) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text(loc("wallet.total_cash"))
                 .font(.system(.footnote))
-                .foregroundStyle(AppTheme.textSecondary)
+                .foregroundStyle(quiet)
             if totals.cash.isEmpty {
                 figure(WalletPocket.Amount(currency: CurrencyManager.shared.preferredCurrency, value: 0), lead: true)
             }
@@ -138,43 +297,50 @@ struct WalletPocketFace: View {
                 figure(item, lead: i == 0)
             }
             if !totals.bills.isEmpty {
-                Rectangle().fill(AppTheme.cardMid).frame(height: 1).padding(.top, 12)
+                Rectangle().fill(Color.white.opacity(0.1)).frame(height: 1).padding(.top, 12)
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text(loc("wallet.cc_bills"))
                         .font(.system(.footnote))
-                        .foregroundStyle(AppTheme.textSecondary)
+                        .foregroundStyle(quiet)
                     Spacer(minLength: 8)
                     Text(totals.bills.map { CurrencyManager.shared.formatted($0.value, currency: $0.currency) }
                         .joined(separator: " · "))
                         .font(.system(.footnote, weight: .semibold))
                         .monospacedDigit()
-                        .foregroundStyle(AppTheme.textPrimary)
+                        .foregroundStyle(.white)
                         .lineLimit(1).minimumScaleFactor(0.7)
                 }
                 .padding(.top, 10)
             }
         }
-        .padding(.horizontal, 18)
+        .padding(.horizontal, 20)
         .padding(.top, WalletPocket.dip + 16)
-        .padding(.bottom, 16)
+        .padding(.bottom, 18)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background {
-            WalletPocketShape(dip: WalletPocket.dip)
-                .fill(AppTheme.cardDark)
-                .shadow(color: .black.opacity(colorScheme == .dark ? 0.3 : 0.1), radius: 5, y: -2)
+            // The front: the lining's dark a shade lifted, its lip catching
+            // the light so it reads apart from the lining where they meet,
+            // and a short shadow cast up onto the cards.
+            ZStack {
+                WalletPocketShape(dip: WalletPocket.dip).fill(AppTheme.flowGround)
+                WalletPocketShape(dip: WalletPocket.dip).fill(Color.white.opacity(0.05))
+                WalletPocketLip(dip: WalletPocket.dip).stroke(Color.white.opacity(0.1), lineWidth: 1)
+            }
+            .compositingGroup()
+            .shadow(color: .black.opacity(0.35), radius: 6, y: -3)
         }
         .accessibilityElement(children: .combine)
     }
 
     /// One currency's total: the first large, any other one under it smaller.
-    /// In ink, not green: the money is the loudest thing here by its size, and
+    /// White, not green: the money is the loudest thing here by its size, and
     /// green is kept for the one action. Red only when it is below zero.
     private func figure(_ item: WalletPocket.Amount, lead: Bool) -> some View {
         Text((item.value < 0 ? "-" : "")
              + CurrencyManager.shared.formatted(Swift.abs(item.value), currency: item.currency))
             .font(.system(lead ? .title : .headline, weight: .bold))
             .monospacedDigit()
-            .foregroundStyle(item.value < 0 ? AppTheme.red : AppTheme.textPrimary)
+            .foregroundStyle(item.value < 0 ? AppTheme.red : .white)
             .lineLimit(1).minimumScaleFactor(0.6)
             .contentTransition(.numericText())
             .padding(.top, lead ? 2 : 4)
@@ -187,7 +353,7 @@ struct WalletPocketShape: Shape {
     var dip: CGFloat
 
     func path(in r: CGRect) -> Path {
-        let radius: CGFloat = 16   // AppRadius.md, a card's inner corner
+        let radius: CGFloat = 20   // WalletPocket.corner, the lining's
         var p = Path()
         p.move(to: CGPoint(x: r.minX, y: r.minY))
         Self.lip(&p, from: r.minX, to: r.maxX, y: r.minY, dip: dip)
@@ -210,6 +376,18 @@ struct WalletPocketShape: Shape {
         p.addCurve(to: CGPoint(x: x1, y: y),
                    control1: CGPoint(x: x0 + w * 0.71, y: y + dip),
                    control2: CGPoint(x: x0 + w * 0.73, y: y))
+    }
+}
+
+/// The lip alone, drawn as a line: the light along the pocket's edge.
+struct WalletPocketLip: Shape {
+    var dip: CGFloat
+
+    func path(in r: CGRect) -> Path {
+        var p = Path()
+        p.move(to: CGPoint(x: r.minX, y: r.minY + 0.5))
+        WalletPocketShape.lip(&p, from: r.minX, to: r.maxX, y: r.minY + 0.5, dip: dip)
+        return p
     }
 }
 
