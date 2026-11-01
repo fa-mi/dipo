@@ -218,6 +218,57 @@ struct CardListView: View {
         HapticManager.shared.warning()
     }
 
+    /// What the wallet does, in words under the pockets: add a card, the one
+    /// green button, and move money between cards (Royal), once there are
+    /// two. They were two bare glyphs in the header.
+    private var actions: some View {
+        HStack(spacing: 10) {
+            Button {
+                HapticManager.shared.tap()
+                showAddCard = true
+            } label: {
+                Label(loc("cards.add_card"), systemImage: "plus")
+                    .font(.system(.subheadline, weight: .semibold))
+                    .foregroundStyle(AppTheme.onVividFill)
+                    .lineLimit(1).minimumScaleFactor(0.8)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 13)
+                    .background(AppTheme.accentFill, in: Capsule())
+            }
+            .buttonStyle(ScaleButtonStyle())
+            if vm.cards.count >= 2 {
+                Button {
+                    HapticManager.shared.tap()
+                    let _ = pm.plan
+                    if pm.canAccess(.cardTransfer) {
+                        showTransfer = true
+                    } else {
+                        showPaywall = true
+                    }
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "arrow.left.arrow.right")
+                        Text(loc("transfer.title"))
+                        // Royal's crown, once, while it is locked.
+                        if !pm.canAccess(.cardTransfer) {
+                            Image(systemName: "crown.fill")
+                                .imageScale(.small)
+                                .foregroundStyle(PremiumPlan.royal.color)
+                        }
+                    }
+                    .font(.system(.subheadline, weight: .semibold))
+                    .foregroundStyle(AppTheme.textPrimary)
+                    .lineLimit(1).minimumScaleFactor(0.8)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 13)
+                    .background(AppTheme.cardDark, in: Capsule())
+                }
+                .buttonStyle(ScaleButtonStyle())
+                .accessibilityLabel(loc("a11y.transfer"))
+            }
+        }
+    }
+
     var body: some View {
         ZStack {
             AppTheme.bg.ignoresSafeArea()
@@ -235,75 +286,31 @@ struct CardListView: View {
                                 .foregroundStyle(AppTheme.textSecondary)
                         }
                         Spacer()
-                        HStack(spacing: 12) {
-                            // Transfer between cards — Royal-only. Needs ≥2 cards
-                            // to have somewhere to move money to.
-                            if vm.cards.count >= 2 {
-                                Button {
-                                    HapticManager.shared.tap()
-                                    let _ = pm.plan
-                                    if pm.canAccess(.cardTransfer) {
-                                        showTransfer = true
-                                    } else {
-                                        showPaywall = true
-                                    }
-                                } label: {
-                                    ZStack {
-                                        Circle()
-                                            .fill(AppTheme.cardDark)
-                                            .frame(width: 42, height: 42)
-                                        Image(systemName: "arrow.left.arrow.right")
-                                            .font(.system(.callout, weight: .semibold))
-                                            .foregroundStyle(AppTheme.textPrimary)
-                                        if !pm.canAccess(.cardTransfer) {
-                                            Image(systemName: "crown.fill")
-                                                .font(.system(.caption2, weight: .bold)).imageScale(.small)
-                                                .foregroundStyle(AppTheme.onVividFill)
-                                                .padding(3)
-                                                .background(PremiumPlan.royal.color, in: Circle())
-                                                .offset(x: 15, y: -15)
-                                        }
-                                    }
-                                }
-.accessibilityLabel(loc("a11y.transfer"))
-                                .buttonStyle(ScaleButtonStyle())
-                            }
-                            Button {
-                                HapticManager.shared.tap()
-                                showAddCard = true
-                            } label: {
-                                ZStack {
-                                    Circle()
-                                        .fill(AppTheme.accentFill)
-                                        .frame(width: 42, height: 42)
-                                    Image(systemName: "plus")
-                                        .font(.system(.body, weight: .semibold))
-                                        .foregroundStyle(AppTheme.bg)
-                                }
-                            }
-.accessibilityLabel(loc("a11y.add_card"))
-                            .buttonStyle(ScaleButtonStyle())
-                        }
                     }
                     .padding(.horizontal, 22)
                     .padding(.top, 20)
 
-                    // The cards in their pocket, each with what is in it, and
-                    // the total on the pocket. Tapping one opens it.
+                    // The cards in their pockets — conventional banks, and
+                    // digital banks with e-wallets — each card showing what
+                    // is in it and each pocket its total. Tapping a card
+                    // opens it. The pockets pad themselves, so a swipe runs
+                    // edge to edge.
                     if !vm.cards.isEmpty {
-                        WalletPocket(cards: vm.cards) { card in
+                        WalletPockets(cards: vm.cards) { card in
                             HapticManager.shared.tap()
                             openedACard = true
                             openCard = card
                         }
-                        .padding(.horizontal, 22)
-                        .padding(.top, 22)
+                        .padding(.top, 18)
                         if !openedACard {
                             Text(loc("wallet.tap_hint"))
                                 .font(.system(.caption))
                                 .foregroundStyle(AppTheme.textSecondary)
                                 .padding(.top, 10)
                         }
+                        actions
+                            .padding(.horizontal, 22)
+                            .padding(.top, 18)
                     }
 
                     // Rekening Bersama: shared wallets, and invitations to one.
