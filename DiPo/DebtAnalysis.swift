@@ -498,6 +498,8 @@ struct DebtAnalysisCard: View {
     @State private var showingPlan = false
     /// What went wrong, as a string key.
     @State private var problem: String?
+    /// Credit packs, offered when an analysis needs more credits than are left.
+    @State private var showPacks = false
     @State private var confirmingCost: Int?
 
     private var capped: Bool {
@@ -579,6 +581,9 @@ struct DebtAnalysisCard: View {
                     .font(.system(.caption, weight: .medium))
                     .foregroundStyle(AppTheme.orange)
                     .fixedSize(horizontal: false, vertical: true)
+                if problem == "analysis.err.credits" {
+                    AddCreditsLink { showPacks = true }
+                }
             } else if client.needsAccount {
                 Text(loc("analysis.confirm_why"))
                     .font(.system(.caption))
@@ -613,6 +618,12 @@ struct DebtAnalysisCard: View {
             Button(loc("common.cancel"), role: .cancel) { confirmingCost = nil }
         } message: { cost in
             Text(String(format: loc("analysis.confirm_msg"), cost, client.quota?.balance ?? 0))
+        }
+        .sheet(isPresented: $showPacks) {
+            BuyCreditsSheet(creditsLeft: client.quota?.balance) {
+                await client.refreshQuota()
+                problem = nil
+            }
         }
         .sheet(isPresented: $showingPlan) {
             if let plan = client.last {
