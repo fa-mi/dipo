@@ -251,8 +251,6 @@ struct DataIntegrityCard: View {
                 Spacer()
                 Text("\(findings.count)")
                     .font(.system(.caption2, weight: .bold)).foregroundStyle(AppTheme.orange)
-                    .padding(.horizontal, 7).padding(.vertical, 2)
-                    .background(AppTheme.orange.opacity(0.15), in: Capsule())
             }
             Text(loc("integrity.subtitle"))
                 .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
@@ -264,7 +262,6 @@ struct DataIntegrityCard: View {
         }
         .padding(16)
         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
-        .overlay(RoundedRectangle(cornerRadius: AppRadius.lg).stroke(AppTheme.orange.opacity(0.22), lineWidth: 1))
     }
 
     private func row(_ f: IntegrityFinding) -> some View {
@@ -277,8 +274,7 @@ struct DataIntegrityCard: View {
                 HStack(spacing: 10) {
                     Image(systemName: f.icon)
                         .font(.system(.footnote)).foregroundStyle(f.tint)
-                        .frame(width: 28, height: 28)
-                        .background(f.tint.opacity(0.12), in: RoundedRectangle(cornerRadius: AppRadius.xs))
+                        .frame(width: 22)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(headline(f))
                             .font(.system(.caption, weight: .semibold))
@@ -300,8 +296,8 @@ struct DataIntegrityCard: View {
                         .multilineTextAlignment(.leading)
                 }
             }
-            .padding(11)
-            .background(AppTheme.cardMid.opacity(0.45), in: RoundedRectangle(cornerRadius: AppRadius.sm))
+            .padding(.vertical, 6)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }
@@ -428,8 +424,6 @@ struct WindfallCard: View {
                 Text(loc(review.verdict.labelKey))
                     .font(.system(.caption2, weight: .bold))
                     .foregroundStyle(review.verdict.tint)
-                    .padding(.horizontal, 8).padding(.vertical, 3)
-                    .background(review.verdict.tint.opacity(0.15), in: Capsule())
             }
 
             Text(String(format: loc("windfall.headline"),
@@ -464,8 +458,6 @@ struct WindfallCard: View {
         }
         .padding(16)
         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
-        .overlay(RoundedRectangle(cornerRadius: AppRadius.lg)
-            .stroke(review.verdict.tint.opacity(0.22), lineWidth: 1))
     }
 
     private func line(_ l: String, _ v: String, _ tint: Color) -> some View {

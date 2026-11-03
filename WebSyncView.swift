@@ -81,12 +81,9 @@ struct WebSyncView: View {
 
     private var header: some View {
         HStack(spacing: 12) {
-            ZStack {
-                Circle().fill(AppTheme.accent.opacity(0.12)).frame(width: 44, height: 44)
-                Image(systemName: "laptopcomputer.and.iphone")
-                    .font(.system(.callout, weight: .medium))
-                    .foregroundStyle(AppTheme.accent)
-            }
+            Image(systemName: "laptopcomputer.and.iphone")
+                .font(.system(.title3, weight: .medium))
+                .foregroundStyle(AppTheme.accent)
             Text(loc("websync.header"))
                 .font(.system(.subheadline)).foregroundStyle(AppTheme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -168,8 +165,8 @@ struct WebSyncView: View {
         }
         .padding(12)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(AppTheme.bg.opacity(0.7), in: RoundedRectangle(cornerRadius: AppRadius.md))
-        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.accent.opacity(0.18), lineWidth: 1))
+        // The value on the control fill, like a field; no outline.
+        .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: AppRadius.md))
     }
 
     private func copyButton(_ value: String, copied: Binding<Bool>) -> some View {
@@ -216,9 +213,9 @@ struct WebSyncView: View {
         HStack(spacing: 10) {
             Text("\(n)")
                 .font(.system(.caption, weight: .heavy))
-                .foregroundStyle(AppTheme.accent)
+                .foregroundStyle(AppTheme.textSecondary)
                 .frame(width: 22, height: 22)
-                .background(AppTheme.accent.opacity(0.14), in: Circle())
+                .background(AppTheme.cardMid, in: Circle())
             // **bold** in the string marks what to look for on screen.
             Text((try? AttributedString(markdown: text)) ?? AttributedString(text))
                 .font(.system(.subheadline))
@@ -272,10 +269,10 @@ struct WebSyncView: View {
             }
             Spacer(minLength: 0)
         }
+        // The note's colour is on its icon; the card is the plain one.
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(tint.opacity(0.08), in: RoundedRectangle(cornerRadius: AppRadius.md))
-        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(tint.opacity(0.2), lineWidth: 1))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
         .transition(.opacity.combined(with: .move(edge: .top)))
     }
 
@@ -305,8 +302,7 @@ struct WebSyncView: View {
                 }
                 .foregroundStyle(AppTheme.textPrimary)
                 .frame(maxWidth: .infinity).padding(.vertical, 14)
-                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
-                .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.cardMid, lineWidth: 1))
+                .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: AppRadius.md))
             }
             .buttonStyle(ScaleButtonStyle())
             .disabled(service.isReconnecting || isUploading)
@@ -415,20 +411,17 @@ private struct SyncProgressOverlay: View {
 
     private var ring: some View {
         ZStack {
+            // The track, then how far the stages have come, in ink. The
+            // breathing green disc behind it said nothing the arc doesn't.
             Circle()
-                .fill(AppTheme.accent.opacity(0.10))
-                .frame(width: 108, height: 108)
-                .scaleEffect(breathe ? 1.08 : 0.94)
-
-            Circle()
-                .stroke(AppTheme.accent.opacity(0.16), lineWidth: 5)
+                .stroke(AppTheme.cardMid, lineWidth: 5)
                 .frame(width: 84, height: 84)
 
             // Determinate: the arc is the share of stages completed, so it can
             // never race ahead of the work the way an indeterminate bar does.
             Circle()
                 .trim(from: 0, to: progress)
-                .stroke(AppTheme.accent, style: StrokeStyle(lineWidth: 5, lineCap: .round))
+                .stroke(AppTheme.textPrimary, style: StrokeStyle(lineWidth: 5, lineCap: .round))
                 .frame(width: 84, height: 84)
                 .rotationEffect(.degrees(-90))
                 .animation(.spring(response: 0.5, dampingFraction: 0.8), value: phase)
@@ -437,7 +430,7 @@ private struct SyncProgressOverlay: View {
             // during a long stage, without implying progress that isn't there.
             Circle()
                 .trim(from: 0, to: 0.12)
-                .stroke(AppTheme.accent.opacity(0.5), style: StrokeStyle(lineWidth: 2, lineCap: .round))
+                .stroke(AppTheme.textSecondary, style: StrokeStyle(lineWidth: 2, lineCap: .round))
                 .frame(width: 100, height: 100)
                 .rotationEffect(.degrees(spin ? 360 : 0))
 
@@ -458,16 +451,18 @@ private struct SyncProgressOverlay: View {
         let active = p == phase
         HStack(spacing: 10) {
             ZStack {
+                // Done: a tick in ink. Running: a dot that breathes. Still to
+                // come: an empty disc on the control fill.
                 Circle()
-                    .fill(done || active ? AppTheme.accent.opacity(0.16) : AppTheme.cardMid.opacity(0.5))
+                    .fill(AppTheme.cardMid)
                     .frame(width: 22, height: 22)
                 if done {
                     Image(systemName: "checkmark")
                         .font(.system(size: 10, weight: .black))
-                        .foregroundStyle(AppTheme.accent)
+                        .foregroundStyle(AppTheme.textPrimary)
                         .transition(.scale.combined(with: .opacity))
                 } else if active {
-                    Circle().fill(AppTheme.accent).frame(width: 7, height: 7)
+                    Circle().fill(AppTheme.textPrimary).frame(width: 7, height: 7)
                         .scaleEffect(breathe ? 1.25 : 0.8)
                 }
             }
