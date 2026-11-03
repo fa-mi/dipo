@@ -113,7 +113,9 @@ struct HomeView: View {
     @State private var flowPutAway: Double = 0
     /// Flagged money in this period, added to the flow card's budget.
     @State private var flowExtra: Double = 0
-    @State private var showAllAttention = false
+    /// A detected bill or habit tapped on the reminder line: asks whether to
+    /// stop reminding about it, the one thing to do with a guess.
+    @State private var recurringAsked: SmartBudgetManager.RecurringPattern?
     @State private var headerAppeared    = false
     @State private var contentAppeared   = false
     // Memoized Smart-Budget analyses. Each engine iterates ALL transactions
@@ -499,45 +501,43 @@ struct HomeView: View {
         cachedRecurring = SmartBudgetManager.shared.detectRecurring(allTransactions: tx)
     }
 
-    /// Everything on Home with something to say, most urgent first.
-    ///
-    /// `rank` is urgency × actionability: a negative balance is both, a pinned
-    /// savings goal is neither. The ranks are unique and the order below IS the
-    /// policy — it is meant to be read as one list and argued with as one list,
-    /// rather than being implied by where each banner happened to sit in the
-    /// view hierarchy.
-    private var attentionItems: [HomeAttentionItem] {
-        var items: [HomeAttentionItem] = []
+    /// Home's own reminders that go before DiPo's on the reminder line:
+    /// trouble with the balance.
+    private var leadingReminders: [HomeReminder] {
+        guard selectedCardBalance < 0 else { return [] }
+        return [HomeReminder(
+            id: "negative", title: loc("home.negative"),
+            detail: String(format: loc("balance.review"),
+                           CurrencyManager.shared.formatted(abs(selectedCardBalance), currency: selectedCardCurrency)),
+            tone: .trouble)]
+    }
 
-        if selectedCardBalance < 0 {
-            items.append(.init(id: "negative", rank: 0, view: AnyView(
-                NegativeBalanceBanner(balance: selectedCardBalance,
-                                      currency: selectedCardCurrency))))
-        }
+    /// Home's own reminders that come after DiPo's: setting up the salary, a
+    /// detected bill falling due, then a pinned goal. A declared schedule is a
+    /// certainty and DiPo says it; the detected pattern is a guess, so it
+    /// comes later. Smart Insights and anomalies are DiPo's to say when Ask
+    /// DiPo opens.
+    private var trailingReminders: [HomeReminder] {
+        var out: [HomeReminder] = []
         if !hasSalary {
-            items.append(.init(id: "setup-salary", rank: 1, view: AnyView(
-                SetupSalaryBanner(showAddSalary: $showAddSalary))))
+            out.append(HomeReminder(id: "setup-salary", title: loc("home.setup_salary"),
+                                    detail: loc("home.setup_salary_sub"), tone: .quiet,
+                                    action: { showAddSalary = true }))
         }
-        // Smart Insights and anomalies are no longer banners here: DiPo says
-        // them when Ask DiPo opens (DiPoTalk.swift, AIChatView).
-        // A declared schedule is a certainty; the detected pattern below is a
-        // guess. Certainty outranks guess.
-        // A bill falling due and payday are no longer banners: DiPo says them
-        // in his bubble at the top (DiPoNudge) — two cards saying the same was
-        // noise, and payday sixteen days away is not news.
         if let next = cachedRecurring.first(where: { $0.isDueSoon }) {
-            items.append(.init(id: "recurring", rank: 6, view: AnyView(
-                RecurringReminderBanner(pattern: next,
-                                        onDismiss: { recomputeHomeInsights() }))))
+            out.append(HomeReminder(id: "recurring-\(next.name)", title: next.name,
+                                    detail: HomeReminders.recurringDetail(next),
+                                    tone: HomeReminders.recurringTone(next),
+                                    action: { recurringAsked = next }))
         }
         if let pinned = pinnedGoals.first {
-            items.append(.init(id: "goal-\(pinned.id)", rank: 8, view: AnyView(
-                Button { HapticManager.shared.tap(); vm.open(PlanRoute.goals) } label: {
-                    PinnedGoalBanner(goal: pinned, tappable: true)
-                }
-                .buttonStyle(ScaleButtonStyle()))))
+            out.append(HomeReminder(
+                id: "goal-\(pinned.id)", title: "\(pinned.emoji) \(pinned.name)",
+                detail: String(format: loc("home.progress_to_go"), Int(pinned.progress * 100),
+                               CurrencyManager.shared.formatted(pinned.remaining, currency: pinned.currency)),
+                tone: .quiet, action: { vm.open(PlanRoute.goals) }))
         }
-        return items.sorted { $0.rank < $1.rank }
+        return out
     }
 
     private static let topAnchor = "home.top"
@@ -555,12 +555,10 @@ struct HomeView: View {
                                 homeHeader
                                 moneyTop
                                 flowCard
-                                netWorthCard
                             }
                             .frame(maxWidth: AppLayout.phoneContentMaxWidth)
                             VStack(spacing: 0) {
                                 dipoSection
-                                attentionCards
                                 filterBar
                                 transactionsCard
                             }
@@ -574,13 +572,12 @@ struct HomeView: View {
                         VStack(spacing: 0) {
                             homeHeader
                             if hasCards { moneyTop }
-                            dipoSection
                             if !hasCards {
+                                dipoSection
                                 noCardState
                             } else {
-                                attentionCards
                                 flowCard
-                                netWorthCard
+                                dipoSection
                                 filterBar
                                 transactionsCard
                             }
@@ -732,14 +729,16 @@ struct HomeView: View {
 
     // MARK: Sections
     //
-    // One column on a phone, in this order: header, money, DiPo, what needs
-    // attention, this period, net worth, the list. Two columns where two
-    // phone columns fit (the Duo opened and turned): where the money stands
-    // on the left, what needs doing and what moved on the right.
+    // One column on a phone, in this order: header; the total, with net
+    // worth and payday under it; the cards; this period's three figures; the
+    // one reminder line; the list. Two columns where two phone columns fit
+    // (the Duo opened and turned): where the money stands on the left, what
+    // needs doing and what moved on the right.
 
     private var homeHeader: some View {
         // Header always visible
-        HomeHeader(vm: vm, showSearch: $showSearch, showNotifications: $showNotifications)
+        HomeHeader(vm: vm, showSearch: $showSearch, showNotifications: $showNotifications,
+                   onAskDiPo: { askDiPoPrompt = nil; showAskDiPo = true })
             .id(Self.topAnchor)
             .padding(.horizontal, 22)
             .padding(.top, 18)
@@ -749,16 +748,17 @@ struct HomeView: View {
     }
 
     private var dipoSection: some View {
-        // DiPo's one line: reminds about unread notifications, a
-        // bill falling due and payday, and opens Ask DiPo when his
-        // face is tapped.
+        // Home's one reminder line: a negative balance, then DiPo's
+        // (unread news, the evening check-in, a bill, payday), then
+        // setting up, a detected bill and a pinned goal.
         DiPoHomeSection(unread: NotificationManager.shared.unreadCount,
                         bill: dipoBill,
                         daysToPayday: nearestSalary.map { SalaryDateEngine.daysUntilPay(dayOfMonth: $0.dayOfMonth) },
                         payDate: nearestSalary.map { SalaryDateEngine.nextPayDate(dayOfMonth: $0.dayOfMonth) },
                         assetCheck: dipoAssetCheck,
                         isRoyal: dipoIsRoyal,
-                        onAskDiPo: { askDiPoPrompt = nil; showAskDiPo = true },
+                        before: leadingReminders,
+                        after: trailingReminders,
                         onAction: { action in
                             switch action {
                             case .notifications: showNotifications = true
@@ -777,9 +777,23 @@ struct HomeView: View {
                             }
                         })
             .padding(.horizontal, 22)
-            .padding(.top, hasCards ? 14 : 12)
+            .padding(.top, hasCards ? 16 : 12)
             .opacity(headerAppeared ? 1 : 0)
             .animation(AppMotion.appear, value: headerAppeared)
+            .confirmationDialog(recurringAsked?.name ?? "",
+                                isPresented: Binding(get: { recurringAsked != nil },
+                                                     set: { if !$0 { recurringAsked = nil } }),
+                                titleVisibility: .visible, presenting: recurringAsked) { pattern in
+                Button(loc("home.reminder.stop")) {
+                    HapticManager.shared.tap()
+                    SmartBudgetManager.shared.dismissRecurring(name: pattern.name)
+                    withAnimation(.spring(response: 0.4)) { recomputeHomeInsights() }
+                }
+                Button(loc("ai.confirm.cancel"), role: .cancel) {}
+            } message: { pattern in
+                Text(HomeReminders.recurringEvidence(pattern) + "\n"
+                     + loc(pattern.kind == .bill ? "recurring.help.bill" : "recurring.help.habit"))
+            }
     }
 
     private var noCardState: some View {
@@ -788,43 +802,6 @@ struct HomeView: View {
             .opacity(contentAppeared ? 1 : 0)
             .offset(y: contentAppeared ? 0 : 30)
             .animation(AppMotion.appear, value: contentAppeared)
-    }
-
-    @ViewBuilder
-    private var attentionCards: some View {
-        // One attention slot. Candidates are ranked by how
-        // urgent and how actionable they are; only the winner
-        // gets a card. The rest sit behind a single row so
-        // nothing is lost — it just stops competing.
-        let attention = attentionItems
-        if let top = attention.first {
-            top.view
-                .padding(.horizontal, 22)
-                .padding(.top, 14)
-                .transition(.move(edge: .top).combined(with: .opacity))
-
-            if showAllAttention {
-                ForEach(attention.dropFirst()) { item in
-                    item.view
-                        .padding(.horizontal, 22)
-                        .padding(.top, 8)
-                        .transition(.move(edge: .top).combined(with: .opacity))
-                }
-            }
-
-            if attention.count > 1 {
-                Button {
-                    HapticManager.shared.tap()
-                    withAnimation(AppMotion.appear) { showAllAttention.toggle() }
-                } label: {
-                    MoreAttentionRow(count: attention.count - 1,
-                                     expanded: showAllAttention)
-                }
-                .buttonStyle(ScaleButtonStyle())
-                .padding(.horizontal, 22)
-                .padding(.top, 8)
-            }
-        }
     }
 
     private var flowCard: some View {
@@ -843,65 +820,32 @@ struct HomeView: View {
                       noteTone: flowNoteTone,
                       onDetails: flowDetails)
             .padding(.horizontal, 22)
-            .padding(.top, 14)
+            .padding(.top, 18)
             .opacity(contentAppeared ? 1 : 0)
             .offset(y: contentAppeared ? 0 : 18)
             .animation(AppMotion.appear, value: contentAppeared)
     }
 
-    @ViewBuilder
-    private var netWorthCard: some View {
-        // Net Worth — cash minus liabilities. Only shown when the
-        // user actually has liabilities (credit cards / debts),
-        // otherwise it's just the cash total again.
-        if worth.liabilities > 0.5 && canSeeNetWorth && !hideAll {
-            let netWorth = worth.total
-            let fmt = { (v: Double) in CurrencyManager.shared.formatted(v, currency: CurrencyManager.shared.preferredCurrency) }
-            VStack(alignment: .leading, spacing: 5) {
-                HStack(spacing: 10) {
-                    Image(systemName: "chart.pie.fill").font(.system(.footnote)).foregroundStyle(AppTheme.purple)
-                    Text(loc("home.net_worth")).font(.system(.caption, weight: .medium)).foregroundStyle(AppTheme.textSecondary)
-                    Spacer()
-                    Text((netWorth < 0 ? "-" : "") + fmt(Swift.abs(netWorth)))
-                        .font(.system(.subheadline, weight: .bold))
-                        .foregroundStyle(netWorth >= 0 ? AppTheme.textPrimary : AppTheme.red)
-                        // Roll the digits when a transaction
-                        // moves this. Seeing the figure change
-                        // is what links the action just taken
-                        // to its effect on net worth.
-                        .contentTransition(.numericText())
-                        .animation(.easeOut(duration: 0.45), value: netWorth)
-                }
-                // Spell out the arithmetic — a bare "net worth"
-                // figure (especially a negative one) is alarming
-                // and unreadable without its parts.
-                Text(worth.goals > 0.5
-                     ? String(format: loc("home.net_worth_breakdown_savings"),
-                              fmt(worth.balance), fmt(worth.goals), fmt(worth.liabilities))
-                     : String(format: loc("home.net_worth_breakdown"),
-                              fmt(worth.balance), fmt(worth.liabilities)))
-                    .font(.system(.caption2))
-                    .foregroundStyle(AppTheme.textSecondary.opacity(0.75))
-                    .fixedSize(horizontal: false, vertical: true)
-                // Investments live in their own menu, so name their
-                // share of net worth here rather than leaving the
-                // total unexplained.
-                if worth.investments > 0.5 {
-                    Text(String(format: loc("invest.networth_line"), fmt(worth.investments)))
-                        .font(.system(.caption2, weight: .medium))
-                        .foregroundStyle(AppTheme.accent)
-                }
-                if worth.assets > 0.5 {
-                    Text(String(format: loc("asset.networth_line"), fmt(worth.assets)))
-                        .font(.system(.caption2, weight: .medium))
-                        .foregroundStyle(AppTheme.teal)
-                }
-            }
-            .padding(.horizontal, 16).padding(.vertical, 11)
-            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
-            .padding(.horizontal, 22).padding(.top, 12)
-            .opacity(contentAppeared ? 1 : 0)
-        }
+    /// Net worth for the grey line under the total. Only with something
+    /// owed (credit cards, debts): without it net worth is just the cash total
+    /// again.
+    private var homeNetWorth: HomeNetWorth? {
+        guard worth.liabilities > 0.5 && canSeeNetWorth else { return nil }
+        let fmt = { (v: Double) in CurrencyManager.shared.formatted(v, currency: CurrencyManager.shared.preferredCurrency) }
+        var extras: [String] = []
+        // Investments live in their own menu, so name their share here rather
+        // than leaving the total unexplained.
+        if worth.investments > 0.5 { extras.append(String(format: loc("invest.networth_line"), fmt(worth.investments))) }
+        if worth.assets > 0.5 { extras.append(String(format: loc("asset.networth_line"), fmt(worth.assets))) }
+        return HomeNetWorth(
+            amount: worth.total,
+            currency: CurrencyManager.shared.preferredCurrency,
+            breakdown: worth.goals > 0.5
+                ? String(format: loc("home.net_worth_breakdown_savings"),
+                         fmt(worth.balance), fmt(worth.goals), fmt(worth.liabilities))
+                : String(format: loc("home.net_worth_breakdown"),
+                         fmt(worth.balance), fmt(worth.liabilities)),
+            extras: extras)
     }
 
     private var filterBar: some View {
@@ -924,33 +868,41 @@ struct HomeView: View {
             onOpenSearch: { HapticManager.shared.tap(); showSearch = true }
         )
         .id(vm.selectedCardIndex)
-        // The list reads as one surface now instead of floating
-        // loose on the page — it is a single thing ("what you
-        // spent") and its edges should say so.
-        .padding(16)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.xl))
-        .padding(.top, 14)
+        // On the page itself, rows divided by hairlines: the card it sat in
+        // was a second edge round a list that already reads as one thing.
+        .padding(.top, 8)
         .padding(.horizontal, 22)
         .opacity(contentAppeared ? 1 : 0)
         .offset(y: contentAppeared ? 0 : 24)
         .animation(AppMotion.appear, value: contentAppeared)
     }
 
-    /// The total of every cash account in one short row, then the cards to
-    /// swipe through. Choosing a card points the period card and the list
+    /// The total of every cash account as Home's one big number, with net
+    /// worth and payday in grey under it, then the cards to swipe through. Choosing a card points the period card and the list
     /// below at it. Its own property so the body stays within what the type
     /// checker takes in.
     @ViewBuilder
     private var moneyTop: some View {
+        let payday = HomeTotalRow.paydayText(days: nearestSalary.map {
+            SalaryDateEngine.daysUntilPay(dayOfMonth: $0.dayOfMonth) })
         if showsTotalRow {
             HomeTotalRow(total: worth.balance,
                          currency: CurrencyManager.shared.preferredCurrency,
                          accounts: cashAccountCount,
-                         payday: HomeTotalRow.paydayText(days: nearestSalary.map {
-                             SalaryDateEngine.daysUntilPay(dayOfMonth: $0.dayOfMonth) }),
+                         netWorth: homeNetWorth,
+                         payday: payday,
                          hidden: $hideBalances)
                 .padding(.horizontal, 22)
                 .padding(.top, 18)
+                .opacity(headerAppeared ? 1 : 0)
+                .animation(AppMotion.appear, value: headerAppeared)
+        } else if HomeTotalSubline.shows(netWorth: homeNetWorth, payday: payday) {
+            // One account: the card carries the balance, so only the grey
+            // line sits over it.
+            HomeTotalSubline(netWorth: homeNetWorth, payday: payday)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 22)
+                .padding(.top, 14)
                 .opacity(headerAppeared ? 1 : 0)
                 .animation(AppMotion.appear, value: headerAppeared)
         }
