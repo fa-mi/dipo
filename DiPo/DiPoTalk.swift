@@ -278,6 +278,115 @@ struct DiPoNudge: Equatable, Identifiable {
     }
 }
 
+/// DiPo on Home, in one row under the accounts: his face, then the one
+/// thing he has to say, with a pager when there is more. Tapping the words
+/// does what they say; tapping his face opens Ask DiPo. With nothing to
+/// remind, the row invites a question.
+///
+/// He used to stand above the balance, a 3D figure beside a thought cloud,
+/// and took the top of the screen before any money did. The figure lives on
+/// in Ask DiPo, where a character helps; here he is an assistant.
+struct DiPoHomeRow: View {
+    let nudges: [DiPoNudge]
+    /// Today in a few words ("Today is logged"), when there is no reminder.
+    var status: String? = nil
+    var onAskDiPo: () -> Void
+    var onNudge: (DiPoNudge.Action) -> Void
+
+    @State private var page = 0
+    private var current: DiPoNudge? { nudges.isEmpty ? nil : nudges[min(page, nudges.count - 1)] }
+
+    /// Pager width kept clear on the trailing side of the words.
+    private static let pagerRoom: CGFloat = 44
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: AppRadius.lg, style: .continuous)
+        HStack(spacing: 12) {
+            leading
+            words
+        }
+        .padding(.leading, 12).padding(.trailing, 14).padding(.vertical, 12)
+        .background(AppTheme.cardDark, in: shape)
+        .overlay(shape.stroke(AppTheme.textSecondary.opacity(0.12), lineWidth: 1))
+        .onChange(of: nudges.map(\.id)) { _, _ in page = 0 }
+        .animation(.spring(response: 0.35), value: current?.id)
+    }
+
+    private var leading: some View {
+        Button {
+            HapticManager.shared.tap()
+            onAskDiPo()
+        } label: {
+            Image("DiPoMascot")
+                .resizable()
+                .scaledToFill()
+                .frame(width: 48, height: 48)
+                .frame(width: 42, height: 42)
+                .background(RadialGradient(colors: [AppTheme.accent.opacity(0.24), AppTheme.cardDark],
+                                           center: UnitPoint(x: 0.5, y: 0.4), startRadius: 0, endRadius: 26))
+                .clipShape(Circle())
+                .overlay(Circle().stroke(AppTheme.accent.opacity(0.45), lineWidth: 1))
+        }
+        .buttonStyle(ScaleButtonStyle())
+        .accessibilityLabel(loc("mascot.a11y"))
+        .accessibilityHint(loc("dipo.a11y_ask"))
+    }
+
+    private var words: some View {
+        Button {
+            HapticManager.shared.tap()
+            if let current { onNudge(current.action) } else { onAskDiPo() }
+        } label: {
+            HStack(spacing: 8) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(current?.rowTitle ?? status ?? loc("dipo.ask"))
+                        .font(.system(.subheadline, weight: .semibold))
+                        .foregroundStyle(AppTheme.textPrimary)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if let detail = current == nil ? loc("dipo.row_invite") : current?.rowDetail {
+                        Text(detail)
+                            .font(.system(.caption))
+                            .foregroundStyle(AppTheme.textSecondary)
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.trailing, nudges.count > 1 ? Self.pagerRoom : 0)
+                Image(systemName: "chevron.right")
+                    .font(.system(.footnote, weight: .semibold))
+                    .foregroundStyle(AppTheme.textSecondary)
+                    .accessibilityHidden(true)
+            }
+            .contentShape(Rectangle())
+            .id(current?.id ?? "invite")
+            .transition(.opacity)
+        }
+        .buttonStyle(ScaleButtonStyle())
+        .accessibilityHint(current == nil ? loc("dipo.a11y_ask") : loc("dipo.a11y_open"))
+        // The other reminders, one tap each — outside the row's own button,
+        // so each tap goes where it looks like it goes.
+        .overlay(alignment: .trailing) {
+            if nudges.count > 1 {
+                Button {
+                    HapticManager.shared.tap()
+                    withAnimation(.spring(response: 0.3)) { page = (page + 1) % nudges.count }
+                } label: {
+                    Text(verbatim: "\(min(page, nudges.count - 1) + 1)/\(nudges.count) \u{203A}")
+                        .font(.system(.caption2, weight: .bold).monospacedDigit())
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .padding(.horizontal, 7).padding(.vertical, 3)
+                        .background(AppTheme.cardMid, in: Capsule())
+                }
+                .buttonStyle(.plain)
+                .padding(.trailing, 20)
+                .accessibilityLabel(loc("dipo.next"))
+            }
+        }
+    }
+}
+
 /// DiPo's own little stage: a rounded frame with a soft green glow and a
 /// gold hairline, so he has room around him instead of floating on the page.
 struct DiPoFrame<Content: View>: View {

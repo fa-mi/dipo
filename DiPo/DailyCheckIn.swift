@@ -106,14 +106,11 @@ enum DailyCheckIn {
 
 // MARK: - DiPo on Home
 
-/// What DiPo has to remind about on Home, said in Home's one reminder line
-/// (HomeReminderLine), with the daily check-in folded in. Whether today is
-/// accounted for is what the line says when there is nothing to remind; the
-/// evening question ("nothing logged today — nothing spent, or not written
-/// down yet?") is one of his reminders, after unread notifications and before
-/// bills and payday. Home's own reminders (a negative balance, setting up the
-/// salary, a detected bill, a pinned goal) come in as `before` and `after`,
-/// so the line steps through everything in one order.
+/// DiPo's row on Home, with the daily check-in folded into it: the "Today
+/// is logged" card is gone. Whether today is accounted for and the streak
+/// are what he says when he has nothing to remind; the evening question
+/// ("nothing logged today — nothing spent, or not written down yet?") is one
+/// of his reminders, after unread notifications and before bills and payday.
 struct DiPoHomeSection: View {
     let unread: Int
     let bill: DiPoNudge.Bill?
@@ -121,13 +118,10 @@ struct DiPoHomeSection: View {
     let payDate: Date?
     /// Assets whose value is due a look, by name (AssetMarketCheck).
     var assetCheck: [String] = []
+    var onAskDiPo: () -> Void
     var onAction: (DiPoNudge.Action) -> Void
     /// Royal gets to know DiPo better: interest guesses and ideas.
     var isRoyal = false
-    /// Home's reminders to step through before DiPo's (a negative balance)
-    /// and after them (setting up, a detected bill, a pinned goal).
-    var before: [HomeReminder] = []
-    var after: [HomeReminder] = []
 
     /// Every account's recent rows, read here rather than handed in. A day
     /// counts as logged when anything was recorded, whichever card paid.
@@ -157,16 +151,14 @@ struct DiPoHomeSection: View {
 
     init(unread: Int, bill: DiPoNudge.Bill?, daysToPayday: Int?, payDate: Date?,
          assetCheck: [String] = [], isRoyal: Bool = false,
-         before: [HomeReminder] = [], after: [HomeReminder] = [],
-         onAction: @escaping (DiPoNudge.Action) -> Void) {
-        self.before = before
-        self.after = after
+         onAskDiPo: @escaping () -> Void, onAction: @escaping (DiPoNudge.Action) -> Void) {
         self.assetCheck = assetCheck
         self.isRoyal = isRoyal
         self.unread = unread
         self.bill = bill
         self.daysToPayday = daysToPayday
         self.payDate = payDate
+        self.onAskDiPo = onAskDiPo
         self.onAction = onAction
         let floor = Calendar.current.date(byAdding: .day, value: -DailyCheckIn.historyDays, to: .now) ?? .distantPast
         _transactions = Query(filter: #Predicate<TxRecord> { $0.date >= floor })
@@ -192,33 +184,23 @@ struct DiPoHomeSection: View {
         }
     }
 
-    /// DiPo's reminders, in the line's terms.
-    private var dipoReminders: [HomeReminder] {
-        DiPoNudge.all(unread: unread, checkIn: asking, streak: greeting ? streak : 0,
-                      bill: bill, daysToPayday: daysToPayday, payDate: payDate,
-                      interestGuess: interestGuess, interestTip: interestTip?.preset,
-                      customInterestTip: interestTip?.custom,
-                      assetCheck: assetCheck)
-            .map { nudge in
-                HomeReminder(id: nudge.id, title: nudge.rowTitle, detail: nudge.rowDetail,
-                             tone: HomeReminders.tone(for: nudge.action),
-                             action: { handle(nudge.action) })
-            }
-    }
-
-    private func handle(_ action: DiPoNudge.Action) {
-        switch action {
-        case .checkIn: askingNow = true
-        case .streak:  withAnimation(.spring(response: 0.35)) { greeting = false }
-        case .interestGuess(let interest): askingInterest = interest
-        default:       onAction(action)
-        }
-    }
-
     var body: some View {
-        HomeReminderLine(
-            reminders: HomeReminders.ordered(first: before, dipo: dipoReminders, last: after),
-            status: status)
+        DiPoHomeRow(
+            nudges: DiPoNudge.all(unread: unread, checkIn: asking, streak: greeting ? streak : 0,
+                                  bill: bill, daysToPayday: daysToPayday, payDate: payDate,
+                                  interestGuess: interestGuess, interestTip: interestTip?.preset,
+                                  customInterestTip: interestTip?.custom,
+                                  assetCheck: assetCheck),
+            status: status,
+            onAskDiPo: onAskDiPo,
+            onNudge: { action in
+                switch action {
+                case .checkIn: askingNow = true
+                case .streak:  withAnimation(.spring(response: 0.35)) { greeting = false }
+                case .interestGuess(let interest): askingInterest = interest
+                default:       onAction(action)
+                }
+            })
         .confirmationDialog(loc("checkin.ask_title"), isPresented: $askingNow, titleVisibility: .visible) {
             Button(loc("checkin.none")) {
                 HapticManager.shared.success()

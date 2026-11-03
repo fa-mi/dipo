@@ -44,6 +44,9 @@ struct MonthFlowCard: View {
 
     /// Spending on living: everything but debt paid and money put away.
     private var living: Double { max(expense - putAway, 0) }
+    /// Share of income spent on living this cycle; nil without income.
+    private var budgetIn: Double { income + extra }
+    private var spentShare: Double? { budgetIn > 0 ? living / budgetIn : nil }
     private var remaining: Double { Self.remaining(income: income, expense: expense, putAway: putAway, extra: extra) }
 
     /// What is left of the period's money once living costs are out: income
@@ -53,82 +56,147 @@ struct MonthFlowCard: View {
         income + extra - max(expense - putAway, 0)
     }
 
-    /// The note's colour: grey to inform, orange or red only when the balance
-    /// is at stake.
-    private var noteInk: Color {
+    /// Green while there is room, orange from 80 % on. Not red: passing income
+    /// is a warning, and the note says whether the balance covers it.
+    private var shareTint: Color {
+        guard let s = spentShare else { return AppTheme.accent }
+        return s >= 0.8 ? AppTheme.orange : AppTheme.accent
+    }
+
+    private var noteTint: Color {
         switch noteTone {
-        case .info:   return AppTheme.textSecondary
+        case .info:   return AppTheme.blue
         case .warn:   return AppTheme.orange
         case .danger: return AppTheme.red
         }
     }
 
-    // Three numbers in a row on the page itself, with the window they cover
-    // under them. No card, no calendar badge, no spent-of-income bar: the
-    // three figures say how the period is going, and the bar said the same
-    // thing a second time as a percentage.
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            // Each figure under its label, so a label has its column's width
-            // and may take a second line ("Sisa / pemasukan"); the figures sit
-            // on one baseline below. Only money coming in is green; going past
-            // income is orange, and said in words, never as a minus.
+        VStack(spacing: 12) {
+            // The window the figures cover, and how much of the income it has used.
+            HStack(spacing: 10) {
+                Image(systemName: "calendar")
+                    .font(.system(.subheadline, weight: .semibold))
+                    .foregroundStyle(AppTheme.accent)
+                    .frame(width: 28)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(loc("home.this_period"))
+                        .font(.system(.subheadline, weight: .bold))
+                        .foregroundStyle(AppTheme.textPrimary)
+                    Text(periodLabel)
+                        .font(.system(.caption2))
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
+                Spacer(minLength: 8)
+                if let share = spentShare, !isHidden {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(loc("home.spent_of_income"))
+                            .font(.system(.caption2))
+                            .foregroundStyle(AppTheme.textSecondary)
+                        HStack(spacing: 6) {
+                            GeometryReader { g in
+                                ZStack(alignment: .leading) {
+                                    Capsule().fill(AppTheme.cardMid)
+                                    Capsule().fill(shareTint)
+                                        .frame(width: g.size.width * min(share, 1))
+                                }
+                            }
+                            .frame(height: 6)
+                            Text(verbatim: "\(Int((share * 100).rounded()))%")
+                                .font(.system(.caption, weight: .bold).monospacedDigit())
+                                .foregroundStyle(AppTheme.textPrimary)
+                        }
+                    }
+                    .frame(width: 128)
+                    .animation(.easeOut(duration: 0.4), value: share)
+                }
+            }
+
+            Rectangle().fill(AppTheme.cardMid).frame(height: 1)
+
+            // Money coming IN points in, money going OUT points out — the
+            // same directions the add-transaction form and Statistics use.
+            //
+            // Three figures side by side, each under its label, so a label
+            // has its column's width and may take a second line ("Sisa /
+            // pemasukan"); the figures sit on one baseline below.
             HStack(alignment: .top, spacing: 12) {
-                tile(label: loc("home.income"), amount: income, ink: AppTheme.flowIn)
-                tile(label: loc("home.spending"), amount: living, ink: AppTheme.textPrimary)
+                tile(icon: "arrow.down.left", label: loc("home.income"), amount: income,
+                     tint: AppTheme.flowIn, ink: AppTheme.flowIn)
+                tile(icon: "arrow.up.right", label: loc("home.spending"), amount: living,
+                     tint: AppTheme.flowOut, ink: AppTheme.textPrimary)
+                // Never a minus. What is left of income, or how far living
+                // costs went past it — said in words, the second in orange.
+                // "Remaining −Rp 2.311.881" under a Rp 4,5 jt balance read as
+                // being in debt.
                 if remaining >= -0.5 {
-                    tile(label: loc("home.left_of_income"), amount: max(remaining, 0), ink: AppTheme.textPrimary)
+                    tile(icon: "equal", label: loc("home.left_of_income"), amount: max(remaining, 0),
+                         tint: AppTheme.blue, ink: AppTheme.textPrimary)
                 } else {
-                    tile(label: loc("home.over_income_label"), amount: -remaining, ink: AppTheme.orange)
+                    tile(icon: "exclamationmark", label: loc("home.over_income_label"), amount: -remaining,
+                         tint: AppTheme.orange, ink: AppTheme.orange)
                 }
             }
             .fixedSize(horizontal: false, vertical: true)
 
-            Text(periodLabel)
-                .font(.system(.caption))
-                .foregroundStyle(AppTheme.textSecondary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-
             if let note, !isHidden {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(note)
-                        .font(.system(.caption))
-                        .foregroundStyle(noteInk)
-                        .fixedSize(horizontal: false, vertical: true)
-                    if let onDetails {
-                        Button {
-                            HapticManager.shared.tap()
-                            onDetails()
-                        } label: {
-                            HStack(spacing: 2) {
-                                Text(loc("home.flow_details"))
-                                Image(systemName: "chevron.right").imageScale(.small)
-                            }
-                            .font(.system(.caption, weight: .semibold))
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: noteTone == .info ? "creditcard.fill" : "exclamationmark.circle.fill")
+                        .font(.system(.footnote))
+                        .foregroundStyle(noteTint)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(note)
+                            .font(.system(.caption))
                             .foregroundStyle(AppTheme.textPrimary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        if let onDetails {
+                            Button {
+                                HapticManager.shared.tap()
+                                onDetails()
+                            } label: {
+                                HStack(spacing: 2) {
+                                    Text(loc("home.flow_details"))
+                                    Image(systemName: "chevron.right").imageScale(.small)
+                                }
+                                .font(.system(.caption, weight: .semibold))
+                                .foregroundStyle(AppTheme.textPrimary)
+                            }
+                            .buttonStyle(.plain)
                         }
-                        .buttonStyle(.plain)
                     }
+                    Spacer(minLength: 0)
                 }
                 .padding(.top, 2)
                 .transition(.opacity)
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
     }
 
-    /// One figure under its label.
-    private func tile(label: String, amount: Double, ink: Color, signed: Bool = false) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(label)
-                .font(.system(.caption))
-                .foregroundStyle(AppTheme.textSecondary)
-                .lineLimit(2)
-                .fixedSize(horizontal: false, vertical: true)
+    /// One figure: what it is, with its direction in its own colour, and the
+    /// amount. Nothing behind it: the badge and the wash each tile wore said
+    /// the colour again. Only money coming in is green (`ink`); spending and
+    /// what is left are in ink, and going past income is orange.
+    private func tile(icon: String, label: String, amount: Double, tint: Color, ink: Color,
+                      signed: Bool = false) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                Image(systemName: icon)
+                    .font(.system(.caption2, weight: .bold))
+                    .foregroundStyle(tint)
+                    .accessibilityHidden(true)
+                Text(label)
+                    .font(.system(.caption2))
+                    .foregroundStyle(AppTheme.textSecondary)
+                    .lineLimit(3)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             Spacer(minLength: 0)
             Text(isHidden ? "••••" : figure(amount, signed: signed))
-                .font(.system(.subheadline, weight: .bold).monospacedDigit())
+                .font(.system(.footnote, weight: .bold))
                 .foregroundStyle(ink)
                 .lineLimit(1)
                 .minimumScaleFactor(0.55)
