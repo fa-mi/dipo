@@ -593,11 +593,11 @@ struct VoiceCaptureView: View {
                                 .blur(radius: 6)
                                 .animation(.easeOut(duration: 0.12), value: voice.level)
                         }
+                        // The halo above follows the voice; the button
+                        // itself has no glow.
                         Circle()
                             .fill(isListening ? AppTheme.redFill : AppTheme.accentFill)
                             .frame(width: 84, height: 84)
-                            .shadow(color: (isListening ? AppTheme.redFill : AppTheme.accentFill).opacity(0.35),
-                                    radius: 16, y: 6)
                         Image(systemName: isListening ? "stop.fill" : "mic.fill")
                             .font(.system(.title, weight: .semibold))
                             .foregroundStyle(AppTheme.onVividFill)

@@ -285,39 +285,31 @@ private struct LandingView: View {
                             selectedTab = tab
                         }
                     } label: {
+                        // The choice in ink on one track, like the app's
+                        // other switches.
                         Text(label(for: tab))
                             .font(.system(.subheadline, weight: .semibold))
-                            .foregroundStyle(selectedTab == tab ? AppTheme.textPrimary : AppTheme.textSecondary)
+                            .foregroundStyle(selectedTab == tab ? AppTheme.cardDark : AppTheme.textSecondary)
                             .frame(maxWidth: .infinity)
-                            .padding(.vertical, 12)
-                            .background {
-                                if selectedTab == tab {
-                                    RoundedRectangle(cornerRadius: AppRadius.sm)
-                                        .fill(AppTheme.cardDark)
-                                        .shadow(color: .black.opacity(0.05), radius: 6, y: 2)
-                                }
-                            }
+                            .padding(.vertical, 10)
+                            .background(selectedTab == tab ? AppTheme.textPrimary : Color.clear, in: Capsule())
                     }
+                    .accessibilityAddTraits(selectedTab == tab ? .isSelected : [])
                 }
             }
-            .padding(4)
-            .background(AppTheme.cardMid.opacity(0.5), in: RoundedRectangle(cornerRadius: AppRadius.md))
+            .padding(3)
+            .background(AppTheme.cardMid, in: Capsule())
             .padding(.horizontal, 22)
             .padding(.top, 4)
 
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 22) {
                     // Illustration card
+                    // The receipt on the plain card. The lilac-to-mint wash
+                    // behind it was a bright slab on the dark theme.
                     ZStack {
                         RoundedRectangle(cornerRadius: AppRadius.xl)
-                            .fill(LinearGradient(
-                                colors: [
-                                    Color(hex: "#E8E4FF"),
-                                    Color(hex: "#D9F2EA")
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ))
+                            .fill(AppTheme.cardDark)
                         ReceiptIllustration()
                             .padding(40)
                     }
@@ -348,14 +340,11 @@ private struct LandingView: View {
                             .font(.system(.subheadline))
                         Text(loc("receipt.landing.tip"))
                             .font(.system(.caption, weight: .medium))
-                            .foregroundStyle(AppTheme.accent)
+                            .foregroundStyle(AppTheme.textSecondary)
                             .multilineTextAlignment(.leading)
                             .fixedSize(horizontal: false, vertical: true)
                         Spacer()
                     }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 12)
-                    .background(AppTheme.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: AppRadius.sm))
                     .padding(.horizontal, 22)
 
                     // CTA

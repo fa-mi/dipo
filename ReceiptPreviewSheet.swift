@@ -242,7 +242,7 @@ struct ReceiptPreviewSheet: View {
                 .foregroundStyle(AppTheme.textPrimary)
                 .lineLimit(1)
                 .padding(.horizontal, 10).padding(.vertical, 6)
-                .background(AppTheme.cardMid.opacity(0.8), in: Capsule())
+                .background(AppTheme.cardMid, in: Capsule())
         }
         .buttonStyle(ScaleButtonStyle())
     }
@@ -337,7 +337,7 @@ struct ReceiptPreviewSheet: View {
             }
             .foregroundStyle(canSave ? AppTheme.onVividFill : AppTheme.textSecondary)
             .frame(maxWidth: .infinity).padding(.vertical, 17)
-            .background(canSave ? AppTheme.accentFill : AppTheme.textSecondary.opacity(0.25),
+            .background(canSave ? AppTheme.accentFill : AppTheme.cardMid,
                         in: RoundedRectangle(cornerRadius: AppRadius.lg))
         }
         .buttonStyle(ScaleButtonStyle())

@@ -117,14 +117,8 @@ struct PendingInboxSheet: View {
             // A held bill says what it was matched against, or the two
             // gestures would mean nothing.
             if item.source == .recurring {
-                Label(RecurringManualMatch.holdNote(for: item, context: context),
-                      systemImage: "questionmark.circle.fill")
-                    .font(.system(.caption))
-                    .foregroundStyle(AppTheme.textPrimary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(10)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(AppTheme.orange.opacity(0.10), in: RoundedRectangle(cornerRadius: AppRadius.sm))
+                PendingNote(text: RecurringManualMatch.holdNote(for: item, context: context),
+                            icon: "questionmark.circle.fill")
             }
             if let twin = PendingTwins.kind(of: item, among: pending) {
                 twinNote(twin, for: item)
@@ -141,11 +135,8 @@ struct PendingInboxSheet: View {
     private func twinNote(_ twin: PendingTwins.Kind, for item: PendingTransaction) -> some View {
         let partner = twin == .crossed ? PendingTwins.crossedPartner(of: item, among: pending) : nil
         return VStack(alignment: .leading, spacing: 10) {
-            Label(loc(twin == .crossed ? "pending.twin_crossed" : "pending.twin_repeated"),
-                  systemImage: twin == .crossed ? "arrow.left.arrow.right.circle.fill" : "square.on.square")
-                .font(.system(.caption))
-                .foregroundStyle(AppTheme.textPrimary)
-                .fixedSize(horizontal: false, vertical: true)
+            PendingNote(text: loc(twin == .crossed ? "pending.twin_crossed" : "pending.twin_repeated"),
+                        icon: twin == .crossed ? "arrow.left.arrow.right.circle.fill" : "square.on.square")
             if let partner {
                 if onTwoCards(item, partner) {
                     transferButton(item, partner)
@@ -157,9 +148,7 @@ struct PendingInboxSheet: View {
                 }
             }
         }
-        .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(AppTheme.orange.opacity(0.10), in: RoundedRectangle(cornerRadius: AppRadius.sm))
     }
 
     private func transferButton(_ item: PendingTransaction, _ partner: PendingTransaction) -> some View {
@@ -184,9 +173,9 @@ struct PendingInboxSheet: View {
                         .foregroundStyle(PremiumPlan.royal.color)
                 }
             }
-            .foregroundStyle(AppTheme.accent)
+            .foregroundStyle(AppTheme.textPrimary)
             .padding(.horizontal, 12).padding(.vertical, 7)
-            .background(AppTheme.accent.opacity(0.14), in: Capsule())
+            .background(AppTheme.cardMid, in: Capsule())
         }
         .buttonStyle(ScaleButtonStyle())
     }
@@ -381,14 +370,8 @@ struct PendingRowEditor: View {
 
                         if item.source == .recurring {
                             // rawText is the matched row's id here, not words.
-                            Label(RecurringManualMatch.holdNote(for: item, context: context),
-                                  systemImage: "questionmark.circle.fill")
-                                .font(.system(.footnote))
-                                .foregroundStyle(AppTheme.textPrimary)
-                                .fixedSize(horizontal: false, vertical: true)
-                                .padding(12)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .background(AppTheme.orange.opacity(0.10), in: RoundedRectangle(cornerRadius: AppRadius.md))
+                            PendingNote(text: RecurringManualMatch.holdNote(for: item, context: context),
+                                        icon: "questionmark.circle.fill", font: .system(.footnote))
                         } else if !item.rawText.isEmpty {
                             VStack(alignment: .leading, spacing: 6) {
                                 FormSectionLabel(text: loc("pending.read_from"))
@@ -462,11 +445,11 @@ struct PendingRowEditor: View {
                     .lineLimit(1)
             }
             .padding(.horizontal, 12).padding(.vertical, 9)
-            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
-            .overlay(RoundedRectangle(cornerRadius: AppRadius.md)
-                .stroke(on ? AppTheme.accent : Color.clear, lineWidth: 2))
+            // The chosen card on the raised fill, no ring.
+            .background(on ? AppTheme.cardMid : AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
         }
         .buttonStyle(ScaleButtonStyle())
+        .accessibilityAddTraits(on ? .isSelected : [])
     }
 
     private func save() {
@@ -476,5 +459,25 @@ struct PendingRowEditor: View {
         try? context.save()
         HapticManager.shared.success()
         dismiss()
+    }
+}
+
+/// Something to check before keeping a row: the icon in orange, the words in
+/// ink, nothing behind them.
+struct PendingNote: View {
+    let text: String
+    let icon: String
+    var font: Font = .system(.caption)
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: icon)
+                .foregroundStyle(AppTheme.orange)
+            Text(text)
+                .foregroundStyle(AppTheme.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
+        .font(font)
     }
 }
