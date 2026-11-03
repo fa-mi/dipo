@@ -420,7 +420,7 @@ struct InstallmentSection: View {
                 }
             }
             .padding(11)
-            .background(AppTheme.cardMid.opacity(0.5), in: RoundedRectangle(cornerRadius: AppRadius.sm))
+            .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: AppRadius.sm))
             .contentShape(Rectangle())
             .onTapGesture { HapticManager.shared.tap(); simulating = inst }
     }
@@ -733,7 +733,7 @@ struct InstallmentSimulatorSheet: View {
                 .font(.system(.body, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
                 .keyboardType(.decimalPad).multilineTextAlignment(.center)
                 .padding(.vertical, 11)
-                .background(AppTheme.cardMid.opacity(0.6), in: RoundedRectangle(cornerRadius: AppRadius.sm))
+                .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: AppRadius.sm))
 
             if paying > statement {
                 row(loc("inst.surplus"), money(extra.surplus))

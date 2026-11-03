@@ -55,12 +55,11 @@ struct SalarySetupCTA: View {
 
     var body: some View {
         VStack(spacing: 14) {
-            ZStack {
-                Circle().fill(AppTheme.accent.opacity(0.12)).frame(width: 56, height: 56)
-                Image(systemName: "banknote.fill")
-                    .font(.system(.title2))
-                    .foregroundStyle(AppTheme.accent)
-            }
+            // Salary is money coming in: its icon is green, with nothing
+            // behind it.
+            Image(systemName: "banknote.fill")
+                .font(.system(.title))
+                .foregroundStyle(AppTheme.accent)
             VStack(spacing: 6) {
                 Text(loc("salary.cta.title"))
                     .font(.system(.callout, weight: .bold))
@@ -89,7 +88,6 @@ struct SalarySetupCTA: View {
         .padding(20)
         .frame(maxWidth: .infinity)
         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
-        .overlay(RoundedRectangle(cornerRadius: AppRadius.lg).stroke(AppTheme.accent.opacity(0.2), lineWidth: 1))
     }
 }
 
@@ -108,7 +106,7 @@ struct OwedBackBlock: View {
         switch reading.verdict {
         case .heavy?: return AppTheme.red
         case .tight?: return AppTheme.orange
-        default:      return AppTheme.accent
+        default:      return AppTheme.textPrimary
         }
     }
 
@@ -116,10 +114,8 @@ struct OwedBackBlock: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
                 Image(systemName: "arrow.uturn.backward")
-                    .font(.system(.caption, weight: .bold))
+                    .font(.system(.footnote, weight: .bold))
                     .foregroundStyle(AppTheme.accent)
-                    .frame(width: 26, height: 26)
-                    .background(AppTheme.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: AppRadius.sm))
                 Text(String(format: loc("debt.owed_back.title"), money(plan.owedBack)))
                     .font(.system(.footnote, weight: .semibold))
                     .foregroundStyle(AppTheme.textPrimary)
@@ -144,8 +140,7 @@ struct OwedBackBlock: View {
                     change(loc("debt.owed_back.verdict"), was, will, tint(plan.after))
                 }
             }
-            .padding(.horizontal, 12).padding(.vertical, 10)
-            .background(AppTheme.cardMid.opacity(0.5), in: RoundedRectangle(cornerRadius: AppRadius.sm))
+            .padding(.top, 4)
 
             Text(plan.note(currency: currency))
                 .font(.system(.caption))
@@ -153,7 +148,7 @@ struct OwedBackBlock: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(14)
-        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.cardMid, lineWidth: 1))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
     }
 
     private func payoffRow(_ payoff: OwedBackPlan.Payoff) -> some View {
@@ -163,7 +158,7 @@ struct OwedBackBlock: View {
         case .loan(let rate):    detail = String(format: loc("debt.owed_back.rate"), DebtFirstAdvice.rate(rate))
         }
         let chip = payoff.cleared
-            ? (loc("debt.owed_back.cleared"), AppTheme.accent)
+            ? (loc("debt.owed_back.cleared"), AppTheme.textPrimary)
             : (String(format: loc("debt.owed_back.of"), money(payoff.debt.balance)), AppTheme.textSecondary)
         return row(payoff.debt.name, detail, money(payoff.paid), chip: chip)
     }
@@ -191,8 +186,6 @@ struct OwedBackBlock: View {
                         .font(.system(.caption2, weight: .bold))
                         .foregroundStyle(chip.1)
                         .lineLimit(1)
-                        .padding(.horizontal, 7).padding(.vertical, 2)
-                        .background(chip.1.opacity(0.12), in: Capsule())
                 }
             }
             .fixedSize()
@@ -296,9 +289,7 @@ struct DebtFirstCard: View {
                 .foregroundStyle(AppTheme.textPrimary)
                 .lineSpacing(2)
                 .fixedSize(horizontal: false, vertical: true)
-                .padding(10)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(AppTheme.cardMid.opacity(0.5), in: RoundedRectangle(cornerRadius: AppRadius.md))
         }
         .padding(16)
         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.xl))
@@ -500,13 +491,10 @@ struct DebtEmptyState: View {
     @Bindable var vm: DebtViewModel
     var body: some View {
         VStack(spacing: 22) {
-            ZStack {
-                Circle().fill(AppTheme.accent.opacity(0.14)).frame(width: 120, height: 120)
-                Circle().fill(AppTheme.accentFill).frame(width: 76, height: 76)
-                Image(systemName: "checkmark.seal.fill")
-                    .font(.system(.title, weight: .semibold))
-                    .foregroundStyle(AppTheme.onVividFill)
-            }
+            // The seal alone; the two green discs round it were decoration.
+            Image(systemName: "checkmark.seal.fill")
+                .font(.system(size: 52, weight: .semibold))
+                .foregroundStyle(AppTheme.textSecondary)
             VStack(spacing: 8) {
                 Text(loc("debt.no_debts"))
                     .font(.system(.title3, weight: .bold))

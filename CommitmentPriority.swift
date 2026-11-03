@@ -212,7 +212,7 @@ struct CommitmentPriorityCard: View {
                     Text(money(max(margin, 0)))
                         .font(.system(.title2, weight: .bold))
                         .foregroundStyle(margin <= 0 ? AppTheme.red
-                                         : tight ? AppTheme.orange : AppTheme.accent)
+                                         : tight ? AppTheme.orange : AppTheme.textPrimary)
                     Text(loc("commit.margin_unit"))
                         .font(.system(.caption))
                         .foregroundStyle(AppTheme.textSecondary)
@@ -250,10 +250,8 @@ struct CommitmentPriorityCard: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
+            // The figure's colour says how tight it is; no wash behind it.
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(12)
-            .background((margin <= 0 ? AppTheme.red : tight ? AppTheme.orange : AppTheme.accent)
-                        .opacity(0.10), in: RoundedRectangle(cornerRadius: AppRadius.md))
         }
     }
 
@@ -321,12 +319,10 @@ struct CommitmentPriorityCard: View {
                             Image(systemName: "arrow.right").font(.system(.caption2, weight: .bold)).imageScale(.small)
                                 .foregroundStyle(AppTheme.textSecondary)
                             Text(months(then)).font(.system(.caption2, weight: .bold))
-                                .foregroundStyle(AppTheme.accent)
+                                .foregroundStyle(AppTheme.textPrimary)
                         }
                     }
                 }
-                .padding(11)
-                .background(AppTheme.accent.opacity(0.10), in: RoundedRectangle(cornerRadius: AppRadius.sm))
             }
 
             Button {
@@ -339,7 +335,7 @@ struct CommitmentPriorityCard: View {
                     Image(systemName: expanded ? "chevron.up" : "chevron.down")
                         .font(.system(.caption2, weight: .bold)).imageScale(.small)
                 }
-                .foregroundStyle(AppTheme.accent)
+                .foregroundStyle(AppTheme.textPrimary)
             }
             .buttonStyle(.plain)
 
@@ -348,10 +344,8 @@ struct CommitmentPriorityCard: View {
                     ForEach(review.lines) { line in
                         HStack(spacing: 10) {
                             Image(systemName: line.category.icon)
-                                .font(.system(.caption2)).foregroundStyle(line.category.color)
-                                .frame(width: 26, height: 26)
-                                .background(line.category.color.opacity(0.12),
-                                            in: RoundedRectangle(cornerRadius: AppRadius.xs))
+                                .font(.system(.caption)).foregroundStyle(line.category.color)
+                                .frame(width: 22)
                             VStack(alignment: .leading, spacing: 1) {
                                 Text(line.label)
                                     .font(.system(.caption, weight: .medium))
@@ -373,8 +367,7 @@ struct CommitmentPriorityCard: View {
                                     .foregroundStyle(line.isDiscretionary ? AppTheme.orange : AppTheme.textSecondary)
                             }
                         }
-                        .padding(10)
-                        .background(AppTheme.cardMid.opacity(0.45), in: RoundedRectangle(cornerRadius: AppRadius.sm))
+                        .padding(.vertical, 4)
                     }
                     Text(loc("commit.note"))
                         .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)

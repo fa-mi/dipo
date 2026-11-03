@@ -99,7 +99,7 @@ struct CommitmentImpactPreview: View {
 
     private var tint: Color {
         if impact.overflows { return AppTheme.red }
-        return impact.shareAfter > 0.80 ? AppTheme.orange : AppTheme.accent
+        return impact.shareAfter > 0.80 ? AppTheme.orange : AppTheme.textPrimary
     }
 
     var body: some View {
@@ -168,7 +168,6 @@ struct CommitmentImpactPreview: View {
             }
         }
         .padding(13)
-        .background(tint.opacity(0.08), in: RoundedRectangle(cornerRadius: AppRadius.md))
-        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(tint.opacity(0.25), lineWidth: 1))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
     }
 }
