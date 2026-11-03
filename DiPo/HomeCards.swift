@@ -7,6 +7,9 @@ struct HomeHeader: View {
     let vm: AppViewModel
     @Binding var showSearch: Bool
     @Binding var showNotifications: Bool
+    /// Opens Ask DiPo. It used to be his face in the reminder row; the row
+    /// is now one plain line, so the way in sits with search and news.
+    var onAskDiPo: () -> Void = {}
     private var notifMgr: NotificationManager { NotificationManager.shared }
 
     /// Decoded once and held — not re-decoded on every body pass.
@@ -107,33 +110,36 @@ struct HomeHeader: View {
 
             Spacer(minLength: 8)
 
-            HStack(spacing: 14) {
-                Button { HapticManager.shared.tap(); showSearch = true } label: {
-                    ZStack {
-                        Circle().fill(AppTheme.cardDark).frame(width: 42, height: 42)
-                        Image(systemName: "magnifyingglass").font(.system(.body)).foregroundStyle(AppTheme.textSecondary)
-                    }
+            // Three plain icons, no round tiles behind them: a tile said
+            // "button" a second time. Each keeps a 42 pt target.
+            HStack(spacing: 4) {
+                Button { HapticManager.shared.tap(); onAskDiPo() } label: {
+                    headerIcon("bubble.left.and.text.bubble.right")
                 }
-.accessibilityLabel(loc("a11y.search"))
+                .buttonStyle(ScaleButtonStyle())
+                .accessibilityLabel(loc("dipo.ask"))
+
+                Button { HapticManager.shared.tap(); showSearch = true } label: {
+                    headerIcon("magnifyingglass")
+                }
+                .accessibilityLabel(loc("a11y.search"))
                 .buttonStyle(ScaleButtonStyle())
 
                 Button { HapticManager.shared.tap(); showNotifications = true } label: {
                     ZStack(alignment: .topTrailing) {
-                        ZStack {
-                            Circle().fill(AppTheme.cardDark).frame(width: 42, height: 42)
-                            Image(systemName: notifMgr.hasUnread ? "bell.badge.fill" : "bell")
-                                .font(.system(.body))
-                                .foregroundStyle(notifMgr.hasUnread ? AppTheme.accent : AppTheme.textSecondary)
-                                // Rings once when a new notification lands.
-                                .symbolEffect(.bounce, value: notifMgr.unreadCount)
-                        }
+                        // Ink when there is news, not green: green says money
+                        // coming in. The red count says there is something new.
+                        headerIcon(notifMgr.hasUnread ? "bell.badge.fill" : "bell",
+                                   ink: notifMgr.hasUnread ? AppTheme.textPrimary : AppTheme.textSecondary)
+                            // Rings once when a new notification lands.
+                            .symbolEffect(.bounce, value: notifMgr.unreadCount)
                         if notifMgr.unreadCount > 0 {
                             ZStack {
                                 Circle().fill(AppTheme.redFill).frame(width: 18, height: 18)
                                 Text(notifMgr.unreadCount > 9 ? "9+" : "\(notifMgr.unreadCount)")
                                     .font(.system(.caption2, weight: .bold)).foregroundStyle(AppTheme.onVividFill)
                             }
-                            .offset(x: 4, y: -4)
+                            .offset(x: 0, y: 2)
                         }
                     }
                 }
@@ -152,6 +158,14 @@ struct HomeHeader: View {
         .onReceive(NotificationCenter.default.publisher(for: .profilePhotoDidChange)) { _ in
             loadIdentity()
         }
+    }
+
+    private func headerIcon(_ name: String, ink: Color = AppTheme.textSecondary) -> some View {
+        Image(systemName: name)
+            .font(.system(.body))
+            .foregroundStyle(ink)
+            .frame(width: 42, height: 42)
+            .contentShape(Rectangle())
     }
 
     private func loadIdentity() {

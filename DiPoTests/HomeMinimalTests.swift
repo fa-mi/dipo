@@ -18,11 +18,9 @@ final class HomeMinimalTests: XCTestCase {
         ("HomeHeader", "DiPo/HomeCards.swift"),
         ("BankCardView", "DiPo/HomeCards.swift"),
         ("HomeTotalRow", "DiPo/HomeBalance.swift"),
+        ("HomeTotalSubline", "DiPo/HomeBalance.swift"),
         ("MonthFlowCard", "HomeSummary.swift"),
-        ("RecurringReminderBanner", "DiPo/HomeBanners.swift"),
-        ("SetupSalaryBanner", "DiPo/HomeBanners.swift"),
-        ("PinnedGoalBanner", "DiPo/HomeBanners.swift"),
-        ("NegativeBalanceBanner", "DiPo/HomeBanners.swift"),
+        ("HomeReminderLine", "DiPo/HomeReminders.swift"),
         ("CategoryFilterBar", "DiPo/HomeTransactions.swift"),
         ("TxRow", "DiPo/HomeTransactions.swift"),
     ]
@@ -82,5 +80,35 @@ final class HomeMinimalTests: XCTestCase {
         XCTAssertTrue(TxRow.showsType("tx.type.debt_payment"))
         XCTAssertTrue(TxRow.showsType("Debt Payment"))
         XCTAssertTrue(TxRow.showsType("Arisan"))
+    }
+
+    /// Home's sections sit on the page: the period's figures, the reminder
+    /// line and the header's icons have no card or tile behind them.
+    func testNoCardsOrTilesBehindHomeSections() throws {
+        for view in [("MonthFlowCard", "HomeSummary.swift"),
+                     ("HomeReminderLine", "DiPo/HomeReminders.swift"),
+                     ("HomeTotalSubline", "DiPo/HomeBalance.swift"),
+                     ("HomeHeader", "DiPo/HomeCards.swift")] {
+            let src = try source(of: view.0, in: view.1).joined(separator: "\n")
+            XCTAssertFalse(src.contains("AppTheme.cardDark, in:"), "\(view.0) sits on a card")
+            // A one-line circle fill is an icon tile. (The avatar's circle,
+            // written over several lines, is the photo's frame.)
+            XCTAssertFalse(src.contains("Circle().fill(AppTheme.cardDark)"), "\(view.0) has an icon tile")
+        }
+    }
+
+    /// Ask DiPo is in the header now that the reminder line has no face.
+    func testAskDiPoIsInTheHeader() throws {
+        let header = try source(of: "HomeHeader", in: "DiPo/HomeCards.swift").joined(separator: "\n")
+        XCTAssertTrue(header.contains("onAskDiPo()"))
+        XCTAssertTrue(header.contains("loc(\"dipo.ask\")"))
+    }
+
+    /// The total is the loudest figure on Home.
+    func testTheTotalIsTheBigNumber() throws {
+        let row = try source(of: "HomeTotalRow", in: "DiPo/HomeBalance.swift").joined(separator: "\n")
+        XCTAssertTrue(row.contains(".largeTitle"))
+        let flow = try source(of: "MonthFlowCard", in: "HomeSummary.swift").joined(separator: "\n")
+        XCTAssertFalse(flow.contains(".largeTitle") || flow.contains(".title"), "the period's figures stay smaller")
     }
 }
