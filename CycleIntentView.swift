@@ -73,13 +73,12 @@ struct CycleIntentView: View {
             Text(loc("intent.subtitle"))
                 .font(.system(.footnote)).foregroundStyle(AppTheme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true).lineSpacing(2)
+            // The period, as a plain grey line under the sentence.
             HStack(spacing: 5) {
                 Image(systemName: "calendar").font(.system(.caption2, weight: .semibold)).imageScale(.small)
                 Text(cycleLabel).font(.system(.caption2, weight: .semibold))
             }
-            .foregroundStyle(AppTheme.purple)
-            .padding(.horizontal, 9).padding(.vertical, 4)
-            .background(AppTheme.purple.opacity(0.12), in: Capsule())
+            .foregroundStyle(AppTheme.textSecondary)
         }
     }
 
@@ -95,12 +94,12 @@ struct CycleIntentView: View {
                 }
             } label: {
                 HStack(spacing: 11) {
-                    ZStack {
-                        Circle().fill(kind.tint.opacity(on ? 0.9 : 0.15)).frame(width: 34, height: 34)
-                        Image(systemName: kind.icon)
-                            .font(.system(.subheadline, weight: .semibold))
-                            .foregroundStyle(on ? .white : kind.tint)
-                    }
+                    // The icon in its colour, nothing behind it. Being on is
+                    // said in words under the title.
+                    Image(systemName: kind.icon)
+                        .font(.system(.subheadline, weight: .semibold))
+                        .foregroundStyle(kind.tint)
+                        .frame(width: ListRowMetrics.icon)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(kind.label)
                             .font(.system(.subheadline, weight: .semibold))
@@ -120,13 +119,12 @@ struct CycleIntentView: View {
 
             if isOpen {
                 // What changes vs what doesn't — always shown together.
+                // Plain lines: what changes in ink, what stays true in orange.
                 VStack(alignment: .leading, spacing: 7) {
-                    effectLine("checkmark.circle.fill", AppTheme.accent, loc("intent.effect_label"), kind.effect)
+                    effectLine("checkmark.circle.fill", AppTheme.textPrimary, loc("intent.effect_label"), kind.effect)
                     effectLine("exclamationmark.circle.fill", AppTheme.orange, loc("intent.tradeoff_label"), kind.tradeoff)
                 }
-                .padding(11)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(AppTheme.bg.opacity(0.6), in: RoundedRectangle(cornerRadius: AppRadius.sm))
 
                 TextField(loc("intent.note_placeholder"),
                           text: Binding(
@@ -134,18 +132,21 @@ struct CycleIntentView: View {
                             set: { noteDrafts[kind.rawValue] = $0 }))
                     .font(.system(.caption))
                     .padding(.horizontal, 12).padding(.vertical, 9)
-                    .background(AppTheme.bg.opacity(0.6), in: RoundedRectangle(cornerRadius: AppRadius.sm))
+                    .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: AppRadius.sm))
 
                 HStack(spacing: 8) {
                     Button {
                         HapticManager.shared.success()
                         toggle(kind, recurring: false)
                     } label: {
+                        // On: the plain control fill with the word in red,
+                        // since it takes the choice away. Off: the card's
+                        // one green action.
                         Text(loc(on ? "intent.turn_off" : "intent.apply_cycle"))
                             .font(.system(.caption, weight: .semibold))
-                            .foregroundStyle(on ? AppTheme.red : .white)
+                            .foregroundStyle(on ? AppTheme.red : AppTheme.onVividFill)
                             .frame(maxWidth: .infinity).padding(.vertical, 10)
-                            .background(on ? AppTheme.red.opacity(0.14) : kind.tint, in: Capsule())
+                            .background(on ? AppTheme.cardMid : AppTheme.accentFill, in: Capsule())
                     }
                     .buttonStyle(ScaleButtonStyle())
 
@@ -156,10 +157,9 @@ struct CycleIntentView: View {
                         } label: {
                             Text(loc("intent.apply_ongoing"))
                                 .font(.system(.caption, weight: .semibold))
-                                .foregroundStyle(kind.tint)
+                                .foregroundStyle(AppTheme.textPrimary)
                                 .frame(maxWidth: .infinity).padding(.vertical, 10)
-                                .background(kind.tint.opacity(0.12), in: Capsule())
-                                .overlay(Capsule().stroke(kind.tint.opacity(0.35), lineWidth: 1))
+                                .background(AppTheme.cardMid, in: Capsule())
                         }
                         .buttonStyle(ScaleButtonStyle())
                     }
@@ -177,8 +177,6 @@ struct CycleIntentView: View {
         .padding(13)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
-        .overlay(RoundedRectangle(cornerRadius: AppRadius.md)
-            .stroke(on ? kind.tint.opacity(0.45) : AppTheme.cardMid.opacity(0.4), lineWidth: 1))
     }
 
     private func effectLine(_ icon: String, _ tint: Color, _ label: String, _ text: String) -> some View {
