@@ -157,7 +157,7 @@ struct GoalInvestmentsCard: View {
                 }
                 .foregroundStyle(AppTheme.textPrimary)
                 .frame(maxWidth: .infinity).padding(.vertical, 11)
-                .background(AppTheme.cardMid.opacity(0.7), in: RoundedRectangle(cornerRadius: AppRadius.md))
+                .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: AppRadius.md))
             }
             .buttonStyle(ScaleButtonStyle())
         }
@@ -172,8 +172,7 @@ struct GoalInvestmentsCard: View {
             Image(systemName: h.type.icon)
                 .font(.system(.footnote, weight: .semibold))
                 .foregroundStyle(h.type.color)
-                .frame(width: 32, height: 32)
-                .background(h.type.color.opacity(0.15), in: RoundedRectangle(cornerRadius: AppRadius.sm))
+                .frame(width: ListRowMetrics.icon)
             VStack(alignment: .leading, spacing: 1) {
                 Text(h.name).font(.system(.subheadline, weight: .semibold))
                     .foregroundStyle(AppTheme.textPrimary).lineLimit(1)
@@ -292,8 +291,7 @@ struct GoalHoldingsPicker: View {
                 Image(systemName: h.type.icon)
                     .font(.system(.subheadline, weight: .semibold))
                     .foregroundStyle(h.type.color)
-                    .frame(width: 34, height: 34)
-                    .background(h.type.color.opacity(0.15), in: RoundedRectangle(cornerRadius: AppRadius.sm))
+                    .frame(width: ListRowMetrics.icon)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(h.name).font(.system(.subheadline, weight: .semibold))
                         .foregroundStyle(AppTheme.textPrimary).lineLimit(1)
@@ -307,7 +305,7 @@ struct GoalHoldingsPicker: View {
                 Spacer(minLength: 8)
                 Image(systemName: on ? "checkmark.circle.fill" : "circle")
                     .font(.system(.title3))
-                    .foregroundStyle(on ? AppTheme.accent : AppTheme.textSecondary)
+                    .foregroundStyle(on ? AppTheme.textPrimary : AppTheme.textSecondary)
             }
             .padding(.horizontal, 12).padding(.vertical, 11)
             .contentShape(Rectangle())
