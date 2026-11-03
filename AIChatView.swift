@@ -342,6 +342,8 @@ struct AIChatView: View {
     var isRoyal: Bool = true
     @State private var showVoiceCapture = false
     @State private var showPaywall = false
+    /// Credit packs, for when the month's credits run low or out.
+    @State private var showPacks = false
 
     // DiPo in 3D at the top, reacting to what he says.
     @State private var dipoMood: DiPoMood = .idle
@@ -457,6 +459,9 @@ struct AIChatView: View {
             }
             .preferredColorScheme(appColorScheme())
         }
+        .sheet(isPresented: $showPacks) {
+            BuyCreditsSheet(creditsLeft: vm.creditsLeft) { await vm.loadCredits() }
+        }
         .sheet(isPresented: $showPaywall) {
             PaywallView()
                 .presentationDetents([.large]).presentationDragIndicator(.visible)
@@ -509,10 +514,21 @@ struct AIChatView: View {
                     .foregroundStyle(AppTheme.orange)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            // Running low or out: a pack tops the month up.
+            if offersPacks {
+                AddCreditsLink { showPacks = true }
+                    .padding(.top, 2)
+            }
         }
         .padding(.horizontal, 18)
         .padding(.top, 16)
         .padding(.bottom, 10)
+    }
+
+    /// Royal, with the plan read, and fewer than ten credits left: worth
+    /// offering a pack. Not when the plan wasn't read; restoring fixes that.
+    private var offersPacks: Bool {
+        isRoyal && !planNotRecognized && (vm.creditsLeft ?? Int.max) < 10
     }
 
     /// What DiPo used to say in his bubble that still needs saying: the
