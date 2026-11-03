@@ -952,7 +952,7 @@ struct PayoffSimulatorSheet: View {
                                         Text(String(format: loc("debt.interest_saved"), fmt(interestSaved)))
                                             .font(.system(.footnote, weight: .semibold))
                                             .foregroundStyle(AppTheme.textPrimary)
-                                        Text(String(format: loc("debt.interest_saved"), fmt(extraPayment)))
+                                        Text(String(format: loc("debt.extra_payment_count"), fmt(extraPayment)))
                                             .font(.system(.caption2))
                                             .foregroundStyle(AppTheme.textSecondary)
                                     }
