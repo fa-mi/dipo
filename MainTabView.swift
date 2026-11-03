@@ -28,6 +28,8 @@ struct MainTabView: View {
     @State private var spokenEntry: SpokenEntry? = nil
     /// Screenshot from the Back Tap shortcut, presented straight to the scanner.
     @State private var shortcutScan: ScanPayload? = nil
+    /// Last month's summary, opened from its reminder or its card in the bell.
+    @State private var showMonthlyRecap = false
     @Environment(\.scenePhase) private var scenePhase
     /// Tabs the user has opened this session. Home is always mounted.
     @State private var visitedTabs: Set<AppTab> = [.home]
@@ -372,6 +374,23 @@ struct MainTabView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .requestOpenSavingsGoals)) { _ in
             route { vm.open(PlanRoute.goals) }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .requestOpenMonthlyRecap)) { _ in
+            _ = MonthlyRecapRoute.shared.consume()
+            route { showMonthlyRecap = true }
+        }
+        // Cold launch from the reminder: the tap was reported before anything
+        // here was listening, so the flag it left is picked up instead.
+        .task {
+            if MonthlyRecapRoute.shared.consume() {
+                try? await Task.sleep(for: .milliseconds(400))
+                showMonthlyRecap = true
+            }
+        }
+        .sheet(isPresented: $showMonthlyRecap) {
+            MonthlyRecapView(cards: vm.cards)
+                .presentationDetents([.large]).presentationDragIndicator(.visible)
+                .presentationBackground(AppTheme.bg).preferredColorScheme(appColorScheme())
         }
         .onReceive(NotificationCenter.default.publisher(for: .requestOpenPaywall)) { _ in
             // If the AddTransaction sheet happens to be open (rare — would

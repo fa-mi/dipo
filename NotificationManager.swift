@@ -26,12 +26,14 @@ enum NotificationRoute: String {
     case smartBudget
     case debt
     case savingsGoals
+    case monthlyRecap
 
     var actionLabel: String {
         switch self {
         case .smartBudget:  return loc("notif.route.budget")
         case .debt:         return loc("notif.route.debt")
         case .savingsGoals: return loc("notif.route.goals")
+        case .monthlyRecap: return loc("notif.route.recap")
         }
     }
     var notificationName: Notification.Name {
@@ -39,6 +41,7 @@ enum NotificationRoute: String {
         case .smartBudget:  return .requestOpenSmartBudget
         case .debt:         return .requestOpenDebt
         case .savingsGoals: return .requestOpenSavingsGoals
+        case .monthlyRecap: return .requestOpenMonthlyRecap
         }
     }
 }
@@ -718,12 +721,14 @@ final class NotificationManager {
     // `nonisolated` — only touches UNUserNotificationCenter (thread-safe),
     // so it can be called from the nonisolated smart-reminder schedulers
     // below as well as the @MainActor salary scheduler above.
-    nonisolated private static func scheduleLocalPush(id: String, title: String, body: String, at date: Date) {
+    nonisolated private static func scheduleLocalPush(id: String, title: String, body: String, at date: Date,
+                                                      userInfo: [String: String] = [:]) {
         let content       = UNMutableNotificationContent()
         content.title     = title
         content.body      = body
         content.sound     = .dipo
         content.badge     = 1
+        content.userInfo  = userInfo
 
         let comps   = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: date)
         let trigger = UNCalendarNotificationTrigger(dateMatching: comps, repeats: false)
@@ -766,31 +771,19 @@ final class NotificationManager {
                           at:    fireDate)
     }
 
-    /// Monthly summary — fires the 1st of next month at 09:00.
-    nonisolated static func scheduleMonthlySummary(incomeFormatted: String,
-                                                   expenseFormatted: String,
-                                                   topCategory: String?) {
-        guard MainActor.assumeIsolated({ NotificationPreferences.shared.isEnabled(.summary) }) else { return }
-        let center = UNUserNotificationCenter.current()
-        center.removePendingNotificationRequests(withIdentifiers: ["smart_monthly_summary"])
-
-        let cal = Calendar.current
-        var comps = DateComponents()
-        comps.day    = 1
-        comps.hour   = 9
-        comps.minute = 0
-        guard let fireDate = cal.nextDate(after: .now, matching: comps,
-                                          matchingPolicy: .nextTime) else { return }
-
-        var body = String(format: loc("notif.monthly.body"), incomeFormatted, expenseFormatted)
-        if let topCategory, !topCategory.isEmpty {
-            body += " " + String(format: loc("notif.monthly.top"), topCategory)
-        }
-
+    /// Monthly summary — the 1st at 09:00, about the month just ended
+    /// (`MonthlyRecap.nextReminder`). It says only that the summary is ready and
+    /// opens it when tapped: numbers baked in when it was scheduled were the
+    /// ones from whenever the app was last opened, not the month's.
+    /// `month` nil — nothing recorded in that month — clears it.
+    static func scheduleMonthlySummary(month: String?, at fire: Date?) {
+        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["smart_monthly_summary"])
+        guard NotificationPreferences.shared.isEnabled(.summary), let month, let fire else { return }
         scheduleLocalPush(id: "smart_monthly_summary",
-                          title: loc("notif.monthly.title"),
-                          body:  body,
-                          at:    fireDate)
+                          title: "🗓️ " + String(format: loc("notif.monthly.title"), month),
+                          body:  loc("notif.monthly.body"),
+                          at:    fire,
+                          userInfo: ["route": NotificationRoute.monthlyRecap.rawValue])
     }
 
     /// Inactivity nudge — fires 3 days after the user's last transaction,
@@ -1351,16 +1344,19 @@ enum NotificationScheduler {
         }
         if monthExpense < 0 { monthExpense = 0 }
 
-        let topCategory = perCategory
-            .filter { $0.value > 0 }
-            .max { $0.value < $1.value }?
-            .key.displayLabel
-
-        NotificationManager.scheduleMonthlySummary(
-            incomeFormatted:  CurrencyManager.shared.formatted(monthIncome,  currency: preferred),
-            expenseFormatted: CurrencyManager.shared.formatted(monthExpense, currency: preferred),
-            topCategory: topCategory
-        )
+        // ── Monthly summary ────────────────────────────────────────────
+        // Read the way Statistics reads it (see MonthlyRecap). The reminder is
+        // only set for a month that has something in it, and last month's card
+        // goes in the bell once.
+        let cards: [BankCard] = (try? context.fetch(FetchDescriptor<BankCard>())) ?? []
+        let recapConvert = MonthlyRecap.converter(to: MonthlyRecap.currency(in: cards))
+        let reminder = MonthlyRecap.nextReminder(after: now, cal: cal)
+        let reminderMonth = reminder.flatMap { r in
+            MonthlyRecap.build(MonthlyRecap.transactions(in: cards), month: r.month, cal: cal,
+                               convert: recapConvert) == nil ? nil : MonthlyRecapBell.monthName(r.month)
+        }
+        NotificationManager.scheduleMonthlySummary(month: reminderMonth, at: reminder?.fire)
+        MonthlyRecapBell.postIfDue(cards: cards, now: now)
 
         // ── Inactivity nudge ───────────────────────────────────────────
         let lastTxDate = txs.map(\.date).max()

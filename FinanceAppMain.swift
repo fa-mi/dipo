@@ -145,8 +145,20 @@ class AppDelegate: NSObject, UIApplicationDelegate,
         if response.notification.request.trigger is UNPushNotificationTrigger {
             let content = response.notification.request.content
             Task { @MainActor in Self.mirrorRemotePushToInApp(content) }
+        } else if Self.opensMonthlyRecap(response.notification.request.content.userInfo) {
+            // The monthly summary's reminder opens the summary. Local
+            // reminders only: a remote push can't steer the app this way.
+            Task { @MainActor in MonthlyRecapRoute.shared.open() }
         }
         handler()
+    }
+
+    /// True for the monthly summary's own reminder, which DiPo schedules with
+    /// this route in its userInfo. Spelled out rather than read off
+    /// `NotificationRoute` so it can be checked off the main actor;
+    /// MonthlyRecapTests pins the two together.
+    nonisolated static func opensMonthlyRecap(_ userInfo: [AnyHashable: Any]) -> Bool {
+        (userInfo["route"] as? String) == "monthlyRecap"
     }
 
     // Silent / data remote push (content-available) — gives the app a brief

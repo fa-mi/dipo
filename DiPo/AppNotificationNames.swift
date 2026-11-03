@@ -39,4 +39,6 @@ extension Notification.Name {
     static let requestOpenSharedScan       = Notification.Name("requestOpenSharedScan")
     static let requestOpenDebt           = Notification.Name("requestOpenDebt")
     static let requestOpenSavingsGoals   = Notification.Name("requestOpenSavingsGoals")
+    /// The monthly summary's reminder or its card in the bell was tapped.
+    static let requestOpenMonthlyRecap   = Notification.Name("requestOpenMonthlyRecap")
 }
