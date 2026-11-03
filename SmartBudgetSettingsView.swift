@@ -276,15 +276,29 @@ struct SmartBudgetSettingsSheet: View {
                                })
                 if let gap = billOutside {
                     let money = CurrencyManager.shared.formatted(gap.plan.amount, currency: gap.plan.currency)
-                    // A note on the plain card, with the fix as a word in ink:
-                    // Save is this screen's one green action.
-                    BudgetNote(text: String(format: loc("budget.bill_outside"),
-                                            gap.plan.label, money, gap.card.pickerLabel),
-                               action: String(format: loc("budget.bill_outside_add"), gap.card.pickerLabel)) {
-                        HapticManager.shared.tap()
-                        MainCard.setBillCard(gap.card, true)
-                        LedgerRevision.shared.bump()
+                    VStack(alignment: .leading, spacing: 8) {
+                        Label(String(format: loc("budget.bill_outside"),
+                                     gap.plan.label, money, gap.card.pickerLabel),
+                              systemImage: "info.circle.fill")
+                            .font(.system(.caption, weight: .medium))
+                            .foregroundStyle(AppTheme.textPrimary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Button {
+                            HapticManager.shared.tap()
+                            MainCard.setBillCard(gap.card, true)
+                            LedgerRevision.shared.bump()
+                        } label: {
+                            Text(String(format: loc("budget.bill_outside_add"), gap.card.pickerLabel))
+                                .font(.system(.caption, weight: .bold))
+                                .foregroundStyle(AppTheme.onVividFill)
+                                .padding(.horizontal, 12).padding(.vertical, 7)
+                                .background(AppTheme.accentFill, in: Capsule())
+                        }
+                        .buttonStyle(ScaleButtonStyle())
                     }
+                    .padding(12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(AppTheme.blue.opacity(0.1), in: RoundedRectangle(cornerRadius: AppRadius.md))
                     .padding(.horizontal, 22)
                 }
             }
@@ -346,12 +360,15 @@ struct SmartBudgetSettingsSheet: View {
 
                     // Master toggle
                     HStack(spacing: 14) {
-                        // The icon Plan shows for this feature, in its colour,
-                        // with nothing behind it. Off, it greys.
+                        // The app's green, like every other on/off feature. A
+                        // purple brain made this read as a separate AI product
+                        // bolted on, not DiPo's own budget.
                         Image(systemName: "chart.pie.fill")
                             .font(.system(.title3, weight: .semibold))
-                            .foregroundStyle(isEnabled ? AppTheme.accent : AppTheme.textSecondary)
-                            .frame(width: ListRowMetrics.icon)
+                            .foregroundStyle(isEnabled ? AppTheme.onVividFill : AppTheme.textSecondary)
+                            .frame(width: 46, height: 46)
+                            .background(isEnabled ? AppTheme.accentFill : AppTheme.cardMid,
+                                        in: RoundedRectangle(cornerRadius: AppRadius.sm))
                         VStack(alignment: .leading, spacing: 2) {
                             Text(loc("profile.budget")).font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
                             Text(loc("budget.sub")).font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
@@ -380,15 +397,14 @@ struct SmartBudgetSettingsSheet: View {
                             }
                             if let ahead = investAhead {
                                 let goal = monthlyIncome * ahead.ratio
-                                HStack(alignment: .top, spacing: 12) {
-                                    // Good news in words; the seal is the
-                                    // group's, in the group's colour.
-                                    Image(systemName: "checkmark.seal.fill").font(.system(.subheadline))
-                                        .foregroundStyle(BudgetGroup.investDebt.color)
-                                        .frame(width: ListRowMetrics.icon)
+                                HStack(spacing: 12) {
+                                    ZStack {
+                                        Circle().fill(AppTheme.accent.opacity(0.15)).frame(width: 36, height: 36)
+                                        Image(systemName: "checkmark.seal.fill").font(.system(.subheadline)).foregroundStyle(AppTheme.accent)
+                                    }
                                     VStack(alignment: .leading, spacing: 3) {
                                         Text(String(format: loc("budget.ahead_title"), BudgetGroup.investDebt.label))
-                                            .font(.system(.footnote, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
+                                            .font(.system(.footnote, weight: .bold)).foregroundStyle(AppTheme.accent)
                                         Text(ahead.spent - goal >= 0.5
                                              ? String(format: loc("budget.ahead_detail"),
                                                       money(ahead.spent), money(ahead.spent - goal), money(goal))
@@ -398,8 +414,8 @@ struct SmartBudgetSettingsSheet: View {
                                     }
                                     Spacer()
                                 }
-                                .padding(14)
-                                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+                                .padding(12)
+                                .background(AppTheme.accent.opacity(0.08), in: RoundedRectangle(cornerRadius: AppRadius.sm))
                             }
                         }
                         .padding(.horizontal, 22).padding(.top, 12)
@@ -588,11 +604,12 @@ struct SmartBudgetSettingsSheet: View {
         var detail = String(format: loc("budget.over_detail"), money(spent), money(limit), money(spent - limit))
         if planned { detail += " " + loc("budget.planned_note") }
         let title = String(format: loc(planned ? "insight.group_over_planned_title" : "budget.over_budget"), group.label)
-        // The colour is in the icon and the title; the card is the plain one.
-        return HStack(alignment: .top, spacing: 12) {
-            Image(systemName: planned ? "checkmark.seal.fill" : "exclamationmark.triangle.fill")
-                .font(.system(.subheadline)).foregroundStyle(tint)
-                .frame(width: ListRowMetrics.icon)
+        return HStack(spacing: 12) {
+            ZStack {
+                Circle().fill(tint.opacity(0.15)).frame(width: 36, height: 36)
+                Image(systemName: planned ? "checkmark.seal.fill" : "exclamationmark.triangle.fill")
+                    .font(.system(.subheadline)).foregroundStyle(tint)
+            }
             VStack(alignment: .leading, spacing: 3) {
                 Text(title).font(.system(.footnote, weight: .bold)).foregroundStyle(tint)
                 Text(detail)
@@ -615,8 +632,9 @@ struct SmartBudgetSettingsSheet: View {
             }
             Spacer()
         }
-        .padding(14)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .padding(12)
+        .background(tint.opacity(0.07), in: RoundedRectangle(cornerRadius: AppRadius.sm))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.sm).stroke(tint.opacity(0.22), lineWidth: 1))
     }
 
     // MARK: - Overview Tab
@@ -722,13 +740,24 @@ struct SmartBudgetSettingsSheet: View {
             HapticManager.shared.tap()
             showRecommendation = true
         } label: {
-            // A row on the plain card, first on the tab. Its icon keeps DiPo's
-            // green; the card is not washed in it, since Save is the green action.
-            ListRow(icon: "sparkles", tint: AppTheme.accent,
-                    title: loc("reco.cta_title"), subtitle: loc("reco.cta_sub")) {
-                ListChevron()
+            // A green-tinted card rather than a purple gradient: it is the most
+            // useful thing on this tab, and it should look like DiPo, not an ad.
+            HStack(spacing: 12) {
+                Image(systemName: "sparkles")
+                    .font(.system(.title3, weight: .semibold))
+                    .foregroundStyle(AppTheme.onVividFill)
+                    .frame(width: 44, height: 44)
+                    .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: AppRadius.sm))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(loc("reco.cta_title")).font(.system(.subheadline, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
+                    Text(loc("reco.cta_sub")).font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 4)
+                Image(systemName: "chevron.right").font(.system(.footnote, weight: .semibold)).foregroundStyle(AppTheme.textSecondary)
             }
-            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+            .padding(14)
+            .background(AppTheme.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: AppRadius.lg))
         }
         .buttonStyle(ScaleButtonStyle())
         .padding(.horizontal, 22)
@@ -800,8 +829,10 @@ struct SmartBudgetSettingsSheet: View {
                 }
                 Spacer(minLength: 0)
                 Text(loc("main.badge"))
-                    .font(.system(.caption2, weight: .semibold))
-                    .foregroundStyle(AppTheme.textSecondary)
+                    .font(.system(.caption2, weight: .bold))
+                    .foregroundStyle(AppTheme.accent)
+                    .padding(.horizontal, 6).padding(.vertical, 2)
+                    .background(AppTheme.accent.opacity(0.15), in: Capsule())
                     .lineLimit(1).fixedSize()
             }
             .padding(.horizontal, 14).padding(.vertical, 11)
@@ -829,8 +860,7 @@ struct SmartBudgetSettingsSheet: View {
             HStack {
                 Text(loc("budget.allocation")).font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
                 Spacer()
-                // Ink when it adds up, red when it doesn't: Save waits on it.
-                Text("\(totalPct)% / 100%").font(.system(.footnote, weight: .bold)).foregroundStyle(isBalanced ? AppTheme.textPrimary : AppTheme.red)
+                Text("\(totalPct)% / 100%").font(.system(.footnote, weight: .bold)).foregroundStyle(isBalanced ? AppTheme.accent : AppTheme.red)
             }.padding(.horizontal, 22)
             if !isBalanced {
                 HStack(spacing: 6) {
@@ -876,12 +906,18 @@ struct SmartBudgetSettingsSheet: View {
                 lifestylePct  = Self.pct(SmartBudgetManager.shared.lifestyleRatio)
                 investPct     = Self.pct(SmartBudgetManager.shared.investDebtRatio)
             } label: {
-                // The word in red on the plain card, like Profile's Log Out:
-                // it takes the card's own split away.
-                ListButtonLabel(title: loc("budget.reset_to_default"))
-                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+                HStack(spacing: 8) {
+                    Image(systemName: "arrow.uturn.backward.circle").font(.system(.subheadline))
+                    Text(loc("budget.reset_to_default"))
+                        .font(.system(.subheadline, weight: .semibold))
+                }
+                .foregroundStyle(AppTheme.red)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background(AppTheme.red.opacity(0.1), in: RoundedRectangle(cornerRadius: AppRadius.sm))
+                .overlay(RoundedRectangle(cornerRadius: AppRadius.sm).stroke(AppTheme.red.opacity(0.25), lineWidth: 1))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(ScaleButtonStyle())
             .padding(.horizontal, 22)
             .padding(.top, 8)
         }
@@ -975,13 +1011,14 @@ struct BudgetPresetCard: View {
             }
             .padding(12)
             .frame(width: 160, height: 120, alignment: .topLeading)
-            // The chosen one sits on the raised fill, with its tick; the rest
-            // have no outline.
-            .background(isSelected ? AppTheme.cardMid : AppTheme.cardDark,
-                        in: RoundedRectangle(cornerRadius: AppRadius.md))
+            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+            .overlay(
+                RoundedRectangle(cornerRadius: AppRadius.md)
+                    .stroke(isSelected ? preset.color : AppTheme.cardMid.opacity(0.4),
+                            lineWidth: isSelected ? 2 : 1)
+            )
         }
         .buttonStyle(ScaleButtonStyle())
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
 
@@ -1129,23 +1166,28 @@ struct BudgetGroupCard: View {
                     Spacer()
                     // What happened, in words: "62% / 50%" was two shares of
                     // income side by side with nothing saying which was which.
-                    // The colour of the words says it; nothing sits behind them.
                     if isOver {
                         Text(String(format: loc("budget.over_short"),
                                     CurrencyManager.shared.formatted((spent - limit).rounded(), currency: currency)))
                             .font(.system(.caption2, weight: .bold)).foregroundStyle(overTint)
                             .lineLimit(1)
+                            .padding(.horizontal, 8).padding(.vertical, 3)
+                            .background(overTint.opacity(0.12), in: Capsule())
                     } else if willGoOver {
                         // Not over yet: orange, and in the future tense.
                         Text(String(format: loc("budget.will_go_over_short"), money(spent + billsTotal - limit)))
                             .font(.system(.caption2, weight: .bold)).foregroundStyle(AppTheme.orange)
                             .lineLimit(1)
+                            .padding(.horizontal, 8).padding(.vertical, 3)
+                            .background(AppTheme.orange.opacity(0.12), in: Capsule())
                     } else if isAhead {
                         HStack(spacing: 3) {
                             Image(systemName: "checkmark").font(.system(.caption2, weight: .heavy))
                             Text(loc("budget.on_target"))
                         }
-                        .font(.system(.caption2, weight: .bold)).foregroundStyle(group.color)
+                        .font(.system(.caption2, weight: .bold)).foregroundStyle(AppTheme.accent)
+                        .padding(.horizontal, 8).padding(.vertical, 3)
+                        .background(AppTheme.accent.opacity(0.12), in: Capsule())
                     }
                     Image(systemName: "chevron.right").font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                 }
@@ -1214,8 +1256,9 @@ struct BudgetGroupCard: View {
                 }
             }
             .padding(14)
-            // No outline when over: the red words, bar and figure say it.
             .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+            // Outlined only when over budget — the one state worth a border.
+            .overlay(RoundedRectangle(cornerRadius: AppRadius.lg).stroke(isOver && !excused ? AppTheme.red.opacity(0.35) : Color.clear, lineWidth: 1.5))
         }
         .buttonStyle(.plain)
         .onAppear { withAnimation(.easeInOut(duration: 1.0).delay(0.15)) { animatedProgress = progress } }
@@ -1398,13 +1441,27 @@ struct BudgetGroupDetailView: View {
     /// never reached this target.
     @ViewBuilder private var misfiledHints: some View {
         ForEach(misfiled.filter { !moved.contains($0.id) }, id: \.id) { plan in
-            BudgetNote(text: String(format: loc("budget.misfiled_investment"), plan.label,
-                                    CurrencyManager.shared.formatted(plan.amount, currency: plan.currency),
-                                    plan.category.displayLabel,
-                                    SmartBudgetManager.shared.group(for: plan.category)?.label ?? plan.category.displayLabel),
-                       action: String(format: loc("budget.misfiled_move"), TxCategory.investment.displayLabel)) {
-                moveToInvestment(plan)
+            VStack(alignment: .leading, spacing: 8) {
+                Label(String(format: loc("budget.misfiled_investment"), plan.label,
+                             CurrencyManager.shared.formatted(plan.amount, currency: plan.currency),
+                             plan.category.displayLabel,
+                             SmartBudgetManager.shared.group(for: plan.category)?.label ?? plan.category.displayLabel),
+                      systemImage: "info.circle.fill")
+                    .font(.system(.caption, weight: .medium))
+                    .foregroundStyle(AppTheme.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Button { moveToInvestment(plan) } label: {
+                    Text(String(format: loc("budget.misfiled_move"), TxCategory.investment.displayLabel))
+                        .font(.system(.caption, weight: .bold))
+                        .foregroundStyle(AppTheme.onVividFill)
+                        .padding(.horizontal, 12).padding(.vertical, 7)
+                        .background(AppTheme.accentFill, in: Capsule())
+                }
+                .buttonStyle(ScaleButtonStyle())
             }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(AppTheme.blue.opacity(0.1), in: RoundedRectangle(cornerRadius: AppRadius.md))
             .padding(.horizontal, 22)
         }
     }
@@ -1427,7 +1484,8 @@ struct BudgetGroupDetailView: View {
                         HStack(spacing: 14) {
                             Image(systemName: bill.category.icon)
                                 .font(.system(.subheadline)).foregroundStyle(bill.category.color)
-                                .frame(width: ListRowMetrics.icon)
+                                .frame(width: 40, height: 40)
+                                .background(bill.category.color.opacity(0.14), in: RoundedRectangle(cornerRadius: AppRadius.sm))
                             VStack(alignment: .leading, spacing: 3) {
                                 Text(bill.label).font(.system(.subheadline, weight: .medium))
                                     .foregroundStyle(AppTheme.textPrimary).lineLimit(1)
@@ -1482,9 +1540,12 @@ struct BudgetGroupDetailView: View {
     private var limitFraction: Double { limit / barScale }
     /// The tick is drawn once something — spent or still to come — reaches it.
     private var showsLimitTick: Bool { isOver || isAhead || willGoOver || plannedToReach }
-    /// Past a limit is red, or blue when it was the plan; past a target is
-    /// more of the good thing, in the group's colour.
-    private var overspillColor: Color { group.isCeiling ? overTint : group.color }
+    /// Past a limit warms to red — or stays blue when it was the plan; past a
+    /// target is more of the good thing, in the group's colour.
+    private var overspillColors: [Color] {
+        guard group.isCeiling else { return [group.color, group.color.opacity(0.75)] }
+        return excused ? [AppTheme.blue.opacity(0.75), AppTheme.blue] : [AppTheme.orange, AppTheme.red]
+    }
     /// Percentage of the budget consumed (can exceed 100).
     private var usedOfBudgetPct: Int { limit > 0 ? Int(((spent / limit) * 100).rounded()) : 0 }
 
@@ -1496,18 +1557,17 @@ struct BudgetGroupDetailView: View {
                     ZStack(alignment: .leading) {
                         Capsule().fill(AppTheme.cardMid).frame(height: 12)
 
-                        // Flat colours: what is inside the limit in the
-                        // group's, what ran past it in the over colour.
                         HStack(spacing: 0) {
-                            Rectangle()
-                                .fill(group.color)
+                            Capsule()
+                                .fill(LinearGradient(colors: [group.color.opacity(0.75), group.color],
+                                                     startPoint: .leading, endPoint: .trailing))
                                 .frame(width: W * CGFloat(withinFraction))
                             if overFraction > 0 {
-                                // Past a limit is red (blue when planned); past
-                                // a target is more of the good thing, in the
-                                // group's colour.
-                                Rectangle()
-                                    .fill(overspillColor)
+                                // Past a limit warms to red; past a target is
+                                // more of the good thing, in the group's colour.
+                                Capsule()
+                                    .fill(LinearGradient(colors: overspillColors,
+                                                         startPoint: .leading, endPoint: .trailing))
                                     .frame(width: W * CGFloat(overFraction))
                             }
                             // Still to come: paler, so it reads as claimed,
@@ -1526,10 +1586,10 @@ struct BudgetGroupDetailView: View {
 
                         // Limit tick — drawn once spending, or what is still
                         // to come, reaches it.
-                        // In ink, which reads on either theme without a shadow.
                         if showsLimitTick {
-                            Capsule().fill(AppTheme.textPrimary)
+                            Capsule().fill(Color.white.opacity(0.92))
                                 .frame(width: 2.5, height: 20)
+                                .shadow(color: .black.opacity(0.4), radius: 2)
                                 .offset(x: W * CGFloat(limitFraction) - 1.25)
                         }
                     }
@@ -1580,10 +1640,10 @@ struct BudgetGroupDetailView: View {
                     // Hero summary card
                     VStack(spacing: 0) {
                         HStack(spacing: 14) {
-                            // The group's icon in the group's colour, nothing
-                            // behind it. Being over is said beside it in words.
-                            Image(systemName: group.icon).font(.system(.title2)).foregroundStyle(group.color)
-                                .frame(width: ListRowMetrics.icon)
+                            ZStack {
+                                RoundedRectangle(cornerRadius: AppRadius.md).fill(isOver ? overTint.opacity(0.12) : group.color.opacity(0.12)).frame(width: 52, height: 52)
+                                Image(systemName: group.icon).font(.system(.title2)).foregroundStyle(isOver ? overTint : group.color)
+                            }
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(group.label).font(.system(.body, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
                                 // Category names in the app's language. `rawValue` is the stored English
@@ -1592,14 +1652,19 @@ struct BudgetGroupDetailView: View {
                             }
                             Spacer()
                             if isOver {
-                                Label(loc("budget.over_badge"),
-                                      systemImage: excused ? "checkmark.seal.fill" : "exclamationmark.triangle.fill")
-                                    .font(.system(.caption2, weight: .bold)).foregroundStyle(overTint)
-                                    .fixedSize()
+                                VStack(spacing: 2) {
+                                    Image(systemName: excused ? "checkmark.seal.fill" : "exclamationmark.triangle.fill").font(.system(.caption)).foregroundStyle(overTint)
+                                    Text(loc("budget.over_badge")).font(.system(.caption2, weight: .bold)).foregroundStyle(overTint)
+                                }
+                                .padding(.horizontal, 10).padding(.vertical, 6)
+                                .background(overTint.opacity(0.1), in: RoundedRectangle(cornerRadius: AppRadius.sm))
                             } else if isAhead {
-                                Label(loc("budget.on_target"), systemImage: "checkmark.seal.fill")
-                                    .font(.system(.caption2, weight: .bold)).foregroundStyle(group.color)
-                                    .fixedSize()
+                                VStack(spacing: 2) {
+                                    Image(systemName: "checkmark.seal.fill").font(.system(.caption)).foregroundStyle(AppTheme.accent)
+                                    Text(loc("budget.on_target")).font(.system(.caption2, weight: .bold)).foregroundStyle(AppTheme.accent)
+                                }
+                                .padding(.horizontal, 10).padding(.vertical, 6)
+                                .background(AppTheme.accent.opacity(0.1), in: RoundedRectangle(cornerRadius: AppRadius.sm))
                             }
                         }
                         .padding(.horizontal, 18).padding(.top, 18).padding(.bottom, 14)
@@ -1608,10 +1673,13 @@ struct BudgetGroupDetailView: View {
                             .padding(.horizontal, 18)
 
                         HStack(alignment: .top) {
-                            Text(statusLine)
-                                .font(.system(.caption2, weight: .medium))
-                                .foregroundStyle(isOver ? overTint : isAhead ? AppTheme.textPrimary : AppTheme.textSecondary)
-                                .fixedSize(horizontal: false, vertical: true)
+                            HStack(alignment: .top, spacing: 5) {
+                                Circle().fill(isOver ? overTint : group.color).frame(width: 6, height: 6).padding(.top, 4)
+                                Text(statusLine)
+                                    .font(.system(.caption2, weight: .medium))
+                                    .foregroundStyle(isOver ? overTint : isAhead ? AppTheme.accent : AppTheme.textSecondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
                             Spacer(minLength: 10)
                             Text(groupTx.count == 1
                                  ? loc("budget.tx_count_one")
@@ -1633,26 +1701,22 @@ struct BudgetGroupDetailView: View {
 
                         Divider().background(AppTheme.cardMid).padding(.horizontal, 18).padding(.vertical, 14)
 
-                        // Three figures under plain labels. The coloured dots
-                        // before each label keyed nothing on the bar.
                         HStack(spacing: 0) {
                             VStack(spacing: 5) {
-                                Text(loc("budget.spent")).font(.system(.caption2, weight: .medium)).foregroundStyle(AppTheme.textSecondary)
+                                HStack(spacing: 4) { Circle().fill(isOver ? overTint : AppTheme.textSecondary).frame(width: 6, height: 6); Text(loc("budget.spent")).font(.system(.caption2, weight: .medium)).foregroundStyle(AppTheme.textSecondary) }
                                 Text(fmt(spent)).font(.system(.subheadline, weight: .bold)).foregroundStyle(isOver ? overTint : AppTheme.textPrimary).minimumScaleFactor(0.6).lineLimit(1)
                                 Text(String(format: loc("budget.pct_income"), actualPct)).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                             }.frame(maxWidth: .infinity).padding(.vertical, 4)
                             Rectangle().fill(AppTheme.cardMid).frame(width: 1, height: 52)
                             VStack(spacing: 5) {
-                                Text(loc(group.isCeiling ? "budget.limit_marker" : "budget.target")).font(.system(.caption2, weight: .medium)).foregroundStyle(AppTheme.textSecondary)
+                                HStack(spacing: 4) { Circle().fill(group.color).frame(width: 6, height: 6); Text(loc(group.isCeiling ? "budget.limit_marker" : "budget.target")).font(.system(.caption2, weight: .medium)).foregroundStyle(AppTheme.textSecondary) }
                                 Text(limit > 0 ? fmt(limit) : "—").font(.system(.subheadline, weight: .bold)).foregroundStyle(group.color).minimumScaleFactor(0.6).lineLimit(1)
                                 Text(String(format: loc("budget.pct_income"), targetPct)).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                             }.frame(maxWidth: .infinity).padding(.vertical, 4)
                             Rectangle().fill(AppTheme.cardMid).frame(width: 1, height: 52)
                             VStack(spacing: 5) {
-                                Text(loc(thirdLabelKey)).font(.system(.caption2, weight: .medium)).foregroundStyle(AppTheme.textSecondary)
-                                // What is left is the budget's, not money coming
-                                // in: ink, as on Plan.
-                                Text(isOver || isAhead ? fmt(overAmt) : fmt(remaining)).font(.system(.subheadline, weight: .bold)).foregroundStyle(isOver ? overTint : AppTheme.textPrimary).minimumScaleFactor(0.6).lineLimit(1)
+                                HStack(spacing: 4) { Circle().fill(isOver ? overTint : AppTheme.accent).frame(width: 6, height: 6); Text(loc(thirdLabelKey)).font(.system(.caption2, weight: .medium)).foregroundStyle(AppTheme.textSecondary) }
+                                Text(isOver || isAhead ? fmt(overAmt) : fmt(remaining)).font(.system(.subheadline, weight: .bold)).foregroundStyle(isOver ? overTint : AppTheme.accent).minimumScaleFactor(0.6).lineLimit(1)
                                 // A share of income like the two columns beside it.
                                 // "+12%" read as 12% of the limit.
                                 Text(String(format: loc("budget.pct_income"), isOver || isAhead ? overPct : BudgetGroup.pct(remaining, of: income))).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
@@ -1685,6 +1749,7 @@ struct BudgetGroupDetailView: View {
                         }
                     }
                     .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+                    .overlay(RoundedRectangle(cornerRadius: AppRadius.lg).stroke(isOver && !excused ? AppTheme.red.opacity(0.3) : Color.clear, lineWidth: 1.5))
                     .padding(.horizontal, 22)
 
                     misfiledHints
@@ -1702,8 +1767,10 @@ struct BudgetGroupDetailView: View {
                                 ForEach(catBreakdown, id: \.cat) { item in
                                     let share = item.amount / max(spent, 1)
                                     HStack(spacing: 12) {
-                                        Image(systemName: item.cat.icon).font(.system(.subheadline)).foregroundStyle(item.cat.color)
-                                            .frame(width: ListRowMetrics.icon)
+                                        ZStack {
+                                            RoundedRectangle(cornerRadius: AppRadius.sm).fill(item.cat.color.opacity(0.14)).frame(width: 36, height: 36)
+                                            Image(systemName: item.cat.icon).font(.system(.subheadline)).foregroundStyle(item.cat.color)
+                                        }
                                         VStack(alignment: .leading, spacing: 6) {
                                             HStack(alignment: .firstTextBaseline, spacing: 8) {
                                                 Text(item.cat.displayLabel).font(.system(.footnote, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
@@ -1717,7 +1784,8 @@ struct BudgetGroupDetailView: View {
                                                 ZStack(alignment: .leading) {
                                                     Capsule().fill(AppTheme.cardMid).frame(height: 5)
                                                     Capsule()
-                                                        .fill(item.cat.color)
+                                                        .fill(LinearGradient(colors: [item.cat.color.opacity(0.75), item.cat.color],
+                                                                             startPoint: .leading, endPoint: .trailing))
                                                         .frame(width: max(g.size.width * CGFloat(share), share > 0 ? 5 : 0), height: 5)
                                                 }
                                             }.frame(height: 5)
@@ -1742,8 +1810,7 @@ struct BudgetGroupDetailView: View {
                                         HStack {
                                             Text(grp.label).font(.system(.caption, weight: .semibold)).foregroundStyle(AppTheme.textSecondary)
                                             Spacer()
-                                            // A day's spending is not trouble: grey, like its date.
-                                            Text(CurrencyManager.shared.formatted(dayTotal, currency: currencyCode)).font(.system(.caption, weight: .medium)).foregroundStyle(AppTheme.textSecondary)
+                                            Text(CurrencyManager.shared.formatted(dayTotal, currency: currencyCode)).font(.system(.caption, weight: .medium)).foregroundStyle(AppTheme.red.opacity(0.7))
                                         }.padding(.horizontal, 22)
                                         VStack(spacing: 0) {
                                             ForEach(grp.txs) { tx in
@@ -1755,11 +1822,11 @@ struct BudgetGroupDetailView: View {
                                                     }
                                                     VStack(alignment: .leading, spacing: 3) {
                                                         Text(tx.name).font(.system(.subheadline, weight: .medium)).foregroundStyle(AppTheme.textPrimary)
-                                                        // Time and category on one grey line; the
-                                                        // category's colour is already its icon's.
-                                                        Text(tx.date.formatted(date: .omitted, time: .shortened) + " · " + tx.category.displayLabel)
-                                                            .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
-                                                            .lineLimit(1)
+                                                        HStack(spacing: 6) {
+                                                            Text(tx.date.formatted(date: .omitted, time: .shortened)).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
+                                                            Text(tx.category.displayLabel).font(.system(.caption2, weight: .semibold)).foregroundStyle(tx.category.color)
+                                                                .padding(.horizontal, 7).padding(.vertical, 2).background(tx.category.color.opacity(0.12), in: Capsule())
+                                                        }
                                                     }
                                                     Spacer()
                                                     VStack(alignment: .trailing, spacing: 2) {
@@ -1798,45 +1865,6 @@ struct BudgetGroupDetailView: View {
     }
 }
 
-
-// MARK: - A note with a fix
-
-/// Something the budget noticed and can fix in one tap: a bill paid from a
-/// card it doesn't count, an investment filed as spending. The note sits on
-/// the plain card with its info icon in blue; the fix is a word in ink, since
-/// Save is the screen's one green action.
-struct BudgetNote: View {
-    let text: String
-    let action: String
-    let perform: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .top, spacing: 8) {
-                Image(systemName: "info.circle.fill")
-                    .font(.system(.caption))
-                    .foregroundStyle(AppTheme.blue)
-                Text(text)
-                    .font(.system(.caption, weight: .medium))
-                    .foregroundStyle(AppTheme.textPrimary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            Button(action: perform) {
-                HStack(spacing: 2) {
-                    Text(action)
-                    Image(systemName: "chevron.right").imageScale(.small)
-                }
-                .font(.system(.caption, weight: .bold))
-                .foregroundStyle(AppTheme.textPrimary)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-        }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
-    }
-}
 
 // MARK: - Group arithmetic, one rule
 

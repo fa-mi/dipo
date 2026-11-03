@@ -568,10 +568,9 @@ struct SmartRecommendationView: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
         }
-        // Three columns on the card itself. The tinted wash behind each said
-        // again what the icon's colour says.
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.vertical, 4)
+        .padding(12)
+        .background(m.rating.color.opacity(0.10), in: RoundedRectangle(cornerRadius: AppRadius.md))
     }
 
     // MARK: What to do
@@ -592,7 +591,7 @@ struct SmartRecommendationView: View {
             VStack(spacing: 0) {
                 ForEach(Array(r.topItems.enumerated()), id: \.element.id) { i, item in
                     if i > 0 {
-                        Rectangle().fill(AppTheme.cardMid.opacity(0.7)).frame(height: 1).padding(.leading, 54)
+                        Rectangle().fill(AppTheme.cardMid.opacity(0.7)).frame(height: 1).padding(.leading, 66)
                     }
                     actionRow(item)
                 }
@@ -624,8 +623,8 @@ struct SmartRecommendationView: View {
             Image(systemName: item.icon)
                 .font(.system(.callout, weight: .semibold))
                 .foregroundStyle(item.tint)
-                .frame(width: ListRowMetrics.icon)
-                .padding(.top, 2)
+                .frame(width: 40, height: 40)
+                .background(item.tint.opacity(0.14), in: RoundedRectangle(cornerRadius: AppRadius.sm))
             VStack(alignment: .leading, spacing: 3) {
                 Text(item.title)
                     .font(.system(.subheadline, weight: .semibold))
@@ -639,10 +638,11 @@ struct SmartRecommendationView: View {
             Spacer(minLength: 6)
             VStack(alignment: .trailing, spacing: 8) {
                 if !item.badge.isEmpty {
-                    // The word in its colour, nothing behind it.
                     Text(item.badge)
                         .font(.system(.caption2, weight: .bold))
                         .foregroundStyle(item.badgeTint)
+                        .padding(.horizontal, 8).padding(.vertical, 4)
+                        .background(item.badgeTint.opacity(0.12), in: Capsule())
                         .fixedSize()
                 }
                 if chevron {
@@ -754,10 +754,8 @@ struct SmartRecommendationView: View {
                     showBriefing = true
                 }
                 divider
-                // Blue once a choice is marked, as Smart Budget says a
-                // planned overspend; green is for money coming in.
                 linkRow(icon: r.declaredIntents.isEmpty ? "hand.raised.fill" : "checkmark.seal.fill",
-                        tint: r.declaredIntents.isEmpty ? AppTheme.orange : AppTheme.blue,
+                        tint: r.declaredIntents.isEmpty ? AppTheme.orange : AppTheme.accent,
                         title: loc(r.declaredIntents.isEmpty ? "reco.intent_cta" : "reco.intent_active"),
                         detail: r.declaredIntents.isEmpty
                             ? loc("reco.intent_cta_sub")
@@ -770,7 +768,7 @@ struct SmartRecommendationView: View {
     }
 
     private var divider: some View {
-        Rectangle().fill(AppTheme.cardMid.opacity(0.7)).frame(height: 1).padding(.leading, 54)
+        Rectangle().fill(AppTheme.cardMid.opacity(0.7)).frame(height: 1).padding(.leading, 62)
     }
 
     private func linkRow(icon: String, tint: Color, title: String, detail: String?,
@@ -782,7 +780,8 @@ struct SmartRecommendationView: View {
                 Image(systemName: icon)
                     .font(.system(.subheadline, weight: .semibold))
                     .foregroundStyle(tint)
-                    .frame(width: ListRowMetrics.icon)
+                    .frame(width: 36, height: 36)
+                    .background(tint.opacity(0.14), in: RoundedRectangle(cornerRadius: AppRadius.sm))
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
                         .font(.system(.subheadline, weight: .semibold))
@@ -813,7 +812,7 @@ struct SmartRecommendationView: View {
             VStack(alignment: .leading, spacing: 12) {
                 ForEach(Array(r.reasons.enumerated()), id: \.offset) { _, reason in
                     HStack(alignment: .firstTextBaseline, spacing: 10) {
-                        Circle().fill(AppTheme.textSecondary).frame(width: 5, height: 5)
+                        Circle().fill(AppTheme.textSecondary.opacity(0.6)).frame(width: 5, height: 5)
                             .alignmentGuide(.firstTextBaseline) { d in d[.bottom] + 4 }
                         Text(reason)
                             .font(.system(.footnote))
@@ -922,6 +921,8 @@ struct ConfidenceBadge: View {
             Text(text).font(.system(.caption2, weight: .semibold))
         }
         .foregroundStyle(tint)
+        .padding(.horizontal, 7).padding(.vertical, 3)
+        .background(tint.opacity(0.14), in: Capsule())
     }
 }
 
@@ -974,6 +975,8 @@ struct ScoreDetailSheet: View {
                             Label(reco.periodLabel, systemImage: "calendar")
                                 .font(.system(.caption2, weight: .semibold))
                                 .foregroundStyle(AppTheme.textSecondary)
+                                .padding(.horizontal, 10).padding(.vertical, 4)
+                                .background(AppTheme.cardMid.opacity(0.7), in: Capsule())
                                 .padding(.top, 2)
                         }
                     }
@@ -997,6 +1000,8 @@ struct ScoreDetailSheet: View {
                             Spacer(minLength: 8)
                             Text(m.rating.label)
                                 .font(.system(.caption, weight: .bold)).foregroundStyle(m.rating.color)
+                                .padding(.horizontal, 9).padding(.vertical, 4)
+                                .background(m.rating.color.opacity(0.13), in: Capsule())
                         }
                         if !m.measured.isEmpty {
                             Text(m.measured)
@@ -1013,6 +1018,8 @@ struct ScoreDetailSheet: View {
                     .padding(16)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+                    .overlay(RoundedRectangle(cornerRadius: AppRadius.lg)
+                        .stroke(m.rating.color.opacity(0.22), lineWidth: 1))
                 }
 
                 Text(loc("brief.disclaimer"))
