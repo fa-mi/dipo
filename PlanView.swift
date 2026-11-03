@@ -19,6 +19,7 @@ struct PlanView: View {
     @Query private var debts: [DebtRecord]
     @Query private var physicalAssets: [PhysicalAsset]
     @Query private var installments: [CardInstallment]
+    @Query private var budgetConfigs: [CardBudgetConfig]
     @State private var pm = PremiumManager.shared
     @State private var budget = SmartBudgetManager.shared
     @State private var showPaywall = false
@@ -27,6 +28,9 @@ struct PlanView: View {
     @State private var moreOpen = false
     /// Read from the whole history, so refreshed on save, not per render.
     @State private var ladder: LadderResult?
+    /// What is left to spend this period, by group. Read from the whole
+    /// history like the ladder, so refreshed on save, not per render.
+    @State private var budgetFigures: PlanBudget?
 
     var body: some View {
         NavigationStack(path: $vm.planPath) {
@@ -35,6 +39,11 @@ struct PlanView: View {
                 ScrollView(showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 22) {
                         header
+                        // With a budget on, the tab opens on what is left to
+                        // spend: the one big number, then the three groups.
+                        if let figures = budgetFigures, pm.canAccess(.smartBudget) {
+                            PlanBudgetBlock(budget: figures) { vm.planPath.append(PlanRoute.budget) }
+                        }
                         // Free for everyone: knowing what to do next with money
                         // is the point of DiPo, not a premium extra.
                         Button {
@@ -46,15 +55,18 @@ struct PlanView: View {
                         }
                         .buttonStyle(.plain)
                         section(loc("plan.section_month")) {
-                            row(.budget, icon: "chart.pie.fill", tint: AppTheme.accent,
-                                title: loc("profile.budget"), status: budgetStatus,
-                                feature: .smartBudget)
-                            divider
+                            // The block above opens Smart Budget when it shows.
+                            if budgetFigures == nil || !pm.canAccess(.smartBudget) {
+                                row(.budget, icon: "chart.pie.fill", tint: AppTheme.accent,
+                                    title: loc("profile.budget"), status: budgetStatus,
+                                    feature: .smartBudget)
+                                divider
+                            }
                             row(.salary, icon: "banknote.fill", tint: AppTheme.blue,
-                                title: loc("profile.salary"), status: salaryStatus)
+                                title: loc("profile.salary"), status: salaryStatus, value: salaryValue)
                             divider
                             row(.bills, icon: "arrow.triangle.2.circlepath", tint: AppTheme.orange,
-                                title: loc("profile.recurring"), status: billsStatus)
+                                title: loc("profile.recurring"), status: billsStatus, value: billsValue)
                         }
                         section(loc("plan.section_goals")) {
                             // Open to every signed-in account: one personal goal
@@ -63,7 +75,7 @@ struct PlanView: View {
                             // in, not Royal.
                             row(.goals, icon: "target", tint: AppTheme.teal,
                                 title: loc("profile.savings"), status: goalsStatus,
-                                needsSignIn: !UserSession.shared.isLoggedIn)
+                                needsSignIn: !UserSession.shared.isLoggedIn, value: goalsValue)
                             if !folded.contains(.investments) {
                                 divider
                                 investmentsRow
@@ -79,7 +91,7 @@ struct PlanView: View {
                         section(loc("plan.section_debts")) {
                             row(.obligations, icon: "scalemass.fill", tint: AppTheme.teal,
                                 title: loc("oblig.nav"), status: debtsStatus,
-                                feature: .smartDebt)
+                                feature: .smartDebt, value: owedValue)
                         }
                         section(loc("plan.section_help")) {
                             askRow
@@ -99,7 +111,17 @@ struct PlanView: View {
             // Hidden, but still the back button's label on every screen below.
             .navigationTitle(loc("tab.plan"))
             .toolbar(.hidden, for: .navigationBar)
-            .onStoreChange { ladder = computeLadder() }
+            .onStoreChange {
+                ladder = computeLadder()
+                budgetFigures = PlanBudget.current(cards: cards, schedules: schedules, configs: budgetConfigs)
+            }
+            .onAppear {
+                budgetFigures = PlanBudget.current(cards: cards, schedules: schedules, configs: budgetConfigs)
+            }
+            // Turning the budget on or off, or moving its card, changes the block.
+            .onChange(of: budget.isEnabled) { _, _ in
+                budgetFigures = PlanBudget.current(cards: cards, schedules: schedules, configs: budgetConfigs)
+            }
             .navigationDestination(for: PlanRoute.self) { route in
                 switch route {
                 case .budget: SmartBudgetSettingsSheet().pushedFeature()
@@ -169,10 +191,37 @@ struct PlanView: View {
     private var billsStatus: String {
         let active = bills.filter(\.isActive)
         guard !active.isEmpty else { return loc("recurring.none_title") }
+        return String(format: loc("plan.bills_count"), active.count)
+    }
+
+    // MARK: Main numbers — the figure at a row's end
+
+    private var salaryValue: String? {
+        guard let salary = MainCard.anchorSalary(schedules) ?? schedules.first(where: \.isActive) else { return nil }
+        return CurrencyManager.shared.formatted(salary.amount, currency: salary.currency)
+    }
+
+    /// What the active bills come to each month.
+    private var billsValue: String? {
+        let active = bills.filter(\.isActive)
+        guard !active.isEmpty else { return nil }
         let cm = CurrencyManager.shared
         let pref = cm.preferredCurrency
         let total = active.reduce(0) { $0 + cm.convert($1.amount, from: $1.currency, to: pref) }
-        return String(format: loc("plan.bills_status"), active.count, cm.formatted(total, currency: pref))
+        return cm.formatted(total, currency: pref)
+    }
+
+    private var goalsValue: String? {
+        guard UserSession.shared.isLoggedIn, goals.contains(where: { !$0.isCompleted }) else { return nil }
+        let pref = CurrencyManager.shared.preferredCurrency
+        return CurrencyManager.shared.formatted(PlanRowValue.saved(goals: goals, currency: pref), currency: pref)
+    }
+
+    private var owedValue: String? {
+        guard pm.canAccess(.smartDebt) else { return nil }
+        let pref = CurrencyManager.shared.preferredCurrency
+        let owed = PlanRowValue.owed(debts: debts, cards: cards, installments: installments, currency: pref)
+        return owed >= 0.5 ? CurrencyManager.shared.formatted(owed, currency: pref) : nil
     }
 
     private var goalsStatus: String {
@@ -271,7 +320,8 @@ struct PlanView: View {
     /// `needsSignIn`: the feature is free with an account, so tapping it
     /// signed out opens sign-in rather than the paywall.
     private func row(_ route: PlanRoute, icon: String, tint: Color, title: String,
-                     status: String, feature: PremiumFeature? = nil, needsSignIn: Bool = false) -> some View {
+                     status: String, feature: PremiumFeature? = nil, needsSignIn: Bool = false,
+                     value: String? = nil) -> some View {
         let locked = feature.map { !pm.canAccess($0) } ?? false
         return Button {
             HapticManager.shared.tap()
@@ -279,7 +329,8 @@ struct PlanView: View {
             else if locked { showPaywall = true } else { vm.planPath.append(route) }
         } label: {
             PlanRowLabel(icon: icon, tint: tint, title: title, status: status,
-                         lockedPlan: locked ? feature?.requiredPlan : nil)
+                         lockedPlan: locked ? feature?.requiredPlan : nil,
+                         value: locked ? nil : value)
         }
         .buttonStyle(.plain)
     }
@@ -310,6 +361,9 @@ struct PlanRowLabel: View {
     let lockedPlan: PremiumPlan?
     /// Set for a row that shows more beneath it: whether that is open.
     var disclosure: Bool? = nil
+    /// The row's main number, before its chevron: what the bills come to,
+    /// what the goals hold, what is owed.
+    var value: String? = nil
 
     var body: some View {
         ListRow(icon: icon, tint: tint, title: title, subtitle: status) {
@@ -321,7 +375,15 @@ struct PlanRowLabel: View {
                     .foregroundStyle(AppTheme.textSecondary)
                     .rotationEffect(.degrees(open ? 180 : 0))
             } else {
-                ListChevron()
+                HStack(spacing: 6) {
+                    if let value {
+                        Text(value)
+                            .font(.system(.subheadline, weight: .semibold).monospacedDigit())
+                            .foregroundStyle(AppTheme.textPrimary)
+                            .lineLimit(1).minimumScaleFactor(0.7)
+                    }
+                    ListChevron()
+                }
             }
         }
     }
