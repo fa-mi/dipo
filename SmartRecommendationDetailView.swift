@@ -67,22 +67,29 @@ struct SmartRecommendationDetailView: View {
         }
     }
 
+    /// The chosen tab in ink on one track, like the app's other switches.
+    /// It was green, which says money coming in.
     private var tabBar: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 2) {
             ForEach(Tab.allCases, id: \.self) { t in
+                let on = tab == t
                 Button {
                     HapticManager.shared.tap()
                     withAnimation(.spring(response: 0.3)) { tab = t }
                 } label: {
                     Text(t.title)
-                        .font(.system(.caption, weight: tab == t ? .bold : .medium))
-                        .foregroundStyle(tab == t ? AppTheme.onVividFill : AppTheme.textSecondary)
-                        .frame(maxWidth: .infinity).padding(.vertical, 9)
-                        .background(tab == t ? AppTheme.accentFill : AppTheme.cardDark, in: Capsule())
+                        .font(.system(.caption, weight: on ? .bold : .medium))
+                        .foregroundStyle(on ? AppTheme.cardDark : AppTheme.textSecondary)
+                        .lineLimit(1).minimumScaleFactor(0.8)
+                        .frame(maxWidth: .infinity).padding(.vertical, 8)
+                        .background(on ? AppTheme.textPrimary : Color.clear, in: Capsule())
                 }
                 .buttonStyle(.plain)
+                .accessibilityAddTraits(on ? .isSelected : [])
             }
         }
+        .padding(3)
+        .background(AppTheme.cardMid, in: Capsule())
     }
 
     // MARK: Summary
@@ -100,7 +107,8 @@ struct SmartRecommendationDetailView: View {
                 .foregroundStyle(AppTheme.textSecondary)
             Text(headline)
                 .font(.system(.title, weight: .bold))
-                .foregroundStyle(positive ? AppTheme.accent : AppTheme.red)
+                // Ink for what can be put aside; red only for a shortfall.
+                .foregroundStyle(positive ? AppTheme.textPrimary : AppTheme.red)
                 .minimumScaleFactor(0.7).lineLimit(1)
             Text(positive
                  ? String(format: loc("reco.sum.where_surplus"), money(measured(reco.avgMonthlyExpense)))
@@ -116,12 +124,8 @@ struct SmartRecommendationDetailView: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        // Was a fixed dark #1B2A24 with white text in BOTH themes — a dark slab on
-        // the light page, and once light mode's green, red and purple were
-        // deepened for legibility, the headline on it fell to ~3:1. The card
-        // now sits on the theme's own surface, tinted with the verdict's colour.
-        .background((positive ? AppTheme.accent : AppTheme.red).opacity(0.10),
-                    in: RoundedRectangle(cornerRadius: AppRadius.lg))
+        // The theme's own surface. The verdict's colour is on the figure; a
+        // wash of it behind the card said the same thing again.
         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
     }
 
@@ -135,8 +139,7 @@ struct SmartRecommendationDetailView: View {
                 HStack(alignment: .top, spacing: 10) {
                     Text("\(idx + 1)")
                         .font(.system(.caption, weight: .bold)).foregroundStyle(item.tint)
-                        .frame(width: 22, height: 22)
-                        .background(item.tint.opacity(0.15), in: Circle())
+                        .frame(width: 22)
                     VStack(alignment: .leading, spacing: 3) {
                         Text(item.title)
                             .font(.system(.footnote, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
@@ -159,7 +162,7 @@ struct SmartRecommendationDetailView: View {
     private var impactStats: [(value: String, label: String, tint: Color)] {
         var out: [(String, String, Color)] = []
         if reco.recommendedMonthlySaving > 0 {
-            out.append((money(reco.recommendedMonthlySaving), loc("reco.impact.planned_saving"), AppTheme.accent))
+            out.append((money(reco.recommendedMonthlySaving), loc("reco.impact.planned_saving"), AppTheme.textPrimary))
         }
         if reco.potentialCut > 0 {
             out.append((money(reco.potentialCut), loc("reco.impact.smarter"), AppTheme.orange))
@@ -211,7 +214,7 @@ struct SmartRecommendationDetailView: View {
                     Text(loc("reco.why_title")).font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
                     ForEach(Array(reco.reasons.enumerated()), id: \.offset) { _, reason in
                         HStack(alignment: .top, spacing: 8) {
-                            Circle().fill(AppTheme.textSecondary.opacity(0.6)).frame(width: 5, height: 5).padding(.top, 6)
+                            Circle().fill(AppTheme.textSecondary).frame(width: 5, height: 5).padding(.top, 6)
                             Text(reason).font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                                 .fixedSize(horizontal: false, vertical: true)
                             Spacer(minLength: 0)
@@ -237,9 +240,7 @@ struct SmartRecommendationDetailView: View {
                     Spacer()
                     if reco.savingVsCurrentPct != 0 && !reco.isDeficit {
                         Text(String(format: loc("reco.vs_current"), reco.savingVsCurrentPct))
-                            .font(.system(.caption2, weight: .bold)).foregroundStyle(AppTheme.accent)
-                            .padding(.horizontal, 8).padding(.vertical, 4)
-                            .background(AppTheme.accent.opacity(0.12), in: Capsule())
+                            .font(.system(.caption2, weight: .bold)).foregroundStyle(AppTheme.textSecondary)
                     }
                 }
                 if reco.isDeficit { deficitExplainer }
@@ -275,7 +276,7 @@ struct SmartRecommendationDetailView: View {
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(loc("reco.goal_new")).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
-                            Text(String(format: loc("debt.month"), new)).font(.system(.callout, weight: .bold)).foregroundStyle(AppTheme.accent)
+                            Text(String(format: loc("debt.month"), new)).font(.system(.callout, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
                         }
                         Spacer()
                         Image(systemName: "arrow.right").font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
@@ -287,7 +288,7 @@ struct SmartRecommendationDetailView: View {
                     }
                     if let faster = reco.goalMonthsFaster, faster > 0 {
                         Text(String(format: loc("reco.months_faster"), faster))
-                            .font(.system(.caption2, weight: .semibold)).foregroundStyle(AppTheme.accent)
+                            .font(.system(.caption2, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
                     }
                 }
             }
@@ -328,9 +329,8 @@ struct SmartRecommendationDetailView: View {
                 .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true).lineSpacing(2)
         }
-        .padding(10)
+        .padding(.top, 4)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(AppTheme.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: AppRadius.sm))
     }
 
     // MARK: Investment
@@ -349,10 +349,10 @@ struct SmartRecommendationDetailView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(loc("reco.invest.value10y")).font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                         Text(reco.investReturn10y > 0 ? money(reco.investReturn10y) : "—")
-                            .font(.system(.title2, weight: .bold)).foregroundStyle(AppTheme.accent)
+                            .font(.system(.title2, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
                     }
                     Spacer()
-                    Image(systemName: "chart.line.uptrend.xyaxis").font(.system(.title)).foregroundStyle(AppTheme.accent.opacity(0.7))
+                    Image(systemName: "chart.line.uptrend.xyaxis").font(.system(.title)).foregroundStyle(AppTheme.purple)
                 }
                 Text(loc("reco.invest.note")).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary.opacity(0.8))
                     .fixedSize(horizontal: false, vertical: true)
@@ -400,8 +400,8 @@ struct SmartRecommendationDetailView: View {
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 0)
                 }
-                .padding(12)
-                .background(AppTheme.orange.opacity(0.10), in: RoundedRectangle(cornerRadius: AppRadius.md))
+                .padding(14)
+                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
             }
         }
     }
@@ -414,7 +414,6 @@ struct SmartRecommendationDetailView: View {
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
-            .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.cardMid.opacity(0.4), lineWidth: 1))
     }
 }
 
