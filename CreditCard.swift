@@ -57,18 +57,19 @@ struct CreditCardLiabilityRow: View {
     }
 
     private var owed: Double { card.totalOwed(installments) }
-    /// Instalment principal not billed yet: in the total, on no bill. Said
-    /// under the total, which otherwise read as a different "owed" from the
-    /// bill on the pay screen.
-    private var unbilled: Double { card.bill(installments).locked }
-    /// Paid beyond the bill: it is off the total already, and said under it
-    /// so the total adds up.
-    private var credit: Double { card.bill(installments).credit }
-    private var owedNote: String? {
+    /// Instalment principal not billed yet (in the total, on no bill) and
+    /// credit paid beyond the bill (off the total already), said under the
+    /// total so it adds up.
+    private var owedNote: String? { Self.owedNote(card: card, installments: installments) }
+
+    /// What the total includes beyond the bill: instalments not billed yet,
+    /// or credit paid beyond it. Shared with the Debts page's plain row.
+    static func owedNote(card: BankCard, installments: [CardInstallment]) -> String? {
+        let bill = card.bill(installments)
         let cm = CurrencyManager.shared
-        let locked = cm.formatted(unbilled.rounded(), currency: card.resolvedCurrency)
-        let paid = cm.formatted(credit.rounded(), currency: card.resolvedCurrency)
-        switch (unbilled >= 1, credit >= 1) {
+        let locked = cm.formatted(bill.locked.rounded(), currency: card.resolvedCurrency)
+        let paid = cm.formatted(bill.credit.rounded(), currency: card.resolvedCurrency)
+        switch (bill.locked >= 1, bill.credit >= 1) {
         case (true, true):   return String(format: loc("cc.unbilled_less_credit"), locked, paid)
         case (true, false):  return String(format: loc("cc.unbilled_instalments"), locked)
         case (false, true):  return String(format: loc("cc.credit_on_card"), paid)
