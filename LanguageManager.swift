@@ -1814,12 +1814,6 @@ final class LanguageManager {
         "debt.description_placeholder": "e.g. BCA Credit Card, Car Loan",
 
         // Smart Budget
-        "plan.budget_left":           "Left to spend this period",
-        "plan.budget_over":           "Over by %@",
-        "plan.group_of":              "%@ of %@",
-        "plan.group_over":            "%@ over the limit",
-        "plan.saved_of_target":       "%@ of the %@ target",
-        "plan.bills_count":           "%d bills",
         "budget.group.daily":         "Needs",
         "budget.group.lifestyle":     "Wants",
         "budget.group.invest_debt":   "Savings & debt",
@@ -5005,12 +4999,6 @@ final class LanguageManager {
         "debt.description_placeholder": "contoh BCA Kartu Kredit, Kredit Mobil",
 
         // Smart Budget
-        "plan.budget_left":           "Sisa anggaran belanja periode ini",
-        "plan.budget_over":           "Lebih %@",
-        "plan.group_of":              "%@ dari %@",
-        "plan.group_over":            "Lebih %@ dari batas",
-        "plan.saved_of_target":       "%@ dari target %@",
-        "plan.bills_count":           "%d tagihan",
         "budget.group.daily":         "Kebutuhan",
         "budget.group.lifestyle":     "Keinginan",
         "budget.group.invest_debt":   "Tabungan & cicilan",
