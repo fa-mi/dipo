@@ -479,10 +479,11 @@ struct AIChatView: View {
 
     // MARK: Header
 
-    /// The title and the speak-aloud toggle; under them DiPo in his frame.
-    /// The credit count lives by the input, where it matters.
+    /// The title and the speak-aloud toggle, and under them one line when
+    /// the credits are out or the plan was not read. DiPo's framed figure and
+    /// speech bubble took the top third of the screen before any answer.
     private var header: some View {
-        VStack(spacing: 0) {
+        VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 10) {
                 Text(loc("ai.title"))
                     .font(.system(.title3, weight: .bold))
@@ -494,58 +495,32 @@ struct AIChatView: View {
                     if !speakAlways { dipoVoice.stop() }
                 } label: {
                     Image(systemName: speakAlways ? "speaker.wave.2.fill" : "speaker.slash.fill")
-                        .font(.system(.footnote, weight: .semibold))
-                        .foregroundStyle(speakAlways ? AppTheme.accent : AppTheme.textSecondary)
-                        .frame(width: 36, height: 36)
-                        .background(speakAlways ? AppTheme.accent.opacity(0.14) : AppTheme.cardDark, in: Circle())
-                        .overlay(Circle().stroke(speakAlways ? AppTheme.accent.opacity(0.35) : AppTheme.cardMid, lineWidth: 1))
+                        .font(.system(.body, weight: .semibold))
+                        .foregroundStyle(speakAlways ? AppTheme.textPrimary : AppTheme.textSecondary)
+                        .frame(width: 40, height: 36)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(loc(speakAlways ? "dipo.speak_on" : "dipo.speak_off"))
             }
-            .padding(.horizontal, 18)
-            .padding(.top, 16)
-
-            DiPoFrame(size: nil, cornerRadius: 28) {
-                HStack(spacing: 2) {
-                    DiPoDragonView(mood: dipoMood, line: dipoLine, talkSeconds: dipoTalk)
-                        .frame(width: 140, height: 140)
-                    headerBubble
-                        .padding(.trailing, 14)
-                }
+            if let notice = creditNotice {
+                Text(notice)
+                    .font(.system(.footnote, weight: .medium))
+                    .foregroundStyle(AppTheme.orange)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            .frame(height: 168)
-            .padding(.horizontal, 18)
-            .padding(.top, 10)
-            .padding(.bottom, 8)
         }
+        .padding(.horizontal, 18)
+        .padding(.top, 16)
+        .padding(.bottom, 10)
     }
 
-    /// DiPo talking to the user, manga-style: a bubble whose tail points at
-    /// him. It changes as the chat goes — thinking while a reply is on its
-    /// way, a word after it, and the credit news when there is nothing left.
-    private var bubbleText: String {
-        if vm.isLoading { return loc("ai.thinking") }
+    /// What DiPo used to say in his bubble that still needs saying: the
+    /// plan was not read, or the credits are out until the 1st.
+    private var creditNotice: String? {
         if planNotRecognized { return loc("ai.credits_plan_unread") }
         if outOfCredits { return String(format: loc("ai.credits_out"), creditsReturn) }
-        return dipoSays
-    }
-
-    private var headerBubble: some View {
-        Text(bubbleText)
-            .font(.system(.subheadline))
-            .lineSpacing(1)
-            .foregroundStyle(AppTheme.textPrimary)
-            .lineLimit(6)
-            .minimumScaleFactor(0.8)
-            .fixedSize(horizontal: false, vertical: true)
-            .padding(.leading, 13 + BubbleShape.tail).padding(.trailing, 13).padding(.vertical, 10)
-            .dipoBubble(tail: .leading)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .id(bubbleText)
-            .transition(.scale(scale: 0.92, anchor: .leading).combined(with: .opacity))
-            .animation(.spring(response: 0.35, dampingFraction: 0.8), value: bubbleText)
-            .accessibilityLabel(bubbleText)
+        return nil
     }
 
     // MARK: Chat scroll
@@ -554,8 +529,14 @@ struct AIChatView: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(spacing: 14) {
-                    ForEach(vm.messages) { msg in
-                        messageRow(msg).id(msg.id)
+                    ForEach(Array(vm.messages.enumerated()), id: \.element.id) { i, msg in
+                        // What DiPo noticed, before anything was asked, reads
+                        // as notes; the rest as the conversation.
+                        if i < openingCount && msg.role == .assistant {
+                            noteRow(msg).id(msg.id)
+                        } else {
+                            messageRow(msg).id(msg.id)
+                        }
                     }
                     if vm.isLoading {
                         HStack {
@@ -581,6 +562,35 @@ struct AIChatView: View {
         }
     }
 
+    /// One of DiPo's notes: an orange dot, its headline, and the line under it.
+    private func noteRow(_ msg: AIChatMessage) -> some View {
+        let note = DiPoChatNote.split(msg.text)
+        return HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Circle()
+                .fill(AppTheme.orange)
+                .frame(width: 7, height: 7)
+                .alignmentGuide(.firstTextBaseline) { d in d[.bottom] + 1 }
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(note.title)
+                    .font(.system(.subheadline, weight: .semibold))
+                    .foregroundStyle(AppTheme.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let body = note.body {
+                    Text(body)
+                        .font(.system(.footnote))
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 18)
+    }
+
+    /// Your words on a grey bubble at the right; DiPo's answer as plain text,
+    /// with what he understood as entries under it. Green is for Send and for
+    /// adding an entry, not for the words.
     @ViewBuilder
     private func messageRow(_ msg: AIChatMessage) -> some View {
         if msg.role == .user {
@@ -588,23 +598,28 @@ struct AIChatView: View {
                 Spacer(minLength: 50)
                 Text(msg.text)
                     .font(.system(.subheadline))
-                    .foregroundStyle(AppTheme.onVividFill)
+                    .foregroundStyle(AppTheme.textPrimary)
                     .padding(.horizontal, 14).padding(.vertical, 10)
-                    .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: AppRadius.md))
+                    .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: AppRadius.md))
             }
             .padding(.horizontal, 18)
         } else {
             VStack(alignment: .leading, spacing: 10) {
-                // DiPo speaks in his own bubble, like on Home; trouble gets an
-                // amber edge instead of gold.
-                Text(msg.text)
-                    .font(.system(.subheadline))
-                    .lineSpacing(2)
-                    .foregroundStyle(AppTheme.textPrimary)
-                    .padding(.horizontal, 16).padding(.vertical, 12)
-                    .dipoBubble(hairline: msg.isError ? AppTheme.orange : AppTheme.royalGold)
-                    .padding(.trailing, 30)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    // Something went wrong: said in words, with an orange mark.
+                    if msg.isError {
+                        Image(systemName: "exclamationmark.circle.fill")
+                            .font(.system(.footnote))
+                            .foregroundStyle(AppTheme.orange)
+                            .accessibilityHidden(true)
+                    }
+                    Text(msg.text)
+                        .font(.system(.subheadline))
+                        .lineSpacing(2)
+                        .foregroundStyle(AppTheme.textPrimary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
                 ForEach(msg.transactions) { tx in
                     txCard(tx, in: msg.id)
                 }
@@ -619,14 +634,10 @@ struct AIChatView: View {
     private func txCard(_ tx: AIParsedTx, in messageID: UUID) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 10) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: AppRadius.sm)
-                        .fill(tx.category.color.opacity(0.18))
-                        .frame(width: 38, height: 38)
-                    Image(systemName: tx.category.icon)
-                        .font(.system(.subheadline))
-                        .foregroundStyle(tx.category.color)
-                }
+                Image(systemName: tx.category.icon)
+                    .font(.system(.body, weight: .semibold))
+                    .foregroundStyle(tx.category.color)
+                    .frame(width: 24)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(tx.name)
                         .font(.system(.subheadline, weight: .semibold))
@@ -639,7 +650,8 @@ struct AIChatView: View {
                 Text((tx.isExpense ? "-" : "+") +
                      CurrencyManager.shared.formatted(tx.amount, currency: tx.currency))
                     .font(.system(.subheadline, weight: .bold))
-                    .foregroundStyle(tx.isExpense ? AppTheme.red : AppTheme.accent)
+                    // Ink going out, green coming in: an expense is not trouble.
+                    .foregroundStyle(tx.isExpense ? AppTheme.textPrimary : AppTheme.accent)
             }
             // Add / Added button.
             Button {
@@ -651,10 +663,12 @@ struct AIChatView: View {
                     Text(tx.added ? loc("ai.tx.added") : loc("ai.tx.add"))
                 }
                 .font(.system(.footnote, weight: .semibold))
-                .foregroundStyle(tx.added ? AppTheme.accent : .white)
+                .foregroundStyle(tx.added ? AppTheme.textSecondary : AppTheme.onVividFill)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 9)
-                .background(tx.added ? AppTheme.accent.opacity(0.12) : AppTheme.accent,
+                // The suggested action is green until it is done; done, it is
+                // words.
+                .background(tx.added ? Color.clear : AppTheme.accentFill,
                             in: RoundedRectangle(cornerRadius: AppRadius.sm))
             }
             .buttonStyle(.plain)
@@ -662,7 +676,6 @@ struct AIChatView: View {
         }
         .padding(12)
         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
-        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.cardMid, lineWidth: 1))
     }
 
     // MARK: Input bar
@@ -685,9 +698,8 @@ struct AIChatView: View {
             }
         } label: {
             ZStack {
-                Circle()
-                    .fill(voice.isListening ? AppTheme.red.opacity(0.15) : AppTheme.cardDark)
-                    .frame(width: 38, height: 38)
+                Color.clear.frame(width: 38, height: 38)
+                // The ring follows the voice level: it says the mic hears you.
                 if voice.isListening {
                     Circle()
                         .stroke(AppTheme.red.opacity(0.55), lineWidth: 2)
@@ -728,12 +740,13 @@ struct AIChatView: View {
                             vm.input = text
                             submit(byVoice: false)
                         } label: {
+                            // A question to ask, in ink on the card colour:
+                            // green is for Send and for adding an entry.
                             Text(text)
                                 .font(.system(.footnote, weight: .semibold))
-                                .foregroundStyle(AppTheme.accent)
+                                .foregroundStyle(AppTheme.textPrimary)
                                 .padding(.horizontal, 12).padding(.vertical, 8)
-                                .background(AppTheme.accent.opacity(0.06), in: Capsule())
-                                .overlay(Capsule().stroke(AppTheme.accent.opacity(0.45), lineWidth: 1))
+                                .background(AppTheme.cardDark, in: Capsule())
                         }
                         .buttonStyle(.plain)
                         .disabled(vm.isLoading || outOfCredits)
