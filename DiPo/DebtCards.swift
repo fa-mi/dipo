@@ -863,14 +863,12 @@ struct PayoffStrategyCard: View {
                         HapticManager.shared.tap()
                         withAnimation(.spring(response: 0.3)) { strategy = i }
                     } label: {
-                        // The choice in ink, as on Statistics' flow toggle:
-                        // the page's ground on this track hid it in the light theme.
                         Text(loc(i == 0 ? "debt.strategy_interest" : "debt.strategy_small"))
                             .font(.system(.footnote, weight: .semibold))
-                            .foregroundStyle(on ? AppTheme.cardDark : AppTheme.textSecondary)
+                            .foregroundStyle(on ? AppTheme.textPrimary : AppTheme.textSecondary)
                             .lineLimit(1).minimumScaleFactor(0.8)
                             .frame(maxWidth: .infinity).padding(.vertical, 9)
-                            .background(on ? AppTheme.textPrimary : Color.clear, in: Capsule())
+                            .background(on ? AppTheme.bg : Color.clear, in: Capsule())
                     }
                     .buttonStyle(.plain)
                 }
