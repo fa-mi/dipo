@@ -851,14 +851,18 @@ extension StatisticsView {
                     guard !on else { return }
                     withAnimation(.spring(response: 0.3)) { statsVM.switchTab(tab) }
                 } label: {
+                    // The choice in ink. It was the page's ground on the
+                    // track, two greys a few steps apart, and in the light
+                    // theme the chosen side could not be told from the other.
+                    // Ink holds in both themes; green would say money in.
                     Text(tab.localizedLabel)
                         .font(.system(.caption, weight: .semibold))
-                        .foregroundStyle(on ? AppTheme.textPrimary : AppTheme.textSecondary)
+                        .foregroundStyle(on ? AppTheme.cardDark : AppTheme.textSecondary)
                         .lineLimit(1)
                         .fixedSize()
                         .padding(.horizontal, 10).padding(.vertical, 6)
                         .frame(maxWidth: fill ? .infinity : nil)
-                        .background(on ? AppTheme.bg : Color.clear, in: Capsule())
+                        .background(on ? AppTheme.textPrimary : Color.clear, in: Capsule())
                         .contentShape(Capsule())
                 }
                 .buttonStyle(.plain)
