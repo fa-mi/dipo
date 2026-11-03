@@ -170,12 +170,12 @@ struct JointAccountsSection: View {
             HStack(spacing: 14) {
                 Image(systemName: "plus")
                     .font(.system(.title3, weight: .bold))
-                    .foregroundStyle(AppTheme.accent)
+                    .foregroundStyle(AppTheme.textPrimary)
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 6) {
                         Text(loc("joint.create.cta"))
                             .font(.system(.subheadline, weight: .bold))
-                            .foregroundStyle(AppTheme.accent)
+                            .foregroundStyle(AppTheme.textPrimary)
                         if !pm.canAccess(.jointAccount) {
                             Image(systemName: "crown.fill")
                                 .font(.system(.caption2, weight: .bold))
