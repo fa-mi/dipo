@@ -322,15 +322,10 @@ struct NameEntryView: View {
 
             VStack(spacing: 32) {
                 // Icon
-                ZStack {
-                    Circle()
-                        .fill(AppTheme.cardDark)
-                        .frame(width: 88, height: 88)
-                        .overlay(Circle().stroke(AppTheme.accent.opacity(0.25), lineWidth: 1.5))
-                    Image(systemName: "person.fill")
-                        .font(.system(size: 38))
-                        .foregroundStyle(AppTheme.accent)
-                }
+                // The icon alone; the ringed disc round it was decoration.
+                Image(systemName: "person.fill")
+                    .font(.system(size: 44))
+                    .foregroundStyle(AppTheme.textSecondary)
                 .scaleEffect(appeared ? 1 : 0.7)
                 .opacity(appeared ? 1 : 0)
 
@@ -356,8 +351,6 @@ struct NameEntryView: View {
                         .padding(.vertical, 16)
                         .padding(.horizontal, 20)
                         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
-                        .overlay(RoundedRectangle(cornerRadius: AppRadius.md)
-                            .stroke(focused ? AppTheme.accent.opacity(0.6) : Color.clear, lineWidth: 1.5))
                         .focused($focused)
                         .onSubmit { authVM.submitName() }
 
@@ -389,7 +382,7 @@ struct NameEntryView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 16)
                 .background(
-                    authVM.userName.count >= 2 ? AppTheme.accent : AppTheme.textSecondary.opacity(0.25),
+                    authVM.userName.count >= 2 ? AppTheme.accentFill : AppTheme.cardMid,
                     in: RoundedRectangle(cornerRadius: AppRadius.lg)
                 )
             }
@@ -414,13 +407,6 @@ struct BiometricGateView: View {
     var body: some View {
         ZStack {
             AppTheme.bg.ignoresSafeArea()
-
-            RadialGradient(
-                colors: [AppTheme.accent.opacity(0.07), .clear],
-                center: .init(x: 0.5, y: 0.35),
-                startRadius: 0, endRadius: 320
-            )
-            .ignoresSafeArea()
 
             VStack(spacing: 0) {
                 Spacer()
@@ -494,8 +480,6 @@ struct BiometricGateView: View {
 struct BiometricPulseIcon: View {
     @Bindable var authVM: AuthViewModel
     let appeared: Bool
-    @State private var pulsing = false
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         Button {
@@ -503,23 +487,11 @@ struct BiometricPulseIcon: View {
             authVM.triggerBiometric()
         } label: {
             ZStack {
-                ForEach(0..<2) { i in
-                    Circle()
-                        .stroke(AppTheme.accent.opacity(0.12 - Double(i) * 0.04), lineWidth: 1)
-                        .frame(width: CGFloat(80 + i * 28), height: CGFloat(80 + i * 28))
-                        .scaleEffect(pulsing ? 1.2 : 1)
-                        .opacity(pulsing ? 0 : 1)
-                        .animation(
-                            .easeOut(duration: 2.0)
-                                .repeatForever(autoreverses: false)
-                                .delay(Double(i) * 0.5),
-                            value: pulsing
-                        )
-                }
+                // A plain round button; the pulsing rings and the green glow
+                // behind the screen were decoration.
                 Circle()
                     .fill(AppTheme.cardDark)
                     .frame(width: 72, height: 72)
-                    .overlay(Circle().stroke(AppTheme.accent.opacity(0.3), lineWidth: 1.5))
 
                 if authVM.isLoading {
                     ProgressView()
@@ -533,7 +505,6 @@ struct BiometricPulseIcon: View {
         }
 .accessibilityLabel(String(format: loc("a11y.unlock_with"), authVM.biometricLabel))
         .buttonStyle(ScaleButtonStyle())
-        .onAppear { pulsing = !reduceMotion }
     }
 }
 

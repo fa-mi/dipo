@@ -278,9 +278,9 @@ struct ReceivablesView: View {
                 Image(systemName: "plus.circle.fill").font(.system(.subheadline))
                 Text(loc("receivable.add")).font(.system(.subheadline, weight: .semibold))
             }
-            .foregroundStyle(AppTheme.accent)
+            .foregroundStyle(AppTheme.textPrimary)
             .frame(maxWidth: .infinity).padding(.vertical, 13)
-            .background(AppTheme.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: AppRadius.md))
+            .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: AppRadius.md))
         }
         .buttonStyle(ScaleButtonStyle())
         .padding(.horizontal, 22)
@@ -313,7 +313,8 @@ struct ReceivablesView: View {
             } label: {
             HStack(spacing: 12) {
                 ZStack {
-                    Circle().fill((r.isSettled ? AppTheme.accent : AppTheme.blue).opacity(0.15))
+                    // An initial on the plain control fill.
+                    Circle().fill(AppTheme.cardMid)
                         .frame(width: 40, height: 40)
                     Text(String(r.personName.prefix(1).uppercased()))
                         .font(.system(.subheadline, weight: .bold))
@@ -327,8 +328,6 @@ struct ReceivablesView: View {
                         if r.isOverdue {
                             Text(loc("receivable.overdue"))
                                 .font(.system(.caption2, weight: .bold)).foregroundStyle(AppTheme.red)
-                                .padding(.horizontal, 5).padding(.vertical, 2)
-                                .background(AppTheme.red.opacity(0.15), in: Capsule())
                         }
                     }
                     Text(r.isSettled
@@ -364,9 +363,11 @@ struct ReceivablesView: View {
                         HapticManager.shared.tap(); repaying = r
                     } label: {
                         Text(loc("receivable.record_repayment"))
+                            // Money coming back: the word is green, on the plain
+                            // control fill.
                             .font(.system(.caption, weight: .semibold)).foregroundStyle(AppTheme.accent)
                             .frame(maxWidth: .infinity).padding(.vertical, 8)
-                            .background(AppTheme.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: AppRadius.sm))
+                            .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: AppRadius.sm))
                     }
                     .buttonStyle(.plain)
                     Button {
@@ -693,10 +694,8 @@ struct RepaymentSheet: View {
         return ScrollView(showsIndicators: false) {
             VStack(spacing: 18) {
                 Image(systemName: "checkmark")
-                    .font(.system(.title2, weight: .bold))
+                    .font(.system(size: 44, weight: .bold))
                     .foregroundStyle(AppTheme.accent)
-                    .frame(width: 56, height: 56)
-                    .background(AppTheme.accent.opacity(0.15), in: Circle())
                     .padding(.top, 8)
                 VStack(spacing: 4) {
                     Text(String(format: loc("receivable.offer.recorded"), money(o.received, receivable.currency)))
@@ -857,7 +856,7 @@ struct ReceivableDetailSheet: View {
                         // Header
                         VStack(spacing: 8) {
                             ZStack {
-                                Circle().fill((r.isSettled ? AppTheme.accent : AppTheme.blue).opacity(0.15))
+                                Circle().fill(AppTheme.cardMid)
                                     .frame(width: 56, height: 56)
                                 Text(String(r.personName.prefix(1).uppercased()))
                                     .font(.system(.title3, weight: .bold))
@@ -989,8 +988,7 @@ struct ReceivableDetailSheet: View {
             Image(systemName: isRepayment ? "arrow.down.left" : "arrow.up.right")
                 .font(.system(.caption, weight: .bold))
                 .foregroundStyle(isRepayment ? AppTheme.accent : AppTheme.textSecondary)
-                .frame(width: 30, height: 30)
-                .background((isRepayment ? AppTheme.accent : AppTheme.textSecondary).opacity(0.12), in: Circle())
+                .frame(width: 22)
             VStack(alignment: .leading, spacing: 2) {
                 Text(loc(isRepayment ? "receivable.detail.repayment" : "receivable.detail.lent"))
                     .font(.system(.caption, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)

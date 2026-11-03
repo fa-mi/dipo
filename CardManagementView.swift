@@ -569,7 +569,7 @@ struct CardFormSheet: View {
                                              startPoint: .topLeading, endPoint: .bottomTrailing))
                         .frame(width: 54, height: 36)
                         .overlay(RoundedRectangle(cornerRadius: AppRadius.sm)
-                            .stroke(selected ? AppTheme.accent : .clear, lineWidth: 2.5))
+                            .stroke(selected ? AppTheme.textPrimary : .clear, lineWidth: 2.5))
                     if let systemIcon {
                         Image(systemName: systemIcon).font(.system(.subheadline, weight: .semibold))
                             .foregroundStyle(.white.opacity(0.9))
@@ -971,10 +971,10 @@ struct CardFormSheet: View {
                                         .foregroundStyle(AppTheme.textSecondary)
                                 }
                                 .padding(.horizontal, 12).padding(.vertical, 8)
-                                .background(AppTheme.cardMid.opacity(0.5), in: RoundedRectangle(cornerRadius: AppRadius.sm))
+                                .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: AppRadius.sm))
                             }
                             .padding(14)
-                            .background(AppTheme.cardDark.opacity(0.5), in: RoundedRectangle(cornerRadius: AppRadius.md))
+                            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
                             .padding(.horizontal, 22)
                         }
 
@@ -1302,9 +1302,9 @@ struct CardTransferSheet: View {
                             } label: {
                                 Image(systemName: "arrow.left.arrow.right")
                                     .font(.system(.subheadline, weight: .bold))
-                                    .foregroundStyle(AppTheme.accent)
+                                    .foregroundStyle(AppTheme.textPrimary)
                                     .frame(width: 38, height: 38)
-                                    .background(AppTheme.accent.opacity(0.12), in: Circle())
+                                    .background(AppTheme.cardMid, in: Circle())
                             }
 .accessibilityLabel(loc("a11y.swap_cards"))
                             .buttonStyle(ScaleButtonStyle())
@@ -1427,10 +1427,7 @@ struct CardTransferSheet: View {
 
     private var header: some View {
         VStack(spacing: 6) {
-            ZStack {
-                Circle().fill(AppTheme.accent.opacity(0.12)).frame(width: 56, height: 56)
-                Image(systemName: "arrow.left.arrow.right").font(.system(.title2)).foregroundStyle(AppTheme.accent)
-            }
+            Image(systemName: "arrow.left.arrow.right").font(.system(.title)).foregroundStyle(AppTheme.textSecondary)
             Text(loc("transfer.subtitle")).font(.system(.footnote)).foregroundStyle(AppTheme.textSecondary)
                 .multilineTextAlignment(.center).padding(.horizontal, 32)
                 .fixedSize(horizontal: false, vertical: true)
@@ -1444,9 +1441,9 @@ struct CardTransferSheet: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             HStack(spacing: 12) {
                 Text(sourceCard?.resolvedCurrency ?? "")
-                    .font(.system(.subheadline, weight: .bold)).foregroundStyle(AppTheme.accent)
+                    .font(.system(.subheadline, weight: .bold)).foregroundStyle(AppTheme.textSecondary)
                     .frame(width: 58, height: 56)
-                    .background(AppTheme.accent.opacity(0.10), in: RoundedRectangle(cornerRadius: AppRadius.md))
+                    .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: AppRadius.md))
                 TextField("0", text: $amountText)
                     .font(.system(.title, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
                     .keyboardType(.decimalPad)
@@ -1454,7 +1451,6 @@ struct CardTransferSheet: View {
                     .padding(.horizontal, 16)
                     .frame(height: 56)
                     .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
-                    .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(insufficient ? AppTheme.red.opacity(0.5) : AppTheme.cardMid.opacity(0.5), lineWidth: 1))
             }
             // Quick-fill chips (percentage of the source balance).
             HStack(spacing: 8) {
@@ -1484,10 +1480,10 @@ struct CardTransferSheet: View {
         } label: {
             Text(title)
                 .font(.system(.footnote, weight: .semibold))
-                .foregroundStyle(AppTheme.accent)
+                .foregroundStyle(AppTheme.textPrimary)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 9)
-                .background(AppTheme.accent.opacity(0.10), in: Capsule())
+                .background(AppTheme.cardMid, in: Capsule())
         }
         .buttonStyle(ScaleButtonStyle())
         .disabled(sourceBalance <= 0)

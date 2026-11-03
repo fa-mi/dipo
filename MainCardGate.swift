@@ -63,12 +63,9 @@ struct MainCardGate: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 10) {
-            ZStack {
-                Circle().fill(AppTheme.accent.opacity(0.15)).frame(width: 54, height: 54)
-                Image(systemName: "star.circle.fill")
-                    .font(.system(.title, weight: .semibold))
-                    .foregroundStyle(AppTheme.accent)
-            }
+            Image(systemName: "star.circle.fill")
+                .font(.system(.largeTitle, weight: .semibold))
+                .foregroundStyle(AppTheme.accent)
             Text(loc("main.gate_title"))
                 .font(.system(.title, weight: .bold))
                 .foregroundStyle(AppTheme.textPrimary)
@@ -94,8 +91,7 @@ struct MainCardGate: View {
                     Image(systemName: dep.icon)
                         .font(.system(.subheadline, weight: .medium))
                         .foregroundStyle(AppTheme.accent)
-                        .frame(width: 26, height: 26)
-                        .background(AppTheme.accent.opacity(0.12), in: Circle())
+                        .frame(width: 26)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(loc(dep.titleKey))
                             .font(.system(.footnote, weight: .semibold))
@@ -143,10 +139,11 @@ struct MainCardGate: View {
                     Image(systemName: "plus.circle.fill").font(.system(.subheadline))
                     Text(loc("main.gate_add_card")).font(.system(.footnote, weight: .semibold))
                 }
-                .foregroundStyle(AppTheme.accent)
+                // A plain control; Confirm is the screen's green.
+                .foregroundStyle(AppTheme.textPrimary)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 13)
-                .background(AppTheme.accent.opacity(0.10), in: RoundedRectangle(cornerRadius: AppRadius.md))
+                .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: AppRadius.md))
             }
             .buttonStyle(ScaleButtonStyle())
 

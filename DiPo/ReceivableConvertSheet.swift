@@ -196,12 +196,11 @@ struct ReceivableConvertSheet: View {
                         Spacer(minLength: 8)
                         Image(systemName: on ? "checkmark.circle.fill" : "circle")
                             .font(.system(.title3))
-                            .foregroundStyle(on ? AppTheme.accent : AppTheme.textSecondary.opacity(0.5))
+                            .foregroundStyle(on ? AppTheme.textPrimary : AppTheme.textSecondary.opacity(0.5))
                     }
                     .padding(14)
-                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
-                    .overlay(RoundedRectangle(cornerRadius: AppRadius.md)
-                        .stroke(on ? AppTheme.accent : .clear, lineWidth: 1.5))
+                    // The choice on the raised fill with its tick, no ring.
+                    .background(on ? AppTheme.cardMid : AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
                 }
                 .buttonStyle(.plain)
             }

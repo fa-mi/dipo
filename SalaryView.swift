@@ -337,7 +337,9 @@ struct PaydayTile: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 10)
-        .background(isToday ? AppTheme.accentFill : AppTheme.cardMid.opacity(0.55),
+        // Payday today is money coming in: green. The other days sit on the
+        // plain control fill.
+        .background(isToday ? AppTheme.accentFill : AppTheme.cardMid,
                     in: RoundedRectangle(cornerRadius: AppRadius.md))
         .overlay(alignment: .topTrailing) {
             if moved {
@@ -541,10 +543,8 @@ struct PaydayHeroCard: View {
                 Spacer()
                 Text(schedule.label)
                     .font(.system(.caption, weight: .semibold))
-                    .foregroundStyle(AppTheme.textPrimary)
+                    .foregroundStyle(AppTheme.textSecondary)
                     .lineLimit(1)
-                    .padding(.horizontal, 10).padding(.vertical, 4)
-                    .background(AppTheme.cardDark.opacity(0.8), in: Capsule())
             }
 
             VStack(alignment: .leading, spacing: 4) {
@@ -575,13 +575,11 @@ struct SalaryEmptyState: View {
 
     var body: some View {
         VStack(spacing: 22) {
-            ZStack {
-                Circle().fill(AppTheme.accent.opacity(0.14)).frame(width: 120, height: 120)
-                Circle().fill(AppTheme.accentFill).frame(width: 76, height: 76)
-                Image(systemName: "banknote.fill")
-                    .font(.system(.title, weight: .semibold))
-                    .foregroundStyle(AppTheme.onVividFill)
-            }
+            // Salary is money coming in: the note is green, with nothing
+            // behind it.
+            Image(systemName: "banknote.fill")
+                .font(.system(size: 52, weight: .semibold))
+                .foregroundStyle(AppTheme.accent)
             VStack(spacing: 8) {
                 Text(loc("salary.no_salary"))
                     .font(.system(.title3, weight: .bold))
@@ -711,7 +709,7 @@ struct SalaryCard: View {
                         .font(.system(.callout, weight: .bold))
                         .foregroundStyle(AppTheme.textPrimary)
                         .frame(width: 38, height: 38)
-                        .background(AppTheme.cardMid.opacity(0.7), in: Circle())
+                        .background(AppTheme.cardMid, in: Circle())
                         .contentShape(Circle())
                 }
 .accessibilityLabel(loc("a11y.more_actions"))
@@ -840,8 +838,6 @@ struct SalaryCard: View {
         .foregroundStyle(tint)
         .lineLimit(1)
         .fixedSize()
-        .padding(.horizontal, 7).padding(.vertical, 3)
-        .background(AppTheme.cardMid.opacity(0.7), in: Capsule())
     }
 }
 
@@ -973,18 +969,15 @@ struct SalaryActionsSheet: View {
     }
 
     private var divider: some View {
-        Rectangle().fill(AppTheme.cardMid.opacity(0.7)).frame(height: 1).padding(.leading, 62)
+        Rectangle().fill(AppTheme.cardMid.opacity(0.7)).frame(height: 1).padding(.leading, 54)
     }
 
-    /// Green and red — the two colours that carry money in and money out — go
-    /// SOLID with an `onVividFill` glyph, like every other green and red badge
-    /// in the app; the rest sit as glyphs on their own pale tint.
+    /// A row's icon: the glyph in its colour, nothing behind it.
     private func iconTile(_ icon: String, tint: Color, solid: Bool = false) -> some View {
         Image(systemName: icon)
             .font(.system(.subheadline, weight: .semibold))
-            .foregroundStyle(solid ? AppTheme.onVividFill : tint)
-            .frame(width: 36, height: 36)
-            .background(solid ? tint : tint.opacity(0.14), in: RoundedRectangle(cornerRadius: AppRadius.sm))
+            .foregroundStyle(tint)
+            .frame(width: ListRowMetrics.icon)
     }
 
     private func row(icon: String, tint: Color, title: String, detail: String,

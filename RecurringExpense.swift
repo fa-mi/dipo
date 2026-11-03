@@ -680,9 +680,10 @@ struct RecurringExpensesView: View {
                     .lineLimit(1)
             }
         }
+        // Two columns on the card itself; the tinted tile behind each said
+        // again what its icon's colour says.
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .padding(12)
-        .background(tint.opacity(0.10), in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .padding(.vertical, 4)
     }
 
     private func cleanupRow(icon: String, tint: Color, title: String, detail: String,
@@ -694,8 +695,7 @@ struct RecurringExpensesView: View {
                 Image(systemName: icon)
                     .font(.system(.subheadline, weight: .semibold))
                     .foregroundStyle(tint)
-                    .frame(width: 36, height: 36)
-                    .background(tint.opacity(0.14), in: RoundedRectangle(cornerRadius: AppRadius.sm))
+                    .frame(width: ListRowMetrics.icon)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
                         .font(.system(.subheadline, weight: .semibold))
@@ -719,13 +719,9 @@ struct RecurringExpensesView: View {
 
     private var emptyState: some View {
         VStack(spacing: 22) {
-            ZStack {
-                Circle().fill(AppTheme.accent.opacity(0.14)).frame(width: 120, height: 120)
-                Circle().fill(AppTheme.accentFill).frame(width: 76, height: 76)
-                Image(systemName: "arrow.triangle.2.circlepath")
-                    .font(.system(.title, weight: .semibold))
-                    .foregroundStyle(AppTheme.onVividFill)
-            }
+            Image(systemName: "arrow.triangle.2.circlepath")
+                .font(.system(size: 52, weight: .semibold))
+                .foregroundStyle(AppTheme.textSecondary)
             VStack(spacing: 8) {
                 Text(loc("recurring.none_title"))
                     .font(.system(.title3, weight: .bold))
@@ -813,9 +809,7 @@ struct RecurringExpenseRow: View {
                     Image(systemName: expense.category.icon)
                         .font(.system(.callout, weight: .semibold))
                         .foregroundStyle(active ? expense.category.color : AppTheme.textSecondary)
-                        .frame(width: 40, height: 40)
-                        .background((active ? expense.category.color : AppTheme.textSecondary).opacity(0.14),
-                                    in: RoundedRectangle(cornerRadius: AppRadius.sm))
+                        .frame(width: ListRowMetrics.icon)
                     VStack(alignment: .leading, spacing: 4) {
                         Text(expense.label)
                             .font(.system(.subheadline, weight: .semibold))
@@ -828,14 +822,13 @@ struct RecurringExpenseRow: View {
                                 Text(loc("recurring.paused"))
                             } else {
                                 Text(RecurringRowFormat.dueLabel(expense))
-                                    .foregroundStyle(days <= 0 ? AppTheme.accent : days <= 3 ? AppTheme.orange : AppTheme.textSecondary)
+                                    // Due soon or today in orange: a bill is money going out.
+                                    .foregroundStyle(days <= 3 ? AppTheme.orange : AppTheme.textSecondary)
                                     .fontWeight(days <= 3 ? .semibold : .regular)
                             }
                             if !expense.autoRecord {
-                                Text(loc("recurring.manual_badge"))
+                                Text("· " + loc("recurring.manual_badge"))
                                     .font(.system(.caption2, weight: .semibold))
-                                    .padding(.horizontal, 6).padding(.vertical, 1)
-                                    .background(AppTheme.cardMid.opacity(0.8), in: Capsule())
                             }
                         }
                         .font(.system(.caption))
@@ -865,7 +858,7 @@ struct RecurringExpenseRow: View {
                     .font(.system(.subheadline, weight: .bold))
                     .foregroundStyle(AppTheme.textPrimary)
                     .frame(width: 32, height: 32)
-                    .background(AppTheme.cardMid.opacity(0.7), in: Circle())
+                    .background(AppTheme.cardMid, in: Circle())
             }
             .accessibilityLabel(loc("a11y.more_actions"))
             .hitTarget(32)

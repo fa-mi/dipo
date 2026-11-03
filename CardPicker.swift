@@ -171,10 +171,8 @@ struct CardListRow: View {
                         .lineLimit(1)
                     if MainCard.isMain(card) {
                         Text(loc("main.badge"))
-                            .font(.system(.caption2, weight: .bold))
-                            .foregroundStyle(AppTheme.accent)
-                            .padding(.horizontal, 6).padding(.vertical, 2)
-                            .background(AppTheme.accent.opacity(0.15), in: Capsule())
+                            .font(.system(.caption2, weight: .semibold))
+                            .foregroundStyle(AppTheme.textSecondary)
                             .lineLimit(1).fixedSize()
                     }
                 }

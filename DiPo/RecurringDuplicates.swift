@@ -243,8 +243,6 @@ struct DuplicateReviewSheet: View {
                     .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                 Text(badge)
                     .font(.system(.caption2, weight: .bold)).foregroundStyle(AppTheme.blue)
-                    .padding(.horizontal, 6).padding(.vertical, 2)
-                    .background(AppTheme.blue.opacity(0.12), in: Capsule())
             }
             Spacer(minLength: 8)
             VStack(alignment: .trailing, spacing: 6) {
@@ -257,13 +255,12 @@ struct DuplicateReviewSheet: View {
                     Label(loc("dupe.delete"), systemImage: "trash")
                         .font(.system(.caption, weight: .semibold))
                         .foregroundStyle(AppTheme.red)
-                        .padding(.horizontal, 10).padding(.vertical, 6)
-                        .background(AppTheme.red.opacity(0.12), in: Capsule())
+                        .padding(.vertical, 6)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
             }
         }
-        .padding(12)
-        .background(AppTheme.bg.opacity(0.6), in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .padding(.vertical, 8)
     }
 }
