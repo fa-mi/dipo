@@ -54,6 +54,9 @@ struct AddTransactionSheet: View {
     /// shows the paywall first when the user lacks access.
     @State private var showScanFlow: Bool = false
     @State private var showScanPaywall: Bool = false
+    /// The category grid and the account pager, each on a sheet of its own.
+    @State private var showCategories = false
+    @State private var showCards = false
     // Subtype is intentionally NOT a field on the create form — assigning
     // refund/transfer to a brand-new tx without a parent is rare and
     // confusing. Instead, the user creates a normal tx, then taps it in
@@ -189,11 +192,6 @@ struct AddTransactionSheet: View {
                 }
             }
 
-        /// Used only as a solid fill (the type capsule, the Record button), so
-        /// it takes the fill tokens. Reading `AppTheme.red` here is what
-        /// dragged the light-mode button from salmon to a hard red when `red`
-        /// was darkened for TEXT legibility — a change the fill never needed.
-        var color: Color { self == .expense ? AppTheme.redFill : AppTheme.accentFill }
         var icon: String { self == .expense ? "arrow.up.circle.fill" : "arrow.down.circle.fill" }
     }
 
@@ -274,18 +272,22 @@ struct AddTransactionSheet: View {
                         .font(.system(.caption, weight: .semibold))
                         .foregroundStyle(AppTheme.textSecondary)
                 }
-                .padding(12)
-                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+                .padding(.vertical, 6)
+                .contentShape(Rectangle())
             }
             .buttonStyle(ScaleButtonStyle())
             .padding(.horizontal, 22)
         }
     }
 
+    /// Expense or income, the choice in ink: red or green filling the chosen
+    /// side said the kind twice, and green is kept for money coming in and
+    /// the one Save.
     private var typeSection: some View {
-        HStack(spacing: 0) {
+        HStack(spacing: 2) {
             ForEach(AddTxType.allCases, id: \.self) { type in
                 let blocked = (type == .income && selectedIsCredit)
+                let on = txType == type
                 Button {
                     HapticManager.shared.select()
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) { txType = type }
@@ -293,35 +295,31 @@ struct AddTransactionSheet: View {
                         selectedCategory = type == .expense ? .shopping : .salary
                     }
                 } label: {
-                    HStack(spacing: 8) {
-                        Image(systemName: type.icon).font(.system(.subheadline))
-                        Text(type.title).font(.system(.subheadline, weight: .semibold))
-                    }
-                    .foregroundStyle(txType == type ? AppTheme.onVividFill
-                                     : AppTheme.textSecondary.opacity(blocked ? 0.35 : 1))
-                    .frame(maxWidth: .infinity).padding(.vertical, 13)
-                    .background {
-                        if txType == type {
-                            Capsule().fill(type.color)
-                        }
-                    }
+                    Text(type.title)
+                        .font(.system(.subheadline, weight: .semibold))
+                        .foregroundStyle(on ? AppTheme.cardDark
+                                         : AppTheme.textSecondary.opacity(blocked ? 0.35 : 1))
+                        .frame(maxWidth: .infinity).padding(.vertical, 10)
+                        .background(on ? AppTheme.textPrimary : Color.clear, in: Capsule())
+                        .contentShape(Capsule())
                 }
+                .buttonStyle(.plain)
                 .disabled(blocked)
-                .animation(.spring(response: 0.3, dampingFraction: 0.7), value: txType)
+                .accessibilityAddTraits(on ? .isSelected : [])
             }
         }
-        .padding(4)
-        .background(AppTheme.cardDark, in: Capsule())
+        .padding(3)
+        .background(AppTheme.cardMid, in: Capsule())
+        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: txType)
         .padding(.horizontal, 22)
     }
 
-    /// The amount is the reason this screen exists, so it gets the largest type
-    /// on it and shares a single surface with the currency it is denominated in
-    /// — the two were previously separate boxes, which read as two questions.
+    /// The amount is the reason this screen exists: the largest type on it,
+    /// centred, on the page itself, with its currency just above.
     @ViewBuilder
     private var amountSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 12) {
+        VStack(alignment: .center, spacing: 8) {
+            VStack(spacing: 4) {
                 if PremiumManager.shared.canAccess(.smartConversion) {
                     Menu {
                         ForEach(CurrencyManager.supportedCurrencies, id: \.code) { c in
@@ -352,13 +350,13 @@ struct AddTransactionSheet: View {
                 }
 
                 TextField("0", text: $amountText)
-                    .font(.system(.largeTitle, weight: .bold))
+                    .font(.system(size: 48, weight: .bold).monospacedDigit())
                     .foregroundStyle(AppTheme.textPrimary)
+                    .multilineTextAlignment(.center)
                     .keyboardType(.decimalPad)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .minimumScaleFactor(0.5)
+                    .frame(maxWidth: .infinity)
             }
-            .padding(14)
-            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
 
             // One quiet line under the field, not three. Whichever of these is
             // true is the one worth reading: a cross-currency result beats a
@@ -380,7 +378,7 @@ struct AddTransactionSheet: View {
                         .foregroundStyle(AppTheme.textSecondary.opacity(0.7))
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: .center)
 
             if amount > 0 && isForeignCurrency {
                 conversionPanel
@@ -446,12 +444,18 @@ struct AddTransactionSheet: View {
     @ViewBuilder
     private var nameSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            IconField(label: loc("tx.name_label"),
-                      icon: "textformat",
-                      placeholder: selectedCategory == .debtPayment
-                          ? loc("tx.debt_placeholder")
-                          : loc("tx.name_placeholder"),
-                      text: $name)
+            // What it was for, centred under the amount, on a hairline.
+            VStack(spacing: 6) {
+                TextField(selectedCategory == .debtPayment
+                              ? loc("tx.debt_placeholder")
+                              : loc("tx.name_placeholder"),
+                          text: $name)
+                    .font(.system(.title3, weight: .semibold))
+                    .foregroundStyle(AppTheme.textPrimary)
+                    .multilineTextAlignment(.center)
+                    .accessibilityLabel(loc("tx.name_label"))
+                Rectangle().fill(AppTheme.cardMid).frame(height: 1)
+            }
                 .onChange(of: name) { _, newName in
                     // The user's own history first, the shipped keyword map
                     // second — what this person actually does beats a guess.
@@ -483,60 +487,88 @@ struct AddTransactionSheet: View {
         .onAppear { nameVocabulary = FuzzyName.vocabulary(of: allTransactions.map(\.name)) }
     }
 
-    private var categorySection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            FormSectionLabel(text: loc("common.category"))
-                .padding(.horizontal, 22)
-            CategoryTilePicker(categories: availableCategories, selection: $selectedCategory)
-        }
-    }
-
-    /// Always shown, even with a single card: "which account does this land
-    /// on" is worth answering before saving, not only when there is a choice.
-    @ViewBuilder
-    private var cardSection: some View {
-        if !vm.cards.isEmpty {
-            VStack(alignment: .leading, spacing: 10) {
-                FormSectionLabel(text: loc("debt.card"))
-                    .padding(.horizontal, 22)
-                // For a credit card the face states the room left on the limit,
-                // not what is owed — at the moment of spending, that is the
-                // number that matters.
-                CardSwipePicker(cards: vm.cards, selectedIndex: $selectedCardIndex,
-                                locked: lockToPreselectedCard) { card in
-                    card.isCreditCard
-                        ? (loc("cc.available"),
-                           CurrencyManager.shared.formatted(card.availableCredit(allInstallments),
-                                                            currency: card.resolvedCurrency))
-                        : (loc("home.balance_total"), card.formattedBalance)
+    /// Category, account, date and note as four plain rows.
+    private var detailsSection: some View {
+        VStack(spacing: 0) {
+            Button { HapticManager.shared.tap(); showCategories = true } label: {
+                TxFormRow(icon: selectedCategory.icon, tint: Color(hex: selectedCategory.iconBg),
+                          title: loc("common.category"), chevron: true) {
+                    Text(selectedCategory.displayLabel)
+                        .font(.system(.subheadline, weight: .semibold))
+                        .foregroundStyle(AppTheme.textPrimary)
+                        .lineLimit(1)
                 }
-                // Say WHY the card can't be changed here, so a locked picker reads
-                // as intentional rather than broken.
+            }
+            .buttonStyle(.plain)
+
+            if let card = selectedCardOrNil {
+                Rectangle().fill(AppTheme.cardMid).frame(height: 1)
+                // For a credit card the row states the room left on the limit,
+                // not what is owed: at the moment of spending, that is the
+                // number that matters.
+                Button {
+                    HapticManager.shared.tap()
+                    if !lockToPreselectedCard && vm.cards.count > 1 { showCards = true }
+                } label: {
+                    TxFormRow(icon: card.isCreditCard ? "creditcard" : "wallet.pass",
+                              title: loc("debt.card"),
+                              chevron: !lockToPreselectedCard && vm.cards.count > 1) {
+                        VStack(alignment: .trailing, spacing: 1) {
+                            Text(CardLabel.title(card))
+                                .font(.system(.subheadline, weight: .semibold))
+                                .foregroundStyle(AppTheme.textPrimary)
+                                .lineLimit(1)
+                            Text(cardFigure(card).value)
+                                .font(.system(.caption).monospacedDigit())
+                                .foregroundStyle(AppTheme.textSecondary)
+                                .lineLimit(1)
+                        }
+                    }
+                }
+                .buttonStyle(.plain)
+                // Say WHY the card can't be changed here, so a locked row
+                // reads as intentional rather than broken.
                 if lockToPreselectedCard {
                     Label(loc("tx.card_locked_cc"), systemImage: "lock.fill")
                         .font(.system(.caption2))
                         .foregroundStyle(AppTheme.textSecondary)
-                        .padding(.horizontal, 22)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.bottom, 8)
                 }
             }
-        }
-    }
 
-    private var dateSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            FormSectionLabel(text: loc("tx.date_time"))
-            DateTimeFields(date: $selectedDate)
+            Rectangle().fill(AppTheme.cardMid).frame(height: 1)
+            TxFormRow(icon: "calendar", title: loc("tx.date_time")) {
+                DatePicker("", selection: $selectedDate, displayedComponents: [.date, .hourAndMinute])
+                    .datePickerStyle(.compact).labelsHidden().tint(AppTheme.textPrimary)
+            }
+
+            Rectangle().fill(AppTheme.cardMid).frame(height: 1)
+            TxFormRow(icon: "text.alignleft", title: loc("tx.notes")) {
+                TextField(loc("common.optional"), text: $notes)
+                    .font(.system(.subheadline))
+                    .foregroundStyle(AppTheme.textPrimary)
+                    .multilineTextAlignment(.trailing)
+                    .accessibilityLabel(loc("tx.notes"))
+            }
         }
         .padding(.horizontal, 22)
+        .sheet(isPresented: $showCategories) {
+            CategoryGridSheet(categories: availableCategories, selection: $selectedCategory)
+        }
+        .sheet(isPresented: $showCards) {
+            CardPickSheet(cards: vm.cards, selectedIndex: $selectedCardIndex, figure: cardFigure)
+        }
     }
 
-    private var notesSection: some View {
-        IconField(label: loc("tx.notes"),
-                  icon: "text.alignleft",
-                  placeholder: loc("tx.notes_placeholder"),
-                  text: $notes,
-                  optionalHint: loc("common.optional"))
-            .padding(.horizontal, 22)
+    /// What an account's row says: the balance, or for a credit card the room
+    /// left on the limit.
+    private func cardFigure(_ card: BankCard) -> (label: String, value: String) {
+        card.isCreditCard
+            ? (loc("cc.available"),
+               CurrencyManager.shared.formatted(card.availableCredit(allInstallments),
+                                                currency: card.resolvedCurrency))
+            : (loc("home.balance_total"), card.formattedBalance)
     }
 
     @ViewBuilder
@@ -614,10 +646,7 @@ struct AddTransactionSheet: View {
                         typeSection
                         amountSection
                         nameSection
-                        categorySection
-                        cardSection
-                        dateSection
-                        notesSection
+                        detailsSection
                         warningSection
                         submitSection
 
