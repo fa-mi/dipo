@@ -525,8 +525,7 @@ struct DebtAnalysisCard: View {
                 Image(systemName: "sparkles")
                     .font(.system(.subheadline, weight: .bold))
                     .foregroundStyle(AppTheme.accent)
-                    .frame(width: 34, height: 34)
-                    .background(AppTheme.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: AppRadius.sm))
+                    .frame(width: ListRowMetrics.icon)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(loc("analysis.title"))
                         .font(.system(.body, weight: .bold))
@@ -554,7 +553,7 @@ struct DebtAnalysisCard: View {
                     }
                     .foregroundStyle(AppTheme.textPrimary)
                     .padding(.horizontal, 12).padding(.vertical, 10)
-                    .background(AppTheme.cardMid.opacity(0.6), in: RoundedRectangle(cornerRadius: AppRadius.sm))
+                    .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: AppRadius.sm))
                 }
                 .buttonStyle(ScaleButtonStyle())
             }
@@ -833,9 +832,11 @@ struct DebtAnalysisSheet: View {
         HStack(alignment: .top, spacing: 12) {
             Text("\(n)")
                 .font(.system(.footnote, weight: .bold))
-                .foregroundStyle(n == 1 ? AppTheme.onVividFill : AppTheme.textSecondary)
+                // The first step in ink, the rest on the plain fill. Green
+                // is for the plan's action, not a step's number.
+                .foregroundStyle(n == 1 ? AppTheme.cardDark : AppTheme.textSecondary)
                 .frame(width: 26, height: 26)
-                .background(n == 1 ? AppTheme.accentFill : AppTheme.cardMid.opacity(0.8), in: Circle())
+                .background(n == 1 ? AppTheme.textPrimary : AppTheme.cardMid, in: Circle())
             VStack(alignment: .leading, spacing: 5) {
                 Text(step.title)
                     .font(.system(.subheadline, weight: .bold))
@@ -862,7 +863,5 @@ struct DebtAnalysisSheet: View {
             .font(.system(.caption2, weight: .semibold))
             .foregroundStyle(tint)
             .lineLimit(1)
-            .padding(.horizontal, 8).padding(.vertical, 4)
-            .background(tint.opacity(0.12), in: Capsule())
     }
 }
