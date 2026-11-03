@@ -77,7 +77,7 @@ struct HoldSection: View {
                     HStack(spacing: 8) {
                         Text(String(format: loc("savings.see_all"), open.count))
                             .font(.system(.subheadline, weight: .semibold))
-                            .foregroundStyle(AppTheme.accent)
+                            .foregroundStyle(AppTheme.textPrimary)
                         Spacer()
                         Image(systemName: "chevron.right")
                             .font(.system(.caption, weight: .semibold))
@@ -346,7 +346,7 @@ struct HoldRow: View {
                         }
                         Text(status(ready: ready))
                             .font(.system(.caption, weight: ready ? .semibold : .regular))
-                            .foregroundStyle(ready ? AppTheme.accent : AppTheme.textSecondary)
+                            .foregroundStyle(ready ? AppTheme.textPrimary : AppTheme.textSecondary)
                     }
                     .padding(.top, 2)
                 }
@@ -381,12 +381,12 @@ struct HoldRow: View {
         }
     }
 
+    /// What became of it, as an icon in its colour with nothing behind.
     private func outcome(_ icon: String, tint: Color) -> some View {
         Image(systemName: icon)
             .font(.system(.subheadline, weight: .semibold))
             .foregroundStyle(tint)
             .frame(width: 38, height: 38)
-            .background(tint.opacity(0.14), in: Circle())
     }
 
     private func status(ready: Bool) -> String {
@@ -416,7 +416,7 @@ struct HoldRow: View {
                 .foregroundStyle(primary ? AppTheme.onVividFill : AppTheme.textPrimary)
                 .lineLimit(1).minimumScaleFactor(0.8)
                 .frame(maxWidth: .infinity).padding(.vertical, 10)
-                .background(primary ? AppTheme.accentFill : AppTheme.cardMid.opacity(0.7),
+                .background(primary ? AppTheme.accentFill : AppTheme.cardMid,
                             in: RoundedRectangle(cornerRadius: AppRadius.sm))
         }
         .buttonStyle(ScaleButtonStyle())
@@ -539,10 +539,12 @@ struct HoldFormSheet: View {
                     } label: {
                         Text(HeldWant.waitText(days))
                             .font(.system(.subheadline, weight: .semibold))
-                            .foregroundStyle(on ? AppTheme.onVividFill : AppTheme.textPrimary)
+                            // The choice in ink, like the app's other
+                            // switches; green would say money coming in.
+                            .foregroundStyle(on ? AppTheme.cardDark : AppTheme.textPrimary)
                             .lineLimit(1).minimumScaleFactor(0.8)
                             .frame(maxWidth: .infinity).padding(.vertical, 12)
-                            .background(on ? AppTheme.accentFill : AppTheme.cardDark,
+                            .background(on ? AppTheme.textPrimary : AppTheme.cardDark,
                                         in: RoundedRectangle(cornerRadius: AppRadius.sm))
                     }
                     .buttonStyle(ScaleButtonStyle())
@@ -668,8 +670,7 @@ struct LetGoSheet: View {
         return HStack(spacing: 12) {
             Text(goal.emoji)
                 .font(.system(.title2))
-                .frame(width: 48, height: 48)
-                .background(AppTheme.cardMid.opacity(0.7), in: RoundedRectangle(cornerRadius: AppRadius.sm))
+                .frame(width: 32)
             VStack(alignment: .leading, spacing: 3) {
                 Text(goal.name)
                     .font(.system(.subheadline, weight: .bold))
@@ -832,18 +833,17 @@ private struct JarGlint: Shape {
     }
 }
 
-/// How far a wait has run, around an hourglass: teal while it runs, green
-/// once it is over.
+/// How far a wait has run, around an hourglass: teal while it runs, ink
+/// once it is over and the choice is due.
 struct HoldRing: View {
     let progress: Double
     let ready: Bool
     var size: CGFloat = 38
 
     var body: some View {
-        let tint = ready ? AppTheme.accent : AppTheme.teal
+        let tint = ready ? AppTheme.textPrimary : AppTheme.teal
         let line = max(2.4, size * 0.07)
         ZStack {
-            if ready { Circle().fill(AppTheme.accent.opacity(0.14)) }
             Circle().strokeBorder(AppTheme.accentTrack, lineWidth: line)
             Circle()
                 .inset(by: line / 2)
@@ -905,7 +905,7 @@ private struct HoldAddRow: View {
                 Text(loc("hold.add")).font(.system(.subheadline, weight: .semibold))
                 Spacer()
             }
-            .foregroundStyle(AppTheme.accent)
+            .foregroundStyle(AppTheme.textPrimary)
             .padding(.horizontal, 16).padding(.vertical, 14)
             .contentShape(Rectangle())
         }
