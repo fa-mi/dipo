@@ -288,19 +288,9 @@ struct PortfolioOverviewCard: View {
         }
         .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background {
-            let tint = investPLColor(totalReturn)
-            RoundedRectangle(cornerRadius: AppRadius.lg)
-                .fill(AppTheme.cardDark)
-                .overlay {
-                    // A soft glow in the holding's fortune colour — green when up,
-                    // red when down — for a premium, at-a-glance read.
-                    LinearGradient(colors: [tint.opacity(0.22), tint.opacity(0.04), .clear],
-                                   startPoint: .topTrailing, endPoint: .bottomLeading)
-                }
-                .overlay(RoundedRectangle(cornerRadius: AppRadius.lg).stroke(tint.opacity(0.18), lineWidth: 1))
-                .clipShape(RoundedRectangle(cornerRadius: AppRadius.lg))
-        }
+        // The plain card: up or down is said by the coloured return, not a
+        // glow across the card.
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
     }
 
     private func figure(_ label: String, _ value: String, _ tint: Color, trend: Int? = nil) -> some View {
@@ -406,8 +396,7 @@ struct HoldingRow: View {
             Image(systemName: holding.type.icon)
                 .font(.system(.body, weight: .semibold))
                 .foregroundStyle(holding.type.color)
-                .frame(width: 44, height: 44)
-                .background(holding.type.color.opacity(0.15), in: RoundedRectangle(cornerRadius: AppRadius.md))
+                .frame(width: ListRowMetrics.icon)
             VStack(alignment: .leading, spacing: 3) {
                 Text(holding.name).font(.system(.subheadline, weight: .semibold))
                     .foregroundStyle(AppTheme.textPrimary).lineLimit(1)

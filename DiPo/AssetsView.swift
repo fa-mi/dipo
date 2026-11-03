@@ -165,8 +165,6 @@ struct AssetsView: View {
                 Image(systemName: "arrow.triangle.2.circlepath")
                     .font(.system(.subheadline, weight: .semibold))
                     .foregroundStyle(AppTheme.orange)
-                    .frame(width: 32, height: 32)
-                    .background(AppTheme.orange.opacity(0.14), in: RoundedRectangle(cornerRadius: AppRadius.sm))
                 Text(loc("asset.replace_title"))
                     .font(.system(.subheadline, weight: .semibold))
                     .foregroundStyle(AppTheme.textPrimary)
@@ -179,7 +177,7 @@ struct AssetsView: View {
             if let g = replacementGoal {
                 Label(String(format: loc("asset.replace_goal_exists"), g.name), systemImage: "checkmark.circle.fill")
                     .font(.system(.caption, weight: .semibold))
-                    .foregroundStyle(AppTheme.accent)
+                    .foregroundStyle(AppTheme.textPrimary)
             } else {
                 Button {
                     HapticManager.shared.success()
@@ -187,9 +185,9 @@ struct AssetsView: View {
                 } label: {
                     Text(String(format: loc("asset.replace_cta"), money(monthly)))
                         .font(.system(.caption, weight: .bold))
-                        .foregroundStyle(AppTheme.accent)
+                        .foregroundStyle(AppTheme.textPrimary)
                         .padding(.horizontal, 12).padding(.vertical, 8)
-                        .background(AppTheme.accent.opacity(0.12), in: Capsule())
+                        .background(AppTheme.cardMid, in: Capsule())
                 }
                 .buttonStyle(.plain)
             }
@@ -254,8 +252,7 @@ private struct AssetRow: View {
             Image(systemName: asset.kind.icon)
                 .font(.system(.body, weight: .semibold))
                 .foregroundStyle(asset.kind.color)
-                .frame(width: 40, height: 40)
-                .background(asset.kind.color.opacity(0.14), in: RoundedRectangle(cornerRadius: AppRadius.sm))
+                .frame(width: ListRowMetrics.icon)
             VStack(alignment: .leading, spacing: 3) {
                 Text(asset.name)
                     .font(.system(.subheadline, weight: .semibold))
@@ -394,7 +391,7 @@ struct AssetFormSheet: View {
                                 .foregroundStyle(AppTheme.red)
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 14)
-                                .background(AppTheme.red.opacity(0.1), in: RoundedRectangle(cornerRadius: AppRadius.md))
+                                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
                         }
                         .buttonStyle(.plain)
                     }
@@ -515,9 +512,9 @@ struct AssetFormSheet: View {
                         Image(systemName: "arrow.up.right")
                     }
                     .font(.system(.subheadline, weight: .semibold))
-                    .foregroundStyle(AppTheme.accent)
+                    .foregroundStyle(AppTheme.textPrimary)
                     .padding(.horizontal, 12).padding(.vertical, 11)
-                    .background(AppTheme.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: AppRadius.md))
+                    .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: AppRadius.md))
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -551,16 +548,14 @@ struct AssetFormSheet: View {
                         Image(systemName: k.icon).font(.system(.title3))
                             .foregroundStyle(kind == k ? k.color : AppTheme.textSecondary)
                             .frame(width: 40, height: 40)
-                            .background((kind == k ? k.color.opacity(0.18) : AppTheme.cardMid.opacity(0.45)), in: Circle())
                         Text(k.displayName).font(.system(.caption2, weight: .semibold))
                             .foregroundStyle(kind == k ? AppTheme.textPrimary : AppTheme.textSecondary)
                             .lineLimit(1).minimumScaleFactor(0.8)
                     }
                     .frame(maxWidth: .infinity).padding(.vertical, 12)
-                    .background((kind == k ? k.color.opacity(0.08) : AppTheme.cardDark),
+                    // The choice on the raised fill; its icon takes its colour.
+                    .background(kind == k ? AppTheme.cardMid : AppTheme.cardDark,
                                 in: RoundedRectangle(cornerRadius: AppRadius.md))
-                    .overlay(RoundedRectangle(cornerRadius: AppRadius.md)
-                        .stroke(kind == k ? k.color : Color.clear, lineWidth: 1.5))
                 }
                 .buttonStyle(.plain)
             }

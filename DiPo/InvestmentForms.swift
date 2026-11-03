@@ -108,19 +108,18 @@ struct CardFundPicker: View {
             HStack(spacing: 9) {
                 Image(systemName: "nosign")
                     .font(.system(.footnote, weight: .semibold))
-                    .foregroundStyle(on ? AppTheme.accent : AppTheme.textSecondary)
+                    .foregroundStyle(on ? AppTheme.textPrimary : AppTheme.textSecondary)
                     .frame(width: 34, height: 24)
-                    .background(AppTheme.cardMid.opacity(0.45), in: RoundedRectangle(cornerRadius: 6))
                 Text(loc("invest.fund_none"))
                     .font(.system(.caption, weight: .semibold))
                     .foregroundStyle(on ? AppTheme.textPrimary : AppTheme.textSecondary)
             }
             .padding(.horizontal, 12).padding(.vertical, 9)
-            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
-            .overlay(RoundedRectangle(cornerRadius: AppRadius.md)
-                .stroke(on ? AppTheme.accent : Color.clear, lineWidth: 2))
+            // The choice on the raised fill, no ring.
+            .background(on ? AppTheme.cardMid : AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
         }
         .buttonStyle(.plain)
+        .accessibilityAddTraits(on ? .isSelected : [])
     }
 
     private func cardChip(_ c: BankCard) -> some View {
@@ -139,7 +138,6 @@ struct CardFundPicker: View {
                         RoundedRectangle(cornerRadius: 1.5).fill(.white.opacity(0.55))
                             .frame(width: 7, height: 5).padding(4)
                     }
-                    .overlay(RoundedRectangle(cornerRadius: 5).stroke(.white.opacity(0.15), lineWidth: 0.5))
                 VStack(alignment: .leading, spacing: 1) {
                     Text(name).font(.system(.caption, weight: .semibold))
                         .foregroundStyle(AppTheme.textPrimary).lineLimit(1)
@@ -150,14 +148,13 @@ struct CardFundPicker: View {
                 }
             }
             .padding(.horizontal, 12).padding(.vertical, 8)
-            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
-            .overlay(RoundedRectangle(cornerRadius: AppRadius.md)
-                .stroke(on ? AppTheme.accent : Color.clear, lineWidth: 2))
+            // The choice on the raised fill with its tick in ink, no ring.
+            .background(on ? AppTheme.cardMid : AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
             .overlay(alignment: .topTrailing) {
                 if on {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(.caption))
-                        .foregroundStyle(AppTheme.accent)
+                        .foregroundStyle(AppTheme.textPrimary)
                         .background(Circle().fill(AppTheme.bg).padding(-1))
                         .offset(x: 6, y: -6)
                 }
@@ -196,8 +193,6 @@ struct MoneyField: View {
             }
             .padding(.horizontal, 14).padding(.vertical, 12)
             .background(bg, in: RoundedRectangle(cornerRadius: AppRadius.md))
-            .overlay(RoundedRectangle(cornerRadius: AppRadius.md)
-                .stroke(focused ? AppTheme.accent.opacity(0.7) : Color.clear, lineWidth: 1.5))
             if let hint {
                 Text(hint).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary.opacity(0.85))
                     // Wrap rather than widen: in a two-column row the hint's
@@ -225,8 +220,6 @@ struct PlainField: View {
                 .focused($focused)
                 .padding(.horizontal, 14).padding(.vertical, 12)
                 .background(bg, in: RoundedRectangle(cornerRadius: AppRadius.md))
-                .overlay(RoundedRectangle(cornerRadius: AppRadius.md)
-                    .stroke(focused ? AppTheme.accent.opacity(0.7) : Color.clear, lineWidth: 1.5))
         }
     }
 }
@@ -317,8 +310,9 @@ private struct GoldPriceWarning: View {
                         withAnimation(.spring(response: 0.3)) { fix() }
                     } label: {
                         Text(fixTitle).font(.system(.caption, weight: .bold))
+                            .foregroundStyle(AppTheme.textPrimary)
                             .padding(.horizontal, 12).padding(.vertical, 6)
-                            .background(AppTheme.amber.opacity(0.18), in: Capsule())
+                            .background(AppTheme.cardMid, in: Capsule())
                     }
                     .buttonStyle(.plain)
                 }
@@ -326,8 +320,6 @@ private struct GoldPriceWarning: View {
         }
         .foregroundStyle(AppTheme.amber)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 12).padding(.vertical, 10)
-        .background(AppTheme.amber.opacity(0.12), in: RoundedRectangle(cornerRadius: AppRadius.md))
     }
 }
 
@@ -355,16 +347,15 @@ private struct PriceSlipWarning: View {
                 } label: {
                     Text(String(format: loc("invest.price_slip_fix"), investMoney(suggestion, currency)))
                         .font(.system(.caption, weight: .bold))
+                        .foregroundStyle(AppTheme.textPrimary)
                         .padding(.horizontal, 12).padding(.vertical, 6)
-                        .background(AppTheme.amber.opacity(0.18), in: Capsule())
+                        .background(AppTheme.cardMid, in: Capsule())
                 }
                 .buttonStyle(.plain)
             }
         }
         .foregroundStyle(AppTheme.amber)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 12).padding(.vertical, 10)
-        .background(AppTheme.amber.opacity(0.12), in: RoundedRectangle(cornerRadius: AppRadius.md))
     }
 }
 
@@ -611,16 +602,14 @@ struct AddHoldingSheet: View {
                             Image(systemName: t.icon).font(.system(.title3))
                                 .foregroundStyle(type == t ? t.color : AppTheme.textSecondary)
                                 .frame(width: 40, height: 40)
-                                .background((type == t ? t.color.opacity(0.18) : AppTheme.cardMid.opacity(0.45)), in: Circle())
                             Text(t.displayName).font(.system(.caption2, weight: .semibold))
                                 .foregroundStyle(type == t ? AppTheme.textPrimary : AppTheme.textSecondary)
                                 .lineLimit(1).minimumScaleFactor(0.8)
                         }
                         .frame(maxWidth: .infinity).padding(.vertical, 12)
-                        .background((type == t ? t.color.opacity(0.08) : AppTheme.cardDark),
+                        // The choice on the raised fill; its icon takes its colour.
+                        .background(type == t ? AppTheme.cardMid : AppTheme.cardDark,
                                     in: RoundedRectangle(cornerRadius: AppRadius.md))
-                        .overlay(RoundedRectangle(cornerRadius: AppRadius.md)
-                            .stroke(type == t ? t.color : Color.clear, lineWidth: 1.5))
                     }
                     .buttonStyle(.plain)
                 }
@@ -672,10 +661,8 @@ struct AddHoldingSheet: View {
             Image(systemName: "bolt.fill").font(.system(.caption2, weight: .bold))
             Text(loc("invest.auto_price_note")).font(.system(.caption, weight: .medium))
         }
-        .foregroundStyle(AppTheme.accent)
+        .foregroundStyle(AppTheme.textSecondary)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 12).padding(.vertical, 10)
-        .background(AppTheme.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: AppRadius.md))
     }
 
     private var dateRow: some View {

@@ -115,10 +115,9 @@ struct HoldingDetailView: View {
     private var header: some View {
         HStack(spacing: 12) {
             Image(systemName: holding.type.icon)
-                .font(.system(.title3, weight: .semibold))
+                .font(.system(.title2, weight: .semibold))
                 .foregroundStyle(holding.type.color)
-                .frame(width: 46, height: 46)
-                .background(holding.type.color.opacity(0.15), in: RoundedRectangle(cornerRadius: AppRadius.md))
+                .frame(width: 32)
             VStack(alignment: .leading, spacing: 3) {
                 Text(holding.name).font(.system(.title3, weight: .bold))
                     .foregroundStyle(AppTheme.textPrimary).lineLimit(1)
@@ -184,14 +183,9 @@ struct HoldingDetailView: View {
             }
         }
         .frame(maxWidth: .infinity).padding(18)
-        .background {
-            let tint = investPLColor(s.unrealizedPL)
-            RoundedRectangle(cornerRadius: AppRadius.lg).fill(AppTheme.cardDark)
-                .overlay { LinearGradient(colors: [tint.opacity(0.22), tint.opacity(0.04), .clear],
-                                          startPoint: .topTrailing, endPoint: .bottomLeading) }
-                .overlay(RoundedRectangle(cornerRadius: AppRadius.lg).stroke(tint.opacity(0.18), lineWidth: 1))
-                .clipShape(RoundedRectangle(cornerRadius: AppRadius.lg))
-        }
+        // The plain card: up or down is said by the coloured figures, not a
+        // glow across the card.
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
     }
 
     /// Gold recorded with totals where per-gram prices belong — the mistake the
@@ -235,8 +229,9 @@ struct HoldingDetailView: View {
                                  String(format: loc("invest.gold_fix_to"), investMoney($0, cur))
                              } ?? loc("invest.gold_fix"))
                             .font(.system(.caption, weight: .bold))
+                            .foregroundStyle(AppTheme.textPrimary)
                             .padding(.horizontal, 12).padding(.vertical, 6)
-                            .background(AppTheme.amber.opacity(0.18), in: Capsule())
+                            .background(AppTheme.cardMid, in: Capsule())
                     }
                     .buttonStyle(.plain)
                 }
@@ -245,7 +240,7 @@ struct HoldingDetailView: View {
         .foregroundStyle(AppTheme.amber)
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
-        .background(AppTheme.amber.opacity(0.12), in: RoundedRectangle(cornerRadius: AppRadius.lg))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
     }
 
     private func plChip(_ text: String, _ tint: Color, trend: Int) -> some View {
@@ -256,8 +251,8 @@ struct HoldingDetailView: View {
             Text(text).font(.system(.caption, weight: .bold))
                 .lineLimit(1).minimumScaleFactor(0.75)
         }
-        .foregroundStyle(tint).padding(.horizontal, 10).padding(.vertical, 5)
-        .background(tint.opacity(0.15), in: Capsule())
+        // A coloured figure with its arrow, nothing behind it.
+        .foregroundStyle(tint)
     }
 
     private var priceChartCard: some View {
@@ -497,8 +492,9 @@ struct HoldingDetailView: View {
                 } label: {
                     Text(String(format: loc("invest.slip_banner_fix"), investMoney(meant, cur)))
                         .font(.system(.caption, weight: .bold))
+                        .foregroundStyle(AppTheme.textPrimary)
                         .padding(.horizontal, 12).padding(.vertical, 6)
-                        .background(AppTheme.amber.opacity(0.18), in: Capsule())
+                        .background(AppTheme.cardMid, in: Capsule())
                 }
                 .buttonStyle(.plain)
             }
@@ -506,7 +502,7 @@ struct HoldingDetailView: View {
         .foregroundStyle(AppTheme.amber)
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
-        .background(AppTheme.amber.opacity(0.12), in: RoundedRectangle(cornerRadius: AppRadius.lg))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
     }
 
     private func repairSlippedPrices() {
@@ -550,13 +546,14 @@ struct HoldingDetailView: View {
 
     private func actionButton(_ title: String, _ icon: String, _ tint: Color, _ action: @escaping () -> Void) -> some View {
         Button { HapticManager.shared.tap(); action() } label: {
+            // Plain controls: the icon keeps its colour, the word is ink.
             HStack(spacing: 6) {
-                Image(systemName: icon).font(.system(.caption, weight: .bold))
+                Image(systemName: icon).font(.system(.caption, weight: .bold)).foregroundStyle(tint)
                 Text(title).font(.system(.caption, weight: .semibold)).lineLimit(1).minimumScaleFactor(0.95)
+                    .foregroundStyle(AppTheme.textPrimary)
             }
-            .foregroundStyle(tint)
             .frame(maxWidth: .infinity).padding(.vertical, 12)
-            .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: AppRadius.md))
+            .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: AppRadius.md))
         }
         .buttonStyle(ScaleButtonStyle())
     }
@@ -612,8 +609,8 @@ private struct LotRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: icon).font(.system(.caption, weight: .bold)).foregroundStyle(tint)
-                .frame(width: 30, height: 30).background(tint.opacity(0.15), in: Circle())
+            Image(systemName: icon).font(.system(.footnote, weight: .bold)).foregroundStyle(tint)
+                .frame(width: 22)
             VStack(alignment: .leading, spacing: 2) {
                 Text(kindLabel).font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
                 Text(subtitle).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
@@ -693,12 +690,8 @@ private struct CenterConfirmModal: View {
 
     private var card: some View {
         VStack(spacing: 0) {
-            ZStack {
-                Circle().fill(AppTheme.red.opacity(0.12)).frame(width: 76, height: 76)
-                Circle().stroke(AppTheme.red.opacity(0.25), lineWidth: 1.5).frame(width: 76, height: 76)
-                Image(systemName: "trash.fill").font(.system(size: 30, weight: .semibold)).foregroundStyle(AppTheme.red)
-            }
-            .padding(.top, 26)
+            Image(systemName: "trash.fill").font(.system(size: 34, weight: .semibold)).foregroundStyle(AppTheme.red)
+                .padding(.top, 26)
 
             VStack(spacing: 8) {
                 Text(title).font(.system(.title3, weight: .bold))
@@ -721,8 +714,7 @@ private struct CenterConfirmModal: View {
                     Text(loc("common.cancel")).font(.system(.body, weight: .semibold))
                         .foregroundStyle(AppTheme.textPrimary)
                         .frame(maxWidth: .infinity).padding(.vertical, 15)
-                        .background(AppTheme.bg, in: RoundedRectangle(cornerRadius: AppRadius.md))
-                        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.cardMid, lineWidth: 1))
+                        .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: AppRadius.md))
                 }
                 .buttonStyle(ScaleButtonStyle())
             }
@@ -730,8 +722,6 @@ private struct CenterConfirmModal: View {
         }
         .frame(maxWidth: 360)
         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: 28))
-        .overlay(RoundedRectangle(cornerRadius: 28).stroke(AppTheme.cardMid.opacity(0.5), lineWidth: 1))
-        .shadow(color: .black.opacity(0.3), radius: 30, y: 10)
         .padding(.horizontal, 36)
     }
 }
@@ -742,11 +732,11 @@ struct InvestEmptyState: View {
     let onAdd: () -> Void
     var body: some View {
         VStack(spacing: 16) {
+            // The icon alone; the green disc behind it was decoration, and
+            // the button below is the screen's one green.
             Image(systemName: "chart.line.uptrend.xyaxis")
                 .font(.system(size: 44, weight: .semibold))
-                .foregroundStyle(AppTheme.accent)
-                .frame(width: 96, height: 96)
-                .background(AppTheme.accent.opacity(0.12), in: Circle())
+                .foregroundStyle(AppTheme.textSecondary)
             VStack(spacing: 6) {
                 Text(loc("invest.empty_title")).font(.system(.title3, weight: .bold))
                     .foregroundStyle(AppTheme.textPrimary)
