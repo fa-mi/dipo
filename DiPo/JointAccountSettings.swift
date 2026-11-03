@@ -254,9 +254,7 @@ struct JointSettingsSheet: View {
             if isOwnerRow {
                 Text(loc("joint.role.owner"))
                     .font(.system(.caption, weight: .bold))
-                    .foregroundStyle(AppTheme.accent)
-                    .padding(.horizontal, 8).padding(.vertical, 3)
-                    .background(AppTheme.accent.opacity(0.12), in: Capsule())
+                    .foregroundStyle(AppTheme.textPrimary)
             } else {
                 Text(loc("joint.role.member"))
                     .font(.system(.caption))
@@ -302,8 +300,7 @@ struct JointSettingsSheet: View {
             Image(systemName: "envelope.badge")
                 .font(.system(.footnote, weight: .semibold))
                 .foregroundStyle(AppTheme.purple)
-                .frame(width: 36, height: 36)
-                .background(AppTheme.purple.opacity(0.12), in: Circle())
+                .frame(width: ListRowMetrics.icon)
             Text(loc("joint.settings.pending"))
                 .font(.system(.subheadline))
                 .foregroundStyle(AppTheme.textSecondary)
@@ -331,7 +328,7 @@ struct JointSettingsSheet: View {
                 .foregroundStyle(AppTheme.textPrimary)
                 .padding(.horizontal, 16)
                 .frame(height: 54)
-                .background(AppTheme.cardMid.opacity(0.6), in: RoundedRectangle(cornerRadius: AppRadius.md))
+                .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: AppRadius.md))
                 .onChange(of: dipoID) { _, _ in inviteResult = nil }
             JointPrimaryButton(title: loc("joint.settings.send_invite"), busy: inviting,
                                enabled: !dipoID.trimmingCharacters(in: .whitespaces).isEmpty) {

@@ -94,8 +94,7 @@ struct JointAccountsSection: View {
             Image(systemName: "envelope.fill")
                 .font(.system(.body, weight: .semibold))
                 .foregroundStyle(AppTheme.purple)
-                .frame(width: 44, height: 44)
-                .background(AppTheme.purple.opacity(0.12), in: RoundedRectangle(cornerRadius: AppRadius.sm))
+                .frame(width: ListRowMetrics.icon)
             VStack(alignment: .leading, spacing: 2) {
                 Text(String(format: loc("joint.invite.from"), invite.fromName.isEmpty ? loc("joint.someone") : invite.fromName))
                     .font(.system(.subheadline, weight: .bold))
@@ -190,11 +189,11 @@ struct JointAccountsSection: View {
                 }
                 Spacer(minLength: 0)
             }
+            // A row on the plain card; the green wash and dashed outline only
+            // said "you can make one here".
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(AppTheme.accent.opacity(0.06), in: RoundedRectangle(cornerRadius: AppRadius.md))
-            .overlay(RoundedRectangle(cornerRadius: AppRadius.md)
-                .strokeBorder(AppTheme.accent.opacity(0.45), style: StrokeStyle(lineWidth: 1.2, dash: [5, 4])))
+            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
         }
         .buttonStyle(ScaleButtonStyle())
     }
@@ -486,7 +485,7 @@ struct JointEmojiRow: View {
                     Spacer(minLength: 0)
                 }
                 .padding(14)
-                .background(AppTheme.blue.opacity(0.08), in: RoundedRectangle(cornerRadius: AppRadius.md))
+                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
                 .id(chosen.emoji)
                 .transition(.opacity)
                 .accessibilityElement(children: .combine)
@@ -506,14 +505,12 @@ struct JointEmojiRow: View {
                 Text(icon.emoji)
                     .font(.system(size: 26))
                     .frame(width: 52, height: 52)
-                    .background(on ? AppTheme.accent.opacity(0.14) : AppTheme.cardDark,
+                    // The choice on the raised fill, no ring.
+                    .background(on ? AppTheme.cardMid : AppTheme.cardDark,
                                 in: RoundedRectangle(cornerRadius: AppRadius.md))
-                    // Drawn inside the tile, so no part of it falls outside.
-                    .overlay(RoundedRectangle(cornerRadius: AppRadius.md)
-                        .strokeBorder(on ? AppTheme.accent : .clear, lineWidth: 2))
                 Text(icon.label)
                     .font(.system(.caption2, weight: on ? .bold : .medium))
-                    .foregroundStyle(on ? AppTheme.accent : AppTheme.textSecondary)
+                    .foregroundStyle(on ? AppTheme.textPrimary : AppTheme.textSecondary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
             }
@@ -569,8 +566,9 @@ struct JointInfo: View {
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
         }
+        // The note's colour is on its icon; the card is the plain one.
         .padding(14)
-        .background(tint.opacity(0.08), in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
     }
 }
 
@@ -589,10 +587,10 @@ struct JointPrimaryButton: View {
                 if busy { ProgressView().tint(AppTheme.onVividFill) } else { Text(title) }
             }
             .font(.system(.body, weight: .bold))
-            .foregroundStyle(AppTheme.onVividFill)
+            .foregroundStyle(enabled ? AppTheme.onVividFill : AppTheme.textSecondary)
             .frame(maxWidth: .infinity)
             .frame(height: 54)
-            .background(AppTheme.accentFill.opacity(enabled ? 1 : 0.4), in: RoundedRectangle(cornerRadius: AppRadius.md))
+            .background(enabled ? AppTheme.accentFill : AppTheme.cardMid, in: RoundedRectangle(cornerRadius: AppRadius.md))
         }
         .buttonStyle(ScaleButtonStyle())
         .disabled(!enabled || busy)

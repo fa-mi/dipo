@@ -176,7 +176,7 @@ struct JointAccountDetailView: View {
                         .accessibilityLabel(loc("common.close"))
                     }
                     .padding(14)
-                    .background(AppTheme.orange.opacity(0.10), in: RoundedRectangle(cornerRadius: AppRadius.md))
+                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
                 }
 
                 // Entries from someone DiPo has no name for read "Someone".
@@ -434,8 +434,6 @@ struct JointTxRow: View {
                     Text(author)
                         .font(.system(.caption2, weight: .bold))
                         .foregroundStyle(mine ? AppTheme.blue : AppTheme.purple)
-                        .padding(.horizontal, 6).padding(.vertical, 2)
-                        .background((mine ? AppTheme.blue : AppTheme.purple).opacity(0.14), in: Capsule())
                         .lineLimit(1)
                 }
             }
@@ -514,9 +512,9 @@ struct JointEntrySheet: View {
                         HStack(spacing: 10) {
                             Text(account.currency)
                                 .font(.system(.subheadline, weight: .bold))
-                                .foregroundStyle(AppTheme.accent)
+                                .foregroundStyle(AppTheme.textSecondary)
                                 .frame(width: 58, height: 60)
-                                .background(AppTheme.accent.opacity(0.10), in: RoundedRectangle(cornerRadius: AppRadius.md))
+                                .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: AppRadius.md))
                             TextField("0", text: $amountText)
                                 .font(.system(.title, weight: .bold))
                                 .foregroundStyle(AppTheme.textPrimary)
@@ -586,8 +584,8 @@ struct JointEntrySheet: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 10)
-            .background(on ? tint.opacity(0.14) : AppTheme.cardDark, in: Capsule())
-            .overlay(Capsule().stroke(on ? tint : .clear, lineWidth: 1.5))
+            // The choice on the raised fill; the icon keeps its colour.
+            .background(on ? AppTheme.cardMid : AppTheme.cardDark, in: Capsule())
         }
         .buttonStyle(ScaleButtonStyle())
         .accessibilityAddTraits(on ? .isSelected : [])
@@ -658,18 +656,17 @@ struct JointDepositSheet: View {
                             HStack(spacing: 10) {
                                 Text(card?.resolvedCurrency ?? "")
                                     .font(.system(.subheadline, weight: .bold))
-                                    .foregroundStyle(AppTheme.accent)
+                                    .foregroundStyle(AppTheme.textSecondary)
                                     .frame(width: 58, height: 60)
-                                    .background(AppTheme.accent.opacity(0.10), in: RoundedRectangle(cornerRadius: AppRadius.md))
+                                    .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: AppRadius.md))
                                 TextField("0", text: $amountText)
                                     .font(.system(.title, weight: .bold))
                                     .foregroundStyle(AppTheme.textPrimary)
                                     .keyboardType(.decimalPad)
                                     .padding(.horizontal, 16)
                                     .frame(height: 60)
+                                    // Too much is said in red words below, not an outline.
                                     .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
-                                    .overlay(RoundedRectangle(cornerRadius: AppRadius.md)
-                                        .stroke(insufficient ? AppTheme.red.opacity(0.5) : .clear, lineWidth: 1))
                             }
 
                             if insufficient {
@@ -734,7 +731,8 @@ struct JointDepositSheet: View {
             .background(LinearGradient(colors: [Color(hex: start), Color(hex: end)],
                                        startPoint: .topLeading, endPoint: .bottomTrailing),
                         in: RoundedRectangle(cornerRadius: AppRadius.md))
-            .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(on ? AppTheme.accent : .clear, lineWidth: 3))
+            // One ring, round the card that is chosen, in ink.
+            .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(on ? AppTheme.textPrimary : .clear, lineWidth: 3))
         }
         .buttonStyle(ScaleButtonStyle())
         .accessibilityAddTraits(on ? .isSelected : [])

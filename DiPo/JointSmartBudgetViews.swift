@@ -58,18 +58,18 @@ struct JointSmartBudgetCard: View {
                         Image(systemName: "slider.horizontal.3")
                     }
                     .font(.system(.caption, weight: .bold))
-                    .foregroundStyle(AppTheme.accent)
+                    .foregroundStyle(AppTheme.textPrimary)
                     .padding(.horizontal, 9).padding(.vertical, 5)
-                    .background(AppTheme.accent.opacity(0.12), in: Capsule())
+                    .background(AppTheme.cardMid, in: Capsule())
                 }
                 .buttonStyle(ScaleButtonStyle())
                 .accessibilityLabel(loc("joint.sb.edit"))
             } else {
                 Text(account.smartRatios.label)
                     .font(.system(.caption, weight: .bold))
-                    .foregroundStyle(AppTheme.accent)
+                    .foregroundStyle(AppTheme.textPrimary)
                     .padding(.horizontal, 9).padding(.vertical, 5)
-                    .background(AppTheme.accent.opacity(0.12), in: Capsule())
+                    .background(AppTheme.cardMid, in: Capsule())
             }
         }
     }
@@ -93,8 +93,7 @@ struct JointSmartBudgetCard: View {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(pot.emoji)
                     .font(.system(.footnote))
-                    .frame(width: 26, height: 26)
-                    .background(pot.color.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
+                    .frame(width: 22)
                 Text(pot.label)
                     .font(.system(.subheadline, weight: .semibold))
                     .foregroundStyle(AppTheme.textPrimary)
@@ -135,8 +134,7 @@ struct JointSmartBudgetCard: View {
                 .font(.system(.caption, weight: .semibold))
                 .foregroundStyle(AppTheme.textSecondary)
         }
-        .padding(12)
-        .background(AppTheme.accent.opacity(0.08), in: RoundedRectangle(cornerRadius: AppRadius.sm))
+        .padding(.vertical, 4)
     }
 }
 
@@ -324,10 +322,9 @@ struct JointSmartBudgetSheet: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 12)
-            .background(on ? AppTheme.accent.opacity(0.10) : AppTheme.cardDark,
+            // The choice on the raised fill, no ring.
+            .background(on ? AppTheme.cardMid : AppTheme.cardDark,
                         in: RoundedRectangle(cornerRadius: AppRadius.md))
-            .overlay(RoundedRectangle(cornerRadius: AppRadius.md)
-                .strokeBorder(on ? AppTheme.accent : .clear, lineWidth: 2))
         }
         .buttonStyle(ScaleButtonStyle())
         .accessibilityAddTraits(on ? .isSelected : [])
