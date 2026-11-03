@@ -618,6 +618,11 @@ extension StatisticsView {
         }
     }
 
+    /// The hairline between figures on the detail screens' strips.
+    var metricDivider: some View {
+        Rectangle().fill(AppTheme.cardMid.opacity(0.7)).frame(width: 1, height: 32)
+    }
+
     // MARK: 1 · How much went out, and am I fine
 
     /// One sentence on where this is heading, for a period still running —
