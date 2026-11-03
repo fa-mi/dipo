@@ -95,6 +95,41 @@ final class WalletPocketTests: XCTestCase {
         XCTAssertTrue(WalletPocketKind.groups([]).isEmpty)
     }
 
+    // MARK: The pager follows the pocket in front
+
+    /// Three cards in one pocket, five in the other: the pager is as tall as
+    /// the one in view, and halfway through a swipe, halfway between them.
+    func testThePagerIsAsTallAsThePocketInFront() {
+        let w: CGFloat = 390
+        let kinds: [WalletPocketKind] = [.conventional, .digital]
+        func frames(_ offset: CGFloat) -> [WalletPocketKind: CGRect] {
+            [.conventional: CGRect(x: -offset, y: 8, width: w, height: 300),
+             .digital: CGRect(x: w - offset, y: 8, width: w, height: 420)]
+        }
+        XCTAssertEqual(WalletPockets.height(of: frames(0), kinds: kinds), 300)
+        XCTAssertEqual(WalletPockets.height(of: frames(w / 2), kinds: kinds), 360)
+        XCTAssertEqual(WalletPockets.height(of: frames(w), kinds: kinds), 420)
+    }
+
+    /// One pocket is as tall as itself; a pocket that has gone (its last card
+    /// deleted) no longer counts; nothing measured yet leaves the natural height.
+    func testThePagerReadsOnlyThePocketsThere() {
+        let only = [WalletPocketKind.conventional: CGRect(x: 0, y: 0, width: 390, height: 250)]
+        XCTAssertEqual(WalletPockets.height(of: only, kinds: [.conventional]), 250)
+        let stale = only.merging([.digital: CGRect(x: 0, y: 0, width: 390, height: 900)]) { $1 }
+        XCTAssertEqual(WalletPockets.height(of: stale, kinds: [.conventional]), 250)
+        XCTAssertNil(WalletPockets.height(of: [:], kinds: [.conventional, .digital]))
+    }
+
+    /// The pockets sit under their names, not at the foot of a pager sized
+    /// for the fuller one.
+    func testThePocketsAreTopAligned() throws {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        let source = try String(contentsOf: root.appendingPathComponent("DiPo/WalletPocket.swift"), encoding: .utf8)
+        XCTAssertTrue(source.contains("HStack(alignment: .top, spacing: 0)"))
+        XCTAssertFalse(source.contains("HStack(alignment: .bottom, spacing: 0)"))
+    }
+
     func testTheWalletsWordsInBothLanguages() {
         let keys = ["wallet.total_cash", "wallet.cc_bills", "wallet.tap_hint", "wallet.recent",
                     "wallet.act_main", "wallet.act_match", "wallet.pocket_conventional",
