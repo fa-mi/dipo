@@ -926,8 +926,10 @@ struct GoalTypeChooserView: View {
                             needsRoyal: Bool, action: @escaping () -> Void) -> some View {
         Button { HapticManager.shared.tap(); action() } label: {
             HStack(spacing: 14) {
-                Image(systemName: icon).font(.system(.title2)).foregroundStyle(tint)
-                    .frame(width: 36)
+                ZStack {
+                    RoundedRectangle(cornerRadius: AppRadius.md).fill(tint.opacity(0.15)).frame(width: 52, height: 52)
+                    Image(systemName: icon).font(.system(.title2)).foregroundStyle(tint)
+                }
                 VStack(alignment: .leading, spacing: 3) {
                     Text(title).font(.system(.callout, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
                     Text(subtitle).font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
@@ -983,8 +985,10 @@ struct InviteInboxRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Text(invite.goalEmoji).font(.system(.title3))
-                .frame(width: 32)
+            ZStack {
+                RoundedRectangle(cornerRadius: AppRadius.sm).fill(AppTheme.cardMid.opacity(0.7)).frame(width: 42, height: 42)
+                Text(invite.goalEmoji).font(.system(.title3))
+            }
             VStack(alignment: .leading, spacing: 2) {
                 Text(invite.goalTitle).font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.textPrimary).lineLimit(1)
                 Text(invite.isLegacy ? String(format: loc("unity.invite_legacy"), invite.fromName)
@@ -1045,14 +1049,18 @@ struct SharedGoalCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 12) {
-                Text(goal.emoji).font(.system(.title2))
-                    .frame(width: 32)
+                ZStack {
+                    RoundedRectangle(cornerRadius: AppRadius.sm).fill(AppTheme.cardMid.opacity(0.7)).frame(width: 48, height: 48)
+                    Text(goal.emoji).font(.system(.title2))
+                }
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 6) {
                         Text(goal.title).font(.system(.body, weight: .bold)).foregroundStyle(AppTheme.textPrimary).lineLimit(1)
                         // Kept in a Rekening Bersama: its name says whose goal it is.
                         Text(accountName ?? loc("unity.badge")).font(.system(.caption2, weight: .bold)).foregroundStyle(AppTheme.blue)
                             .lineLimit(1)
+                            .padding(.horizontal, 6).padding(.vertical, 2)
+                            .background(AppTheme.blue.opacity(0.14), in: Capsule())
                     }
                     HStack(spacing: 6) {
                         Image(systemName: "person.2.fill").font(.system(.caption2)).imageScale(.small).foregroundStyle(AppTheme.textSecondary)
@@ -1096,7 +1104,7 @@ struct SharedGoalCard: View {
                     }
                     .foregroundStyle(AppTheme.textPrimary)
                     .frame(maxWidth: .infinity).padding(.vertical, 12)
-                    .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: AppRadius.md))
+                    .background(AppTheme.cardMid.opacity(0.7), in: RoundedRectangle(cornerRadius: AppRadius.md))
                 }
                 .buttonStyle(ScaleButtonStyle())
             }
@@ -1153,8 +1161,7 @@ struct SharedGoalDetailView: View {
                             GeometryReader { g in
                                 ZStack(alignment: .leading) {
                                     Capsule().fill(AppTheme.cardMid).frame(height: 9)
-                                    // Ink and flat, like every goal's bar.
-                                    Capsule().fill(AppTheme.textPrimary)
+                                    Capsule().fill(LinearGradient(colors: [AppTheme.purple, AppTheme.blue], startPoint: .leading, endPoint: .trailing))
                                         .frame(width: g.size.width * goal.progress, height: 9)
                                 }
                             }.frame(height: 9).padding(.top, 4)
@@ -1162,7 +1169,7 @@ struct SharedGoalDetailView: View {
                                 Text(money(goal.savedAmount)).font(.system(.callout, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
                                 Text("/ \(money(goal.targetAmount))").font(.system(.footnote)).foregroundStyle(AppTheme.textSecondary)
                                 Spacer()
-                                Text("\(Int(goal.progress * 100))%").font(.system(.subheadline, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
+                                Text("\(Int(goal.progress * 100))%").font(.system(.subheadline, weight: .bold)).foregroundStyle(AppTheme.purple)
                             }
                         }
                         .padding(18)
@@ -1175,20 +1182,18 @@ struct SharedGoalDetailView: View {
                                 Image(systemName: "plus.circle.fill").font(.system(.callout))
                                 Text(loc("unity.add_savings")).font(.system(.subheadline, weight: .bold))
                             }
-                            // The screen's one action, in the app's green.
                             .foregroundStyle(AppTheme.onVividFill).frame(maxWidth: .infinity).padding(.vertical, 14)
-                            .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: AppRadius.md))
+                            .background(AppTheme.purple, in: RoundedRectangle(cornerRadius: AppRadius.md))
                         }.buttonStyle(ScaleButtonStyle()).padding(.horizontal, 22)
 
                         // Members breakdown
                         section(loc("unity.members_title")) {
                             ForEach(members) { m in
                                 HStack(spacing: 10) {
-                                    // An initial on the plain control fill.
-                                    Circle().fill(AppTheme.cardMid).frame(width: 30, height: 30)
-                                        .overlay(Text(String(m.displayName.prefix(1)).uppercased()).font(.system(.caption, weight: .bold)).foregroundStyle(AppTheme.textPrimary))
+                                    Circle().fill(AppTheme.purple.opacity(0.15)).frame(width: 30, height: 30)
+                                        .overlay(Text(String(m.displayName.prefix(1)).uppercased()).font(.system(.caption, weight: .bold)).foregroundStyle(AppTheme.purple))
                                     Text(m.displayName).font(.system(.footnote, weight: .medium)).foregroundStyle(AppTheme.textPrimary).lineLimit(1)
-                                    if m.isOwner { Text(loc("unity.role_owner")).font(.system(.caption2, weight: .semibold)).foregroundStyle(AppTheme.textSecondary) }
+                                    if m.isOwner { Text(loc("unity.role_owner")).font(.system(.caption2, weight: .bold)).foregroundStyle(AppTheme.purple).padding(.horizontal, 5).padding(.vertical, 1).background(AppTheme.purple.opacity(0.15), in: Capsule()) }
                                     Spacer()
                                     Text(money(m.contributedAmount)).font(.system(.footnote, weight: .semibold)).foregroundStyle(AppTheme.textSecondary)
                                     // Members of an account's goal come and go with the account.
@@ -1285,10 +1290,9 @@ struct SharedGoalDetailView: View {
 
     private func dangerButton(_ title: String, _ action: @escaping () -> Void) -> some View {
         Button { HapticManager.shared.tap(); action() } label: {
-            // A red word on the plain card, like Profile's Log Out.
             Text(title).font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.red)
                 .frame(maxWidth: .infinity).padding(.vertical, 12)
-                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.sm))
+                .background(AppTheme.red.opacity(0.1), in: RoundedRectangle(cornerRadius: AppRadius.sm))
         }.buttonStyle(ScaleButtonStyle()).padding(.horizontal, 22)
     }
 }
@@ -1398,7 +1402,7 @@ struct AddContributionSheet: View {
                 VStack(spacing: 18) {
                     Text(goal.emoji).font(.system(.largeTitle)).padding(.top, 12)
                     HStack(spacing: 10) {
-                        Text(goal.currency).font(.system(.subheadline, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
+                        Text(goal.currency).font(.system(.subheadline, weight: .bold)).foregroundStyle(AppTheme.purple)
                             .padding(.horizontal, 14).padding(.vertical, 14)
                             .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.sm))
                         TextField("0", text: $amountText).keyboardType(.decimalPad)
@@ -1460,10 +1464,9 @@ struct AddContributionSheet: View {
                             } else { HapticManager.shared.error() }
                         }
                     } label: {
-                        Text(loc("unity.add_savings")).font(.system(.callout, weight: .bold))
-                            .foregroundStyle(canSave ? AppTheme.onVividFill : AppTheme.textSecondary)
+                        Text(loc("unity.add_savings")).font(.system(.callout, weight: .bold)).foregroundStyle(.white)
                             .frame(maxWidth: .infinity).padding(.vertical, 15)
-                            .background(canSave ? AppTheme.accentFill : AppTheme.cardMid, in: RoundedRectangle(cornerRadius: AppRadius.md))
+                            .background(canSave ? AppTheme.purple : AppTheme.textSecondary.opacity(0.3), in: RoundedRectangle(cornerRadius: AppRadius.md))
                     }.buttonStyle(ScaleButtonStyle()).disabled(!canSave).padding(.horizontal, 22)
                     Spacer()
                 }
@@ -1503,6 +1506,7 @@ struct InviteSheet: View {
                             .autocorrectionDisabled()
                             .padding(.horizontal, 16).padding(.vertical, 14)
                             .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+                            .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.purple.opacity(0.3), lineWidth: 1))
                         Text(loc("unity.invite_hint")).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary.opacity(0.8))
                             .fixedSize(horizontal: false, vertical: true)
                     }.padding(.horizontal, 22)
@@ -1515,12 +1519,11 @@ struct InviteSheet: View {
 
                     Button { send() } label: {
                         HStack(spacing: 8) {
-                            if sending { ProgressView().tint(AppTheme.onVividFill) }
+                            if sending { ProgressView().tint(.white) }
                             Text(loc("unity.invite_send")).font(.system(.callout, weight: .bold))
                         }
-                        .foregroundStyle(canSend ? AppTheme.onVividFill : AppTheme.textSecondary)
-                        .frame(maxWidth: .infinity).padding(.vertical, 15)
-                        .background(canSend ? AppTheme.accentFill : AppTheme.cardMid, in: RoundedRectangle(cornerRadius: AppRadius.md))
+                        .foregroundStyle(.white).frame(maxWidth: .infinity).padding(.vertical, 15)
+                        .background(canSend ? AppTheme.purple : AppTheme.textSecondary.opacity(0.3), in: RoundedRectangle(cornerRadius: AppRadius.md))
                     }
                     .buttonStyle(ScaleButtonStyle())
                     .disabled(!canSend)
@@ -1600,8 +1603,8 @@ struct SharedGoalFormSheet: View {
                                 ForEach(emojiChoices, id: \.self) { e in
                                     Text(e).font(.system(.title2))
                                         .frame(width: 46, height: 46)
-                                        // The choice on the raised fill, no ring.
-                                        .background(emoji == e ? AppTheme.cardMid : AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.sm))
+                                        .background(emoji == e ? AppTheme.purple.opacity(0.18) : AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.sm))
+                                        .overlay(RoundedRectangle(cornerRadius: AppRadius.sm).stroke(emoji == e ? AppTheme.purple : Color.clear, lineWidth: 2))
                                         .onTapGesture { HapticManager.shared.tap(); emoji = e }
                                 }
                             }.padding(.horizontal, 22)
@@ -1619,9 +1622,10 @@ struct SharedGoalFormSheet: View {
                                     let p = CurrencyManager.shared.preferredCurrency
                                     currency = currency == p ? "USD" : p
                                 } label: {
-                                    Text(currency).font(.system(.subheadline, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
+                                    Text(currency).font(.system(.subheadline, weight: .bold)).foregroundStyle(AppTheme.purple)
                                         .padding(.horizontal, 14).padding(.vertical, 14)
                                         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.sm))
+                                        .overlay(RoundedRectangle(cornerRadius: AppRadius.sm).stroke(AppTheme.purple.opacity(0.3), lineWidth: 1))
                                 }.buttonStyle(ScaleButtonStyle())
                                 // An account's goal saves in the account's currency.
                                 .disabled(account != nil)
@@ -1684,7 +1688,7 @@ struct SharedGoalFormSheet: View {
                 ToolbarItem(placement: .primaryAction) {
                     Button(loc("unity.create_short")) { save() }
                         .font(.system(.subheadline, weight: .semibold))
-                        .foregroundStyle(canSave ? AppTheme.accent : AppTheme.textSecondary.opacity(0.4))
+                        .foregroundStyle(canSave ? AppTheme.purple : AppTheme.textSecondary.opacity(0.4))
                         .disabled(!canSave)
                 }
             }

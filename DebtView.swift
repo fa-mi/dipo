@@ -20,16 +20,11 @@ struct DebtView: View {
     @State private var showSalarySetup = false
     @State private var showAllDebts = false
     @State private var showAddCreditCard = false
-    /// A credit card's own page: spending, its bill, history, instalments.
-    @State private var openCard: BankCard? = nil
+    @State private var editingCreditCard: BankCard? = nil
+    @State private var logSpendCard: BankCard? = nil
+    @State private var payingCard: BankCard? = nil
+    @State private var deletingCard: BankCard? = nil
     @State private var payingDebt: DebtRecord? = nil
-    @State private var showOwedBack = false
-    @State private var showAnalysis = false
-    @State private var showAdvice = false
-    /// Which debt goes first: 0 highest interest, 1 smallest balance. Kept
-    /// on this device, like other choices about one screen; it sets the
-    /// pay-first box and the order of the rows.
-    @AppStorage("debt_payoff_strategy") private var strategy = 0
     @Query private var installments: [CardInstallment]
     @Query private var recurrings: [RecurringExpense]
     @Query private var receivables: [Receivable]
@@ -262,55 +257,89 @@ struct DebtView: View {
         return dates.max()
     }
 
-    /// The active debts in the chosen payoff order.
-    private func order(_ e: FinancialHealthEngine) -> [DebtRecord] {
-        strategy == 1 ? e.snowballOrder : e.avalancheOrder
-    }
-
-    /// Debts with a payment recorded this month.
-    private var paidThisMonth: Set<String> { DebtDue.paidThisMonth(allTransactions) }
-
-    // The page reads top to bottom as: how much do I owe and can a usual
-    // month carry it; which debt to pay first, with the page's one green
-    // button; the other debts; the credit cards; then the tools, one row
-    // each. It was a stack of cards with six green buttons: a summary with
-    // icon tiles and a tinted verdict, "Due soon" with a Pay per row, a card
-    // per debt with its own Pay, the payoff order, Smart Budget, the analysis,
-    // and each credit card with its history and instalments underneath.
+    // The screen reads top to bottom as: how much do I owe and can a usual
+    // month carry it, what is due now, each debt, which to pay first, and
+    // what Smart Budget's savings & debt share should do meanwhile.
+    // It opened on a score out of 100, a four-way allocation, a warning, an
+    // urgent list and then the debts — five verdicts before the thing itself.
+    // Later it said "Very healthy" above a pay-period overspending warning;
+    // how a pay period is going is Statistics' to say, not this screen's.
     private var debtContent: some View {
         ZStack { AppTheme.bg.ignoresSafeArea()
             ScrollView(showsIndicators: false) {
-                // Worked out once a pass: each reads every account's history.
-                let e = engine
-                let reading = affordability(e)
-                VStack(alignment: .leading, spacing: 0) {
-                    // A card balance alone is enough to show the total.
+                VStack(alignment: .leading, spacing: 18) {
+                    // A card balance alone is enough to show the summary.
                     if debts.isEmpty && cardOwed < 0.5 {
                         DebtEmptyState(vm: vm)
                             .frame(maxWidth: .infinity)
                             .padding(.top, 30)
                     } else {
-                        DebtTotalHeader(engine: e,
+                        let reading = affordability(engine)
+                        DebtSummaryCard(engine: engine,
                                         affordability: reading,
                                         cardOwed: cardOwed,
+                                        owedBack: owedBack(engine, reading),
                                         debtFreeDate: debtFreeDate,
-                                        onAdd: { HapticManager.shared.tap(); vm.resetForm(); vm.showAddSheet = true })
-                        debtsSection(e)
+                                        showSimulator: !embedded && !activeDebts.isEmpty,
+                                        onAdd: { HapticManager.shared.tap(); vm.resetForm(); vm.showAddSheet = true },
+                                        onSimulate: { HapticManager.shared.tap(); simulatorDebt = activeDebts.first })
+
+                        if !engine.urgentDebts.isEmpty {
+                            DueSoonCard(debts: engine.urgentDebts) { payingDebt = $0 }
+                        }
+
+                        // Only when something is recorded: with just a card,
+                        // "Your debts · 0 active" sat under "Total you owe
+                        // Rp 8.500.000" and read as a contradiction. The card
+                        // has its own section further down.
+                        if !activeDebts.isEmpty {
+                            VStack(alignment: .leading, spacing: 12) {
+                                HStack(alignment: .firstTextBaseline) {
+                                    Text(loc("debt.your_debts"))
+                                        .font(.system(.body, weight: .bold))
+                                        .foregroundStyle(AppTheme.textPrimary)
+                                    Spacer()
+                                    Text(String(format: loc("debt.active_count"), activeDebts.count))
+                                        .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
+                                }
+                                ForEach(Array(engine.avalancheOrder.prefix(debtPreviewLimit).enumerated()), id: \.element.id) { i, debt in
+                                    DebtCard(debt: debt, priority: i + 1,
+                                             payFirst: i == 0 && activeDebts.count > 1, vm: vm)
+                                }
+                                if engine.avalancheOrder.count > debtPreviewLimit {
+                                    Button { HapticManager.shared.tap(); showAllDebts = true } label: {
+                                        SeeAllLabel(count: engine.avalancheOrder.count)
+                                    }
+                                    .buttonStyle(ScaleButtonStyle())
+                                }
+                            }
+                        }
+
+                        if activeDebts.count > 1 {
+                            PayoffStrategyCard(engine: engine)
+                        }
+
+                        // Smart Budget's part on this screen: what its savings
+                        // & debt share does while something is owed. Its share
+                        // is of the income it budgets.
+                        if monthlyIncome > 0 {
+                            if engine.hasAnyDebt {
+                                DebtFirstCard(advice: advice(engine, reading))
+                                DebtAnalysisCard { analysisSnapshot(engine, reading) }
+                            }
+                        } else if !activeDebts.isEmpty {
+                            SalarySetupCTA(message: loc("salary.cta.debt")) { showSalarySetup = true }
+                        }
                     }
 
                     // Credit cards show regardless — someone may track only a card.
                     creditCardSection
-                        .padding(.top, 26)
-
-                    if !(debts.isEmpty && cardOwed < 0.5) {
-                        toolsSection(e, reading: reading)
-                            .padding(.top, 18)
-                    }
+                        .padding(.top, 6)
 
                     Spacer(minLength: 120)
                 }
                 .padding(.horizontal, 22)
-                .padding(.top, embedded ? 8 : 20)
+                .padding(.top, embedded ? 4 : 20)
                 .containerRelativeFrame(.horizontal)
             }
         }
@@ -359,7 +388,7 @@ struct DebtView: View {
                 .preferredColorScheme(appColorScheme())
         }
         .sheet(isPresented: $showAllDebts) {
-            AllDebtsView(order: order(engine), paid: paidThisMonth, vm: vm)
+            AllDebtsView(order: engine.avalancheOrder, vm: vm)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
                 .presentationBackground(AppTheme.bg)
@@ -370,155 +399,81 @@ struct DebtView: View {
                 .presentationDetents([.large]).presentationDragIndicator(.visible)
                 .presentationBackground(AppTheme.bg).preferredColorScheme(appColorScheme())
         }
-        .sheet(item: $openCard) { card in
-            CreditCardDetailSheet(card: card, installments: installments, cards: cards)
+        .sheet(item: $editingCreditCard) { card in
+            CreditCardFormSheet(editCard: card)
+                .presentationDetents([.large]).presentationDragIndicator(.visible)
+                .presentationBackground(AppTheme.bg).preferredColorScheme(appColorScheme())
+        }
+        .sheet(item: $payingCard) { card in
+            CreditCardPaymentSheet(creditCard: card, cards: cards, context: context)
+                .presentationDetents([.large]).presentationDragIndicator(.visible)
+                .presentationBackground(AppTheme.bg).preferredColorScheme(appColorScheme())
+        }
+        .confirmSheet(item: $deletingCard,
+                      icon: "creditcard.fill",
+                      title: { _ in loc("cc.delete_title") },
+                      message: { _ in loc("cc.delete_msg") },
+                      confirmLabel: loc("action.delete")) { c in
+            // Installments belong to the card; orphaning them would leave
+            // phantom principal locking a limit that no longer exists.
+            for inst in installments where inst.cardID == c.id { context.delete(inst) }
+            context.delete(c)
+            try? context.save()
+        }
+        .sheet(item: $logSpendCard) { card in
+            // Cross-link: log a purchase on THIS credit card. Lock the card —
+            // the flow is "spend on this card", so swiping to another would log
+            // the purchase on the wrong account.
+            AddTransactionSheet(vm: txViewModel(), preselectedCardID: card.id,
+                                lockToPreselectedCard: true)
                 .presentationDetents([.large]).presentationDragIndicator(.visible)
                 .presentationBackground(AppTheme.bg).preferredColorScheme(appColorScheme())
         }
     }
 
-    // MARK: - Debts
-
-    /// The pay-first box, then the other debts as rows under the payoff order.
-    @ViewBuilder
-    private func debtsSection(_ e: FinancialHealthEngine) -> some View {
-        let ordered = order(e)
-        let paid = paidThisMonth
-        if let first = DebtPayFirst.pick(ordered, due: { DebtDue.of($0, paid: paid) }) {
-            let due = DebtDue.of(first, paid: paid)
-            DebtPayFirstBox(debt: first, due: due,
-                            reason: DebtPayFirst.reason(first, due: due, byInterest: strategy == 0,
-                                                        count: ordered.count),
-                            vm: vm,
-                            onPay: { payingDebt = first })
-                .padding(.top, 20)
-
-            let rest = ordered.filter { $0.id != first.id }
-            if !rest.isEmpty {
-                VStack(alignment: .leading, spacing: 0) {
-                    HStack(alignment: .firstTextBaseline) {
-                        Text(loc("debt.other_debts"))
-                            .font(.system(.body, weight: .bold))
-                            .foregroundStyle(AppTheme.textPrimary)
-                        Spacer()
-                        Text(verbatim: "\(rest.count)")
-                            .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
-                    }
-                    DebtStrategyPicker(strategy: $strategy)
-                        .padding(.top, 10)
-                        .padding(.bottom, 4)
-                    ForEach(Array(rest.prefix(debtPreviewLimit).enumerated()), id: \.element.id) { i, debt in
-                        if i > 0 { DebtHairline() }
-                        DebtRow(debt: debt, due: DebtDue.of(debt, paid: paid), vm: vm)
-                    }
-                    if rest.count > debtPreviewLimit {
-                        DebtHairline()
-                        DebtLinkRow(icon: "list.bullet", title: String(format: loc("savings.see_all"), ordered.count)) {
-                            showAllDebts = true
-                        }
-                    }
-                }
-                .padding(.top, 26)
-            }
-        }
-    }
-
-    // MARK: - Tools
-
-    /// One row each: what the money owed back would clear, the analysis,
-    /// the payoff simulator and Smart Budget's advice. Each opens its own page.
-    @ViewBuilder
-    private func toolsSection(_ e: FinancialHealthEngine, reading: DebtAffordability) -> some View {
-        let plan = owedBack(e, reading)
-        let rows = toolRows(e, reading: reading, plan: plan)
-        if !rows.isEmpty {
-            VStack(spacing: 0) {
-                ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
-                    DebtHairline()
-                    row
-                }
-            }
-            .sheet(isPresented: $showOwedBack) {
-                if let plan {
-                    DebtToolSheet(title: loc("debt.owed_back.nav")) { OwedBackBlock(plan: plan) }
-                }
-            }
-            .sheet(isPresented: $showAnalysis) {
-                DebtToolSheet(title: loc("analysis.title")) {
-                    DebtAnalysisCard { analysisSnapshot(e, reading) }
-                }
-            }
-            .sheet(isPresented: $showAdvice) {
-                DebtToolSheet(title: loc("debt.first.header")) {
-                    DebtFirstCard(advice: advice(e, reading))
-                }
-            }
-        }
-    }
-
-    private func toolRows(_ e: FinancialHealthEngine, reading: DebtAffordability,
-                          plan: OwedBackPlan?) -> [DebtLinkRow] {
-        let money = { (v: Double) in
-            CurrencyManager.shared.formatted(v, currency: CurrencyManager.shared.preferredCurrency)
-        }
-        var rows: [DebtLinkRow] = []
-        if let plan {
-            let cleared = plan.payoffs.filter(\.cleared).map(\.debt.name)
-            rows.append(DebtLinkRow(
-                icon: "arrow.uturn.backward", tint: AppTheme.accent,
-                title: String(format: loc("debt.owed_back.title"), money(plan.owedBack)),
-                detail: cleared.isEmpty ? nil
-                    : String(format: loc("debt.owed_back.clears"), cleared.joined(separator: ", ")),
-                action: { showOwedBack = true }))
-        }
-        if monthlyIncome > 0 && e.hasAnyDebt {
-            rows.append(DebtLinkRow(icon: "sparkles", tint: AppTheme.accent,
-                                    title: loc("analysis.title"), detail: loc("analysis.sub"),
-                                    action: { showAnalysis = true }))
-        }
-        if !embedded && !activeDebts.isEmpty {
-            rows.append(DebtLinkRow(icon: "chart.line.uptrend.xyaxis", title: loc("debt.simulate_row"),
-                                    action: { simulatorDebt = activeDebts.first }))
-        }
-        if monthlyIncome > 0 && e.hasAnyDebt {
-            rows.append(DebtLinkRow(icon: "lightbulb", tint: AppTheme.orange,
-                                    title: loc("debt.first.header"), detail: advice(e, reading).title(),
-                                    action: { showAdvice = true }))
-        } else if monthlyIncome <= 0 && !activeDebts.isEmpty {
-            rows.append(DebtLinkRow(icon: "banknote", tint: AppTheme.blue,
-                                    title: loc("salary.cta.title"), detail: loc("salary.cta.debt"),
-                                    action: { showSalarySetup = true }))
-        }
-        return rows
+    /// Lightweight AppViewModel carrying the live card list into the add-tx form.
+    private func txViewModel() -> AppViewModel {
+        let vm = AppViewModel()
+        vm.cards = cards
+        return vm
     }
 
     // MARK: - Credit Cards Section
 
     @ViewBuilder private var creditCardSection: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .center) {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
                 Text(loc("cc.section_title")).font(.system(.body, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
                 Spacer()
                 Button { HapticManager.shared.tap(); showAddCreditCard = true } label: {
-                    Image(systemName: "plus")
-                        .font(.system(.body, weight: .semibold))
-                        .foregroundStyle(AppTheme.textPrimary)
-                        .frame(width: 40, height: 32)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(ScaleButtonStyle())
-                .accessibilityLabel(loc("cc.add"))
+                    HStack(spacing: 5) {
+                        Image(systemName: "plus").font(.system(.caption, weight: .bold))
+                        Text(loc("cc.add")).font(.system(.footnote, weight: .semibold))
+                    }
+                    .foregroundStyle(AppTheme.textPrimary)
+                    .padding(.horizontal, 12).padding(.vertical, 7)
+                    .background(AppTheme.cardDark, in: Capsule())
+                }.buttonStyle(ScaleButtonStyle())
             }
 
             if creditCards.isEmpty {
                 Text(loc("cc.section_empty"))
                     .font(.system(.footnote)).foregroundStyle(AppTheme.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, 4)
             } else {
-                ForEach(Array(creditCards.enumerated()), id: \.element.id) { i, card in
-                    if i > 0 { DebtHairline() }
-                    CreditCardPlainRow(card: card, installments: installments) { openCard = card }
+                ForEach(creditCards) { card in
+                    VStack(spacing: 10) {
+                        CreditCardLiabilityRow(card: card,
+                                               installments: installments,
+                                               onEdit: { editingCreditCard = card },
+                                               onLogSpend: { logSpendCard = card },
+                                               onPay: { payingCard = card },
+                                               onDelete: { deletingCard = card })
+                        // Right under the card, so a purchase just logged is
+                        // the first thing below what it changed.
+                        CardHistorySection(card: card)
+                        InstallmentSection(card: card, installments: installments, context: context)
+                    }
                 }
             }
         }

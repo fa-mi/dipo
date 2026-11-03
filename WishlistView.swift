@@ -436,12 +436,11 @@ struct WishlistView: View {
             Button {
                 HapticManager.shared.tap(); goalSheet = .chooser
             } label: {
-                // In ink, as on Debts: a new goal is not money coming in.
                 Image(systemName: "plus")
-                    .font(.system(.title3, weight: .semibold))
-                    .foregroundStyle(AppTheme.textPrimary)
+                    .font(.system(.body, weight: .bold))
+                    .foregroundStyle(AppTheme.onVividFill)
                     .frame(width: 44, height: 44)
-                    .contentShape(Rectangle())
+                    .background(AppTheme.accentFill, in: Circle())
             }
             .accessibilityLabel(loc("a11y.add_goal"))
             .buttonStyle(ScaleButtonStyle())
@@ -607,7 +606,7 @@ struct GoalsSummaryCard: View {
                     Spacer(minLength: 8)
                     Text("\(Int((progress * 100).rounded()))%")
                         .font(.system(.title3, weight: .bold))
-                        .foregroundStyle(AppTheme.textPrimary)
+                        .foregroundStyle(AppTheme.accent)
                 }
                 Text(String(format: loc("savings.of_across"), cm.formatted(totalTarget, currency: pref), goalCount))
                     .font(.system(.footnote))
@@ -620,7 +619,7 @@ struct GoalsSummaryCard: View {
                 HStack(spacing: 8) {
                     Image(systemName: "repeat")
                         .font(.system(.footnote, weight: .semibold))
-                        .foregroundStyle(AppTheme.textSecondary)
+                        .foregroundStyle(AppTheme.accent)
                     Text(loc("savings.monthly"))
                         .font(.system(.footnote))
                         .foregroundStyle(AppTheme.textSecondary)
@@ -649,9 +648,8 @@ struct SavingsProgressBar: View {
     var body: some View {
         GeometryReader { g in
             ZStack(alignment: .leading) {
-                // Ink, as Plan's and Debts' bars: how far along, not money in.
                 Capsule().fill(AppTheme.cardMid)
-                Capsule().fill(AppTheme.textPrimary)
+                Capsule().fill(AppTheme.accentFill)
                     .frame(width: max(g.size.width * CGFloat(progress), progress > 0 ? height : 0))
             }
         }
@@ -680,10 +678,10 @@ struct GoalCard: View {
     private var planLine: (icon: String, text: String, tint: Color)? {
         let cm = CurrencyManager.shared
         if goal.reachedOnTodaysPrice {
-            return ("checkmark.seal", loc("savings.reached_today_price"), AppTheme.textPrimary)
+            return ("checkmark.seal", loc("savings.reached_today_price"), AppTheme.accent)
         }
         if goal.progress >= 1.0 {
-            return ("checkmark.seal.fill", loc("savings.reached"), AppTheme.textPrimary)
+            return ("checkmark.seal.fill", loc("savings.reached"), AppTheme.accent)
         }
         if let date = goal.estimatedDate {
             let when = date.formatted(.dateTime.month(.abbreviated).year())
@@ -720,10 +718,10 @@ struct GoalCard: View {
         VStack(alignment: .leading, spacing: 14) {
             NavigationLink(destination: GoalDetailView(goal: goal, monthlyIncome: monthlyIncome)) {
                 HStack(spacing: 12) {
-                    // The goal's emoji on its own; a tile behind it said nothing.
                     Text(goal.emoji)
                         .font(.system(.title2))
-                        .frame(width: 32)
+                        .frame(width: 48, height: 48)
+                        .background(AppTheme.cardMid.opacity(0.7), in: RoundedRectangle(cornerRadius: AppRadius.sm))
                     VStack(alignment: .leading, spacing: 3) {
                         Text(goal.name)
                             .font(.system(.body, weight: .bold))
@@ -781,16 +779,13 @@ struct GoalCard: View {
                 Button {
                     HapticManager.shared.tap(); showDepositSheet = true
                 } label: {
-                    // On the plain control fill: with several goals, a green
-                    // button on each made a column of them. The goal's own
-                    // screen keeps Add as its one green action.
                     HStack(spacing: 8) {
                         Image(systemName: "plus.circle.fill").font(.system(.callout))
                         Text(loc("savings.add")).font(.system(.subheadline, weight: .bold))
                     }
-                    .foregroundStyle(AppTheme.textPrimary)
+                    .foregroundStyle(AppTheme.onVividFill)
                     .frame(maxWidth: .infinity).padding(.vertical, 13)
-                    .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: AppRadius.md))
+                    .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: AppRadius.md))
                 }
                 .buttonStyle(ScaleButtonStyle())
 
@@ -801,7 +796,7 @@ struct GoalCard: View {
                         .font(.system(.subheadline, weight: .bold))
                         .foregroundStyle(AppTheme.textPrimary)
                         .frame(width: 46, height: 46)
-                        .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: AppRadius.md))
+                        .background(AppTheme.cardMid.opacity(0.7), in: RoundedRectangle(cornerRadius: AppRadius.md))
                 }
                 .accessibilityLabel(loc("a11y.more_actions"))
                 .buttonStyle(ScaleButtonStyle())
@@ -1009,7 +1004,7 @@ struct DepositSheet: View {
                     }
                     .foregroundStyle(AppTheme.textPrimary)
                     .frame(maxWidth: .infinity).padding(.vertical, 12)
-                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.sm))
+                    .background(AppTheme.accent.opacity(0.14), in: RoundedRectangle(cornerRadius: AppRadius.sm))
                 }
                 .buttonStyle(ScaleButtonStyle())
             }
@@ -1167,7 +1162,8 @@ struct CompletedGoalRow: View {
     var body: some View {
         HStack(spacing: 12) {
             Text(goal.emoji).font(.system(.title3))
-                .frame(width: 32)
+                .frame(width: 44, height: 44)
+                .background(AppTheme.accent.opacity(0.14), in: RoundedRectangle(cornerRadius: AppRadius.sm))
             VStack(alignment: .leading, spacing: 3) {
                 Text(goal.name)
                     .font(.system(.subheadline, weight: .semibold))
@@ -1183,13 +1179,13 @@ struct CompletedGoalRow: View {
             Spacer(minLength: 6)
             Image(systemName: "checkmark.seal.fill")
                 .font(.system(.title3))
-                .foregroundStyle(AppTheme.textPrimary)
+                .foregroundStyle(AppTheme.accent)
             Button(action: onMore) {
                 Image(systemName: "ellipsis")
                     .font(.system(.subheadline, weight: .bold))
                     .foregroundStyle(AppTheme.textPrimary)
                     .frame(width: 32, height: 32)
-                    .background(AppTheme.cardMid, in: Circle())
+                    .background(AppTheme.cardMid.opacity(0.7), in: Circle())
             }
             .accessibilityLabel(loc("a11y.more_actions"))
             .hitTarget(32)
@@ -1205,11 +1201,13 @@ struct GoalsEmptyState: View {
     let onAdd: () -> Void
     var body: some View {
         VStack(spacing: 22) {
-            // The icon alone; the two green discs round it were decoration,
-            // and the button below is the screen's one green.
-            Image(systemName: "target")
-                .font(.system(size: 52, weight: .semibold))
-                .foregroundStyle(AppTheme.textSecondary)
+            ZStack {
+                Circle().fill(AppTheme.accent.opacity(0.14)).frame(width: 120, height: 120)
+                Circle().fill(AppTheme.accentFill).frame(width: 76, height: 76)
+                Image(systemName: "target")
+                    .font(.system(.title, weight: .semibold))
+                    .foregroundStyle(AppTheme.onVividFill)
+            }
             VStack(spacing: 8) {
                 Text(loc("savings.no_goals"))
                     .font(.system(.title3, weight: .bold))
@@ -1302,7 +1300,7 @@ struct GoalFormSheet: View {
                             }
                             .foregroundStyle(canSave ? AppTheme.onVividFill : AppTheme.textSecondary)
                             .frame(maxWidth: .infinity).padding(.vertical, 17)
-                            .background(canSave ? AppTheme.accentFill : AppTheme.cardMid,
+                            .background(canSave ? AppTheme.accentFill : AppTheme.textSecondary.opacity(0.25),
                                         in: RoundedRectangle(cornerRadius: AppRadius.lg))
                         }
                         .buttonStyle(ScaleButtonStyle())
@@ -1344,14 +1342,14 @@ struct GoalFormSheet: View {
                     ForEach(emojis, id: \.self) { e in
                         let on = emoji == e
                         Button { HapticManager.shared.tap(); emoji = e } label: {
-                            // The choice on the raised fill, no ring.
                             Text(e).font(.system(.title2))
                                 .frame(width: 54, height: 54)
-                                .background(on ? AppTheme.cardMid : AppTheme.cardDark,
+                                .background(on ? AppTheme.accent.opacity(0.16) : AppTheme.cardDark,
                                             in: RoundedRectangle(cornerRadius: AppRadius.md))
+                                .overlay(RoundedRectangle(cornerRadius: AppRadius.md)
+                                    .stroke(on ? AppTheme.accent.opacity(0.65) : Color.clear, lineWidth: 1.5))
                         }
                         .buttonStyle(ScaleButtonStyle())
-                        .accessibilityAddTraits(on ? .isSelected : [])
                     }
                 }
                 .padding(.horizontal, 22).padding(.vertical, 2)
@@ -1419,12 +1417,12 @@ struct GoalFormSheet: View {
                         }
                         .foregroundStyle(on ? AppTheme.textPrimary : AppTheme.textSecondary)
                         .frame(maxWidth: .infinity).padding(.vertical, 12)
-                        // The choice on the raised fill; the dot keeps the colour.
-                        .background(on ? AppTheme.cardMid : AppTheme.cardDark,
+                        .background(on ? color.opacity(0.14) : AppTheme.cardDark,
                                     in: RoundedRectangle(cornerRadius: AppRadius.md))
+                        .overlay(RoundedRectangle(cornerRadius: AppRadius.md)
+                            .stroke(on ? color.opacity(0.6) : Color.clear, lineWidth: 1.5))
                     }
                     .buttonStyle(ScaleButtonStyle())
-                    .accessibilityAddTraits(on ? .isSelected : [])
                 }
             }
         }
@@ -1436,8 +1434,9 @@ struct GoalFormSheet: View {
         return HStack(spacing: 12) {
             Image(systemName: "calendar")
                 .font(.system(.subheadline, weight: .bold))
-                .foregroundStyle(AppTheme.textSecondary)
-                .frame(width: ListRowMetrics.icon)
+                .foregroundStyle(AppTheme.onVividFill)
+                .frame(width: 34, height: 34)
+                .background(AppTheme.accentFill, in: Circle())
             VStack(alignment: .leading, spacing: 2) {
                 Text(String(format: loc("savings.reach_in_months"), months))
                     .font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
@@ -1627,7 +1626,7 @@ struct GoalDetailView: View {
                 Circle().stroke(AppTheme.cardMid, lineWidth: 10)
                 Circle()
                     .trim(from: 0, to: animatedProgress)
-                    .stroke(AppTheme.textPrimary, style: StrokeStyle(lineWidth: 10, lineCap: .round))
+                    .stroke(AppTheme.accentFill, style: StrokeStyle(lineWidth: 10, lineCap: .round))
                     .rotationEffect(.degrees(-90))
                 VStack(spacing: 0) {
                     Text(goal.emoji).font(.system(size: 38))
@@ -1753,16 +1752,16 @@ struct GoalDetailView: View {
 
             VStack(spacing: 0) {
                 linkRow("pencil", AppTheme.blue, loc("common.edit"), nil) { showEdit = true }
-                divider.padding(.leading, 38)
+                divider.padding(.leading, 46)
                 linkRow(goal.isPinned ? "pin.slash.fill" : "pin.fill", AppTheme.purple,
                         goal.isPinned ? loc("savings.unpin") : loc("savings.pin"),
                         goal.isPinned ? nil : loc("savings.pin_sub")) {
                     goal.isPinned.toggle(); try? context.save(); HapticManager.shared.select()
                 }
-                divider.padding(.leading, 38)
+                divider.padding(.leading, 46)
                 linkRow("clock.arrow.circlepath", AppTheme.teal, loc("savings.record_past"),
                         loc("savings.record_past_sub")) { showPastDepositSheet = true }
-                divider.padding(.leading, 38)
+                divider.padding(.leading, 46)
                 linkRow("trash.fill", AppTheme.red, loc("common.delete"), nil, destructive: true) {
                     HapticManager.shared.warning(); showDelete = true
                 }
@@ -1779,8 +1778,9 @@ struct GoalDetailView: View {
             HStack(spacing: 12) {
                 Image(systemName: icon)
                     .font(.system(.subheadline, weight: .semibold))
-                    .foregroundStyle(tint)
-                    .frame(width: ListRowMetrics.icon)
+                    .foregroundStyle(destructive ? AppTheme.onVividFill : tint)
+                    .frame(width: 36, height: 36)
+                    .background(destructive ? tint : tint.opacity(0.14), in: RoundedRectangle(cornerRadius: AppRadius.sm))
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title).font(.system(.subheadline, weight: .semibold))
                         .foregroundStyle(destructive ? AppTheme.red : AppTheme.textPrimary)

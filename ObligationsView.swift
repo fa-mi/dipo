@@ -247,6 +247,8 @@ struct ObligationLoadCard: View {
                 Text(loc(shown.verdict.labelKey))
                     .font(.system(.caption2, weight: .bold))
                     .foregroundStyle(shown.verdict.tint)
+                    .padding(.horizontal, 8).padding(.vertical, 3)
+                    .background(shown.verdict.tint.opacity(0.15), in: Capsule())
             }
 
             if load.monthlyIncome <= 0 {

@@ -1,8 +1,7 @@
 import SwiftUI
 import SwiftData
 
-// Part of StatisticsView. The main page: the hero (what went on living, the
-// balance, payday), by month, where it went, worth knowing, the working.
+// Part of StatisticsView, moved out of StatisticsView.swift unchanged. The main page: headline, where it went, worth knowing.
 
 extension StatisticsView {
     // MARK: Main page
@@ -20,10 +19,11 @@ extension StatisticsView {
                             VStack(alignment: .leading, spacing: 16) {
                                 header
                                 spendHero
+                                metricStrip
                             }
                             .frame(maxWidth: AppLayout.phoneContentMaxWidth)
-                            VStack(alignment: .leading, spacing: 26) {
-                                monthBars
+                            VStack(alignment: .leading, spacing: 16) {
+                                dualCards
                                 categoriesCard
                                 notesCard
                                 detailLink
@@ -32,14 +32,11 @@ extension StatisticsView {
                         }
                         .padding(.bottom, 40)
                     } else {
-                        // The hero, then sections on the page itself: by month,
-                        // where it went, worth knowing, the working.
-                        VStack(alignment: .leading, spacing: 26) {
-                            VStack(alignment: .leading, spacing: 16) {
-                                header
-                                spendHero
-                            }
-                            monthBars
+                        VStack(alignment: .leading, spacing: 16) {
+                            header
+                            spendHero
+                            metricStrip
+                            dualCards
                             categoriesCard
                             notesCard
                             detailLink
@@ -81,13 +78,11 @@ extension StatisticsView {
                     HapticManager.shared.tap()
                     showExportSheet = true
                 } label: {
-                    // A plain icon: the round tile behind it said "button"
-                    // a second time.
                     Image(systemName: "square.and.arrow.up")
                         .font(.system(.body, weight: .semibold))
                         .foregroundStyle(AppTheme.textPrimary)
                         .frame(width: 44, height: 44)
-                        .contentShape(Rectangle())
+                        .background(AppTheme.cardDark, in: Circle())
                 }
                 .accessibilityLabel(loc("a11y.export"))
                 .buttonStyle(ScaleButtonStyle())
@@ -122,8 +117,8 @@ extension StatisticsView {
                         .font(.system(.caption2, weight: .semibold)).imageScale(.small)
                         .foregroundStyle(AppTheme.textSecondary)
                 }
-                .padding(.vertical, 6)
-                .contentShape(Rectangle())
+                .padding(.horizontal, 13).padding(.vertical, 8)
+                .background(AppTheme.cardDark, in: Capsule())
             }
         }
     }
@@ -145,61 +140,95 @@ extension StatisticsView {
         let book = cashBook
         let outlook = book.flatMap { paydayOutlook($0) }
         let danger = book.map { (outlook?.end ?? $0.end) < 0.5 } ?? false
-        let spent = book?.living ?? filteredExpenses
         return VStack(alignment: .leading, spacing: 14) {
-            // What went on living this period is the one big number. The
-            // balance it leaves, and whether it lasts to payday, come after.
+            if let outlook {
+                Label(String(format: loc(outlook.end >= 0.5 ? "stats.safe_until" : "stats.risk_until"),
+                             dayMonth(outlook.payday)),
+                      systemImage: outlook.end >= 0.5 ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                    .font(.system(.footnote, weight: .bold))
+                    .foregroundStyle(outlook.end >= 0.5 ? AppTheme.flowPillInk : AppTheme.red)
+                    .padding(.horizontal, 11).padding(.vertical, 6)
+                    .background((outlook.end >= 0.5 ? AppTheme.flowPine.opacity(0.20) : AppTheme.red.opacity(0.14)),
+                                in: Capsule())
+                    .overlay(Capsule().stroke(outlook.end >= 0.5 ? AppTheme.flowWillow.opacity(0.25)
+                                                                 : AppTheme.flowPeach.opacity(0.30), lineWidth: 1))
+            }
+
             VStack(alignment: .leading, spacing: 4) {
-                Text(loc("stats.spent_label"))
+                Text(book == nil ? loc("stats.expenses")
+                     : periodRunsToToday ? ScopeBalance.nowLabel(cards: scopeCards.count) : loc("stats.recon_end"))
                     .font(.system(.footnote, weight: .medium))
                     .foregroundStyle(AppTheme.textSecondary)
-                Text(money(spent))
+                Text(book.map { signedMoney($0.end) } ?? money(filteredExpenses))
                     .font(.system(size: 40, weight: .bold))
                     .foregroundStyle(heroFigure(danger: danger))
                     .contentTransition(.numericText())
                     .minimumScaleFactor(0.5).lineLimit(1)
-                if let line = StatsLines.comparison(periodLivingChange) {
-                    Text(line)
+                if let outlook {
+                    Text(String(format: loc("stats.at_payday"), signedMoney(outlook.end)))
                         .font(.system(.footnote))
-                        .foregroundStyle(AppTheme.textPrimary)
-                }
-                if let line = StatsLines.days(today: todaySpend, typical: typicalDailySpend, money: money) {
-                    Text(line)
-                        .font(.system(.caption))
                         .foregroundStyle(AppTheme.textSecondary)
                 }
             }
 
+            if let book, livingFunds > 0 { livingBox(book, danger: danger) }
+            if let book, book.debtPaid >= 0.5 || book.invested >= 0.5 { debtBox(book) }
+            if let book { cashBookView(book) }
+
             if livingFunds > 0 {
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: 8) {
                     // The existing gauge, not a plain bar: it carries the tick for
                     // how much of the period has elapsed, so spending ahead of the
                     // calendar is visible rather than merely counted.
                     SpendGauge(fraction: livingRatio,
                                timeMarker: periodProgress.map { Double($0.elapsed) / Double($0.total) },
                                overColor: danger ? AppTheme.red : AppTheme.orange)
-                    Text(String(format: loc("stats.pct_of_income"), incomeUsedPct))
-                        .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
-                        .lineLimit(1).minimumScaleFactor(0.7)
+
+                    HStack(spacing: 8) {
+                        Text(String(format: loc("stats.pct_of_income"), incomeUsedPct))
+                            .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
+                            .lineLimit(1).minimumScaleFactor(0.7)
+                        Spacer(minLength: 4)
+                        if let c = periodLivingChange, abs(c) >= 1 {
+                            let tint = c < 0 ? AppTheme.accent : (danger ? AppTheme.red : AppTheme.orange)
+                            HStack(spacing: 3) {
+                                Image(systemName: c >= 0 ? "arrow.up.right" : "arrow.down.right")
+                                    .font(.system(.caption2, weight: .bold))
+                                // Says what it is compared with: "60%" alone
+                                // read as anything.
+                                Text(String(format: loc("stats.vs_last_period"),
+                                            String(format: "%.0f%%", abs(c))))
+                                    .font(.system(.caption2, weight: .bold))
+                                    .lineLimit(1)
+                            }
+                            .foregroundStyle(tint)
+                            .padding(.horizontal, 8).padding(.vertical, 4)
+                            .background(tint.opacity(0.15), in: Capsule())
+                        }
+                    }
                 }
             }
 
-            if let book { balanceLines(book, outlook: outlook) }
-            if let book, livingFunds > 0 { livingBox(book, danger: danger) }
-            if let book, book.debtPaid >= 0.5 || book.invested >= 0.5 { debtBox(book) }
-
             // Where this period is heading, in one sentence.
             if let line = paceLine(book) {
-                sentence(line.ok ? "checkmark.circle.fill" : "exclamationmark.triangle.fill",
-                         line.ok ? AppTheme.accent : AppTheme.orange, line.text)
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: line.ok ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                        .font(.system(.subheadline))
+                        .foregroundStyle(line.ok ? AppTheme.accent : AppTheme.orange)
+                    Text(line.text)
+                        .font(.system(.footnote, weight: .medium))
+                        .foregroundStyle(AppTheme.textPrimary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .heroPanel(line.ok ? AppTheme.flowPine.opacity(0.13) : AppTheme.orange.opacity(0.12))
             } else if livingFunds <= 0 {
                 Label(loc("stats.no_income_hint"), systemImage: "info.circle")
                     .font(.system(.caption))
                     .foregroundStyle(AppTheme.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
-
-            if let book { cashBookDisclosure(book) }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(18)
@@ -215,77 +244,6 @@ extension StatisticsView {
                 .shadow(color: (danger ? AppTheme.flowPeach : AppTheme.flowPine).opacity(0.22), radius: 18, y: 10)
         }
         .environment(\.colorScheme, .dark)
-    }
-
-    /// The balance the period leaves, and for a running pay cycle whether it
-    /// lasts to payday and what payday should find. Red only when it may not.
-    func balanceLines(_ book: PeriodCashBook, outlook: (payday: Date, end: Double)?) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack(spacing: 4) {
-                Text(periodRunsToToday ? ScopeBalance.nowLabel(cards: scopeCards.count) : loc("stats.recon_end"))
-                    .foregroundStyle(AppTheme.textSecondary)
-                Text(signedMoney(book.end))
-                    .fontWeight(.semibold)
-                    .foregroundStyle(AppTheme.textPrimary)
-                    .contentTransition(.numericText())
-            }
-            .font(.system(.subheadline))
-            .lineLimit(1).minimumScaleFactor(0.8)
-            if let outlook {
-                let safe = outlook.end >= 0.5
-                Text(String(format: loc(safe ? "stats.safe_until" : "stats.risk_until"), dayMonth(outlook.payday))
-                     + " · " + String(format: loc("stats.at_payday"), signedMoney(outlook.end)))
-                    .font(.system(.caption, weight: safe ? .regular : .semibold))
-                    .foregroundStyle(safe ? AppTheme.textSecondary : AppTheme.red)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-    }
-
-    /// One sentence on the hero: its icon in its colour, nothing behind it.
-    func sentence(_ icon: String, _ tint: Color, _ text: String) -> some View {
-        HStack(alignment: .top, spacing: 8) {
-            Image(systemName: icon)
-                .font(.system(.subheadline))
-                .foregroundStyle(tint)
-            Text(text)
-                .font(.system(.footnote, weight: .medium))
-                .foregroundStyle(AppTheme.textPrimary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    /// The cash book, one tap away: where the balance began, what came in and
-    /// went out, and where it stands. Open by itself when the opening balance
-    /// is below zero, since that needs a fix.
-    @ViewBuilder
-    func cashBookDisclosure(_ book: PeriodCashBook) -> some View {
-        let needsFix = book.start < -0.5 && !(selectedCard?.isCreditCard ?? true)
-        let open = showCashBook || needsFix
-        VStack(alignment: .leading, spacing: 8) {
-            if !needsFix {
-                Button {
-                    HapticManager.shared.tap()
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { showCashBook.toggle() }
-                } label: {
-                    HStack(spacing: 4) {
-                        Text(loc(showCashBook ? "stats.book_hide" : "stats.book_show"))
-                        Image(systemName: "chevron.down")
-                            .imageScale(.small)
-                            .rotationEffect(.degrees(showCashBook ? 180 : 0))
-                    }
-                    .font(.system(.caption, weight: .semibold))
-                    .foregroundStyle(AppTheme.textPrimary)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-            }
-            if open {
-                cashBookView(book)
-                    .transition(.opacity)
-            }
-        }
     }
 
     /// White fading to frost, or blush to peach when the balance runs out —
@@ -353,13 +311,35 @@ extension StatisticsView {
         let over = book.livingNet < -0.5
         let text = book.livingSentence(money: money)
         let tint = !over ? AppTheme.accent : (danger ? AppTheme.red : AppTheme.orange)
-        return sentence(over ? "exclamationmark.circle.fill" : "checkmark.circle.fill", tint, text)
+        return HStack(alignment: .top, spacing: 8) {
+            Image(systemName: over ? "exclamationmark.circle.fill" : "checkmark.circle.fill")
+                .font(.system(.subheadline))
+                .foregroundStyle(tint)
+            Text(text)
+                .font(.system(.footnote, weight: .medium))
+                .foregroundStyle(AppTheme.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .heroPanel(!over ? AppTheme.flowPine.opacity(0.13) : tint.opacity(0.12))
     }
 
     /// Debt paid down and money put away — named as what they are, in blue,
     /// rather than counted as overspending.
     func debtBox(_ book: PeriodCashBook) -> some View {
-        sentence("creditcard.fill", AppTheme.blue, book.debtSentence(money: money) ?? "")
+        return HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "creditcard.fill")
+                .font(.system(.subheadline))
+                .foregroundStyle(AppTheme.blue)
+            Text(book.debtSentence(money: money) ?? "")
+                .font(.system(.footnote, weight: .medium))
+                .foregroundStyle(AppTheme.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .heroPanel(AppTheme.flowCobalt.opacity(0.18))
     }
 
     // MARK: The period as a cash book
@@ -552,75 +532,94 @@ extension StatisticsView {
         .accessibilityElement(children: .combine)
     }
 
-    /// Spending by month (or pay period), the current one in ink, opening
-    /// the trends; then this week, opening the week. Plain on the page: the
-    /// two cards they sat in, and the strip of four figures above them, said
-    /// again what the hero and the categories say.
-    var monthBars: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Button {
-                HapticManager.shared.tap()
-                appVM.statsPath.append(.trends)
-            } label: {
-                VStack(alignment: .leading, spacing: 10) {
-                    HStack(alignment: .firstTextBaseline, spacing: 6) {
-                        Text(loc("stats.trends"))
-                            .font(.system(.body, weight: .bold))
-                            .foregroundStyle(AppTheme.textPrimary)
-                        Spacer(minLength: 6)
-                        // The trend buckets follow the pay cycle whenever there
-                        // is a salary to anchor them, so the last bar is this
-                        // PERIOD, not this month.
-                        Text(loc(payCycleDay != nil ? "stats.this_period" : "stats.this_month"))
-                            .font(.system(.caption))
-                            .foregroundStyle(AppTheme.textSecondary)
-                        Text(money(trendTotal))
-                            .font(.system(.subheadline, weight: .semibold).monospacedDigit())
-                            .foregroundStyle(AppTheme.textPrimary)
-                            .lineLimit(1).minimumScaleFactor(0.7)
-                        Image(systemName: "chevron.right")
-                            .font(.system(.caption, weight: .semibold))
-                            .foregroundStyle(AppTheme.textSecondary)
-                    }
-                    // The current one in ink, the others faint: money going out
-                    // is not green.
-                    MiniBars(values: trendBars.map(\.value), labels: trendBars.map(\.label),
-                             tint: AppTheme.textPrimary, highlightLast: true)
-                        .frame(height: 54)
-                }
-                .padding(.bottom, 12)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
+    var metricStrip: some View {
+        let top = topCategories.first
+        let usedText: String = livingFunds > 0 ? "\(incomeUsedPct)%" : "—"
+        return HStack(spacing: 0) {
+            metricCell("chart.pie.fill", AppTheme.accent,
+                       usedText,
+                       loc("stats.metric_of_income"))
+            metricDivider
+            metricCell("sun.max.fill", AppTheme.amber, money(todaySpend), loc("common.today"))
+            metricDivider
+            // The median day of day-to-day spending — not an allowance. "per
+            // day" read as how much may be spent each day.
+            metricCell("scope", AppTheme.blue, money(typicalDailySpend), loc("stats.metric_typical_day"))
+            metricDivider
+            // Named as the top category, or "Bills" read as bills still due.
+            metricCell("tag.fill", top?.category.color ?? AppTheme.purple,
+                       money(top?.amount ?? 0),
+                       top.map { String(format: loc("stats.metric_top_named"), $0.category.displayLabel) }
+                           ?? loc("stats.metric_top"))
+        }
+        .padding(.vertical, 12)
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+    }
 
-            Rectangle().fill(AppTheme.cardMid).frame(height: 1)
+    func metricCell(_ icon: String, _ tint: Color, _ value: String, _ label: String) -> some View {
+        VStack(spacing: 5) {
+            Image(systemName: icon).font(.system(.caption, weight: .bold)).foregroundStyle(tint)
+            Text(value).font(.system(.subheadline, weight: .bold))
+                .foregroundStyle(AppTheme.textPrimary)
+                .lineLimit(1).minimumScaleFactor(0.5)
+            Text(label).font(.system(size: 10, weight: .medium))
+                .foregroundStyle(AppTheme.textSecondary)
+                .lineLimit(1).minimumScaleFactor(0.7)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 4)
+    }
 
-            Button {
-                HapticManager.shared.tap()
-                appVM.statsPath.append(.weekly)
-            } label: {
-                HStack(spacing: 6) {
-                    Text(loc("stats.this_week"))
-                        .font(.system(.subheadline, weight: .medium))
-                        .foregroundStyle(AppTheme.textPrimary)
-                    Spacer(minLength: 6)
-                    Text(money(weekTotal))
-                        .font(.system(.subheadline, weight: .semibold).monospacedDigit())
-                        .foregroundStyle(AppTheme.textPrimary)
-                    Image(systemName: "chevron.right")
-                        .font(.system(.caption, weight: .semibold))
-                        .foregroundStyle(AppTheme.textSecondary)
-                }
-                .padding(.vertical, 12)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
+    var metricDivider: some View {
+        Rectangle().fill(AppTheme.cardMid.opacity(0.7)).frame(width: 1, height: 32)
+    }
+
+    var dualCards: some View {
+        HStack(spacing: 12) {
+            miniStatCard(loc("stats.weekly"), loc("stats.this_week"), weekTotal,
+                         "chart.bar.fill", AppTheme.blue, weekBars,
+                         highlightLast: false, route: .weekly)
+            // The trend buckets follow the pay cycle whenever there is a salary
+            // to anchor them, so the last bar is this PERIOD, not this month.
+            miniStatCard(loc("stats.trends"), loc(payCycleDay != nil ? "stats.this_period" : "stats.this_month"),
+                         trendTotal,
+                         "chart.line.uptrend.xyaxis", AppTheme.accent, trendBars,
+                         highlightLast: true, route: .trends)
         }
     }
 
-    /// The hairline between figures on the detail screens' strips.
-    var metricDivider: some View {
-        Rectangle().fill(AppTheme.cardMid.opacity(0.7)).frame(width: 1, height: 32)
+    func miniStatCard(_ title: String, _ subtitle: String, _ value: Double,
+                              _ icon: String, _ tint: Color,
+                              _ bars: [(label: String, value: Double)],
+                              highlightLast: Bool, route: StatsRoute) -> some View {
+        Button {
+            HapticManager.shared.tap()
+            appVM.statsPath.append(route)
+        } label: {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 6) {
+                    Image(systemName: icon).font(.system(.caption, weight: .bold)).foregroundStyle(tint)
+                    Text(title).font(.system(.subheadline, weight: .bold))
+                        .foregroundStyle(AppTheme.textPrimary).lineLimit(1)
+                    Spacer(minLength: 2)
+                    Image(systemName: "chevron.right").font(.system(.caption2, weight: .semibold))
+                        .foregroundStyle(AppTheme.textSecondary.opacity(0.6))
+                }
+                Text(subtitle).font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
+                // In ink: the bars carry the card's colour; green is kept
+                // for money coming in, and this is money going out.
+                Text(money(value)).font(.system(.title3, weight: .bold))
+                    .foregroundStyle(AppTheme.textPrimary).lineLimit(1).minimumScaleFactor(0.5)
+                    .padding(.bottom, 2)
+                MiniBars(values: bars.map(\.value), labels: bars.map(\.label),
+                         tint: tint, highlightLast: highlightLast)
+                    .frame(height: 54)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(14)
+            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+        }
+        .buttonStyle(ScaleButtonStyle())
     }
 
     // MARK: 1 · How much went out, and am I fine
@@ -781,6 +780,8 @@ extension StatisticsView {
 
             nonFlowSection
         }
+        .padding(16)
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.xl))
     }
 
     /// Transfers for the current tab, shown beside the breakdown and never
@@ -811,7 +812,8 @@ extension StatisticsView {
                         Image(systemName: incoming ? "arrow.down.left" : "arrow.up.right")
                             .font(.system(.caption, weight: .bold))
                             .foregroundStyle(AppTheme.textSecondary)
-                            .frame(width: 24)
+                            .frame(width: 36, height: 36)
+                            .background(AppTheme.cardMid, in: Circle())
                         Text(r.label)
                             .font(.system(.subheadline))
                             .foregroundStyle(AppTheme.textPrimary)
@@ -849,18 +851,14 @@ extension StatisticsView {
                     guard !on else { return }
                     withAnimation(.spring(response: 0.3)) { statsVM.switchTab(tab) }
                 } label: {
-                    // The choice in ink. It was the page's ground on the
-                    // track, two greys a few steps apart, and in the light
-                    // theme the chosen side could not be told from the other.
-                    // Ink holds in both themes; green would say money in.
                     Text(tab.localizedLabel)
                         .font(.system(.caption, weight: .semibold))
-                        .foregroundStyle(on ? AppTheme.cardDark : AppTheme.textSecondary)
+                        .foregroundStyle(on ? AppTheme.textPrimary : AppTheme.textSecondary)
                         .lineLimit(1)
                         .fixedSize()
                         .padding(.horizontal, 10).padding(.vertical, 6)
                         .frame(maxWidth: fill ? .infinity : nil)
-                        .background(on ? AppTheme.textPrimary : Color.clear, in: Capsule())
+                        .background(on ? AppTheme.bg : Color.clear, in: Capsule())
                         .contentShape(Capsule())
                 }
                 .buttonStyle(.plain)
@@ -879,11 +877,11 @@ extension StatisticsView {
 ) -> some View {
         let hue = Color(hex: cat.iconBg)
         return HStack(spacing: 12) {
-            // The glyph in its category's colour, no disc behind it.
             Image(systemName: cat.icon)
-                .font(.system(.body, weight: .semibold))
-                .foregroundStyle(hue)
-                .frame(width: 24)
+                .font(.system(.subheadline, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: 36, height: 36)
+                .background(hue, in: Circle())
             VStack(alignment: .leading, spacing: 6) {
                 HStack(alignment: .firstTextBaseline) {
                     Text(cat.displayLabel)
@@ -954,6 +952,8 @@ extension StatisticsView {
                     lockedNotes(rows)
                 }
             }
+            .padding(16)
+            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.xl))
         }
     }
 
@@ -1020,7 +1020,7 @@ extension StatisticsView {
                          title: loc("stats.detail_link"),
                          status: loc("stats.detail_link_sub"),
                          lockedPlan: nil)
-                .overlay(alignment: .top) { Rectangle().fill(AppTheme.cardMid).frame(height: 1) }
+                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
         }
         .buttonStyle(ScaleButtonStyle())
     }

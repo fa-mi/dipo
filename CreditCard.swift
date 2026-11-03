@@ -41,29 +41,34 @@ struct CreditCardLiabilityRow: View {
                 Text(title).font(.system(.caption, weight: .semibold))
                     .lineLimit(1).minimumScaleFactor(0.8)
             }
-            // The prominent one green, the other on the plain control fill.
-            .foregroundStyle(prominent ? AppTheme.onVividFill : AppTheme.textPrimary)
+            .foregroundStyle(prominent ? AppTheme.onVividFill : AppTheme.purple)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 10)
-            .background(prominent ? AppTheme.accentFill : AppTheme.cardMid, in: Capsule())
+            .background {
+                if prominent {
+                    Capsule().fill(AppTheme.accentFill)
+                } else {
+                    Capsule().fill(AppTheme.purple.opacity(0.12))
+                        .overlay(Capsule().stroke(AppTheme.purple.opacity(0.3), lineWidth: 1))
+                }
+            }
         }
         .buttonStyle(ScaleButtonStyle())
     }
 
     private var owed: Double { card.totalOwed(installments) }
-    /// Instalment principal not billed yet (in the total, on no bill) and
-    /// credit paid beyond the bill (off the total already), said under the
-    /// total so it adds up.
-    private var owedNote: String? { Self.owedNote(card: card, installments: installments) }
-
-    /// What the total includes beyond the bill: instalments not billed yet,
-    /// or credit paid beyond it. Shared with the Debts page's plain row.
-    static func owedNote(card: BankCard, installments: [CardInstallment]) -> String? {
-        let bill = card.bill(installments)
+    /// Instalment principal not billed yet: in the total, on no bill. Said
+    /// under the total, which otherwise read as a different "owed" from the
+    /// bill on the pay screen.
+    private var unbilled: Double { card.bill(installments).locked }
+    /// Paid beyond the bill: it is off the total already, and said under it
+    /// so the total adds up.
+    private var credit: Double { card.bill(installments).credit }
+    private var owedNote: String? {
         let cm = CurrencyManager.shared
-        let locked = cm.formatted(bill.locked.rounded(), currency: card.resolvedCurrency)
-        let paid = cm.formatted(bill.credit.rounded(), currency: card.resolvedCurrency)
-        switch (bill.locked >= 1, bill.credit >= 1) {
+        let locked = cm.formatted(unbilled.rounded(), currency: card.resolvedCurrency)
+        let paid = cm.formatted(credit.rounded(), currency: card.resolvedCurrency)
+        switch (unbilled >= 1, credit >= 1) {
         case (true, true):   return String(format: loc("cc.unbilled_less_credit"), locked, paid)
         case (true, false):  return String(format: loc("cc.unbilled_instalments"), locked)
         case (false, true):  return String(format: loc("cc.credit_on_card"), paid)
@@ -100,6 +105,8 @@ struct CreditCardLiabilityRow: View {
                         Text(title).font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.textPrimary).lineLimit(1)
                         Text(loc("cc.badge")).font(.system(.caption2, weight: .bold))
                             .foregroundStyle(AppTheme.purple)
+                            .padding(.horizontal, 6).padding(.vertical, 2)
+                            .background(AppTheme.purple.opacity(0.15), in: Capsule())
                     }
                     if !card.last4.isEmpty {
                         Text("•••• \(card.last4)").font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
@@ -128,8 +135,7 @@ struct CreditCardLiabilityRow: View {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(loc("cc.total_owed")).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
-                    // In ink, as the Debts page says what is owed.
-                    Text(owedFmt).font(.system(.body, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
+                    Text(owedFmt).font(.system(.body, weight: .bold)).foregroundStyle(AppTheme.red)
                         .minimumScaleFactor(0.6).lineLimit(1)
                     if let owedNote {
                         Text(owedNote)
@@ -140,7 +146,7 @@ struct CreditCardLiabilityRow: View {
                 Spacer()
                 VStack(alignment: .trailing, spacing: 2) {
                     Text(loc("cc.available")).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
-                    Text(availableFmt).font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                    Text(availableFmt).font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.accent)
                         .minimumScaleFactor(0.6).lineLimit(1)
                 }
             }
@@ -165,15 +171,19 @@ struct CreditCardLiabilityRow: View {
         }
         .padding(14)
         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.lg).stroke(AppTheme.purple.opacity(0.18), lineWidth: 1))
     }
 }
 
 // MARK: - Limit bar
 
-/// How much of the credit line is spoken for: a flat bar in ink, orange once
-/// more than 70% is used, as on the Debts page's card rows. It was purple
-/// with a hatched remainder and a ringed knob, which said nothing the
-/// figures under it don't.
+/// How much of the credit line is spoken for.
+///
+/// Replaces a flat 6pt progress strip. The spent portion is solid and the
+/// remainder is hatched, so "used" and "still available" are told apart by
+/// texture as well as by colour — the two halves of the bar were previously
+/// distinguished by fill alone, which made the figure easy to misread at a
+/// glance on a dark ground.
 struct CreditLimitBar: View {
     let used: Double
     let limit: Double
@@ -184,23 +194,54 @@ struct CreditLimitBar: View {
         return min(max(used / limit, 0), 1)
     }
     /// Above ~70% is where scoring models start treating utilisation as a risk
-    /// signal.
+    /// signal, so that is where the bar stops being decorative.
     private var isHot: Bool { progress > 0.7 }
-    private var tint: Color { isHot ? AppTheme.orange : AppTheme.textPrimary }
+    private var tint: Color { isHot ? AppTheme.red : AppTheme.purple }
 
-    private let barHeight: CGFloat = 8
+    private let barHeight: CGFloat = 12
 
     var body: some View {
         VStack(spacing: 9) {
             GeometryReader { g in
+                let w = g.size.width
+                let fill = max(w * progress, progress > 0 ? barHeight : 0)
+
                 ZStack(alignment: .leading) {
-                    Capsule().fill(AppTheme.cardMid)
+                    // Remainder — hatched, reading as "not yet spent".
+                    Canvas { ctx, size in
+                        let step: CGFloat = 7
+                        var x: CGFloat = -size.height
+                        while x < size.width + size.height {
+                            var line = Path()
+                            line.move(to: CGPoint(x: x, y: size.height))
+                            line.addLine(to: CGPoint(x: x + size.height, y: 0))
+                            ctx.stroke(line, with: .color(tint.opacity(0.28)), lineWidth: 2)
+                            x += step
+                        }
+                    }
+                    .frame(height: barHeight)
+                    .background(AppTheme.cardMid)
+                    .clipShape(Capsule())
+
                     Capsule()
                         .fill(tint)
-                        .frame(width: max(g.size.width * progress, progress > 0 ? barHeight : 0))
+                        .frame(width: fill, height: barHeight)
+
+                    // Knob marks the exact position the way the reference does,
+                    // and gives the eye something to land on when the fill is
+                    // short enough to be hard to measure.
+                    if progress > 0 {
+                        Circle()
+                            .fill(AppTheme.cardDark)
+                            .frame(width: barHeight + 6, height: barHeight + 6)
+                            .overlay(Circle().stroke(tint, lineWidth: 3))
+                            .offset(x: min(max(fill - (barHeight + 6) / 2, 0), w - (barHeight + 6)))
+                    }
                 }
+                .frame(height: barHeight + 6)
+                .frame(maxHeight: .infinity, alignment: .center)
             }
-            .frame(height: barHeight)
+            .frame(height: barHeight + 6)
 
             HStack(spacing: 8) {
                 Text(loc("cc.limit_used"))
@@ -209,7 +250,7 @@ struct CreditLimitBar: View {
                 Spacer(minLength: 8)
                 Text(CurrencyManager.shared.formatted(used, currency: currency))
                     .font(.system(.caption, weight: .semibold))
-                    .foregroundStyle(isHot ? AppTheme.orange : AppTheme.textPrimary)
+                    .foregroundStyle(isHot ? AppTheme.red : AppTheme.textPrimary)
                     .monospacedDigit()
                 Text("/ " + CurrencyManager.shared.formatted(limit, currency: currency))
                     .font(.system(.caption))
@@ -288,7 +329,7 @@ struct CreditCardFormSheet: View {
                             Text(loc("cc.explainer")).font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
-                        .padding(14).background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+                        .padding(14).background(AppTheme.purple.opacity(0.08), in: RoundedRectangle(cornerRadius: AppRadius.md))
                         .padding(.horizontal, 22)
 
                         saveButton
@@ -337,8 +378,8 @@ struct CreditCardFormSheet: View {
             Text(label).font(.system(.footnote, weight: .semibold)).foregroundStyle(AppTheme.textSecondary)
                 .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 22)
             HStack(spacing: 10) {
-                Text(currency).font(.system(.subheadline, weight: .bold)).foregroundStyle(AppTheme.textSecondary)
-                    .frame(width: 54, height: 52).background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: AppRadius.sm))
+                Text(currency).font(.system(.subheadline, weight: .bold)).foregroundStyle(AppTheme.purple)
+                    .frame(width: 54, height: 52).background(AppTheme.purple.opacity(0.10), in: RoundedRectangle(cornerRadius: AppRadius.sm))
                 TextField("0", text: text)
                     .font(.system(.title3, weight: .bold)).keyboardType(.decimalPad)
                     .padding(.horizontal, 14).frame(height: 52)
@@ -487,7 +528,7 @@ struct CreditCardPaymentSheet: View {
                             Text(loc("cc.owed")).font(.system(.caption))
                                 .foregroundStyle(AppTheme.textSecondary)
                             Text(creditCard.formattedOwed)
-                                .font(.system(.title, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
+                                .font(.system(.title, weight: .bold)).foregroundStyle(AppTheme.red)
                             ForEach(billParts, id: \.self) { line in
                                 Text(line).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                                     .multilineTextAlignment(.center)
@@ -506,7 +547,7 @@ struct CreditCardPaymentSheet: View {
 
                         Button { amountText = String(format: "%.0f", owed) } label: {
                             Text(loc("cc.pay_full")).font(.system(.caption, weight: .semibold))
-                                .foregroundStyle(AppTheme.textPrimary)
+                                .foregroundStyle(AppTheme.accent)
                         }
                         .buttonStyle(.plain)
 

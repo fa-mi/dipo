@@ -57,7 +57,7 @@ private struct TicketStatusConfig {
         // status string comes from Firestore (always English) — we keep the
         // switch on raw English values but localize the label for display.
         switch status {
-        case "answered": return .init(label: loc("support.answered"), color: AppTheme.textPrimary,  icon: "checkmark.circle.fill", step: 1)
+        case "answered": return .init(label: loc("support.answered"), color: AppTheme.accent,       icon: "checkmark.circle.fill", step: 1)
         case "closed":   return .init(label: loc("support.closed"),   color: AppTheme.textSecondary, icon: "xmark.circle.fill",     step: 2)
         default:         return .init(label: loc("support.open"),     color: AppTheme.orange,  icon: "clock.fill",            step: 0)
         }
@@ -97,6 +97,8 @@ struct ContactAdminSheet: View {
                         Text(loc("support.new"))
                             .font(.system(.subheadline, weight: .semibold))
                             .foregroundStyle(AppTheme.accent)
+                            .padding(.horizontal, 10).padding(.vertical, 5)
+                            .background(AppTheme.accent.opacity(0.12), in: Capsule())
                     }
                 }
             }
@@ -147,8 +149,11 @@ struct ContactAdminSheet: View {
             // Error state — shown when fetch fails (e.g. Firestore permission denied)
             if let err = svc.fetchError {
                 VStack(spacing: 16) {
-                    Image(systemName: "wifi.exclamationmark")
-                        .font(.system(size: 40)).foregroundStyle(AppTheme.textSecondary)
+                    ZStack {
+                        Circle().fill(AppTheme.red.opacity(0.08)).frame(width: 72, height: 72)
+                        Image(systemName: "wifi.exclamationmark")
+                            .font(.system(.title)).foregroundStyle(AppTheme.red.opacity(0.7))
+                    }
                     VStack(spacing: 6) {
                         Text(loc("support.load_error"))
                             .font(.system(.body, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
@@ -166,16 +171,19 @@ struct ContactAdminSheet: View {
                             Image(systemName: "arrow.clockwise").font(.system(.subheadline))
                             Text(loc("common.retry")).font(.system(.subheadline, weight: .semibold))
                         }
-                        .foregroundStyle(AppTheme.textPrimary)
+                        .foregroundStyle(AppTheme.accent)
                         .padding(.horizontal, 24).padding(.vertical, 10)
-                        .background(AppTheme.cardMid, in: Capsule())
+                        .background(AppTheme.accent.opacity(0.12), in: Capsule())
                     }
                     .buttonStyle(ScaleButtonStyle())
                 }
             } else {
                 // Normal empty state — no error, just no tickets yet
-                Image(systemName: "headphones.circle.fill")
-                    .font(.system(size: 44)).foregroundStyle(AppTheme.textSecondary)
+                ZStack {
+                    Circle().fill(AppTheme.accent.opacity(0.08)).frame(width: 90, height: 90)
+                    Image(systemName: "headphones.circle.fill")
+                        .font(.system(size: 44)).foregroundStyle(AppTheme.accent.opacity(0.6))
+                }
                 VStack(spacing: 8) {
                     Text(loc("support.no_tickets"))
                         .font(.system(.body, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
@@ -192,9 +200,11 @@ struct ContactAdminSheet: View {
 
     private var summaryHeader: some View {
         HStack(spacing: 12) {
-            Image(systemName: "headphones.circle.fill")
-                .font(.system(.title2)).foregroundStyle(AppTheme.accent)
-                .frame(width: ListRowMetrics.icon)
+            ZStack {
+                Circle().fill(AppTheme.accent.opacity(0.12)).frame(width: 44, height: 44)
+                Image(systemName: "headphones.circle.fill")
+                    .font(.system(.title2)).foregroundStyle(AppTheme.accent)
+            }
             VStack(alignment: .leading, spacing: 3) {
                 Text(loc("support.your_tickets"))
                     .font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
@@ -207,30 +217,32 @@ struct ContactAdminSheet: View {
             // Unread indicator
             let unreadCount = svc.tickets.filter { $0.hasUnreadReply }.count
             if unreadCount > 0 {
-                // A new reply is news, not money: an orange dot and the
-                // count in ink, as Ask DiPo marks its notes.
-                HStack(spacing: 4) {
-                    Circle().fill(AppTheme.orange).frame(width: 6, height: 6)
-                    Text(String(format: loc("support.unread_count"), unreadCount))
-                        .font(.system(.caption2, weight: .bold))
-                        .foregroundStyle(AppTheme.textPrimary)
-                }
+                Text(String(format: loc("support.unread_count"), unreadCount))
+                    .font(.system(.caption2, weight: .bold))
+                    .foregroundStyle(AppTheme.accent)
+                    .padding(.horizontal, 8).padding(.vertical, 4)
+                    .background(AppTheme.accent.opacity(0.12), in: Capsule())
             }
         }
         .padding(14)
         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.accent.opacity(0.15), lineWidth: 1))
     }
 
     @ViewBuilder
     private func ticketCard(_ ticket: SupportTicket) -> some View {
         let cat    = SupportCategory(rawValue: ticket.category) ?? .other
         let status = TicketStatusConfig.from(ticket.status)
+        let bg: Color     = ticket.hasUnreadReply ? AppTheme.accent.opacity(0.05) : AppTheme.cardDark
+        let border: Color = ticket.hasUnreadReply ? AppTheme.accent.opacity(0.3)  : AppTheme.cardMid
 
         VStack(spacing: 0) {
             // Top row
             HStack(spacing: 12) {
-                Image(systemName: cat.icon).font(.system(.body)).foregroundStyle(cat.color)
-                    .frame(width: ListRowMetrics.icon)
+                ZStack {
+                    Circle().fill(cat.color.opacity(0.15)).frame(width: 42, height: 42)
+                    Image(systemName: cat.icon).font(.system(.body)).foregroundStyle(cat.color)
+                }
 
                 VStack(alignment: .leading, spacing: 4) {
                     HStack {
@@ -241,10 +253,10 @@ struct ContactAdminSheet: View {
                         Spacer()
                         if ticket.hasUnreadReply {
                             HStack(spacing: 4) {
-                                Circle().fill(AppTheme.orange).frame(width: 6, height: 6)
+                                Circle().fill(AppTheme.accent).frame(width: 6, height: 6)
                                 Text(loc("support.new_reply"))
                                     .font(.system(.caption2, weight: .bold))
-                                    .foregroundStyle(AppTheme.textPrimary)
+                                    .foregroundStyle(AppTheme.accent)
                             }
                         }
                     }
@@ -277,9 +289,8 @@ struct ContactAdminSheet: View {
             ticketProgressBar(status: status)
                 .padding(.horizontal, 14).padding(.vertical, 10)
         }
-        // The plain card for every ticket; an unread one says so with its
-        // orange dot, not a green wash and outline.
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .background(bg, in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(border, lineWidth: 1))
     }
 
     @ViewBuilder
@@ -300,20 +311,19 @@ struct ContactAdminSheet: View {
                 // Step dot
                 VStack(spacing: 3) {
                     ZStack {
-                        // Done steps in ink; green is for money coming in.
                         Circle()
-                            .fill(step.active ? AppTheme.textPrimary : AppTheme.cardMid)
+                            .fill(step.active ? AppTheme.accent : AppTheme.cardMid)
                             .frame(width: 18, height: 18)
                         Image(systemName: step.icon)
                             .font(.system(.caption2, weight: .bold)).imageScale(.small)
-                            .foregroundStyle(step.active ? AppTheme.cardDark : AppTheme.textSecondary.opacity(0.5))
+                            .foregroundStyle(step.active ? AppTheme.onVividFill : AppTheme.textSecondary.opacity(0.5))
                     }
                     Text(step.label)
                         // Was 8pt: below anything legible, and a fixed size
                         // ignores Dynamic Type entirely. Three steps leave room
                         // for a real text style.
                         .font(.system(.caption2, weight: step.active ? .semibold : .regular))
-                        .foregroundStyle(step.active ? AppTheme.textPrimary : AppTheme.textSecondary.opacity(0.5))
+                        .foregroundStyle(step.active ? AppTheme.accent : AppTheme.textSecondary.opacity(0.5))
                         .lineLimit(1)
                 }
                 .frame(maxWidth: .infinity)
@@ -321,7 +331,7 @@ struct ContactAdminSheet: View {
                 // Connector line (not after last)
                 if i < steps.count - 1 {
                     Rectangle()
-                        .fill(steps[i + 1].active ? AppTheme.textPrimary : AppTheme.cardMid)
+                        .fill(steps[i + 1].active ? AppTheme.accent : AppTheme.cardMid)
                         .frame(height: 2)
                         .frame(maxWidth: .infinity)
                         .padding(.bottom, 14)
@@ -409,6 +419,7 @@ struct NewTicketForm: View {
         }
         .padding(16)
         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.accent.opacity(0.2), lineWidth: 1))
         .padding(.horizontal, 22)
     }
 
@@ -426,25 +437,23 @@ struct NewTicketForm: View {
         let isSelected = (category == cat)
         // `onVividFill`, not white: it goes near-black in light mode, which is
         // what a label on a saturated fill needs there.
-        // The choice in ink, like the app's other switches; the icon keeps
-        // its colour while it is not chosen.
-        let fg: Color     = isSelected ? AppTheme.cardDark : AppTheme.textSecondary
-        let bg: Color     = isSelected ? AppTheme.textPrimary : AppTheme.cardDark
+        let fg: Color     = isSelected ? AppTheme.onVividFill : AppTheme.textSecondary
+        let bg: Color     = isSelected ? cat.color : AppTheme.cardDark
+        let border: Color = isSelected ? Color.clear : AppTheme.cardMid
         Button {
             HapticManager.shared.tap()
             withAnimation { category = cat }
         } label: {
             HStack(spacing: 7) {
                 Image(systemName: cat.icon).font(.system(.caption))
-                    .foregroundStyle(isSelected ? fg : cat.color)
                 Text(cat.displayLabel).font(.system(.footnote, weight: .medium))
             }
             .foregroundStyle(fg)
             .padding(.horizontal, 14).padding(.vertical, 9)
             .background(bg, in: Capsule())
+            .overlay(Capsule().stroke(border, lineWidth: 1))
         }
         .buttonStyle(ScaleButtonStyle())
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
     private var formSubjectField: some View {
@@ -527,20 +536,22 @@ struct NewTicketForm: View {
     }
 
     private var addPhotoButton: some View {
+        let dashPattern: [CGFloat] = [5]
         return PhotosPicker(selection: $pickerItems, maxSelectionCount: 3 - selectedImages.count, matching: .images) {
-            // A plain control, not a dashed green drop zone.
             VStack(spacing: 6) {
-                Image(systemName: "camera.fill").font(.system(.body)).foregroundStyle(AppTheme.textPrimary)
-                Text(loc("support.add_photo")).font(.system(.caption2, weight: .medium)).foregroundStyle(AppTheme.textPrimary)
+                Image(systemName: "camera.fill").font(.system(.body)).foregroundStyle(AppTheme.accent)
+                Text(loc("support.add_photo")).font(.system(.caption2, weight: .medium)).foregroundStyle(AppTheme.accent)
             }
             .frame(width: 80, height: 80)
-            .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: AppRadius.sm))
+            .background(AppTheme.accent.opacity(0.06), in: RoundedRectangle(cornerRadius: AppRadius.sm))
+            .overlay(RoundedRectangle(cornerRadius: AppRadius.sm).strokeBorder(AppTheme.accent.opacity(0.35),
+                style: StrokeStyle(lineWidth: 1.5, dash: dashPattern)))
         }
         .onChange(of: pickerItems) { _, items in loadImages(from: items) }
     }
 
     private var formSendButton: some View {
-        let buttonColor: Color = canSend ? AppTheme.accentFill : AppTheme.cardMid
+        let buttonColor: Color = canSend ? AppTheme.accent : AppTheme.textSecondary.opacity(0.3)
         return Button { Task { await submit() } } label: {
             sendButtonLabel.background(buttonColor, in: RoundedRectangle(cornerRadius: AppRadius.lg))
         }
@@ -556,13 +567,16 @@ struct NewTicketForm: View {
             else { Image(systemName: "paperplane.fill").font(.system(.callout)) }
             Text(isSubmitting ? loc("support.sending") : loc("support.send")).font(.system(.callout, weight: .bold))
         }
-        .foregroundStyle(canSend ? AppTheme.onVividFill : AppTheme.textSecondary).frame(maxWidth: .infinity).padding(.vertical, 16)
+        .foregroundStyle(AppTheme.onVividFill).frame(maxWidth: .infinity).padding(.vertical, 16)
     }
 
     private var sentView: some View {
         VStack(spacing: 24) {
             Spacer()
-            Image(systemName: "checkmark.circle.fill").font(.system(size: 44)).foregroundStyle(AppTheme.textPrimary)
+            ZStack {
+                Circle().fill(AppTheme.accent.opacity(0.12)).frame(width: 90, height: 90)
+                Image(systemName: "checkmark.circle.fill").font(.system(size: 44)).foregroundStyle(AppTheme.accent)
+            }
             VStack(spacing: 10) {
                 Text(loc("support.submitted")).font(.system(.title2, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
                 Text(loc("support.submitted_sub"))
@@ -731,9 +745,8 @@ struct TicketThreadView: View {
                             .padding(.horizontal, 10)
                             .padding(.vertical, 6)
                     }
-                    // The field on the control fill: the bar under it is the
-                    // card's colour, so it needs no outline to be seen.
-                    .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+                    .overlay(RoundedRectangle(cornerRadius: AppRadius.lg).stroke(AppTheme.cardMid, lineWidth: 1))
 
                     // Send button
                     Button {
@@ -745,11 +758,11 @@ struct TicketThreadView: View {
                                       ? AppTheme.cardMid : AppTheme.accent)
                                 .frame(width: 36, height: 36)
                             if isSending {
-                                ProgressView().tint(AppTheme.onVividFill).scaleEffect(0.7)
+                                ProgressView().tint(.white).scaleEffect(0.7)
                             } else {
                                 Image(systemName: "arrow.up")
                                     .font(.system(.subheadline, weight: .bold))
-                                    .foregroundStyle(AppTheme.onVividFill)
+                                    .foregroundStyle(.white)
                             }
                         }
                     }
@@ -789,8 +802,10 @@ struct TicketThreadView: View {
 
         return VStack(spacing: 12) {
             HStack(spacing: 12) {
-                Image(systemName: cat.icon).font(.system(.callout)).foregroundStyle(cat.color)
-                    .frame(width: ListRowMetrics.icon)
+                ZStack {
+                    Circle().fill(cat.color.opacity(0.12)).frame(width: 40, height: 40)
+                    Image(systemName: cat.icon).font(.system(.callout)).foregroundStyle(cat.color)
+                }
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 8) {
                         Text(cat.displayLabel)
@@ -804,6 +819,8 @@ struct TicketThreadView: View {
                             Text(status.label)
                                 .font(.system(.caption2, weight: .semibold)).foregroundStyle(status.color)
                         }
+                        .padding(.horizontal, 9).padding(.vertical, 4)
+                        .background(status.color.opacity(0.12), in: Capsule())
                         .scaleEffect(statusChangeAnim ? 1.05 : 1)
                         .animation(.spring(response: 0.4), value: statusChangeAnim)
                     }
@@ -821,6 +838,7 @@ struct TicketThreadView: View {
         }
         .padding(14)
         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.cardMid, lineWidth: 1))
         .padding(.horizontal, 22)
     }
 
@@ -841,25 +859,28 @@ struct TicketThreadView: View {
                 let isCurrent = i == activeUpTo
                 VStack(spacing: 4) {
                     ZStack {
-                        // Done steps in ink; the current one is said by its
-                        // bold label, not a halo.
                         Circle()
-                            .fill(active ? AppTheme.textPrimary : AppTheme.cardMid)
+                            .fill(active ? AppTheme.accent : AppTheme.cardMid)
                             .frame(width: 22, height: 22)
+                        if isCurrent && step < 2 {
+                            Circle()
+                                .stroke(AppTheme.accent.opacity(0.3), lineWidth: 3)
+                                .frame(width: 28, height: 28)
+                        }
                         Image(systemName: s.icon)
                             .font(.system(.caption2, weight: .bold)).imageScale(.small)
-                            .foregroundStyle(active ? AppTheme.cardDark : AppTheme.textSecondary.opacity(0.4))
+                            .foregroundStyle(active ? AppTheme.onVividFill : AppTheme.textSecondary.opacity(0.4))
                     }
                     Text(s.label)
                         .font(.system(.caption2, weight: isCurrent ? .bold : .regular))
-                        .foregroundStyle(active ? (isCurrent ? AppTheme.textPrimary : AppTheme.textSecondary) : AppTheme.textSecondary.opacity(0.4))
+                        .foregroundStyle(active ? (isCurrent ? AppTheme.accent : AppTheme.textSecondary) : AppTheme.textSecondary.opacity(0.4))
                         .lineLimit(1)
                 }
                 .frame(maxWidth: .infinity)
 
                 if i < steps.count - 1 {
                     Rectangle()
-                        .fill(i < activeUpTo ? AppTheme.textPrimary : AppTheme.cardMid)
+                        .fill(i < activeUpTo ? AppTheme.accent : AppTheme.cardMid)
                         .frame(height: 2)
                         .frame(maxWidth: .infinity)
                         .padding(.bottom, 16)
@@ -908,10 +929,9 @@ struct TicketThreadView: View {
                         Text(date.displayDateTimeShort)
                             .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                     }
-                    // Your messages grey, as in Ask DiPo.
-                    Text(text).font(.system(.subheadline)).foregroundStyle(AppTheme.textPrimary).lineSpacing(4)
+                    Text(text).font(.system(.subheadline)).foregroundStyle(AppTheme.onVividFill).lineSpacing(4)
                         .padding(14)
-                        .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: AppRadius.md, style: .continuous))
+                        .background(category.color, in: RoundedRectangle(cornerRadius: AppRadius.md, style: .continuous))
                     if !mediaBase64.isEmpty {
                         HStack(spacing: 8) {
                             ForEach(Array(mediaBase64.enumerated()), id: \.offset) { _, b64 in
@@ -942,18 +962,21 @@ struct TicketThreadView: View {
     @ViewBuilder
     private func adminBubble(_ reply: SupportReply) -> some View {
         HStack(alignment: .top, spacing: 10) {
-            // The team's answer as plain text, as DiPo answers in Ask DiPo.
-            Image(systemName: "headphones").font(.system(.subheadline)).foregroundStyle(AppTheme.textSecondary)
-                .frame(width: 22)
-                .padding(.top, 1)
+            ZStack {
+                Circle().fill(AppTheme.accent.opacity(0.15)).frame(width: 36, height: 36)
+                Image(systemName: "headphones").font(.system(.subheadline)).foregroundStyle(AppTheme.accent)
+            }
             VStack(alignment: .leading, spacing: 5) {
                 HStack(spacing: 6) {
-                    Text(loc("support.staff")).font(.system(.caption2, weight: .semibold)).foregroundStyle(AppTheme.textSecondary)
+                    Text(loc("support.staff")).font(.system(.caption2, weight: .semibold)).foregroundStyle(AppTheme.accent)
                     Text(reply.createdAt.displayDateTimeShort)
                         .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
-                    if !reply.isReadByUser { Circle().fill(AppTheme.orange).frame(width: 6, height: 6) }
+                    if !reply.isReadByUser { Circle().fill(AppTheme.accent).frame(width: 6, height: 6) }
                 }
                 Text(reply.message).font(.system(.subheadline)).foregroundStyle(AppTheme.textPrimary).lineSpacing(4)
+                    .padding(14)
+                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.accent.opacity(0.2), lineWidth: 1))
             }
             Spacer(minLength: 50)
         }
@@ -968,9 +991,9 @@ struct TicketThreadView: View {
                 Text(DateFormatterCache.styles(date: .medium, time: .short)
                         .string(from: reply.createdAt))
                     .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
-                Text(reply.message).font(.system(.subheadline)).foregroundStyle(AppTheme.textPrimary).lineSpacing(4)
+                Text(reply.message).font(.system(.subheadline)).foregroundStyle(AppTheme.onVividFill).lineSpacing(4)
                     .padding(14)
-                    .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: AppRadius.md, style: .continuous))
+                    .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: AppRadius.md, style: .continuous))
             }
         }
         .padding(.horizontal, 22)

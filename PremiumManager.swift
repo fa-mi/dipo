@@ -560,11 +560,19 @@ struct LockedFeaturePlaceholder: View {
             VStack(spacing: 28) {
                 Spacer()
 
-                // The feature's icon alone; the rings and disc round it
-                // were decoration.
-                Image(systemName: feature.icon)
-                    .font(.system(size: 48, weight: .semibold))
-                    .foregroundStyle(feature.requiredPlan.color)
+                ZStack {
+                    ForEach(0..<3) { i in
+                        Circle()
+                            .stroke(feature.requiredPlan.color.opacity(0.08 - Double(i) * 0.02), lineWidth: 1)
+                            .frame(width: CGFloat(100 + i * 40), height: CGFloat(100 + i * 40))
+                    }
+                    Circle()
+                        .fill(feature.requiredPlan.color.opacity(0.12))
+                        .frame(width: 88, height: 88)
+                    Image(systemName: feature.icon)
+                        .font(.system(.largeTitle, weight: .semibold))
+                        .foregroundStyle(feature.requiredPlan.color)
+                }
 
                 VStack(spacing: 10) {
                     HStack(spacing: 6) {
@@ -574,6 +582,9 @@ struct LockedFeaturePlaceholder: View {
                             .font(.system(.caption, weight: .bold))
                     }
                     .foregroundStyle(feature.requiredPlan.color)
+                    .padding(.horizontal, 12).padding(.vertical, 5)
+                    .background(feature.requiredPlan.color.opacity(0.12), in: Capsule())
+                    .overlay(Capsule().stroke(feature.requiredPlan.color.opacity(0.3), lineWidth: 1))
 
                     Text(feature.displayName)
                         .font(.system(.title2, weight: .bold))
@@ -597,11 +608,16 @@ struct LockedFeaturePlaceholder: View {
                         Text(String(format: loc("premium.unlock"), feature.requiredPlan.label))
                             .font(.system(.callout, weight: .bold))
                     }
-                    // The screen's one action, in the app's green, flat.
-                    .foregroundStyle(AppTheme.onVividFill)
+                    .foregroundStyle(.white)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
-                    .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+                    .background(
+                        LinearGradient(
+                            colors: [feature.requiredPlan.color, feature.requiredPlan.color.opacity(0.7)],
+                            startPoint: .leading, endPoint: .trailing
+                        ),
+                        in: RoundedRectangle(cornerRadius: AppRadius.lg)
+                    )
                 }
                 .buttonStyle(ScaleButtonStyle())
                 .padding(.horizontal, 32)
@@ -661,9 +677,15 @@ struct PaywallView: View {
                 VStack(spacing: 28) {
 
                     VStack(spacing: 10) {
-                        Image(systemName: selectedPlan.icon)
-                            .font(.system(size: 44, weight: .semibold))
-                            .foregroundStyle(selectedPlan.color)
+                        ZStack {
+                            Circle()
+                                .fill(selectedPlan.color.opacity(0.12))
+                                .frame(width: 80, height: 80)
+                            Image(systemName: selectedPlan.icon)
+                                .font(.system(.largeTitle, weight: .semibold))
+                                .foregroundStyle(selectedPlan.color)
+                        }
+                        .animation(.spring(response: 0.35), value: selectedPlan)
 
                         Text(loc("premium.upgrade"))
                             .font(.system(.title, weight: .bold))
@@ -684,6 +706,9 @@ struct PaywallView: View {
                             .font(.system(.caption, weight: .semibold))
                     }
                     .foregroundStyle(mgr.plan.color)
+                    .padding(.horizontal, 14).padding(.vertical, 7)
+                    .background(mgr.plan.color.opacity(0.12), in: Capsule())
+                    .overlay(Capsule().stroke(mgr.plan.color.opacity(0.3), lineWidth: 1))
 
                     // Single Royal hero card (no tier comparison anymore —
                     // there's only one paid plan). Stretches full-width to
@@ -699,10 +724,14 @@ struct PaywallView: View {
 
                         ForEach(royalAllFeatures, id: \.rawValue) { feature in
                             HStack(spacing: 12) {
-                                Image(systemName: feature.icon)
-                                    .font(.system(.callout))
-                                    .foregroundStyle(feature.color)
-                                    .frame(width: ListRowMetrics.icon)
+                                ZStack {
+                                    RoundedRectangle(cornerRadius: AppRadius.sm)
+                                        .fill(feature.color.opacity(0.12))
+                                        .frame(width: 38, height: 38)
+                                    Image(systemName: feature.icon)
+                                        .font(.system(.callout))
+                                        .foregroundStyle(feature.color)
+                                }
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(feature.displayName)
                                         .font(.system(.footnote, weight: .semibold))
@@ -721,6 +750,7 @@ struct PaywallView: View {
                     }
                     .padding(16)
                     .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+                    .overlay(RoundedRectangle(cornerRadius: AppRadius.lg).stroke(selectedPlan.color.opacity(0.25), lineWidth: 1))
                     .padding(.horizontal, 22)
 
                     VStack(spacing: 12) {
@@ -735,6 +765,9 @@ struct PaywallView: View {
                                         .foregroundStyle(AppTheme.orange)
                                 }
                                 .frame(maxWidth: .infinity)
+                                .padding(12)
+                                .background(AppTheme.orange.opacity(0.1), in: RoundedRectangle(cornerRadius: AppRadius.sm))
+                                .overlay(RoundedRectangle(cornerRadius: AppRadius.sm).stroke(AppTheme.orange.opacity(0.3), lineWidth: 1))
 
                                 Text(loc("auth.sub_linked"))
                                     .font(.system(.caption2))
@@ -746,10 +779,10 @@ struct PaywallView: View {
                                     Text(loc("premium.sign_in"))
                                         .font(.system(.callout, weight: .bold))
                                 }
-                                .foregroundStyle(AppTheme.textSecondary)
+                                .foregroundStyle(.white)
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 18)
-                                .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+                                .background(AppTheme.textSecondary.opacity(0.3), in: RoundedRectangle(cornerRadius: AppRadius.lg))
                             }
                         } else if mgr.plan != selectedPlan {
                             // Previous deferred-billing notices for the
@@ -770,7 +803,7 @@ struct PaywallView: View {
                                 VStack(spacing: 4) {
                                     HStack(spacing: 10) {
                                         if mgr.isLoading {
-                                            ProgressView().tint(AppTheme.onVividFill)
+                                            ProgressView().tint(.white)
                                         } else {
                                             Image(systemName: selectedPlan.icon).font(.system(.callout))
                                         }
@@ -796,12 +829,16 @@ struct PaywallView: View {
                                             .font(.system(.callout, weight: .bold))
                                     }
                                 }
-                                // Still the most visible thing on the screen,
-                                // in the app's green for its one action, flat.
-                                .foregroundStyle(AppTheme.onVividFill)
+                                .foregroundStyle(.white)
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 18)
-                                .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+                                .background(
+                                    LinearGradient(
+                                        colors: [selectedPlan.color, selectedPlan.color.opacity(0.75)],
+                                        startPoint: .leading, endPoint: .trailing
+                                    ),
+                                    in: RoundedRectangle(cornerRadius: AppRadius.lg)
+                                )
                             }
                             .buttonStyle(ScaleButtonStyle())
                             .disabled(mgr.isLoading)
@@ -825,7 +862,8 @@ struct PaywallView: View {
                             }
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 18)
-                            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+                            .background(selectedPlan.color.opacity(0.1), in: RoundedRectangle(cornerRadius: AppRadius.lg))
+                            .overlay(RoundedRectangle(cornerRadius: AppRadius.lg).stroke(selectedPlan.color.opacity(0.3), lineWidth: 1))
                         }
 
                         if mgr.plan != .free {
@@ -899,7 +937,7 @@ struct PaywallView: View {
                                  destination: URL(string: "https://dipo.info/terms")!)
                         }
                         .font(.system(.caption2, weight: .medium))
-                        .tint(AppTheme.textPrimary)
+                        .tint(AppTheme.accent)
                         .padding(.top, 2)
                     }
                     .padding(.horizontal, 22)
@@ -958,6 +996,8 @@ struct PaywallView: View {
                         .font(.system(.caption2, weight: .bold))
                         .tracking(0.8)
                         .foregroundStyle(plan.color)
+                        .padding(.horizontal, 8).padding(.vertical, 4)
+                        .background(plan.color.opacity(0.15), in: Capsule())
                 }
             }
 
@@ -1008,6 +1048,7 @@ struct PaywallView: View {
         }
         .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+        .background(plan.color.opacity(0.08), in: RoundedRectangle(cornerRadius: AppRadius.lg))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.lg).stroke(plan.color.opacity(0.4), lineWidth: 1.5))
     }
 }
