@@ -77,12 +77,12 @@ struct JointGoalsSection: View {
                         }
                         Spacer(minLength: 0)
                     }
-                    // A row on the plain card, in ink; the green wash and
-                    // dashed outline only said "you can add one here".
-                    .foregroundStyle(AppTheme.textPrimary)
+                    .foregroundStyle(AppTheme.accent)
                     .padding(14)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
+                    .background(AppTheme.accent.opacity(0.08), in: RoundedRectangle(cornerRadius: AppRadius.md))
+                    .overlay(RoundedRectangle(cornerRadius: AppRadius.md)
+                        .strokeBorder(AppTheme.accent.opacity(0.35), style: StrokeStyle(lineWidth: 1.2, dash: [5, 4])))
                 }
                 .buttonStyle(ScaleButtonStyle())
             }
@@ -122,7 +122,8 @@ struct JointGoalsSection: View {
                 HStack(spacing: 12) {
                     Text(goal.emoji)
                         .font(.system(.title3))
-                        .frame(width: 32)
+                        .frame(width: 42, height: 42)
+                        .background(AppTheme.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: AppRadius.sm))
                     VStack(alignment: .leading, spacing: 2) {
                         Text(goal.title)
                             .font(.system(.subheadline, weight: .bold))
@@ -137,7 +138,7 @@ struct JointGoalsSection: View {
                     Spacer(minLength: 6)
                     Text("\(Int((goal.progress * 100).rounded()))%")
                         .font(.system(.subheadline, weight: .heavy))
-                        .foregroundStyle(AppTheme.textPrimary)
+                        .foregroundStyle(AppTheme.accent)
                 }
             }
             .buttonStyle(.plain)
@@ -149,10 +150,10 @@ struct JointGoalsSection: View {
                 } label: {
                     Label(loc("unity.set_aside"), systemImage: "arrow.down.to.line")
                         .font(.system(.footnote, weight: .semibold))
-                        .foregroundStyle(AppTheme.textPrimary)
+                        .foregroundStyle(AppTheme.accent)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 10)
-                        .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: AppRadius.sm))
+                        .background(AppTheme.accent.opacity(0.10), in: RoundedRectangle(cornerRadius: AppRadius.sm))
                 }
                 .buttonStyle(ScaleButtonStyle())
             }
