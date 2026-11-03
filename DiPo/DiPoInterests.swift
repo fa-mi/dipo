@@ -369,11 +369,12 @@ private struct ChipStyle: ViewModifier {
     func body(content: Content) -> some View {
         content
             .font(.system(.subheadline, weight: .semibold))
-            .foregroundStyle(on ? AppTheme.accent : AppTheme.textPrimary)
+            // Chosen in ink, like the app's other switches; green would say
+            // money coming in.
+            .foregroundStyle(on ? AppTheme.cardDark : AppTheme.textPrimary)
             .lineLimit(1)
             .padding(.horizontal, 12).padding(.vertical, 9)
-            .background(on ? AppTheme.accent.opacity(0.14) : AppTheme.cardDark, in: Capsule())
-            .overlay(Capsule().stroke(on ? AppTheme.accent : AppTheme.cardMid, lineWidth: 1.5))
+            .background(on ? AppTheme.textPrimary : AppTheme.cardDark, in: Capsule())
     }
 }
 

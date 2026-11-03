@@ -226,7 +226,6 @@ struct ActionFeedbackOverlay: View {
     private func card(_ toast: ActionFeedbackCenter.Toast) -> some View {
         HStack(spacing: 12) {
             ZStack {
-                Circle().fill(toast.tint.opacity(0.16)).frame(width: 34, height: 34)
                 Image(systemName: toast.icon)
                     .font(.system(.subheadline, weight: .bold))
                     .foregroundStyle(toast.tint)
@@ -250,9 +249,9 @@ struct ActionFeedbackOverlay: View {
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 14).padding(.vertical, 12)
+        // It floats over whatever is on screen: the material and a soft
+        // shadow keep it legible there. The tinted outline and disc are gone.
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: AppRadius.md))
-        .overlay(RoundedRectangle(cornerRadius: AppRadius.md)
-            .stroke(toast.tint.opacity(0.22), lineWidth: 1))
         .shadow(color: .black.opacity(0.18), radius: 14, y: 6)
         .contentShape(RoundedRectangle(cornerRadius: AppRadius.md))
         .onTapGesture { center.dismiss() }

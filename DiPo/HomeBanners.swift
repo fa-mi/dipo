@@ -19,19 +19,10 @@ struct NoCardState: View {
     var body: some View {
         VStack(spacing: 24) {
             // Animated mascot
-            ZStack {
-                ForEach(0..<3) { i in
-                    Circle()
-                        .stroke(AppTheme.accent.opacity(0.10 - Double(i) * 0.025), lineWidth: 1.5)
-                        .frame(width: CGFloat(110 + i * 40), height: CGFloat(110 + i * 40))
-                }
-                Circle()
-                    .fill(Color.black)
-                    .frame(width: 96, height: 96)
-                    .shadow(color: AppTheme.accent.opacity(0.45), radius: 20)
-                DiPoLogo(size: 96, showBackground: true)
-                    .clipShape(Circle())
-            }
+            // DiPo's face alone; the rings and green glow round it were
+            // decoration.
+            DiPoLogo(size: 96, showBackground: true)
+                .clipShape(Circle())
 
             VStack(spacing: 6) {
                 Text(loc("home.get_started")).font(.system(.title2, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
@@ -39,16 +30,6 @@ struct NoCardState: View {
                     .font(.system(.subheadline)).foregroundStyle(AppTheme.textSecondary)
                     .multilineTextAlignment(.center).lineSpacing(3)
             }
-
-            // Progress bar
-            GeometryReader { g in
-                ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 4).fill(AppTheme.accentTrack).frame(height: 6)
-                    RoundedRectangle(cornerRadius: 4).fill(AppTheme.accentFill).frame(width: g.size.width * 0, height: 6)
-                }
-            }
-            .frame(height: 6)
-            .padding(.horizontal, 32)
 
             Text(loc("home.step1")).font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
 
@@ -96,18 +77,12 @@ struct TappableSetupStep: View {
 
     var body: some View {
         HStack(spacing: 14) {
-            ZStack {
-                Circle()
-                    .fill(isDone ? AppTheme.accent : isActive ? AppTheme.accent.opacity(0.15) : AppTheme.cardDark)
-                    .frame(width: 36, height: 36)
-                    .overlay(Circle().stroke(isActive || isDone ? AppTheme.accent.opacity(0.5) : AppTheme.cardMid, lineWidth: 1))
-                if isDone {
-                    Image(systemName: "checkmark").font(.system(.footnote, weight: .bold)).foregroundStyle(AppTheme.bg)
-                } else {
-                    Image(systemName: icon).font(.system(.subheadline))
-                        .foregroundStyle(isActive ? AppTheme.accent : AppTheme.textSecondary.opacity(0.5))
-                }
-            }
+            // The step's icon alone: ink when it is the one to do now, faded
+            // while it waits, a tick once done.
+            Image(systemName: isDone ? "checkmark" : icon)
+                .font(.system(.subheadline, weight: .semibold))
+                .foregroundStyle(isActive || isDone ? AppTheme.textPrimary : AppTheme.textSecondary.opacity(0.5))
+                .frame(width: ListRowMetrics.icon)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title).font(.system(.subheadline, weight: .semibold))
@@ -116,21 +91,16 @@ struct TappableSetupStep: View {
                     .foregroundStyle(AppTheme.textSecondary.opacity(isActive ? 0.8 : 0.4))
             }
             Spacer()
+            // The button under the steps is the screen's one green.
             if isActive {
-                ZStack {
-                    Circle().fill(AppTheme.accentFill).frame(width: 28, height: 28)
-                    Image(systemName: "chevron.right").font(.system(.caption2, weight: .bold)).foregroundStyle(AppTheme.bg)
-                }
-            } else if isDone {
-                Image(systemName: "checkmark.circle.fill").font(.system(.title2)).foregroundStyle(AppTheme.accent)
-            } else {
-                Circle().fill(AppTheme.cardMid).frame(width: 28, height: 28)
-                    .overlay(Image(systemName: "lock.fill").font(.system(.caption2)).imageScale(.small).foregroundStyle(AppTheme.textSecondary.opacity(0.4)))
+                ListChevron()
+            } else if !isDone {
+                Image(systemName: "lock.fill").font(.system(.caption2)).imageScale(.small)
+                    .foregroundStyle(AppTheme.textSecondary.opacity(0.4))
             }
         }
         .padding(14)
-        .background(isActive ? AppTheme.accent.opacity(0.07) : AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
-        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(isActive ? AppTheme.accent.opacity(0.25) : Color.clear, lineWidth: 1))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
     }
 }
 

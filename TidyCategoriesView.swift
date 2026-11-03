@@ -118,10 +118,8 @@ struct TidyCategoriesView: View {
 
     private func row(_ s: Binding<TidySuggestion>) -> some View {
         HStack(spacing: 12) {
-            ZStack {
-                RoundedRectangle(cornerRadius: AppRadius.sm).fill(s.wrappedValue.category.color.opacity(0.14)).frame(width: 40, height: 40)
-                Image(systemName: s.wrappedValue.category.icon).font(.system(.callout)).foregroundStyle(s.wrappedValue.category.color)
-            }
+            Image(systemName: s.wrappedValue.category.icon).font(.system(.callout)).foregroundStyle(s.wrappedValue.category.color)
+                .frame(width: ListRowMetrics.icon)
             VStack(alignment: .leading, spacing: 3) {
                 Text(s.wrappedValue.tx.name).font(.system(.subheadline, weight: .medium)).foregroundStyle(AppTheme.textPrimary).lineLimit(1)
                 Text(detail(s.wrappedValue))
@@ -141,7 +139,7 @@ struct TidyCategoriesView: View {
                     Image(systemName: "chevron.down").font(.system(.caption2, weight: .bold)).imageScale(.small).foregroundStyle(s.wrappedValue.category.color)
                 }
                 .padding(.horizontal, 10).padding(.vertical, 7)
-                .background(s.wrappedValue.category.color.opacity(0.12), in: Capsule())
+                .background(AppTheme.cardMid, in: Capsule())
             }
         }
         .padding(12)
@@ -177,10 +175,7 @@ struct TidyCategoriesView: View {
 
     private var emptyState: some View {
         VStack(spacing: 16) {
-            ZStack {
-                Circle().fill(AppTheme.accent.opacity(0.12)).frame(width: 84, height: 84)
-                Image(systemName: "checkmark.seal.fill").font(.system(size: 36)).foregroundStyle(AppTheme.accent)
-            }
+            Image(systemName: "checkmark.seal.fill").font(.system(size: 44)).foregroundStyle(AppTheme.textSecondary)
             Text(loc("tidy.none_title")).font(.system(.body, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
             Text(loc("tidy.none_sub")).font(.system(.subheadline)).foregroundStyle(AppTheme.textSecondary)
                 .multilineTextAlignment(.center).padding(.horizontal, 40)

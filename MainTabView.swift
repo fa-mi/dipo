@@ -237,8 +237,9 @@ struct MainTabView: View {
                 }
                 .padding(.horizontal, 18)
                 .padding(.vertical, 12)
+                // It floats over the page: the shadow keeps it apart; the green
+                // outline only decorated it.
                 .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
-                .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.accent.opacity(0.3), lineWidth: 1))
                 .shadow(color: .black.opacity(0.25), radius: 12, y: 4)
                 .padding(.bottom, 100)
                 .transition(.move(edge: .bottom).combined(with: .opacity))

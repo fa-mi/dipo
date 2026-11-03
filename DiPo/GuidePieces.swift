@@ -36,8 +36,6 @@ struct GuideHero: View {
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
-        .overlay(RoundedRectangle(cornerRadius: AppRadius.md)
-            .stroke(tint.opacity(0.25), lineWidth: 1))
     }
 }
 
@@ -67,7 +65,8 @@ struct GuideStepList: View {
                 HStack(alignment: .top, spacing: 13) {
                     VStack(spacing: 0) {
                         ZStack {
-                            Circle().fill(tint.opacity(0.14))
+                            // The step's number on the plain control fill.
+                            Circle().fill(AppTheme.cardMid)
                                 .frame(width: 30, height: 30)
                             Text("\(step.id)")
                                 .font(.system(.footnote, weight: .bold))
@@ -127,7 +126,7 @@ struct GuideCallout: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(tint.opacity(0.08), in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
     }
 }
 

@@ -994,10 +994,8 @@ struct NotificationCenterView: View {
     private func notifRow(_ item: AppNotificationItem) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 14) {
-                ZStack {
-                    Circle().fill(item.iconColor.opacity(0.15)).frame(width: 44, height: 44)
-                    Image(systemName: item.icon).font(.system(.title3)).foregroundStyle(item.iconColor)
-                }
+                Image(systemName: item.icon).font(.system(.title3)).foregroundStyle(item.iconColor)
+                    .frame(width: ListRowMetrics.icon)
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 6) {
                         Text(item.title)
@@ -1008,8 +1006,6 @@ struct NotificationCenterView: View {
                             Text(loc("notif.tag.support"))
                                 .font(.system(.caption2, weight: .bold))
                                 .foregroundStyle(item.iconColor)
-                                .padding(.horizontal, 6).padding(.vertical, 2)
-                                .background(item.iconColor.opacity(0.15), in: Capsule())
                         }
                         Spacer()
                         if !item.isRead {
@@ -1048,12 +1044,10 @@ struct NotificationCenterView: View {
                 .padding(.top, 10)
             }
         }
+        // The plain card for every notice; an urgent one says so in its
+        // words and icon, not a wash and outline.
         .padding(14)
-        .background(
-            item.isUrgent && !item.isRead ? item.iconColor.opacity(0.06) : AppTheme.cardDark,
-            in: RoundedRectangle(cornerRadius: AppRadius.md))
-        .overlay(RoundedRectangle(cornerRadius: AppRadius.md)
-            .stroke(item.isUrgent && !item.isRead ? item.iconColor.opacity(0.2) : Color.clear, lineWidth: 1))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
     }
 
     private var emptyState: some View {
@@ -1112,14 +1106,10 @@ struct NotificationDetailView: View {
 
                         // Header: icon + title + timestamp
                         HStack(alignment: .top, spacing: 14) {
-                            ZStack {
-                                Circle()
-                                    .fill(item.iconColor.opacity(0.15))
-                                    .frame(width: 54, height: 54)
-                                Image(systemName: item.icon)
-                                    .font(.system(.title2))
-                                    .foregroundStyle(item.iconColor)
-                            }
+                            Image(systemName: item.icon)
+                                .font(.system(.title))
+                                .foregroundStyle(item.iconColor)
+                                .frame(width: 36)
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(item.title)
                                     .font(.system(.title3, weight: .bold))
@@ -1218,10 +1208,11 @@ struct NotificationDetailView: View {
                                             Image(systemName: "arrow.right")
                                                 .font(.system(.caption, weight: .semibold))
                                         }
+                                        // The notice's one action, in the app's green.
                                         .foregroundStyle(AppTheme.onVividFill)
                                         .frame(maxWidth: .infinity)
                                         .padding(.vertical, 13)
-                                        .background(AppTheme.purple, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+                                        .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: AppRadius.lg))
                                     }
                                     .buttonStyle(ScaleButtonStyle())
                                     .padding(.top, 4)
@@ -1229,8 +1220,7 @@ struct NotificationDetailView: View {
                             }
                             .padding(14)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(AppTheme.orange.opacity(0.08),
-                                        in: RoundedRectangle(cornerRadius: AppRadius.md))
+                            .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
                         }
 
                         // "Learn more" link button — only when a valid URL
@@ -1249,16 +1239,11 @@ struct NotificationDetailView: View {
                                     Image(systemName: "arrow.up.right")
                                         .font(.system(.footnote, weight: .semibold))
                                 }
-                                .foregroundStyle(.white)
+                                // A link: the plain control fill, in ink.
+                                .foregroundStyle(AppTheme.textPrimary)
                                 .padding(.vertical, 15)
                                 .padding(.horizontal, 18)
-                                .background(
-                                    LinearGradient(
-                                        colors: [item.iconColor, item.iconColor.opacity(0.78)],
-                                        startPoint: .leading, endPoint: .trailing
-                                    ),
-                                    in: RoundedRectangle(cornerRadius: AppRadius.md)
-                                )
+                                .background(AppTheme.cardMid, in: RoundedRectangle(cornerRadius: AppRadius.md))
                             }
                             .buttonStyle(ScaleButtonStyle())
                         }

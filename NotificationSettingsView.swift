@@ -64,13 +64,10 @@ struct NotificationSettingsView: View {
             }
         )
         return HStack(alignment: .top, spacing: 13) {
-            ZStack {
-                RoundedRectangle(cornerRadius: AppRadius.sm).fill(kind.tint.opacity(0.14))
-                    .frame(width: 36, height: 36)
-                Image(systemName: kind.icon)
-                    .font(.system(.callout, weight: .semibold))
-                    .foregroundStyle(kind.tint)
-            }
+            Image(systemName: kind.icon)
+                .font(.system(.callout, weight: .semibold))
+                .foregroundStyle(kind.tint)
+                .frame(width: ListRowMetrics.icon)
             VStack(alignment: .leading, spacing: 3) {
                 Text(loc(kind.titleKey))
                     .font(.system(.subheadline, weight: .semibold))
@@ -101,6 +98,6 @@ struct NotificationSettingsView: View {
         }
         .padding(13)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(AppTheme.cardDark.opacity(0.6), in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
     }
 }

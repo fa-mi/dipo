@@ -152,8 +152,7 @@ struct DataCleanupView: View {
                 Image(systemName: icon)
                     .font(.system(.body, weight: .semibold))
                     .foregroundStyle(tint)
-                    .frame(width: 44, height: 44)
-                    .background(tint.opacity(0.15), in: RoundedRectangle(cornerRadius: AppRadius.md))
+                    .frame(width: ListRowMetrics.icon)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(title).font(.system(.subheadline, weight: .semibold))
                         .foregroundStyle(AppTheme.textPrimary)

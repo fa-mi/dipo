@@ -292,8 +292,6 @@ struct SearchView: View {
                         }
                         .padding(.horizontal, 14).padding(.vertical, 12)
                         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
-                        .overlay(RoundedRectangle(cornerRadius: AppRadius.md)
-                            .stroke(focused ? AppTheme.accent.opacity(0.5) : Color.clear, lineWidth: 1.5))
 
                         Button(loc("common.cancel")) { HapticManager.shared.tap(); dismiss() }
                             .foregroundStyle(AppTheme.textSecondary).font(.system(.subheadline))
@@ -402,9 +400,9 @@ struct SearchView: View {
                                             Text(loc(sort.titleKey))
                                                 .font(.system(.caption, weight: .medium))
                                         }
-                                        .foregroundStyle(AppTheme.accent)
+                                        .foregroundStyle(AppTheme.textPrimary)
                                         .padding(.horizontal, 10).padding(.vertical, 5)
-                                        .background(AppTheme.accent.opacity(0.1), in: Capsule())
+                                        .background(AppTheme.cardMid, in: Capsule())
                                     }
                                     .padding(.leading, 10)
                                     Spacer()
@@ -484,9 +482,9 @@ struct SearchView: View {
                                         Text(String(format: loc("search.show_more"),
                                                     min(results.hidden, SearchView.pageSize), results.hidden))
                                             .font(.system(.footnote, weight: .semibold))
-                                            .foregroundStyle(AppTheme.accent)
+                                            .foregroundStyle(AppTheme.textPrimary)
                                             .padding(.horizontal, 16).padding(.vertical, 10)
-                                            .background(AppTheme.accent.opacity(0.1), in: Capsule())
+                                            .background(AppTheme.cardMid, in: Capsule())
                                     }
                                     .buttonStyle(.plain)
                                     .padding(.bottom, 40)
@@ -593,9 +591,6 @@ struct SearchTxRow: View {
                         .foregroundStyle(tx.category.color)
                         .lineLimit(1)
                         .fixedSize(horizontal: true, vertical: false)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(tx.category.color.opacity(0.12), in: Capsule())
                         .layoutPriority(1)
                 }
             }

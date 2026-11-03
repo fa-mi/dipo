@@ -598,9 +598,7 @@ struct FinancialBriefingView: View {
                                 Text(b.periodLabel)
                                     .font(.system(.caption, weight: .semibold))
                             }
-                            .foregroundStyle(AppTheme.purple)
-                            .padding(.horizontal, 10).padding(.vertical, 5)
-                            .background(AppTheme.purple.opacity(0.12), in: Capsule())
+                            .foregroundStyle(AppTheme.textSecondary)
                             .padding(.horizontal, 22).padding(.top, 8)
 
                             // Headline
@@ -663,10 +661,11 @@ struct FinancialBriefingView: View {
                                         .foregroundStyle(f.severity.color)
                                     }
                                 }
+                                // The plain card; how serious it is is in the
+                                // icon's and the label's colour.
                                 .padding(14)
                                 .frame(maxWidth: .infinity, alignment: .leading)
-                                .background(f.severity.color.opacity(0.07), in: RoundedRectangle(cornerRadius: AppRadius.md))
-                                .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(f.severity.color.opacity(0.2), lineWidth: 1))
+                                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
                                 .padding(.horizontal, 22)
                             }
 
@@ -685,7 +684,7 @@ struct FinancialBriefingView: View {
                                     }
                                 }
                                 .padding(14).frame(maxWidth: .infinity, alignment: .leading)
-                                .background(AppTheme.purple.opacity(0.07), in: RoundedRectangle(cornerRadius: AppRadius.md))
+                                .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
                                 .padding(.horizontal, 22)
                             }
 

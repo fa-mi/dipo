@@ -44,10 +44,6 @@ struct SheetField: View {
                 .foregroundStyle(AppTheme.textPrimary)
                 .padding(14)
                 .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
-                .overlay(
-                    RoundedRectangle(cornerRadius: AppRadius.md)
-                        .stroke(focused ? AppTheme.accent.opacity(0.6) : Color.clear, lineWidth: 1.5)
-                )
                 .focused($focused)
         }
         .padding(.horizontal, 22)
@@ -128,7 +124,7 @@ struct ActionListSheet: View {
         VStack(spacing: 0) {
             ForEach(Array(rows.enumerated()), id: \.element.id) { i, item in
                 if i > 0 {
-                    Rectangle().fill(AppTheme.cardMid.opacity(0.7)).frame(height: 1).padding(.leading, 62)
+                    Rectangle().fill(AppTheme.cardMid.opacity(0.7)).frame(height: 1).padding(.leading, 54)
                 }
                 Button {
                     HapticManager.shared.tap()
@@ -136,12 +132,12 @@ struct ActionListSheet: View {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { item.action() }
                 } label: {
                     HStack(spacing: 12) {
+                        // The icon in its colour, nothing behind it; red for
+                        // the row that takes something away.
                         Image(systemName: item.icon)
                             .font(.system(.subheadline, weight: .semibold))
-                            .foregroundStyle(item.destructive ? AppTheme.onVividFill : item.tint)
-                            .frame(width: 36, height: 36)
-                            .background(item.destructive ? AppTheme.red : item.tint.opacity(0.14),
-                                        in: RoundedRectangle(cornerRadius: AppRadius.sm))
+                            .foregroundStyle(item.destructive ? AppTheme.red : item.tint)
+                            .frame(width: ListRowMetrics.icon)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(item.title)
                                 .font(.system(.subheadline, weight: .semibold))
@@ -230,10 +226,6 @@ struct IconField: View {
             .padding(.horizontal, 14)
             .padding(.vertical, 15)
             .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
-            .overlay(
-                RoundedRectangle(cornerRadius: AppRadius.md)
-                    .stroke(focused ? AppTheme.accent.opacity(0.6) : Color.clear, lineWidth: 1.5)
-            )
             .animation(.easeOut(duration: 0.15), value: focused)
         }
     }
@@ -750,13 +742,8 @@ struct InlineBanner: View {
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .background(tone.color.opacity(0.1), in: RoundedRectangle(cornerRadius: AppRadius.sm))
-        .overlay(
-            RoundedRectangle(cornerRadius: AppRadius.sm)
-                .stroke(tone.color.opacity(0.25), lineWidth: 1)
-        )
+        // The tone's colour on the icon and words; no wash or outline.
+        .padding(.vertical, 4)
         .transition(.opacity)
     }
 }
