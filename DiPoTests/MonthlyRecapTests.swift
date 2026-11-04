@@ -42,7 +42,7 @@ final class MonthlyRecapTests: XCTestCase {
     /// transfers skipped, debt paid and money saved kept apart — and only rows
     /// inside the month count.
     func testTheTotalsAreStatistics() throws {
-        let october = date(2026, 10, 1)
+        let october = date(2026, 10, 1, 0, 0)
         let rows = [
             tx(4_200_000, .salary, on: date(2026, 10, 1, 8)),
             tx(-100_000, .food, on: date(2026, 10, 3)),

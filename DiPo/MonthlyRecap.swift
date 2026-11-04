@@ -253,6 +253,7 @@ struct MonthlyRecapView: View {
                     .padding(.horizontal, 20)
                     .padding(.top, 4)
                     .padding(.bottom, 28)
+                    .containerRelativeFrame(.horizontal)
                 }
             }
             .navigationTitle(loc("recap.title"))
@@ -276,9 +277,7 @@ struct MonthlyRecapView: View {
         HStack(alignment: .bottom, spacing: 10) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(rangeLabel)
-                    .font(.system(.caption2, weight: .bold))
-                    .textCase(.uppercase)
-                    .tracking(0.6)
+                    .font(.system(.caption, weight: .semibold))
                     .foregroundStyle(AppTheme.textSecondary)
                 Text(String(format: loc("recap.headline"), MonthlyRecapBell.monthName(month)))
                     .font(.system(.title2, weight: .heavy))
