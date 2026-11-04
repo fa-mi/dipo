@@ -669,6 +669,14 @@ final class CurrencyManager {
 
     // ── Formatting ─────────────────────────────────────────────────────
 
+    /// Currencies shown without decimals.
+    static let wholeUnitCurrencies: Set<String> = ["IDR","JPY","KRW","VND"]
+
+    /// The smallest step `formatted` shows for `currency`: 1 rupiah, 1 cent.
+    static func minorUnit(_ currency: String) -> Double {
+        wholeUnitCurrencies.contains(currency.uppercased()) ? 1 : 0.01
+    }
+
     func formatted(_ amount: Double, currency: String) -> String {
         let f   = NumberFormatter()
         f.numberStyle          = .decimal
@@ -685,8 +693,7 @@ final class CurrencyManager {
             f.decimalSeparator  = "."
         }
         let sym       = Self.symbol(for: currency)
-        let noDecimals: Set<String> = ["IDR","JPY","KRW","VND"]
-        if noDecimals.contains(cur) {
+        if Self.wholeUnitCurrencies.contains(cur) {
             f.maximumFractionDigits = 0
             f.minimumFractionDigits = 0
             return "\(sym) \(f.string(from: NSNumber(value: amount)) ?? "0")"

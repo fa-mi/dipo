@@ -601,7 +601,8 @@ struct SmartBudgetSettingsSheet: View {
         let tint = planned ? AppTheme.blue : AppTheme.red
         // In money. "62% of your pay used, 12% past the 50% limit" asked the
         // reader to tell a share of income from a share of the limit.
-        var detail = String(format: loc("budget.over_detail"), money(spent), money(limit), money(spent - limit))
+        var detail = String(format: loc("budget.over_detail"), money(spent), money(limit),
+                            money(BudgetGroupMath.past(limit, by: [spent])))
         if planned { detail += " " + loc("budget.planned_note") }
         let title = String(format: loc(planned ? "insight.group_over_planned_title" : "budget.over_budget"), group.label)
         return HStack(spacing: 12) {
@@ -1143,7 +1144,7 @@ struct BudgetGroupCard: View {
         if group.isCeiling {
             if willGoOver {
                 return String(format: loc("budget.bills_card_over"), money(billsTotal), group.label,
-                              money(spent + billsTotal - limit))
+                              money(BudgetGroupMath.past(limit, by: [spent, billsTotal])))
             }
             guard !isOver else { return nil }
             return String(format: loc("budget.bills_card_left"), money(billsTotal),
@@ -1168,14 +1169,14 @@ struct BudgetGroupCard: View {
                     // income side by side with nothing saying which was which.
                     if isOver {
                         Text(String(format: loc("budget.over_short"),
-                                    CurrencyManager.shared.formatted((spent - limit).rounded(), currency: currency)))
+                                    money(BudgetGroupMath.past(limit, by: [spent]))))
                             .font(.system(.caption2, weight: .bold)).foregroundStyle(overTint)
                             .lineLimit(1)
                             .padding(.horizontal, 8).padding(.vertical, 3)
                             .background(overTint.opacity(0.12), in: Capsule())
                     } else if willGoOver {
                         // Not over yet: orange, and in the future tense.
-                        Text(String(format: loc("budget.will_go_over_short"), money(spent + billsTotal - limit)))
+                        Text(String(format: loc("budget.will_go_over_short"), money(BudgetGroupMath.past(limit, by: [spent, billsTotal]))))
                             .font(.system(.caption2, weight: .bold)).foregroundStyle(AppTheme.orange)
                             .lineLimit(1)
                             .padding(.horizontal, 8).padding(.vertical, 3)
@@ -1405,7 +1406,8 @@ struct BudgetGroupDetailView: View {
             if isOver { return String(format: loc("budget.bills_more_over"), fmt(billsTotal)) }
             if willGoOver {
                 return String(format: loc("budget.bills_will_over"), fmt(billsTotal), group.label,
-                              fmt(spent + billsTotal - limit))
+                              fmt(BudgetGroupMath.past(limit, by: [spent, billsTotal],
+                                                       unit: CurrencyManager.minorUnit(primary))))
             }
             return String(format: loc("budget.bills_taken_out"), fmt(billsTotal))
         }
@@ -1874,6 +1876,16 @@ struct BudgetGroupDetailView: View {
 /// outflows, so a refunded purchase stayed in "Wants" while Statistics had
 /// already taken it out.
 enum BudgetGroupMath {
+    /// How far `parts` pass `limit`, worked out from the figures as the
+    /// screen shows them: each rounded to `unit` first, so spent plus still to
+    /// come, less the limit, adds up on the page. Rounding the difference
+    /// instead put "Rp 177.213 over" under Rp 4.895.810 spent and
+    /// Rp 2.281.402 to come, against a Rp 7.000.000 limit.
+    static func past(_ limit: Double, by parts: [Double], unit: Double = 1) -> Double {
+        func shown(_ v: Double) -> Double { (v / unit).rounded() * unit }
+        return parts.reduce(0) { $0 + shown($1) } - shown(limit)
+    }
+
     /// The group's rows from `start` on — outflows and refunds — newest first.
     static func rows(_ group: BudgetGroup, in txs: [TxRecord], from start: Date) -> [TxRecord] {
         let cats = Set(SmartBudgetManager.shared.categories(for: group))

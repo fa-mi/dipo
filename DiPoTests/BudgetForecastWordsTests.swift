@@ -34,4 +34,17 @@ final class BudgetForecastWordsTests: XCTestCase {
             }
         }
     }
+
+    /// The amount past the limit is worked out from the figures on screen,
+    /// so they add up: Rp 4.895.810 spent and Rp 2.281.402 to come against
+    /// Rp 7.000.000 is Rp 177.212 over, not the Rp 177.213 the unrounded
+    /// difference rounded to.
+    func testTheOverAmountAddsUpOnScreen() {
+        XCTAssertEqual(BudgetGroupMath.past(7_000_000, by: [4_895_810.4, 2_281_402.4]), 177_212)
+        XCTAssertEqual(BudgetGroupMath.past(1_500_000, by: [1_669_250.4]), 169_250)
+        // A currency shown with cents rounds each part to the cent.
+        XCTAssertEqual(BudgetGroupMath.past(100, by: [12.346, 90.004], unit: 0.01), 2.35, accuracy: 0.000_1)
+        XCTAssertEqual(CurrencyManager.minorUnit("IDR"), 1)
+        XCTAssertEqual(CurrencyManager.minorUnit("usd"), 0.01)
+    }
 }
