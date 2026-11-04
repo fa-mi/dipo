@@ -57,15 +57,41 @@ struct WalletPocketGroup: Identifiable {
 
 /// The pockets side by side, swiped between. The names above say which one is
 /// in front, and a tap on the other brings it forward the way a swipe does. As
-/// a pocket slides away it shrinks a little toward its foot and its cards sink
+/// a pocket slides away it shrinks a little toward its top and its cards sink
 /// into it; the arriving pocket's cards rise.
+///
+/// Each pocket sits right under the names, and the pager is as tall as the
+/// pocket in front, so what comes after it moves with the cards. The pockets
+/// were bottom-aligned at first, to keep both totals level, and a pocket of
+/// three cards then floated under two cards' worth of empty space whenever
+/// the other held five.
 struct WalletPockets: View {
     let cards: [BankCard]
     var onOpen: (BankCard) -> Void
 
     /// The pocket in front. Nil until the first swipe or tap: the first one.
     @State private var shown: WalletPocketKind?
+    /// Each pocket's frame against the pager, as it scrolls: where it is
+    /// across, and how tall it is.
+    @State private var frames: [WalletPocketKind: CGRect] = [:]
     @Namespace private var underline
+
+    /// The pager's height: each pocket's own, counted by how much of it is in
+    /// view. Halfway through a swipe it is halfway between the two, so what
+    /// sits below follows the finger instead of jumping when the swipe lands.
+    /// Nil until the pockets have been measured, and the pager then takes its
+    /// natural height for that first moment.
+    static func height(of frames: [WalletPocketKind: CGRect], kinds: [WalletPocketKind]) -> CGFloat? {
+        var sum: CGFloat = 0
+        var weight: CGFloat = 0
+        for kind in kinds {
+            guard let f = frames[kind], f.width > 0 else { continue }
+            let inView = max(0, 1 - abs(f.minX) / f.width)
+            sum += f.height * inView
+            weight += inView
+        }
+        return weight > 0 ? sum / weight : nil
+    }
 
     private static let move = Animation.spring(response: 0.42, dampingFraction: 0.86)
 
@@ -79,26 +105,34 @@ struct WalletPockets: View {
                     .padding(.horizontal, 22)
             }
             ScrollView(.horizontal) {
-                // Bottom-aligned: the pockets stand side by side, so one with
-                // fewer cards is shorter at the top and its total stays level
-                // with the other's.
-                HStack(alignment: .bottom, spacing: 0) {
+                // Top-aligned, right under the names.
+                HStack(alignment: .top, spacing: 0) {
                     ForEach(groups) { group in
                         WalletPocket(cards: group.cards, onOpen: onOpen)
                             .padding(.horizontal, 22)
                             .containerRelativeFrame(.horizontal)
                             .scrollTransition(.interactive, axis: .horizontal) { content, phase in
-                                content.scaleEffect(CGFloat(1 - 0.05 * abs(phase.value)), anchor: .bottom)
+                                content.scaleEffect(CGFloat(1 - 0.05 * abs(phase.value)), anchor: .top)
                             }
+                            // Outside the transition, so its scaling isn't measured.
+                            .onGeometryChange(for: CGRect.self) { proxy in
+                                proxy.frame(in: .named("walletPockets"))
+                            } action: { frames[group.kind] = $0 }
                     }
                 }
                 .scrollTargetLayout()
+                // The height is set here, on the content, not on the scroll
+                // view: content taller than a scroll view would be centred in
+                // it, cut at the top and the bottom. Here the taller pocket
+                // runs past the foot and is clipped there, while it slides in.
+                .frame(height: Self.height(of: frames, kinds: groups.map(\.kind)), alignment: .top)
                 // Room inside the scroll view, which clips, for the top card's
                 // shadow and the pocket's own on the page, taken back outside
                 // so the layout doesn't move.
                 .padding(.top, Self.shadowRoom.top)
                 .padding(.bottom, Self.shadowRoom.bottom)
             }
+            .coordinateSpace(.named("walletPockets"))
             .scrollTargetBehavior(.paging)
             .scrollIndicators(.hidden)
             .scrollPosition(id: $shown)
