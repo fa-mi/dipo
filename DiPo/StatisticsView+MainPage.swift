@@ -220,9 +220,9 @@ extension StatisticsView {
                         .foregroundStyle(AppTheme.textPrimary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                .padding(12)
+                // A line on the field, like the two above it: the cash book is
+                // the hero's one panel.
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .heroPanel(line.ok ? AppTheme.flowPine.opacity(0.13) : AppTheme.orange.opacity(0.12))
             } else if livingFunds <= 0 {
                 Label(loc("stats.no_income_hint"), systemImage: "info.circle")
                     .font(.system(.caption))
@@ -320,9 +320,9 @@ extension StatisticsView {
                 .foregroundStyle(AppTheme.textPrimary)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(12)
+        // On the field, not in a tinted panel: four panels stacked on the
+        // hero made a sentence each look like a separate card.
         .frame(maxWidth: .infinity, alignment: .leading)
-        .heroPanel(!over ? AppTheme.flowPine.opacity(0.13) : tint.opacity(0.12))
     }
 
     /// Debt paid down and money put away — named as what they are, in blue,
@@ -337,9 +337,7 @@ extension StatisticsView {
                 .foregroundStyle(AppTheme.textPrimary)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .heroPanel(AppTheme.flowCobalt.opacity(0.18))
     }
 
     // MARK: The period as a cash book
