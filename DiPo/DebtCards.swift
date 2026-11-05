@@ -151,6 +151,11 @@ struct DebtSummaryCard: View {
                 .buttonStyle(ScaleButtonStyle())
             }
 
+            // Facts and verdict sit on the card between hairlines. A grey box
+            // for each fact and a tinted box for the verdict put three boxes
+            // inside one card before anything had been said.
+            Divider().overlay(AppTheme.cardMid)
+
             HStack(spacing: 10) {
                 fact("calendar", loc("debt.monthly_payments_label"), money(engine.totalEffectiveMinimums))
                 if let date = debtFreeDate {
@@ -158,6 +163,8 @@ struct DebtSummaryCard: View {
                          date.formatted(.dateTime.month(.abbreviated).year()))
                 }
             }
+
+            Divider().overlay(AppTheme.cardMid)
 
             HStack(alignment: .top, spacing: 10) {
                 Image(systemName: tone.icon)
@@ -177,8 +184,6 @@ struct DebtSummaryCard: View {
                 }
                 Spacer(minLength: 0)
             }
-            .padding(12)
-            .background(tone.tint.opacity(0.10), in: RoundedRectangle(cornerRadius: AppRadius.md))
 
             if let owedBack {
                 OwedBackBlock(plan: owedBack)
@@ -212,8 +217,6 @@ struct DebtSummaryCard: View {
                 .lineLimit(1).minimumScaleFactor(0.8)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(12)
-        .background(AppTheme.cardMid.opacity(0.5), in: RoundedRectangle(cornerRadius: AppRadius.md))
     }
 }
 
@@ -436,9 +439,8 @@ struct DebtFirstCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             VStack(alignment: .leading, spacing: 3) {
-                Text(loc("debt.first.header").uppercased(with: LanguageManager.shared.currentLocale))
-                    .font(.system(.caption2, weight: .heavy))
-                    .tracking(1)
+                Text(loc("debt.first.header"))
+                    .font(.system(.caption, weight: .semibold))
                     .foregroundStyle(AppTheme.textSecondary)
                 Text(advice.title())
                     .font(.system(.body, weight: .bold))
@@ -475,14 +477,15 @@ struct DebtFirstCard: View {
                 }
             }
 
+            // The advice on the card itself, under a hairline, not in a grey
+            // box inside it.
+            Divider().overlay(AppTheme.cardMid)
             Text(advice.body(currency: currency))
                 .font(.system(.caption))
                 .foregroundStyle(AppTheme.textPrimary)
                 .lineSpacing(2)
                 .fixedSize(horizontal: false, vertical: true)
-                .padding(10)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(AppTheme.cardMid.opacity(0.5), in: RoundedRectangle(cornerRadius: AppRadius.md))
         }
         .padding(16)
         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.xl))
