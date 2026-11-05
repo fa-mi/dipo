@@ -353,14 +353,22 @@ struct StatsReportCard: View {
     private var footer: some View {
         VStack(alignment: .leading, spacing: 10) {
             Rectangle().fill(AppTheme.cardMid).frame(height: 1)
-            HStack(spacing: 8) {
+            HStack(spacing: 10) {
                 Image("DiPoMark")
                     .resizable().scaledToFit()
-                    .frame(height: 24)
-                Text(String(format: loc("stats.generated_by"), Date().displayDateTimeShort))
-                    .font(.system(.caption, weight: .semibold))
-                    .foregroundStyle(AppTheme.textSecondary)
-                    .lineLimit(1).minimumScaleFactor(0.8)
+                    .frame(height: 30)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(String(format: loc("stats.generated_by"), Date().displayDateTimeShort))
+                        .font(.system(.caption, weight: .semibold))
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .lineLimit(1).minimumScaleFactor(0.8)
+                    // Whoever the picture is forwarded to learns what made
+                    // it and that they can use it too.
+                    Text(loc("stats.report_cta"))
+                        .font(.system(.caption2))
+                        .foregroundStyle(AppTheme.textSecondary.opacity(0.8))
+                        .lineLimit(2).minimumScaleFactor(0.8)
+                }
                 Spacer(minLength: 0)
             }
         }
