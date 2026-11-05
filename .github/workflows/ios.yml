@@ -45,7 +45,11 @@ jobs:
 
       - name: Pick a simulator
         id: sim
-        run: echo "udid=$(xcrun simctl list devices available -j | python3 ci/pick-simulator.py)" >> "$GITHUB_OUTPUT"
+        # Fails here, by name, when no simulator is found, rather than as an
+        # empty destination in the next step.
+        run: |
+          udid=$(xcrun simctl list devices available -j | python3 ci/pick-simulator.py)
+          echo "udid=$udid" >> "$GITHUB_OUTPUT"
 
       - name: Build and test
         run: |
