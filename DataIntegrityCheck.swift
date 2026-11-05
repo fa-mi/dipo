@@ -258,13 +258,15 @@ struct DataIntegrityCard: View {
                 .font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
 
-            ForEach(findings) { f in
+            // Rows on the card, a line between them: a grey box per row
+            // inside an orange-outlined card was a box in a box.
+            ForEach(Array(findings.enumerated()), id: \.element.id) { index, f in
+                if index > 0 { Divider().overlay(AppTheme.cardMid) }
                 row(f)
             }
         }
         .padding(16)
         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
-        .overlay(RoundedRectangle(cornerRadius: AppRadius.lg).stroke(AppTheme.orange.opacity(0.22), lineWidth: 1))
     }
 
     private func row(_ f: IntegrityFinding) -> some View {
@@ -300,8 +302,8 @@ struct DataIntegrityCard: View {
                         .multilineTextAlignment(.leading)
                 }
             }
-            .padding(11)
-            .background(AppTheme.cardMid.opacity(0.45), in: RoundedRectangle(cornerRadius: AppRadius.sm))
+            .padding(.vertical, 4)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }
@@ -464,8 +466,6 @@ struct WindfallCard: View {
         }
         .padding(16)
         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
-        .overlay(RoundedRectangle(cornerRadius: AppRadius.lg)
-            .stroke(review.verdict.tint.opacity(0.22), lineWidth: 1))
     }
 
     private func line(_ l: String, _ v: String, _ tint: Color) -> some View {
