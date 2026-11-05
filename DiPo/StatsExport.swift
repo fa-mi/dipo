@@ -326,9 +326,9 @@ struct StatsReportCard: View {
                 .foregroundStyle(AppTheme.textPrimary)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(12)
+        // On the field, as on the Statistics hero: the categories are the
+        // picture's one panel. `fill` stays in the signature for callers.
         .frame(maxWidth: .infinity, alignment: .leading)
-        .heroPanel(fill)
     }
 
     private var categoriesBlock: some View {
