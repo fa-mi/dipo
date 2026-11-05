@@ -215,10 +215,13 @@ struct StatsReportCard: View {
 
     private var header: some View {
         HStack(spacing: 10) {
-            Image("DiPoMascot")
+            // DiPo, so the picture says where it came from. The full mascot
+            // image is mostly empty margin, and was screen-blended on top: at
+            // 34 points it came out a faint smudge about 15 points tall.
+            // DiPoMark is the same mascot cropped to the character.
+            Image("DiPoMark")
                 .resizable().scaledToFit()
-                .frame(width: 34, height: 34)
-                .blendMode(.screen)
+                .frame(height: 38)
             VStack(alignment: .leading, spacing: 1) {
                 Text(loc("stats.report_title"))
                     .font(.system(.subheadline, design: .rounded, weight: .bold))
@@ -345,14 +348,21 @@ struct StatsReportCard: View {
         }
     }
 
+    /// The signature: DiPo, and when the picture was made. Shared on its own,
+    /// the image still says which app it came from.
     private var footer: some View {
-        HStack(spacing: 6) {
+        VStack(alignment: .leading, spacing: 10) {
             Rectangle().fill(AppTheme.cardMid).frame(height: 1)
-            Text(String(format: loc("stats.generated_by"), Date().displayDateTimeShort))
-                .font(.system(.caption2))
-                .foregroundStyle(AppTheme.textSecondary)
-                .fixedSize(horizontal: true, vertical: false)
-            Rectangle().fill(AppTheme.cardMid).frame(height: 1)
+            HStack(spacing: 8) {
+                Image("DiPoMark")
+                    .resizable().scaledToFit()
+                    .frame(height: 24)
+                Text(String(format: loc("stats.generated_by"), Date().displayDateTimeShort))
+                    .font(.system(.caption, weight: .semibold))
+                    .foregroundStyle(AppTheme.textSecondary)
+                    .lineLimit(1).minimumScaleFactor(0.8)
+                Spacer(minLength: 0)
+            }
         }
     }
 }
