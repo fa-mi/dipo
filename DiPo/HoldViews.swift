@@ -866,7 +866,15 @@ struct HoldIntroCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 14) {
-                HoldJar(level: 0, size: 64)
+                // A wait, which is what this is. The jar it used to show fills
+                // as wants are let go; before anything is held it was an empty
+                // glass circle, and read as a blank.
+                Image(systemName: "hourglass")
+                    .font(.system(.title2, weight: .semibold))
+                    .foregroundStyle(AppTheme.accent)
+                    .frame(width: 56, height: 56)
+                    .background(AppTheme.accent.opacity(0.14), in: Circle())
+                    .accessibilityHidden(true)
                 Text(loc("hold.intro_title"))
                     .font(.system(.body, weight: .bold))
                     .foregroundStyle(AppTheme.textPrimary)
