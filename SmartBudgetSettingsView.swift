@@ -356,99 +356,53 @@ struct SmartBudgetSettingsSheet: View {
         PremiumGate(feature: .smartBudget) {
         FeatureStack { pushed in
             ZStack { AppTheme.bg.ignoresSafeArea()
-                VStack(spacing: 0) {
+                // One page, one scroll. The toggle, the alerts and the tabs
+                // used to stand still above a scroll view of their own, so with
+                // two alerts showing the budget itself had a strip a few lines
+                // tall to scroll in. Now everything moves together, and the
+                // tabs stay pinned at the top once they reach it.
+                ScrollView(showsIndicators: false) {
+                    LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
+                        masterToggle
+                            .padding(.horizontal, 22).padding(.top, 12)
 
-                    // Master toggle
-                    HStack(spacing: 14) {
-                        // The app's green, like every other on/off feature. A
-                        // purple brain made this read as a separate AI product
-                        // bolted on, not DiPo's own budget.
-                        Image(systemName: "chart.pie.fill")
-                            .font(.system(.title3, weight: .semibold))
-                            .foregroundStyle(isEnabled ? AppTheme.onVividFill : AppTheme.textSecondary)
-                            .frame(width: 46, height: 46)
-                            .background(isEnabled ? AppTheme.accentFill : AppTheme.cardMid,
-                                        in: RoundedRectangle(cornerRadius: AppRadius.sm))
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(loc("profile.budget")).font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
-                            Text(loc("budget.sub")).font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
-                                .fixedSize(horizontal: false, vertical: true)
+                        if isEnabled && (!overGroups.isEmpty || investAhead != nil) {
+                            statusCard
+                                .padding(.horizontal, 22).padding(.top, 14)
+                                .transition(.opacity)
                         }
-                        Spacer()
-                        DiPoSwitch(isOn: $isEnabled, onIcon: "checkmark", offIcon: "xmark")
-                            .onChange(of: isEnabled) { _, on in
-                                if on {
-                                    // Force user to choose a card before proceeding
-                                    if selectedCardID == nil {
-                                        withAnimation(.spring(response: 0.3)) { selectedTab = .settings }
+
+                        Section {
+                            VStack(spacing: 20) {
+                                if isEnabled {
+                                    switch selectedTab {
+                                    case .overview: overviewTab
+                                    case .settings: settingsTab
+                                    // Take-home pay and pension growth live here,
+                                    // not in Debts & Credits. They answer income and
+                                    // cash-flow questions, which is what this screen
+                                    // is already about — a salary calculator filed
+                                    // under "what you owe" is somewhere nobody
+                                    // would think to look.
+                                    case .simulate:
+                                        PlannerView(embedded: true, tools: [.takeHome, .jht])
                                     }
                                 }
+                                Spacer(minLength: 40)
                             }
-                    }
-                    .padding(16)
-                    .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
-                                        .padding(.horizontal, 22).padding(.top, 16)
-
-                    // Over-budget alerts
-                    if isEnabled && (!overGroups.isEmpty || investAhead != nil) {
-                        VStack(spacing: 8) {
-                            ForEach(overGroups, id: \.group.rawValue) { item in
-                                overAlert(item.group, spent: item.spent, limit: item.limit)
-                            }
-                            if let ahead = investAhead {
-                                let goal = monthlyIncome * ahead.ratio
-                                HStack(spacing: 12) {
-                                    ZStack {
-                                        Circle().fill(AppTheme.accent.opacity(0.15)).frame(width: 36, height: 36)
-                                        Image(systemName: "checkmark.seal.fill").font(.system(.subheadline)).foregroundStyle(AppTheme.accent)
-                                    }
-                                    VStack(alignment: .leading, spacing: 3) {
-                                        Text(String(format: loc("budget.ahead_title"), BudgetGroup.investDebt.label))
-                                            .font(.system(.footnote, weight: .bold)).foregroundStyle(AppTheme.accent)
-                                        Text(ahead.spent - goal >= 0.5
-                                             ? String(format: loc("budget.ahead_detail"),
-                                                      money(ahead.spent), money(ahead.spent - goal), money(goal))
-                                             : String(format: loc("budget.met_detail"), money(ahead.spent)))
-                                            .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
-                                            .fixedSize(horizontal: false, vertical: true)
-                                    }
-                                    Spacer()
-                                }
-                                .padding(12)
-                                .background(AppTheme.accent.opacity(0.08), in: RoundedRectangle(cornerRadius: AppRadius.sm))
-                            }
-                        }
-                        .padding(.horizontal, 22).padding(.top, 12)
-                        .transition(.move(edge: .top).combined(with: .opacity))
-                    }
-
-                    if isEnabled {
-                        Picker("", selection: $selectedTab) {
-                            ForEach(BudgetTab.allCases, id: \.self) { Text(loc($0.titleKey)).tag($0) }
-                        }
-                        .pickerStyle(.segmented).padding(.horizontal, 22).padding(.top, 12).padding(.bottom, 4)
-                    }
-
-                    ScrollView(showsIndicators: false) {
-                        VStack(spacing: 20) {
+                            .padding(.top, 8)
+                        } header: {
                             if isEnabled {
-                                switch selectedTab {
-                                case .overview: overviewTab
-                                case .settings: settingsTab
-                                // Take-home pay and pension growth live here,
-                                // not in Debts & Credits. They answer income and
-                                // cash-flow questions, which is what this screen
-                                // is already about — a salary calculator filed
-                                // under "what you owe" is somewhere nobody
-                                // would think to look.
-                                case .simulate:
-                                    PlannerView(embedded: true, tools: [.takeHome, .jht])
+                                Picker("", selection: $selectedTab) {
+                                    ForEach(BudgetTab.allCases, id: \.self) { Text(loc($0.titleKey)).tag($0) }
                                 }
+                                .pickerStyle(.segmented)
+                                .padding(.horizontal, 22).padding(.vertical, 10)
+                                .background(AppTheme.bg)
                             }
-                            Spacer(minLength: 40)
-                        }.padding(.top, 12)
-                        .containerRelativeFrame(.horizontal)
+                        }
                     }
+                    .containerRelativeFrame(.horizontal)
                 }
             }
             .navigationTitle(loc("profile.budget")).navigationBarTitleDisplayMode(.inline)
@@ -594,6 +548,77 @@ struct SmartBudgetSettingsSheet: View {
         .trackScreen(.smartBudgetSettings)
     }
 
+    /// The switch, as a plain row: what Smart Budget is, and on or off.
+    private var masterToggle: some View {
+        HStack(spacing: 12) {
+            // The app's green, like every other on/off feature. A purple brain
+            // made this read as a separate AI product bolted on, not DiPo's
+            // own budget.
+            Image(systemName: "chart.pie.fill")
+                .font(.system(.subheadline, weight: .semibold))
+                .foregroundStyle(isEnabled ? AppTheme.onVividFill : AppTheme.textSecondary)
+                .frame(width: 34, height: 34)
+                .background(isEnabled ? AppTheme.accentFill : AppTheme.cardMid,
+                            in: RoundedRectangle(cornerRadius: AppRadius.sm))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(loc("profile.budget")).font(.system(.subheadline, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                Text(loc("budget.sub")).font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer()
+            DiPoSwitch(isOn: $isEnabled, onIcon: "checkmark", offIcon: "xmark")
+                .onChange(of: isEnabled) { _, on in
+                    if on {
+                        // Force user to choose a card before proceeding
+                        if selectedCardID == nil {
+                            withAnimation(.spring(response: 0.3)) { selectedTab = .settings }
+                        }
+                    }
+                }
+        }
+    }
+
+    /// What needs saying about this period, in one card: each group past its
+    /// limit, and savings & debt when it reached its target. They were a red
+    /// box and a green box stacked above the budget, each with its own tinted
+    /// icon, and together took most of the screen before a figure showed.
+    private var statusCard: some View {
+        VStack(spacing: 0) {
+            ForEach(Array(overGroups.enumerated()), id: \.element.group.rawValue) { index, item in
+                if index > 0 { Divider().overlay(AppTheme.cardMid) }
+                overAlert(item.group, spent: item.spent, limit: item.limit)
+            }
+            if let ahead = investAhead {
+                if !overGroups.isEmpty { Divider().overlay(AppTheme.cardMid) }
+                aheadRow(ahead)
+            }
+        }
+        .padding(.horizontal, 16)
+        .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+    }
+
+    /// Savings & debt at or past its target.
+    private func aheadRow(_ ahead: (spent: Double, ratio: Double)) -> some View {
+        let goal = monthlyIncome * ahead.ratio
+        return HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "checkmark.seal.fill")
+                .font(.system(.footnote, weight: .semibold)).foregroundStyle(AppTheme.accent)
+                .frame(width: 18).padding(.top, 1)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(String(format: loc("budget.ahead_title"), BudgetGroup.investDebt.label))
+                    .font(.system(.footnote, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
+                Text(ahead.spent - goal >= 0.5
+                     ? String(format: loc("budget.ahead_detail"),
+                              money(ahead.spent), money(ahead.spent - goal), money(goal))
+                     : String(format: loc("budget.met_detail"), money(ahead.spent)))
+                    .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, 12)
+    }
+
     /// A group past its limit. Marked as on purpose this period, it is said
     /// in blue as the choice it was; otherwise in red, with a way to say so.
     private func overAlert(_ group: BudgetGroup, spent: Double, limit: Double) -> some View {
@@ -605,14 +630,12 @@ struct SmartBudgetSettingsSheet: View {
                             money(BudgetGroupMath.past(limit, by: [spent])))
         if planned { detail += " " + loc("budget.planned_note") }
         let title = String(format: loc(planned ? "insight.group_over_planned_title" : "budget.over_budget"), group.label)
-        return HStack(spacing: 12) {
-            ZStack {
-                Circle().fill(tint.opacity(0.15)).frame(width: 36, height: 36)
-                Image(systemName: planned ? "checkmark.seal.fill" : "exclamationmark.triangle.fill")
-                    .font(.system(.subheadline)).foregroundStyle(tint)
-            }
-            VStack(alignment: .leading, spacing: 3) {
-                Text(title).font(.system(.footnote, weight: .bold)).foregroundStyle(tint)
+        return HStack(alignment: .top, spacing: 10) {
+            Image(systemName: planned ? "checkmark.seal.fill" : "exclamationmark.triangle.fill")
+                .font(.system(.footnote, weight: .semibold)).foregroundStyle(tint)
+                .frame(width: 18).padding(.top, 1)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.system(.footnote, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
                 Text(detail)
                     .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -631,11 +654,9 @@ struct SmartBudgetSettingsSheet: View {
                     .padding(.top, 2)
                 }
             }
-            Spacer()
+            Spacer(minLength: 0)
         }
-        .padding(12)
-        .background(tint.opacity(0.07), in: RoundedRectangle(cornerRadius: AppRadius.sm))
-        .overlay(RoundedRectangle(cornerRadius: AppRadius.sm).stroke(tint.opacity(0.22), lineWidth: 1))
+        .padding(.vertical, 12)
     }
 
     // MARK: - Overview Tab
@@ -1231,30 +1252,9 @@ struct BudgetGroupCard: View {
                         Spacer(minLength: 0)
                     }
                 }
-                if !groupTx.isEmpty {
-                    Divider().background(AppTheme.cardMid)
-                    VStack(spacing: 8) {
-                        ForEach(groupTx.prefix(2)) { tx in
-                            HStack(spacing: 10) {
-                                ZStack {
-                                    RoundedRectangle(cornerRadius: AppRadius.sm).fill(tx.displayIconBg).frame(width: 30, height: 30)
-                                    Text(tx.icon).font(.system(size: tx.icon.count == 1 ? 12 : 15)).foregroundStyle(.white)
-                                }
-                                Text(tx.name).font(.system(.caption, weight: .medium)).foregroundStyle(AppTheme.textPrimary).lineLimit(1)
-                                Spacer()
-                                Text(BudgetGroupMath.amountLabel(tx))
-                                    .font(.system(.caption, weight: .semibold))
-                                    .foregroundStyle(BudgetGroupMath.isRefund(tx) ? AppTheme.accent : AppTheme.textSecondary)
-                            }
-                        }
-                        if groupTx.count > 2 { Text(String(format: loc("common.plus_more"), groupTx.count - 2)).font(.system(.caption2)).foregroundStyle(group.color).frame(maxWidth: .infinity, alignment: .leading) }
-                    }
-                } else {
-                    HStack(spacing: 6) {
-                        Image(systemName: "checkmark.circle").font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
-                        Text(loc("budget.none_yet")).font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
-                    }
-                }
+                // The rows themselves are one tap away, on the group's page.
+                // Two of them and "+46 more" under every group made the
+                // overview a list of lists.
             }
             .padding(14)
             .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
