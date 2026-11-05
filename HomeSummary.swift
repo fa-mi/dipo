@@ -47,7 +47,22 @@ struct MonthFlowCard: View {
     /// Share of income spent on living this cycle; nil without income.
     private var budgetIn: Double { income + extra }
     private var spentShare: Double? { budgetIn > 0 ? living / budgetIn : nil }
+    /// Share of income that went to debt paid and money put away: the bar's
+    /// second, blue part.
+    private var putAwayShare: Double { budgetIn > 0 ? putAway / budgetIn : 0 }
     private var remaining: Double { Self.remaining(income: income, expense: expense, putAway: putAway, extra: extra) }
+    private var left: Double { Self.left(income: income, expense: expense, putAway: putAway, extra: extra) }
+
+    /// What is actually left of the period's money: income and added money,
+    /// less living costs AND what went to debts and savings. Fahmi read
+    /// "Spending Rp 5.353.060 · Left of income Rp 13.646.940" on a period
+    /// where Rp 5.750.000 had also gone to his cards, and asked why so little
+    /// had been spent when so much of the income was gone. Debt paid is still
+    /// not spending, but it is not left either. Negative when the debts and
+    /// savings took more than the income had room for.
+    static func left(income: Double, expense: Double, putAway: Double, extra: Double) -> Double {
+        remaining(income: income, expense: expense, putAway: putAway, extra: extra) - putAway
+    }
 
     /// What is left of the period's money once living costs are out: income
     /// and added money, less spending other than debt paid and money put
@@ -91,6 +106,10 @@ struct MonthFlowCard: View {
                 }
                 Spacer(minLength: 8)
                 if let share = spentShare, !isHidden {
+                    // Spending first, then debts and savings in blue: the bar
+                    // says how much of the income is used, the tiles below
+                    // say on what.
+                    let debtPart = min(putAwayShare, max(1 - share, 0))
                     VStack(alignment: .leading, spacing: 4) {
                         Text(loc("home.spent_of_income"))
                             .font(.system(.caption2))
@@ -99,12 +118,17 @@ struct MonthFlowCard: View {
                             GeometryReader { g in
                                 ZStack(alignment: .leading) {
                                     Capsule().fill(AppTheme.cardMid)
-                                    Capsule().fill(shareTint)
-                                        .frame(width: g.size.width * min(share, 1))
+                                    HStack(spacing: 0) {
+                                        Rectangle().fill(shareTint)
+                                            .frame(width: g.size.width * min(share, 1))
+                                        Rectangle().fill(AppTheme.blue)
+                                            .frame(width: g.size.width * debtPart)
+                                    }
+                                    .clipShape(Capsule())
                                 }
                             }
                             .frame(height: 6)
-                            Text(verbatim: "\(Int((share * 100).rounded()))%")
+                            Text(verbatim: "\(Int(((share + putAwayShare) * 100).rounded()))%")
                                 .font(.system(.caption, weight: .bold).monospacedDigit())
                                 .foregroundStyle(AppTheme.textPrimary)
                         }
@@ -131,8 +155,14 @@ struct MonthFlowCard: View {
                 // costs went past it — said in words, the second in orange.
                 // "Remaining −Rp 2.311.881" under a Rp 4,5 jt balance read as
                 // being in debt.
-                if remaining >= -0.5 {
-                    tile(icon: "equal", label: loc("home.left_of_income"), amount: max(remaining, 0),
+                if remaining >= -0.5 && left >= -0.5 {
+                    tile(icon: "equal", label: loc("home.left_of_income"), amount: max(left, 0),
+                         tint: AppTheme.blue, ink: AppTheme.textPrimary)
+                } else if remaining >= -0.5 {
+                    // Living costs fit the income, but debts and savings took
+                    // more than was left: the rest came from the balance.
+                    // Blue, not orange: paying debt down is not overspending.
+                    tile(icon: "arrow.uturn.down", label: loc("home.from_balance"), amount: -left,
                          tint: AppTheme.blue, ink: AppTheme.textPrimary)
                 } else {
                     tile(icon: "exclamationmark", label: loc("home.over_income_label"), amount: -remaining,
