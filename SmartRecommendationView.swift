@@ -497,7 +497,7 @@ struct SmartRecommendationView: View {
                 Spacer(minLength: 0)
             }
 
-            HStack(spacing: 8) {
+            HStack(spacing: 12) {
                 ForEach(metricDetails(r)) { m in metricTile(m) }
             }
 
@@ -562,15 +562,16 @@ struct SmartRecommendationView: View {
                 .foregroundStyle(AppTheme.textSecondary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
+            // The rating carries the colour; the tile no longer does. Three
+            // tinted tiles under a coloured ring were three more boxes on a
+            // card that already said "Needs work" in red.
             Text(m.rating.label)
                 .font(.system(.subheadline, weight: .bold))
-                .foregroundStyle(AppTheme.textPrimary)
+                .foregroundStyle(m.rating.color)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(12)
-        .background(m.rating.color.opacity(0.10), in: RoundedRectangle(cornerRadius: AppRadius.md))
     }
 
     // MARK: What to do
