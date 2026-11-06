@@ -41,17 +41,12 @@ struct CreditCardLiabilityRow: View {
                 Text(title).font(.system(.caption, weight: .semibold))
                     .lineLimit(1).minimumScaleFactor(0.8)
             }
-            .foregroundStyle(prominent ? AppTheme.onVividFill : AppTheme.purple)
+            // The second action is neutral, not the card's purple: green is
+            // the one thing to press, and purple only names a credit card.
+            .foregroundStyle(prominent ? AppTheme.onVividFill : AppTheme.textPrimary)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 10)
-            .background {
-                if prominent {
-                    Capsule().fill(AppTheme.accentFill)
-                } else {
-                    Capsule().fill(AppTheme.purple.opacity(0.12))
-                        .overlay(Capsule().stroke(AppTheme.purple.opacity(0.3), lineWidth: 1))
-                }
-            }
+            .background(prominent ? AppTheme.accentFill : AppTheme.cardMid, in: Capsule())
         }
         .buttonStyle(ScaleButtonStyle())
     }
@@ -171,7 +166,6 @@ struct CreditCardLiabilityRow: View {
         }
         .padding(14)
         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
-        .overlay(RoundedRectangle(cornerRadius: AppRadius.lg).stroke(AppTheme.purple.opacity(0.18), lineWidth: 1))
     }
 }
 
@@ -194,9 +188,11 @@ struct CreditLimitBar: View {
         return min(max(used / limit, 0), 1)
     }
     /// Above ~70% is where scoring models start treating utilisation as a risk
-    /// signal, so that is where the bar stops being decorative.
+    /// signal, so that is where the bar takes a colour: red. Below it the bar
+    /// is ink, as any figure is — purple names a credit card on its badge and
+    /// says nothing about how much of the line is used.
     private var isHot: Bool { progress > 0.7 }
-    private var tint: Color { isHot ? AppTheme.red : AppTheme.purple }
+    private var tint: Color { isHot ? AppTheme.red : AppTheme.textSecondary }
 
     private let barHeight: CGFloat = 12
 
@@ -325,11 +321,11 @@ struct CreditCardFormSheet: View {
 
                         // First-run explainer
                         HStack(spacing: 10) {
-                            Image(systemName: "info.circle.fill").font(.system(.subheadline)).foregroundStyle(AppTheme.purple)
+                            Image(systemName: "info.circle.fill").font(.system(.subheadline)).foregroundStyle(AppTheme.blue)
                             Text(loc("cc.explainer")).font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
-                        .padding(14).background(AppTheme.purple.opacity(0.08), in: RoundedRectangle(cornerRadius: AppRadius.md))
+                        .padding(14).background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
                         .padding(.horizontal, 22)
 
                         saveButton
@@ -378,8 +374,8 @@ struct CreditCardFormSheet: View {
             Text(label).font(.system(.footnote, weight: .semibold)).foregroundStyle(AppTheme.textSecondary)
                 .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 22)
             HStack(spacing: 10) {
-                Text(currency).font(.system(.subheadline, weight: .bold)).foregroundStyle(AppTheme.purple)
-                    .frame(width: 54, height: 52).background(AppTheme.purple.opacity(0.10), in: RoundedRectangle(cornerRadius: AppRadius.sm))
+                Text(currency).font(.system(.subheadline, weight: .bold)).foregroundStyle(AppTheme.textSecondary)
+                    .frame(width: 54, height: 52).background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.sm))
                 TextField("0", text: text)
                     .font(.system(.title3, weight: .bold)).keyboardType(.decimalPad)
                     .padding(.horizontal, 14).frame(height: 52)
@@ -400,7 +396,7 @@ struct CreditCardFormSheet: View {
         } label: {
             Text(loc("cc.save")).font(.system(.callout, weight: .bold)).foregroundStyle(AppTheme.onVividFill)
                 .frame(maxWidth: .infinity).padding(.vertical, 16)
-                .background(isValid ? AppTheme.purple : AppTheme.cardMid, in: RoundedRectangle(cornerRadius: AppRadius.md))
+                .background(isValid ? AppTheme.accentFill : AppTheme.cardMid, in: RoundedRectangle(cornerRadius: AppRadius.md))
         }
         .buttonStyle(ScaleButtonStyle()).disabled(!isValid).padding(.horizontal, 22)
     }

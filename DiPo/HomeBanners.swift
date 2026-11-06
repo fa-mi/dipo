@@ -276,9 +276,9 @@ struct SetupSalaryBanner: View {
             } label: {
                 Text(loc("home.set_up"))
                     .font(.system(.caption, weight: .semibold))
-                    .foregroundStyle(AppTheme.bg)
+                    .foregroundStyle(AppTheme.onVividFill)
                     .padding(.horizontal, 12).padding(.vertical, 6)
-                    .background(AppTheme.blue, in: Capsule())
+                    .background(AppTheme.accentFill, in: Capsule())
             }
             .buttonStyle(ScaleButtonStyle())
         }

@@ -1214,7 +1214,7 @@ struct NotificationDetailView: View {
                                         .foregroundStyle(AppTheme.onVividFill)
                                         .frame(maxWidth: .infinity)
                                         .padding(.vertical, 13)
-                                        .background(AppTheme.purple, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+                                        .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: AppRadius.lg))
                                     }
                                     .buttonStyle(ScaleButtonStyle())
                                     .padding(.top, 4)

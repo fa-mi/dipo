@@ -699,7 +699,7 @@ struct FinancialBriefingView: View {
                         .containerRelativeFrame(.horizontal)
                     }
                 } else {
-                    ProgressView().tint(AppTheme.purple)
+                    ProgressView().tint(AppTheme.textSecondary)
                 }
             }
             .navigationTitle(loc("brief.title"))

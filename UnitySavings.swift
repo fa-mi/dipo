@@ -1158,18 +1158,14 @@ struct SharedGoalDetailView: View {
                             Text(account.map { String(format: loc("unity.kept_in"), "\($0.emoji) \($0.name)") }
                                  ?? String(format: loc("unity.members"), goal.memberCount, goal.maxMembers))
                                 .font(.system(.caption)).foregroundStyle(AppTheme.textSecondary)
-                            GeometryReader { g in
-                                ZStack(alignment: .leading) {
-                                    Capsule().fill(AppTheme.cardMid).frame(height: 9)
-                                    Capsule().fill(LinearGradient(colors: [AppTheme.purple, AppTheme.blue], startPoint: .leading, endPoint: .trailing))
-                                        .frame(width: g.size.width * goal.progress, height: 9)
-                                }
-                            }.frame(height: 9).padding(.top, 4)
+                            // The same green bar a personal goal draws:
+                            // progress toward a goal is the accent's to show.
+                            SavingsProgressBar(progress: goal.progress, height: 9).padding(.top, 4)
                             HStack {
                                 Text(money(goal.savedAmount)).font(.system(.callout, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
                                 Text("/ \(money(goal.targetAmount))").font(.system(.footnote)).foregroundStyle(AppTheme.textSecondary)
                                 Spacer()
-                                Text("\(Int(goal.progress * 100))%").font(.system(.subheadline, weight: .bold)).foregroundStyle(AppTheme.purple)
+                                Text("\(Int(goal.progress * 100))%").font(.system(.subheadline, weight: .bold)).foregroundStyle(AppTheme.textPrimary)
                             }
                         }
                         .padding(18)
@@ -1183,7 +1179,7 @@ struct SharedGoalDetailView: View {
                                 Text(loc("unity.add_savings")).font(.system(.subheadline, weight: .bold))
                             }
                             .foregroundStyle(AppTheme.onVividFill).frame(maxWidth: .infinity).padding(.vertical, 14)
-                            .background(AppTheme.purple, in: RoundedRectangle(cornerRadius: AppRadius.md))
+                            .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: AppRadius.md))
                         }.buttonStyle(ScaleButtonStyle()).padding(.horizontal, 22)
 
                         // Members breakdown
@@ -1402,7 +1398,7 @@ struct AddContributionSheet: View {
                 VStack(spacing: 18) {
                     Text(goal.emoji).font(.system(.largeTitle)).padding(.top, 12)
                     HStack(spacing: 10) {
-                        Text(goal.currency).font(.system(.subheadline, weight: .bold)).foregroundStyle(AppTheme.purple)
+                        Text(goal.currency).font(.system(.subheadline, weight: .bold)).foregroundStyle(AppTheme.textSecondary)
                             .padding(.horizontal, 14).padding(.vertical, 14)
                             .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.sm))
                         TextField("0", text: $amountText).keyboardType(.decimalPad)
@@ -1464,9 +1460,9 @@ struct AddContributionSheet: View {
                             } else { HapticManager.shared.error() }
                         }
                     } label: {
-                        Text(loc("unity.add_savings")).font(.system(.callout, weight: .bold)).foregroundStyle(.white)
+                        Text(loc("unity.add_savings")).font(.system(.callout, weight: .bold)).foregroundStyle(AppTheme.onVividFill)
                             .frame(maxWidth: .infinity).padding(.vertical, 15)
-                            .background(canSave ? AppTheme.purple : AppTheme.textSecondary.opacity(0.3), in: RoundedRectangle(cornerRadius: AppRadius.md))
+                            .background(canSave ? AppTheme.accentFill : AppTheme.textSecondary.opacity(0.3), in: RoundedRectangle(cornerRadius: AppRadius.md))
                     }.buttonStyle(ScaleButtonStyle()).disabled(!canSave).padding(.horizontal, 22)
                     Spacer()
                 }
@@ -1506,7 +1502,6 @@ struct InviteSheet: View {
                             .autocorrectionDisabled()
                             .padding(.horizontal, 16).padding(.vertical, 14)
                             .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
-                            .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppTheme.purple.opacity(0.3), lineWidth: 1))
                         Text(loc("unity.invite_hint")).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary.opacity(0.8))
                             .fixedSize(horizontal: false, vertical: true)
                     }.padding(.horizontal, 22)
@@ -1519,11 +1514,11 @@ struct InviteSheet: View {
 
                     Button { send() } label: {
                         HStack(spacing: 8) {
-                            if sending { ProgressView().tint(.white) }
+                            if sending { ProgressView().tint(AppTheme.onVividFill) }
                             Text(loc("unity.invite_send")).font(.system(.callout, weight: .bold))
                         }
-                        .foregroundStyle(.white).frame(maxWidth: .infinity).padding(.vertical, 15)
-                        .background(canSend ? AppTheme.purple : AppTheme.textSecondary.opacity(0.3), in: RoundedRectangle(cornerRadius: AppRadius.md))
+                        .foregroundStyle(AppTheme.onVividFill).frame(maxWidth: .infinity).padding(.vertical, 15)
+                        .background(canSend ? AppTheme.accentFill : AppTheme.textSecondary.opacity(0.3), in: RoundedRectangle(cornerRadius: AppRadius.md))
                     }
                     .buttonStyle(ScaleButtonStyle())
                     .disabled(!canSend)
@@ -1603,8 +1598,8 @@ struct SharedGoalFormSheet: View {
                                 ForEach(emojiChoices, id: \.self) { e in
                                     Text(e).font(.system(.title2))
                                         .frame(width: 46, height: 46)
-                                        .background(emoji == e ? AppTheme.purple.opacity(0.18) : AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.sm))
-                                        .overlay(RoundedRectangle(cornerRadius: AppRadius.sm).stroke(emoji == e ? AppTheme.purple : Color.clear, lineWidth: 2))
+                                        .background(emoji == e ? AppTheme.accent.opacity(0.16) : AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.sm))
+                                        .overlay(RoundedRectangle(cornerRadius: AppRadius.sm).stroke(emoji == e ? AppTheme.accent.opacity(0.65) : Color.clear, lineWidth: 1.5))
                                         .onTapGesture { HapticManager.shared.tap(); emoji = e }
                                 }
                             }.padding(.horizontal, 22)
@@ -1622,10 +1617,9 @@ struct SharedGoalFormSheet: View {
                                     let p = CurrencyManager.shared.preferredCurrency
                                     currency = currency == p ? "USD" : p
                                 } label: {
-                                    Text(currency).font(.system(.subheadline, weight: .bold)).foregroundStyle(AppTheme.purple)
+                                    Text(currency).font(.system(.subheadline, weight: .bold)).foregroundStyle(AppTheme.textSecondary)
                                         .padding(.horizontal, 14).padding(.vertical, 14)
                                         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.sm))
-                                        .overlay(RoundedRectangle(cornerRadius: AppRadius.sm).stroke(AppTheme.purple.opacity(0.3), lineWidth: 1))
                                 }.buttonStyle(ScaleButtonStyle())
                                 // An account's goal saves in the account's currency.
                                 .disabled(account != nil)
@@ -1642,12 +1636,12 @@ struct SharedGoalFormSheet: View {
                         // cramped/out of place).
                         VStack(spacing: 10) {
                             HStack(spacing: 10) {
-                                Image(systemName: "calendar").font(.system(.subheadline)).foregroundStyle(AppTheme.purple)
+                                Image(systemName: "calendar").font(.system(.subheadline)).foregroundStyle(AppTheme.textSecondary)
                                 Text(loc("unity.deadline")).font(.system(.subheadline, weight: .medium)).foregroundStyle(AppTheme.textPrimary)
                                 Spacer()
                                 DiPoSwitch(isOn: $hasDeadline.animation(.spring(response: 0.3)),
                                            onIcon: "calendar", offIcon: "infinity",
-                                           tint: AppTheme.purple)
+                                           tint: AppTheme.accent)
                             }
                             .padding(14)
                             .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
@@ -1656,7 +1650,7 @@ struct SharedGoalFormSheet: View {
                             if hasDeadline {
                                 DatePicker("", selection: $deadline, in: Date()..., displayedComponents: .date)
                                     .datePickerStyle(.graphical)
-                                    .tint(AppTheme.purple)
+                                    .tint(AppTheme.accent)
                                     .padding(8)
                                     .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.md))
                                     .padding(.horizontal, 22)
@@ -1688,7 +1682,7 @@ struct SharedGoalFormSheet: View {
                 ToolbarItem(placement: .primaryAction) {
                     Button(loc("unity.create_short")) { save() }
                         .font(.system(.subheadline, weight: .semibold))
-                        .foregroundStyle(canSave ? AppTheme.purple : AppTheme.textSecondary.opacity(0.4))
+                        .foregroundStyle(canSave ? AppTheme.accent : AppTheme.textSecondary.opacity(0.4))
                         .disabled(!canSave)
                 }
             }
