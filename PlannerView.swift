@@ -503,7 +503,7 @@ struct CalculatorSheet: View {
                 (loc("planner.total_paid"), money(total)),
                 (loc("planner.total_interest"), money(max(total - p, 0))),
                 (loc("planner.method"), loc("planner.method_annuity")),
-            ], accent: AppTheme.blue)
+            ], accent: AppTheme.textPrimary)
             impactCard(instalment: monthly)
             affordabilityCard(.annuity)
         }
@@ -651,7 +651,7 @@ struct CalculatorSheet: View {
                 (loc("planner.total_paid"), money(p + flat.totalInterest)),
                 (loc("planner.total_interest"), money(flat.totalInterest)),
                 (loc("planner.method"), loc("planner.method_flat")),
-            ], accent: AppTheme.orange)
+            ], accent: AppTheme.textPrimary)
             impactCard(instalment: flat.monthly)
             affordabilityCard(.flat)
 
@@ -699,6 +699,6 @@ struct CalculatorSheet: View {
             (loc("planner.total_contributed"), money(contributed)),
             (loc("planner.growth"), money(max(fv - contributed, 0))),
             (loc("planner.jht_years"), String(format: "%.0f %@", yrs, loc("planner.years"))),
-        ], accent: AppTheme.teal)
+        ], accent: AppTheme.accent)
     }
 }
