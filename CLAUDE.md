@@ -17,6 +17,18 @@ If a change genuinely looks necessary, say so and name it precisely — which to
 
 **What is always fine without asking:** using an existing token in a new place, opacity or blend of a token at a call site, and choosing *which* token a new element should use.
 
+## Colour use: 60/30/10
+
+The palette says which colours exist; this says where they go.
+
+- **60, the ground:** `bg` and the card surfaces. Most of every screen is neutral.
+- **30, the ink:** `textPrimary` and `textSecondary`. A figure is ink unless its colour says something.
+- **10, the green:** `accent` marks what to press and money coming in. Each screen, sheet or card gets one green action: the main filled button, the selected or "on" state, progress toward a goal, an income figure. A second action beside it is neutral (`cardMid` fill, ink label), never another hue.
+- **Every other hue means something:** red for money out, over a limit, or delete; orange for "needs attention"; blue for information. Purple and the category hues name a category or a feature (the credit card's "Kredit" badge, Royal's crown). They go on that icon or badge, not on its buttons, fields, bars or panels.
+- Before giving something a colour, look at it without one. If it still reads, leave it ink.
+
+This doesn't reopen the frozen palette, and it doesn't give licence to strip colour. Icons, category circles and cards keep their colours: the washed-out minimal pass (#166–#180) was reverted for looking bad. The rule only decides which existing token a new or misused element takes.
+
 ## Other standing rules
 
 - **Never boot the iOS Simulator.** Verify with headless `xcodebuild … build`. For visual work, render the geometry as HTML/SVG in the browser pane and look at it before writing Swift.
