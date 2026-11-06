@@ -42,6 +42,34 @@ final class HomeBalanceTests: XCTestCase {
         XCTAssertEqual(MonthFlowCard.remaining(income: 5_000_000, expense: 6_250_000, putAway: 0, extra: 0), -1_250_000)
     }
 
+    /// What is left takes the debts and savings out too. Fahmi's period:
+    /// Rp 19 jt in, Rp 5.353.060 spent, Rp 5.750.000 to his cards. "Left of
+    /// income Rp 13.646.940" while the money had gone; left is Rp 7.896.940.
+    func testLeftTakesOutDebtPaid() {
+        XCTAssertEqual(MonthFlowCard.left(income: 19_000_000, expense: 11_103_060, putAway: 5_750_000, extra: 0),
+                       7_896_940)
+        // Nothing to debts: the same as before.
+        XCTAssertEqual(MonthFlowCard.left(income: 10_000_000, expense: 9_283_500, putAway: 0, extra: 0), 716_500)
+        // Debts took more than living costs left: the rest came from the balance.
+        XCTAssertEqual(MonthFlowCard.left(income: 5_000_000, expense: 7_000_000, putAway: 4_000_000, extra: 0),
+                       -2_000_000)
+        // Spending is still living costs alone: the warning stays off.
+        XCTAssertEqual(MonthFlowCard.remaining(income: 5_000_000, expense: 7_000_000, putAway: 4_000_000, extra: 0),
+                       2_000_000)
+    }
+
+    func testThePeriodCardSaysWhatIsLeftPlainly() {
+        LanguageManager.shared.withLanguage(.indonesian) {
+            XCTAssertEqual(loc("home.left_of_income"), "Sisa")
+            XCTAssertEqual(loc("home.from_balance"), "Dari saldo")
+            XCTAssertEqual(loc("home.spent_of_income"), "Terpakai dari pemasukan")
+        }
+        LanguageManager.shared.withLanguage(.english) {
+            XCTAssertEqual(loc("home.left_of_income"), "Left")
+            XCTAssertEqual(loc("home.from_balance"), "From balance")
+        }
+    }
+
     func testHomeStringsExistInBothLanguages() {
         let keys = ["home.total_balance", "home.total_accounts",
                     "home.hero.payday_today", "home.hero.payday_tomorrow", "home.hero.payday_in",
