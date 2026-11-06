@@ -10,10 +10,19 @@ import sys
 devices = json.load(sys.stdin)["devices"]
 best = None
 for runtime, entries in devices.items():
-    # com.apple.CoreSimulator.SimRuntime.iOS-26-2
+    # com.apple.CoreSimulator.SimRuntime.iOS-26-2, or with a device after the
+    # version (…iOS-27-1-iPhone19…) on newer images: the version is the run
+    # of numbers up to the first part that isn't one.
     if ".iOS-" not in runtime:
         continue
-    version = tuple(int(p) for p in runtime.split(".iOS-")[1].split("-"))
+    parts = []
+    for p in runtime.split(".iOS-")[1].split("-"):
+        if not p.isdigit():
+            break
+        parts.append(int(p))
+    if not parts:
+        continue
+    version = tuple(parts)
     for d in entries:
         if d.get("isAvailable") and d["name"].startswith("iPhone"):
             # A one-screen iPhone first: the tests check logic, and the
