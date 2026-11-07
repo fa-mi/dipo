@@ -1061,9 +1061,8 @@ struct ProfileView: View {
 
     private func saveEmail() {
         let trimmed = emailText.trimmingCharacters(in: .whitespacesAndNewlines)
-        // Basic format guard — must look like an email.
-        guard trimmed.contains("@"), trimmed.contains("."),
-              !trimmed.hasPrefix("@"), !trimmed.hasSuffix("@") else {
+        // The same check the server makes, so what is accepted here is kept there.
+        guard ContactEmail.isValid(trimmed) else {
             HapticManager.shared.warning()
             return
         }
