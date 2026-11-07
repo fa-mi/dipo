@@ -47,8 +47,8 @@ struct MonthFlowCard: View {
     /// Share of income spent on living this cycle; nil without income.
     private var budgetIn: Double { income + extra }
     private var spentShare: Double? { budgetIn > 0 ? living / budgetIn : nil }
-    /// Share of income that went to debt paid and money put away: the bar's
-    /// second, blue part.
+    /// Share of income that went to debt paid and money put away, counted in
+    /// "used of income" with the living costs.
     private var putAwayShare: Double { budgetIn > 0 ? putAway / budgetIn : 0 }
     private var remaining: Double { Self.remaining(income: income, expense: expense, putAway: putAway, extra: extra) }
     private var left: Double { Self.left(income: income, expense: expense, putAway: putAway, extra: extra) }
@@ -71,11 +71,16 @@ struct MonthFlowCard: View {
         income + extra - max(expense - putAway, 0)
     }
 
-    /// Green while there is room, orange from 80 % on. Not red: passing income
-    /// is a warning, and the note says whether the balance covers it.
-    private var shareTint: Color {
-        guard let s = spentShare else { return AppTheme.accent }
-        return s >= 0.8 ? AppTheme.orange : AppTheme.accent
+    /// The hourglass's two bulbs, as shares of the money that came in: what
+    /// has been used (living costs, debts paid and money put away) below, and
+    /// what is left above. Used past the income fills the bottom bulb and
+    /// empties the top one.
+    static func sand(income: Double, expense: Double, putAway: Double, extra: Double) -> (left: Double, used: Double) {
+        let budget = income + extra
+        guard budget > 0 else { return (0, 0) }
+        let spent = max(expense - putAway, 0) + putAway
+        let used = min(max(spent / budget, 0), 1)
+        return (1 - used, used)
     }
 
     private var noteTint: Color {
@@ -103,38 +108,30 @@ struct MonthFlowCard: View {
                         .foregroundStyle(AppTheme.textSecondary)
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
-                }
-                Spacer(minLength: 8)
-                if let share = spentShare, !isHidden {
-                    // Spending first, then debts and savings in blue: the bar
-                    // says how much of the income is used, the tiles below
-                    // say on what.
-                    let debtPart = min(putAwayShare, max(1 - share, 0))
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(loc("home.spent_of_income"))
-                            .font(.system(.caption2))
-                            .foregroundStyle(AppTheme.textSecondary)
-                        HStack(spacing: 6) {
-                            GeometryReader { g in
-                                ZStack(alignment: .leading) {
-                                    Capsule().fill(AppTheme.cardMid)
-                                    HStack(spacing: 0) {
-                                        Rectangle().fill(shareTint)
-                                            .frame(width: g.size.width * min(share, 1))
-                                        Rectangle().fill(AppTheme.blue)
-                                            .frame(width: g.size.width * debtPart)
-                                    }
-                                    .clipShape(Capsule())
-                                }
-                            }
-                            .frame(height: 6)
+                    if let share = spentShare, !isHidden {
+                        HStack(alignment: .firstTextBaseline, spacing: 4) {
+                            Text(loc("home.spent_of_income"))
+                                .font(.system(.caption2))
+                                .foregroundStyle(AppTheme.textSecondary)
                             Text(verbatim: "\(Int(((share + putAwayShare) * 100).rounded()))%")
                                 .font(.system(.caption, weight: .bold).monospacedDigit())
                                 .foregroundStyle(AppTheme.textPrimary)
+                                .contentTransition(.numericText())
                         }
+                        .padding(.top, 6)
                     }
-                    .frame(width: 128)
-                    .animation(.easeOut(duration: 0.4), value: share)
+                }
+                Spacer(minLength: 8)
+                if spentShare != nil, !isHidden {
+                    // The same hourglass as dipo.info's hero: green sand on top
+                    // is what is left, grey sand below is what is used, both as
+                    // shares of what came in. It replaces the bar that said the
+                    // same thing as a line.
+                    let sand = Self.sand(income: income, expense: expense, putAway: putAway, extra: extra)
+                    HourglassView(left: sand.left, used: sand.used)
+                        .frame(width: 46, height: 84)
+                        .accessibilityHidden(true)
+                        .animation(.easeOut(duration: 0.8), value: sand.used)
                 }
             }
 
