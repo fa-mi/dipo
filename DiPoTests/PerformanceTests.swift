@@ -126,6 +126,25 @@ final class PerformanceTests: XCTestCase {
         let all = time(scenario, "flatMap all transactions") { l.cards.flatMap(\.transactions) }
         time(scenario, "sort all by date (recent list)") { all.sorted { $0.date > $1.date }.count }
 
+        // Home's list on its 7-day view: one card's window, as the list picks
+        // it (the line above is what it used to cost, a sort of everything).
+        time(scenario, "Home list 7-day window") {
+            TransactionSection.window(l.cards[0].transactions, kind: .all, category: nil, showAll: true).rows.count
+        }
+        // Each row and day header formats an amount; this is a long week's worth.
+        time(scenario, "Format 1,000 amounts") {
+            (0..<1_000).reduce(0) { $0 + CurrencyManager.shared.formatted(Double($1) * -1_250, currency: "IDR").count }
+        }
+        time(scenario, "Format 1,000 amounts, a formatter each (before)") {
+            (0..<1_000).reduce(0) { n, i in
+                let f = NumberFormatter()
+                f.numberStyle = .decimal
+                f.groupingSeparator = "."
+                f.maximumFractionDigits = 0
+                return n + (f.string(from: NSNumber(value: Double(i) * -1_250)) ?? "").count
+            }
+        }
+
         // Home
         time(scenario, "Home net worth: goals+receivables") {
             l.goals.reduce(0.0) { $0 + $1.netWorthContribution(from: all) }

@@ -45,7 +45,9 @@ struct PendingInboxSheet: View {
                                 ForEach(pending) { item in
                                     SwipeToDeleteRow(
                                         onTap: { HapticManager.shared.tap(); editing = item },
-                                        onDelete: { remove(item) }
+                                        onDelete: { remove(item) },
+                                        // These rows sit on the page, not in a card.
+                                        edge: AppTheme.bg
                                     ) {
                                         row(item)
                                     }
