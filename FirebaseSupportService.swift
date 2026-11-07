@@ -368,6 +368,22 @@ final class FirebaseSupportService {
         }
     }
 
+    /// The email the user typed in Profile, on their `device_tokens` doc for
+    /// the admin panel's broadcast emails. Written on its own so it doesn't
+    /// wait for a push token, which `registerDeviceToken` needs.
+    func saveEmailForBroadcasts(_ email: String) async {
+        guard let userId = UserSession.shared.userID, ContactEmail.isValid(email) else { return }
+        do {
+            try await db.collection("device_tokens").document(userId).setData([
+                "email": email,
+                "uid": Auth.auth().currentUser?.uid ?? "",
+                "updatedAt": FieldValue.serverTimestamp(),
+            ], merge: true)
+        } catch {
+            print("[DiPo] device_tokens email save failed: \(error.localizedDescription)")
+        }
+    }
+
     // MARK: - Unity Savings — user registry (F0)
     //
     // Foundation for collaborative "Tabungan Bersama" goals: so another user

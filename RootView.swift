@@ -494,8 +494,12 @@ struct RootView: View {
                 // banner + this Firestore-backed bell) is the source of truth.
                 FirebaseSupportService.shared.startListeningForAdminNotifications()
                 // Register this device's push token under the freshly
-                // signed-in user so the admin panel can target them.
-                Task { await FirebaseSupportService.shared.registerCurrentDeviceToken() }
+                // signed-in user so the admin panel can target them, once the
+                // email they typed before has been brought back.
+                Task {
+                    await UserSession.shared.restoreEmail()
+                    await FirebaseSupportService.shared.registerCurrentDeviceToken()
+                }
             } else {
                 FirebaseSupportService.shared.stopListening()
                 CrashReporter.setUser(nil)
@@ -543,10 +547,6 @@ struct RootView: View {
             // Idempotent, so it costs nothing once there is nothing to trim.
             CardNumber.trimStoredCards(context: context)
             UserSession.shared.checkAppleCredentialState { _ in }
-            // Recover email for users who signed in before email capture was
-            // fixed — so support/broadcast emails can reach them. Runs before
-            // registerCurrentDeviceToken below so the email lands in device_tokens.
-            UserSession.shared.backfillEmailFromFirebaseIfNeeded()
             // Same rationale for the name: Apple only hands it over on the first
             // authorization, so recover it from the Firebase user when missing.
             UserSession.shared.backfillNameFromFirebaseIfNeeded()
@@ -603,8 +603,13 @@ struct RootView: View {
             // userID `.onChange` above does NOT fire for users restored
             // from Keychain at startup, so returning users would otherwise
             // never get into `device_tokens` and admin push couldn't reach
-            // them.
-            Task { await FirebaseSupportService.shared.registerCurrentDeviceToken() }
+            // them. The email the user typed in Profile is restored from the
+            // server first (UserSession.restoreEmail), so the token's doc
+            // carries it rather than Apple's relay address.
+            Task {
+                await UserSession.shared.restoreEmail()
+                await FirebaseSupportService.shared.registerCurrentDeviceToken()
+            }
             // ✅ Pre-fetch Indonesian public holidays for this year + next year
             // from api-harilibur.vercel.app (free, no auth). Cached for offline use.
             IndonesianHolidayService.shared.prefetch()

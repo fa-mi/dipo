@@ -193,14 +193,10 @@ final class UserSession {
                     // across sign-ins, so backfill from the Firebase user when
                     // we don't already have one. The relay address still
                     // forwards to the user's real inbox, so support emails work.
+                    // The address the user typed in Profile comes first;
+                    // Firebase's (relay) one is the fallback (restoreEmail).
                     let fbEmail = result?.user.email
-                    DispatchQueue.main.async {
-                        guard let self else { return }
-                        if (self.email ?? "").isEmpty, let fbEmail, !fbEmail.isEmpty {
-                            self.email = fbEmail
-                            self.save()
-                        }
-                    }
+                    Task { @MainActor [weak self] in await self?.restoreEmail(fallback: fbEmail) }
                 }
             }
         }
@@ -233,16 +229,10 @@ final class UserSession {
                     print("[DiPo] Firebase Auth (Google) error: \(authError.localizedDescription)")
                 } else {
                     print("[DiPo] Firebase Auth (Google) signed in: \(authResult?.user.uid ?? "")")
-                    // Safety net: if the Google profile didn't include an email,
-                    // backfill from the Firebase user so support emails work.
+                    // Safety net: the address typed in Profile, else the
+                    // Firebase user's, when the Google profile had none.
                     let fbEmail = authResult?.user.email
-                    DispatchQueue.main.async {
-                        guard let self else { return }
-                        if (self.email ?? "").isEmpty, let fbEmail, !fbEmail.isEmpty {
-                            self.email = fbEmail
-                            self.save()
-                        }
-                    }
+                    Task { @MainActor [weak self] in await self?.restoreEmail(fallback: fbEmail) }
                 }
             }
 
@@ -313,15 +303,39 @@ final class UserSession {
         guard !trimmed.isEmpty else { return }
         email = trimmed
         Keychain.save(trimmed, key: kEmail)
-        Task { await FirebaseSupportService.shared.registerCurrentDeviceToken() }
+        // On the server too, so signing out and back in brings it back
+        // (ContactEmail). The device_tokens copy is for the admin panel's
+        // broadcast emails; it no longer waits on a push token.
+        Task {
+            await ContactEmail.save(trimmed)
+            await FirebaseSupportService.shared.saveEmailForBroadcasts(trimmed)
+            await FirebaseSupportService.shared.registerCurrentDeviceToken()
+        }
     }
 
-    func backfillEmailFromFirebaseIfNeeded() {
-        guard isLoggedIn, (email ?? "").isEmpty else { return }
-        if let fbEmail = Auth.auth().currentUser?.email, !fbEmail.isEmpty {
-            email = fbEmail
+    /// Bring back the address the user typed, after a sign-in or at launch.
+    /// The Keychain copy is gone after sign-out and Apple sends an email only
+    /// on the first sign-in, so the server's copy is the one that lasts. Falls
+    /// back to what an older build left in device_tokens, then to the Firebase
+    /// user's own address (Apple's relay or Google's).
+    func restoreEmail(fallback: String? = nil) async {
+        guard isLoggedIn, Auth.auth().currentUser != nil else { return }
+        var server = await ContactEmail.load()
+        if server == nil, let social = userID, let old = await ContactEmail.legacy(socialID: social), ContactEmail.isValid(old) {
+            server = old
+            await ContactEmail.save(old)
+        }
+        let local = email
+        let chosen = ContactEmail.preferred(local: local, server: server)
+            ?? ContactEmail.preferred(local: nil, server: fallback ?? Auth.auth().currentUser?.email)
+        if let chosen, chosen != local {
+            email = chosen
             save()
-            print("[DiPo] email backfilled from Firebase ✓")
+            print("[DiPo] email restored ✓")
+        }
+        // Typed on this phone while the server was out of reach: put it there now.
+        if server == nil, let local, !local.isEmpty, !ContactEmail.isRelay(local), ContactEmail.isValid(local) {
+            await ContactEmail.save(local)
         }
     }
 

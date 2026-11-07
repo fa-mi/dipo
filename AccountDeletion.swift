@@ -63,6 +63,9 @@ final class AccountDeletionService {
         //    mapping is a dangling pointer to a non-existent account, and its
         //    DiPo ID could never be reissued.
         if let dipoID { try? await db.collection("dipoIndex").document(dipoID).delete() }
+        // The contact email under the profile: deleting users/{uid} leaves its
+        // subcollections behind, and nothing could reach this one afterwards.
+        await ContactEmail.delete()
         try? await db.collection("users").document(uid).delete()
         // The web-dashboard snapshot: balances and six months of transactions.
         // Keyed by uid, so it has to go before the auth account does — after
