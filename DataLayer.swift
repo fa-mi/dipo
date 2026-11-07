@@ -677,29 +677,41 @@ final class CurrencyManager {
         wholeUnitCurrencies.contains(currency.uppercased()) ? 1 : 0.01
     }
 
-    func formatted(_ amount: Double, currency: String) -> String {
-        let f   = NumberFormatter()
-        f.numberStyle          = .decimal
+    /// Konvensi titik-sebagai-pemisah-ribuan untuk IDR, EUR, dll.
+    private static let dotForGrouping: Set<String> = ["IDR","EUR","BRL","VND","DKK","ISK","NOK","SEK","TRY"]
+
+    /// `formatted` runs for every amount on screen: each row of a long list,
+    /// each day's total, each figure on a chart. It used to build a new
+    /// NumberFormatter on every call, and building one is the slow part, so a
+    /// busy week on Home stuttered while it scrolled. These four cover every
+    /// currency (which thousands mark × whether cents show), are set up once,
+    /// and are only read after that.
+    private static func amountFormatter(dotGrouping: Bool, cents: Bool) -> NumberFormatter {
+        let f = NumberFormatter()
+        f.locale                = .autoupdatingCurrent
+        f.numberStyle           = .decimal
         f.usesGroupingSeparator = true
-        f.groupingSize         = 3
+        f.groupingSize          = 3
+        f.groupingSeparator     = dotGrouping ? "." : ","
+        f.decimalSeparator      = dotGrouping ? "," : "."
+        f.minimumFractionDigits = cents ? 2 : 0
+        f.maximumFractionDigits = cents ? 2 : 0
+        return f
+    }
+    private static let dotWhole   = amountFormatter(dotGrouping: true, cents: false)
+    private static let dotCents   = amountFormatter(dotGrouping: true, cents: true)
+    private static let commaWhole = amountFormatter(dotGrouping: false, cents: false)
+    private static let commaCents = amountFormatter(dotGrouping: false, cents: true)
+
+    func formatted(_ amount: Double, currency: String) -> String {
         let cur = currency.uppercased()
-        // Konvensi titik-sebagai-pemisah-ribuan untuk IDR, EUR, dll.
-        let dotForGrouping: Set<String> = ["IDR","EUR","BRL","VND","DKK","ISK","NOK","SEK","TRY"]
-        if dotForGrouping.contains(cur) {
-            f.groupingSeparator = "."
-            f.decimalSeparator  = ","
-        } else {
-            f.groupingSeparator = ","
-            f.decimalSeparator  = "."
-        }
-        let sym       = Self.symbol(for: currency)
+        let dot = Self.dotForGrouping.contains(cur)
+        let sym = Self.symbol(for: currency)
         if Self.wholeUnitCurrencies.contains(cur) {
-            f.maximumFractionDigits = 0
-            f.minimumFractionDigits = 0
+            let f = dot ? Self.dotWhole : Self.commaWhole
             return "\(sym) \(f.string(from: NSNumber(value: amount)) ?? "0")"
         } else {
-            f.minimumFractionDigits = 2
-            f.maximumFractionDigits = 2
+            let f = dot ? Self.dotCents : Self.commaCents
             return "\(sym)\(f.string(from: NSNumber(value: amount)) ?? "0.00")"
         }
     }

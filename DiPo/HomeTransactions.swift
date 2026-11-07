@@ -177,42 +177,69 @@ struct TransactionSection: View {
         var hasOlderOutsideWindow = false
     }
 
+    /// The rows a window shows, newest first, and what lies outside it.
+    struct Window {
+        var rows: [TxRecord] = []
+        var hasMoreInWeek = false
+        var hasOlderOutsideWindow = false
+    }
+
+    /// Which of a card's transactions the list shows.
+    ///
+    /// Unfiltered, Home shows the most RECENT activity across all time. It
+    /// deliberately does NOT month-scope that default view: doing so left Home
+    /// looking empty on the 1st of a new month even when the card had plenty
+    /// of recent history.
+    ///
+    /// A category filter is the exception, and scoping it to the current month
+    /// is the point — "what did I spend on food this month" is the question
+    /// being asked. Anything older is Search's job, and the empty state says so
+    /// rather than leaving a blank panel.
+    ///
+    /// The window is picked out in one pass and only what it holds is sorted.
+    /// This used to sort the card's whole history first and filter after, so
+    /// each redraw cost a sort of every transaction the card ever had, and
+    /// switching to 7 days with a few years of history stalled.
+    static func window(_ transactions: [TxRecord], kind: Kind, category: TxCategory?, showAll: Bool,
+                       now: Date = Date(), calendar cal: Calendar = .current) -> Window {
+        var out = Window()
+        if let filter = category {
+            out.rows = transactions
+                .filter { kind.matches($0) && $0.category == filter
+                          && cal.isDate($0.date, equalTo: now, toGranularity: .month) }
+                .sorted { $0.date > $1.date }
+            return out
+        }
+        // Rolling windows, counted in calendar days INCLUSIVE of today:
+        // 3 days = today plus the two before it, 7 days = today plus six.
+        // The list used to be capped by row count instead, which meant the
+        // period it covered changed with how busy the days happened to be.
+        let today = cal.startOfDay(for: now)
+        let weekCutoff = cal.date(byAdding: .day, value: -6, to: today) ?? .distantPast
+        let dayCutoff  = cal.date(byAdding: .day, value: -2, to: today) ?? .distantPast
+        var inWeek: [TxRecord] = []
+        var older = false
+        for tx in transactions where kind.matches(tx) {
+            if tx.date >= weekCutoff { inWeek.append(tx) } else { older = true }
+        }
+        inWeek.sort { $0.date > $1.date }
+        let inDays = inWeek.filter { $0.date >= dayCutoff }
+        out.hasMoreInWeek = inWeek.count > inDays.count
+        out.rows = showAll ? inWeek : inDays
+        // Something of this kind is left out: older than the week, or, on the
+        // 3-day view, in the days the week adds.
+        out.hasOlderOutsideWindow = older || (!showAll && out.hasMoreInWeek)
+        return out
+    }
+
     private var derived: Derived {
         let cal = Calendar.current
-
-        // Unfiltered, Home shows the most RECENT activity across all time.
-        // It deliberately does NOT month-scope that default view: doing so left
-        // Home looking empty on the 1st of a new month even when the card had
-        // plenty of recent history.
-        //
-        // A category filter is the exception, and scoping it to the current
-        // month is the point — "what did I spend on food this month" is the
-        // question being asked. Anything older is Search's job, and the empty
-        // state below says so rather than leaving a blank panel.
-        let now = Date()
-        let today = cal.startOfDay(for: now)
-        let sorted = transactions.filter(kind.matches).sorted { $0.date > $1.date }
+        let w = Self.window(transactions, kind: kind, category: categoryFilter, showAll: showAll, calendar: cal)
 
         var out = Derived()
-        var rows: [TxRecord]
-
-        if let filter = categoryFilter {
-            rows = sorted.filter {
-                $0.category == filter && cal.isDate($0.date, equalTo: now, toGranularity: .month)
-            }
-        } else {
-            // Rolling windows, counted in calendar days INCLUSIVE of today:
-            // 3 days = today plus the two before it, 7 days = today plus six.
-            // The list used to be capped by row count instead, which meant the
-            // period it covered changed with how busy the days happened to be.
-            let weekCutoff = cal.date(byAdding: .day, value: -6, to: today) ?? .distantPast
-            let dayCutoff  = cal.date(byAdding: .day, value: -2, to: today) ?? .distantPast
-            let inWeek = sorted.filter { $0.date >= weekCutoff }
-            let inDays = inWeek.filter { $0.date >= dayCutoff }
-            out.hasMoreInWeek = inWeek.count > inDays.count
-            rows = showAll ? inWeek : inDays
-            out.hasOlderOutsideWindow = sorted.count > rows.count
-        }
+        out.hasMoreInWeek = w.hasMoreInWeek
+        out.hasOlderOutsideWindow = w.hasOlderOutsideWindow
+        let rows = w.rows
 
         guard !rows.isEmpty else { return out }
 
@@ -220,14 +247,13 @@ struct TransactionSection: View {
         // keeps showing the true amount while "See more" only reveals more
         // detail rows beneath it.
         var fullByDay: [Date: Double] = [:]
-        for tx in rows { fullByDay[cal.startOfDay(for: tx.date), default: 0] += tx.amount }
-
         var byDay: [Date: [TxRecord]] = [:]
         var order: [Date] = []
         for tx in rows {
             let day = cal.startOfDay(for: tx.date)
             if byDay[day] == nil { order.append(day) }
             byDay[day, default: []].append(tx)
+            fullByDay[day, default: 0] += tx.amount
         }
 
         // `rows` is already newest-first, so insertion order IS date order and
@@ -267,6 +293,68 @@ struct TransactionSection: View {
         .padding(3)
         .background(AppTheme.cardMid, in: Capsule())
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// The days and their rows.
+    private func dayList(_ groups: [(key: String, date: Date, rows: [TxListRow], total: Double)]) -> some View {
+        // One lazy stack of headers and rows, so each row is built as
+        // it scrolls into view. Each day used to be a plain VStack
+        // inside the lazy one, which built every row of a day at
+        // once: on the 7-day view a busy day arrived as one long
+        // stall. The gaps are the old ones: 20 before a day, 10
+        // under its header, and 10 · hairline · 10 between rows.
+        LazyVStack(spacing: 0) {
+            ForEach(Array(groups.enumerated()), id: \.element.key) { g, group in
+                // Date header with the REAL daily total (all txs that
+                // day, not just the visible rows).
+                let dayTotal = group.total
+                HStack {
+                    Text(group.key)
+                        .font(.system(.footnote, weight: .semibold))
+                        .foregroundStyle(AppTheme.textSecondary)
+                    Spacer()
+                    Text(dayTotal >= 0
+                         ? "+\(CurrencyManager.shared.formatted(dayTotal, currency: group.rows.first?.tx.currency ?? CurrencyManager.shared.preferredCurrency))"
+                         : CurrencyManager.shared.formatted(dayTotal, currency: group.rows.first?.tx.currency ?? CurrencyManager.shared.preferredCurrency))
+                        .font(.system(.caption, weight: .medium))
+                        .foregroundStyle(dayTotal >= 0 ? AppTheme.accent.opacity(0.7) : AppTheme.red.opacity(0.7))
+                }
+                .padding(.top, g == 0 ? 0 : 20)
+
+                ForEach(Array(group.rows.enumerated()), id: \.element.id) { i, row in
+                    VStack(spacing: 10) {
+                        // A hairline between rows of the same day,
+                        // starting where the name does — 44pt of
+                        // avatar plus the row's 14pt gap — so it
+                        // separates entries without drawing a table
+                        // rule across the card. The first row of a
+                        // day has none: the day's header is the break
+                        // there.
+                        if i > 0 {
+                            Rectangle()
+                                .fill(AppTheme.cardMid.opacity(0.6))
+                                .frame(height: 1)
+                                .padding(.leading, 58)
+                        }
+                        SwipeToDeleteRow(
+                            onTap: { selectedRow = row },
+                            onDelete: { pendingDelete = row.tx }
+                        ) {
+                            TxRow(tx: row.tx, sourceCard: sourceCard ?? cards.first, showCard: cards.count > 1,
+                                  parts: row.parts)
+                        }
+                    }
+                    .padding(.top, 10)
+                    // Rows used to vanish instantly, which reads as a
+                    // glitch — the eye can't tell a deleted row from a
+                    // mis-rendered list. Collapsing out shows WHICH
+                    // row left.
+                    .transition(.asymmetric(
+                        insertion: .opacity.combined(with: .move(edge: .top)),
+                        removal: .scale(scale: 0.92).combined(with: .opacity)))
+                }
+            }
+        }
     }
 
     var body: some View {
@@ -396,59 +484,7 @@ struct TransactionSection: View {
                 }
                 .padding(.vertical, 24)
             } else {
-                LazyVStack(spacing: 20) {
-                    ForEach(d.groups, id: \.key) { group in
-                        VStack(alignment: .leading, spacing: 10) {
-                            // Date header with the REAL daily total (all txs that
-                            // day, not just the visible rows).
-                            let dayTotal = group.total
-                            HStack {
-                                Text(group.key)
-                                    .font(.system(.footnote, weight: .semibold))
-                                    .foregroundStyle(AppTheme.textSecondary)
-                                Spacer()
-                                Text(dayTotal >= 0
-                                     ? "+\(CurrencyManager.shared.formatted(dayTotal, currency: group.rows.first?.tx.currency ?? CurrencyManager.shared.preferredCurrency))"
-                                     : CurrencyManager.shared.formatted(dayTotal, currency: group.rows.first?.tx.currency ?? CurrencyManager.shared.preferredCurrency))
-                                    .font(.system(.caption, weight: .medium))
-                                    .foregroundStyle(dayTotal >= 0 ? AppTheme.accent.opacity(0.7) : AppTheme.red.opacity(0.7))
-                            }
-
-                            VStack(spacing: 10) {
-                                ForEach(Array(group.rows.enumerated()), id: \.element.id) { i, row in
-                                    SwipeToDeleteRow(
-                                        onTap: { selectedRow = row },
-                                        onDelete: { pendingDelete = row.tx }
-                                    ) {
-                                        TxRow(tx: row.tx, sourceCard: sourceCard ?? cards.first, showCard: cards.count > 1,
-                                              parts: row.parts)
-                                    }
-                                    // Rows used to vanish instantly, which reads
-                                    // as a glitch — the eye can't tell a deleted
-                                    // row from a mis-rendered list. Collapsing
-                                    // out shows WHICH row left.
-                                    .transition(.asymmetric(
-                                        insertion: .opacity.combined(with: .move(edge: .top)),
-                                        removal: .scale(scale: 0.92).combined(with: .opacity)))
-                                    // A hairline between rows of the same day,
-                                    // starting where the name does — 44pt of
-                                    // avatar plus the row's 14pt gap — so it
-                                    // separates entries without drawing a table
-                                    // rule across the card. The last row of a day
-                                    // has none: the next day's header is the
-                                    // break there, and a line above it would read
-                                    // as belonging to that header.
-                                    if i < group.rows.count - 1 {
-                                        Rectangle()
-                                            .fill(AppTheme.cardMid.opacity(0.6))
-                                            .frame(height: 1)
-                                            .padding(.leading, 58)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+                dayList(d.groups)
             }
         }
         .sheet(item: $pendingDelete) { tx in
@@ -500,6 +536,9 @@ struct TransactionSection: View {
 struct SwipeToDeleteRow<Content: View>: View {
     var onTap: () -> Void
     var onDelete: () -> Void
+    /// The colour behind the row, which its leading edge fades into while it
+    /// is pushed aside: the card a list sits in, or the page.
+    var edge: Color = AppTheme.cardDark
     @ViewBuilder var content: Content
 
     @State private var offset: CGFloat = 0
@@ -610,17 +649,25 @@ struct SwipeToDeleteRow<Content: View>: View {
         // its leading edge and fades over the last few points there, instead
         // of poking out past the card the list sits in as a slab of the
         // card's colour with the avatar cut off. The fade grows with the
-        // swipe, so a closed row is untouched. The mask reaches past the top
+        // swipe, so a closed row is untouched. The clip reaches past the top
         // and bottom so nothing hanging over them is cut.
-        .mask {
-            HStack(spacing: 0) {
-                LinearGradient(colors: [.black.opacity(Double(1 - min(revealed / edgeFade, 1))), .black],
+        //
+        // The fade is painted in the colour behind the row rather than cut
+        // with a mask. A mask made every row draw off-screen on every frame,
+        // open or not, and a week of rows on Home stuttered as it scrolled;
+        // a rectangular clip and an overlay that exists only mid-swipe cost
+        // next to nothing, and look the same.
+        .overlay(alignment: .leading) {
+            if revealed > 0 {
+                LinearGradient(colors: [edge.opacity(Double(min(revealed / edgeFade, 1))), edge.opacity(0)],
                                startPoint: .leading, endPoint: .trailing)
                     .frame(width: edgeFade)
-                Rectangle()
+                    .allowsHitTesting(false)
             }
-            .padding(.vertical, -12)
         }
+        .padding(.vertical, 12)
+        .clipped()
+        .padding(.vertical, -12)
     }
 }
 
