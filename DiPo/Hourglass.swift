@@ -3,17 +3,16 @@ import UIKit
 
 // MARK: - Hourglass
 
-/// The hourglass from dipo.info's hero, drawn on Home's "This period" card:
-/// green sand in the top bulb is what is left of the period's money, grey sand
-/// in the bottom bulb is what has been used.
+/// The hourglass on Home's "This period" card: green sand in the top bulb is
+/// what is left of the period's money, grey sand in the bottom bulb is what has
+/// been used.
 ///
-/// The drawing is made with the Anatomy kit on the website side
-/// (fa-mi/netlify-home-dipo, `figures/payday`), and `figures/payday/app.mjs`
-/// writes it here as `HourglassArt.json`: every shape the kit draws, tagged
-/// with its material (brass, glass, the sand left, the sand spent) and its role
-/// (fill, one of four shades, top face, line, dot). This file only paints those
-/// shapes, with the app's own tokens, so the page and the app show one picture
-/// and the colours follow light and dark mode. Regenerate the JSON there; don't
+/// The drawing is made with the Anatomy kit in `tools/hourglass` (`art.mjs`),
+/// and `node tools/hourglass/build.mjs` writes it here as `HourglassArt.json`:
+/// every shape the kit draws, tagged with its material (brass, glass, the sand
+/// left, the sand spent) and its role (fill, one of four shades, top face,
+/// line, dot). This file only paints those shapes, with the app's own tokens,
+/// so the colours follow light and dark mode. Regenerate the JSON there; don't
 /// edit it by hand.
 struct HourglassArt: Decodable {
     struct Shape: Decodable {
