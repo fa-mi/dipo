@@ -20,8 +20,17 @@ import FirebaseCrashlytics
 // report uploads on the NEXT launch, not at crash time).
 enum CrashReporter {
     /// Associate subsequent crashes with the signed-in user. Pass nil on logout.
-    static func setUser(_ id: String?) {
-        Crashlytics.crashlytics().setUserID(id ?? "")
+    static func setUser(_ socialID: String?) {
+        Crashlytics.crashlytics().setUserID(reportedID(for: socialID))
+    }
+    /// The id a crash report carries: the person's DiPo ID, never their Apple
+    /// or Google account id. The DiPo ID is shown in Profile, so a report can
+    /// still be matched to the person who sent it, but it is a one-way hash of
+    /// the account id and doesn't hand the account id itself to a third-party
+    /// dashboard. Signed out: empty.
+    static func reportedID(for socialID: String?) -> String {
+        guard let socialID, !socialID.isEmpty else { return "" }
+        return UserSession.dipoID(from: socialID)
     }
     /// Breadcrumb in the crash timeline (shows what happened before a crash).
     static func log(_ message: String) {
