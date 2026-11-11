@@ -252,15 +252,18 @@ final class FirebaseSupportService {
             await registerDeviceToken(token)
             return
         }
-        do {
-            let snap = try await db.collection("support_tickets")
-                .whereField("userId", isEqualTo: userId)
-                .getDocuments()
-            for doc in snap.documents {
-                try? await doc.reference.updateData(["fcmToken": token])
+        // The person's tickets, found the way the Support screen finds them.
+        if AccountReconnect.isBound, let uid = Auth.auth().currentUser?.uid {
+            do {
+                let snap = try await db.collection("support_tickets")
+                    .whereField("uid", isEqualTo: uid)
+                    .getDocuments()
+                for doc in snap.documents {
+                    try? await doc.reference.updateData(["fcmToken": token])
+                }
+            } catch {
+                print("[DiPo] updateFCMToken error: \(error)")
             }
-        } catch {
-            print("[DiPo] updateFCMToken error: \(error)")
         }
         // Also keep the per-user device-token registry fresh.
         await registerDeviceToken(token)
@@ -524,13 +527,22 @@ final class FirebaseSupportService {
     // MARK: - Fetch Tickets for current user
 
     func fetchTickets() async {
-        let userId = UserSession.shared.userID ?? "anonymous"
+        // Tickets are found by the Firebase account (uid), so the rules can
+        // keep everyone else's out of reach. Only an account that carries the
+        // person's Apple/Google login has a uid that is reliably theirs; the
+        // Support screen asks to confirm it first (ContactAdminSheet).
+        guard AccountReconnect.isBound, let socialID = UserSession.shared.userID,
+              let uid = Auth.auth().currentUser?.uid else {
+            await MainActor.run { tickets = []; isLoading = false }
+            return
+        }
         await MainActor.run { isLoading = true; fetchError = nil }
+        await claimTickets(uid: uid, socialID: socialID)
         do {
             // ✅ No .order(by:) here — combining whereField + orderBy requires a
             // composite Firestore index. Sort client-side instead, zero config needed.
             let snap = try await db.collection("support_tickets")
-                .whereField("userId", isEqualTo: userId)
+                .whereField("uid", isEqualTo: uid)
                 .getDocuments()
             let decoded = snap.documents
                 .compactMap { decodeTicket($0) }
@@ -539,10 +551,80 @@ final class FirebaseSupportService {
         } catch {
             await MainActor.run {
                 fetchError = Self.fetchErrorMessage(error)
-                print("[DiPo Support] fetchTickets failed for userId=\(userId): \(error)")
+                print("[DiPo Support] fetchTickets failed: \(error)")
             }
         }
         await MainActor.run { isLoading = false }
+    }
+
+    // MARK: - Tickets follow their owner to this account
+
+    static let claimURL = URL(string: "https://dipo-receipt-scanner.fahmi-aquinas.workers.dev/api/support/claim-tickets")!
+    private static let claimedKey = "support_tickets_claimed_uid"
+
+    /// What is remembered once a claim worked: this Firebase account and
+    /// whose tickets it took (by DiPo ID, not the raw Apple/Google id). Once
+    /// per pair is enough, since every new ticket is written with the uid.
+    static func claimMark(uid: String, socialID: String) -> String {
+        "\(uid):\(UserSession.dipoID(from: socialID))"
+    }
+
+    static func needsClaim(remembered: String?, uid: String, socialID: String) -> Bool {
+        remembered != claimMark(uid: uid, socialID: socialID)
+    }
+
+    static func claimBody(socialID: String) -> Data? {
+        try? JSONSerialization.data(withJSONObject: ["socialUserID": socialID])
+    }
+
+    /// Tickets are filed under the Apple/Google id (`userId`) and the uid of
+    /// the session that filed them. A reinstall brings a new uid, and tickets
+    /// from before the app wrote one have none, so they are moved to this
+    /// account before listing by uid. The Worker does it on the proof in the
+    /// ID token (dipo-backend support.js). If it can't be reached, the app
+    /// does the same itself while the rules still let a session list by
+    /// `userId`; once they don't, that step finds nothing and does no harm.
+    func claimTickets(uid: String, socialID: String, force: Bool = false) async {
+        let defaults = UserDefaults.standard
+        guard force || Self.needsClaim(remembered: defaults.string(forKey: Self.claimedKey),
+                                       uid: uid, socialID: socialID) else { return }
+        var claimed = await claimViaWorker(socialID: socialID)
+        if !claimed { claimed = await claimDirectly(uid: uid, socialID: socialID) }
+        if claimed {
+            defaults.set(Self.claimMark(uid: uid, socialID: socialID), forKey: Self.claimedKey)
+        }
+    }
+
+    private func claimViaWorker(socialID: String) async -> Bool {
+        var req = URLRequest(url: Self.claimURL)
+        req.httpMethod = "POST"
+        req.timeoutInterval = 20
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        for (field, value) in await WorkerAuth.headers() { req.setValue(value, forHTTPHeaderField: field) }
+        req.httpBody = Self.claimBody(socialID: socialID)
+        do {
+            let (_, response) = try await URLSession.shared.data(for: req)
+            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+            if status != 200 { print("[DiPo Support] claim-tickets answered \(status)") }
+            return status == 200
+        } catch {
+            print("[DiPo Support] claim-tickets failed: \(error.localizedDescription)")
+            return false
+        }
+    }
+
+    private func claimDirectly(uid: String, socialID: String) async -> Bool {
+        do {
+            let snap = try await db.collection("support_tickets")
+                .whereField("userId", isEqualTo: socialID)
+                .getDocuments()
+            for doc in snap.documents where (doc.data()["uid"] as? String) != uid {
+                try await doc.reference.updateData(["uid": uid])
+            }
+            return true
+        } catch {
+            return false
+        }
     }
 
     /// What the Support screen says when tickets can't be fetched. Never the

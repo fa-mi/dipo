@@ -116,19 +116,28 @@ final class AccountDeletionService {
     /// they go too. Each ticket carries `replies` and `media` subcollections that
     /// Firestore will not cascade, so they're cleared first.
     private func deleteSupportTickets(socialID: String) async {
-        do {
-            let tickets = try await db.collection("support_tickets")
-                .whereField("userId", isEqualTo: socialID).getDocuments()
-            for t in tickets.documents {
-                await deleteAll(in: t.reference.collection("replies"), label: "replies")
-                await deleteAll(in: t.reference.collection("media"), label: "media")
-                try? await t.reference.delete()
+        // Found by uid, as the Support screen finds them, after moving any
+        // filed from an earlier install to this account; and by social id too,
+        // for as long as the rules still let a session list that way.
+        var found: [String: DocumentReference] = [:]
+        if let uid = Auth.auth().currentUser?.uid {
+            await FirebaseSupportService.shared.claimTickets(uid: uid, socialID: socialID, force: true)
+            if let mine = try? await db.collection("support_tickets")
+                .whereField("uid", isEqualTo: uid).getDocuments() {
+                for t in mine.documents { found[t.documentID] = t.reference }
             }
-            if !tickets.documents.isEmpty {
-                print("[DiPo][account-delete] ✓ removed \(tickets.documents.count) support ticket(s)")
-            }
-        } catch {
-            print("[DiPo][account-delete] ✗ support tickets: \(error.localizedDescription)")
+        }
+        if let legacy = try? await db.collection("support_tickets")
+            .whereField("userId", isEqualTo: socialID).getDocuments() {
+            for t in legacy.documents { found[t.documentID] = t.reference }
+        }
+        for ref in found.values {
+            await deleteAll(in: ref.collection("replies"), label: "replies")
+            await deleteAll(in: ref.collection("media"), label: "media")
+            try? await ref.delete()
+        }
+        if !found.isEmpty {
+            print("[DiPo][account-delete] ✓ removed \(found.count) support ticket(s)")
         }
     }
 
