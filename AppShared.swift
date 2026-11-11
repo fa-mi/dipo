@@ -989,3 +989,48 @@ extension View {
         modifier(DoneToolbar(action: action))
     }
 }
+
+/// Lays items out in rows, left to right, wrapping to the next row when one is
+/// full. Each item keeps its natural width, so a label never breaks mid-word:
+/// a whole item moves down instead. Used for the interest chips and for the
+/// investment allocation legend, which squeezed four labels into one row and
+/// broke them into "Ema s", "De-posito".
+struct WrapFlow: Layout {
+    var spacing: CGFloat = 8
+    /// Space between rows; the same as `spacing` unless given.
+    var rowSpacing: CGFloat? = nil
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let width = proposal.width ?? .infinity
+        let gap = rowSpacing ?? spacing
+        var x: CGFloat = 0, y: CGFloat = 0, rowHeight: CGFloat = 0, widest: CGFloat = 0
+        for view in subviews {
+            let size = view.sizeThatFits(.unspecified)
+            if x > 0, x + size.width > width {
+                y += rowHeight + gap
+                x = 0
+                rowHeight = 0
+            }
+            x += size.width + spacing
+            rowHeight = max(rowHeight, size.height)
+            widest = max(widest, x - spacing)
+        }
+        return CGSize(width: proposal.width ?? widest, height: y + rowHeight)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let gap = rowSpacing ?? spacing
+        var x = bounds.minX, y = bounds.minY, rowHeight: CGFloat = 0
+        for view in subviews {
+            let size = view.sizeThatFits(.unspecified)
+            if x > bounds.minX, x + size.width > bounds.maxX {
+                y += rowHeight + gap
+                x = bounds.minX
+                rowHeight = 0
+            }
+            view.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
+            x += size.width + spacing
+            rowHeight = max(rowHeight, size.height)
+        }
+    }
+}
