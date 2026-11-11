@@ -9,7 +9,8 @@ import SwiftData
 /// does (as `TEST_RUNNER_DIPO_SCREENSHOTS_DIR`). Everywhere else it skips.
 ///
 /// The demo person is the site's reader: paid Rp 5,5 juta on the 25th into
-/// BRI, a motorbike on instalments, a little gold and a money-market fund.
+/// BRI, spending about two thirds of it, a motorbike on instalments, a little
+/// gold and a money-market fund.
 /// Nothing here is anyone's real data. Prices are set by hand so nothing is
 /// fetched while the screens are drawn.
 @MainActor
@@ -94,6 +95,9 @@ private enum DemoAccount {
                                       currency: "IDR", cardID: bri.id))
 
         func add(_ name: String, _ amount: Double, _ category: TxCategory, _ date: Date) {
+            // Only what has happened: a date still to come is left out, not
+            // moved to today, where it piled into the running period.
+            guard date <= now else { return }
             let t = TxRecord(name: name, date: date, amount: amount,
                              type: amount < 0 ? "tx.type.purchase" : "tx.type.income",
                              icon: String(name.prefix(2)).uppercased(), iconBgHex: category.iconBg,
@@ -101,26 +105,31 @@ private enum DemoAccount {
             context.insert(t)
             bri.transactions.append(t)
         }
-        func day(monthsAgo: Int, _ d: Int) -> Date {
-            let base = cal.date(byAdding: .month, value: -monthsAgo, to: now) ?? now
-            var c = cal.dateComponents([.year, .month], from: base)
-            c.day = d; c.hour = 12
-            return min(cal.date(from: c) ?? now, now)
-        }
 
-        // Three months of an ordinary pay cycle.
-        for m in 0...3 {
-            add("Gaji", 5_500_000, .salary, day(monthsAgo: m, 25))
-            add("Kontrakan", -1_200_000, .commitment, day(monthsAgo: m, 26))
-            add("Cicilan motor", -780_000, .debtPayment, day(monthsAgo: m, 28))
-            add("Token listrik", -150_000, .bills, day(monthsAgo: m, 2))
-            add("Pulsa & data", -100_000, .bills, day(monthsAgo: m, 3))
-            add("Belanja bulanan", -650_000, .shopping, day(monthsAgo: m, 27))
-            for (i, d) in [1, 4, 7, 10, 13, 16, 19, 22].enumerated() {
-                add(i % 2 == 0 ? "Warung makan" : "Kopi", i % 2 == 0 ? -38_000 : -18_000, .food, day(monthsAgo: m, d))
-                add("Bensin", -30_000, .transport, day(monthsAgo: m, d))
+        // The last four paydays (the 25th) up to today, oldest first.
+        var paydays: [Date] = []
+        var probe = now
+        while paydays.count < 4 {
+            var c = cal.dateComponents([.year, .month], from: probe)
+            c.day = 25; c.hour = 9
+            if let p = cal.date(from: c), p <= now { paydays.insert(p, at: 0) }
+            probe = cal.date(byAdding: .month, value: -1, to: probe) ?? probe
+        }
+        func after(_ p: Date, _ days: Int) -> Date { cal.date(byAdding: .day, value: days, to: p) ?? p }
+
+        // An ordinary pay cycle: about two thirds spent, a third left over.
+        for p in paydays {
+            add("Gaji", 5_500_000, .salary, p)
+            add("Kontrakan", -1_000_000, .commitment, after(p, 1))
+            add("Kiriman orang tua", -400_000, .commitment, after(p, 1))
+            add("Belanja bulanan", -600_000, .shopping, after(p, 2))
+            add("Cicilan motor", -780_000, .debtPayment, after(p, 3))
+            add("Token listrik", -150_000, .bills, after(p, 8))
+            add("Pulsa & data", -100_000, .bills, after(p, 9))
+            for d in stride(from: 1, to: 29, by: 3) {
+                add("Warung makan", -25_000, .food, after(p, d))
+                add("Bensin", -25_000, .transport, after(p, d + 1))
             }
-            add("Kiriman orang tua", -500_000, .commitment, day(monthsAgo: m, 26))
         }
 
         // Saving and owing.
@@ -138,7 +147,8 @@ private enum DemoAccount {
             if type == .gold { h.setGoldSource(.manual) }
             context.insert(h)
             for lot in lots {
-                let l = InvestmentLot(kind: .buy, date: day(monthsAgo: lot.monthsAgo, 26),
+                let bought = cal.date(byAdding: .month, value: -lot.monthsAgo, to: paydays.last ?? now) ?? now
+                let l = InvestmentLot(kind: .buy, date: after(bought, 1),
                                       units: lot.units, pricePerUnit: lot.price)
                 context.insert(l)
                 h.lots.append(l)
@@ -148,9 +158,9 @@ private enum DemoAccount {
         }
         holding(.gold, "Emas Antam", price: 1_452_000, prev: 1_446_000, order: 0,
                 lots: [(5, 5, 1_318_000), (2, 3, 1_401_000), (0, 2, 1_440_000)])
-        holding(.mutualFund, "Reksa dana pasar uang", price: 1_871, prev: 1_870, order: 1,
+        holding(.mutualFund, "Reksa dana", price: 1_871, prev: 1_870, order: 1,
                 lots: [(4, 1_100, 1_820), (1, 500, 1_858)])
-        holding(.stock, "Bank Rakyat Indonesia", symbol: "BBRI", price: 4_380, prev: 4_350, order: 2,
+        holding(.stock, "Saham BRI", symbol: "BBRI", price: 4_380, prev: 4_350, order: 2,
                 lots: [(3, 300, 4_120)])
         holding(.deposit, "Deposito BRI", price: 1, prev: 1, order: 3,
                 lots: [(6, 3_000_000, 1)])
@@ -162,9 +172,9 @@ private enum DemoAccount {
                                   purchaseDate: bought, sortOrder: order)
             context.insert(a)
         }
-        asset(.motorcycle, "Honda Beat 2022", 18_500_000, yearsAgo: 3, order: 0)
+        asset(.motorcycle, "Honda Beat", 18_500_000, yearsAgo: 3, order: 0)
         asset(.land, "Tanah kebun", 60_000_000, yearsAgo: 5, order: 1)
-        asset(.electronics, "Samsung Galaxy A35", 5_000_000, yearsAgo: 1, order: 2)
+        asset(.electronics, "Galaxy A35", 5_000_000, yearsAgo: 1, order: 2)
 
         try context.save()
         return container

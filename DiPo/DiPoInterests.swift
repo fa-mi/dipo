@@ -272,7 +272,7 @@ struct DiPoInterestsView: View {
                             .foregroundStyle(AppTheme.textSecondary)
                             .fixedSize(horizontal: false, vertical: true)
 
-                        InterestFlow(spacing: 8) {
+                        WrapFlow(spacing: 8) {
                             ForEach(DiPoInterest.allCases) { interest in
                                 let on = liked.contains(interest)
                                 Button {
@@ -293,7 +293,7 @@ struct DiPoInterestsView: View {
                             .padding(.top, 6)
 
                         if !custom.isEmpty {
-                            InterestFlow(spacing: 8) {
+                            WrapFlow(spacing: 8) {
                                 ForEach(custom, id: \.self) { name in
                                     Button {
                                         HapticManager.shared.tap()
@@ -374,42 +374,5 @@ private struct ChipStyle: ViewModifier {
             .padding(.horizontal, 12).padding(.vertical, 9)
             .background(on ? AppTheme.accent.opacity(0.14) : AppTheme.cardDark, in: Capsule())
             .overlay(Capsule().stroke(on ? AppTheme.accent : AppTheme.cardMid, lineWidth: 1.5))
-    }
-}
-
-/// Lays chips out in rows, wrapping to the next row when one is full.
-private struct InterestFlow: Layout {
-    var spacing: CGFloat = 8
-
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let width = proposal.width ?? .infinity
-        var x: CGFloat = 0, y: CGFloat = 0, rowHeight: CGFloat = 0, widest: CGFloat = 0
-        for view in subviews {
-            let size = view.sizeThatFits(.unspecified)
-            if x > 0, x + size.width > width {
-                y += rowHeight + spacing
-                x = 0
-                rowHeight = 0
-            }
-            x += size.width + spacing
-            rowHeight = max(rowHeight, size.height)
-            widest = max(widest, x - spacing)
-        }
-        return CGSize(width: proposal.width ?? widest, height: y + rowHeight)
-    }
-
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        var x = bounds.minX, y = bounds.minY, rowHeight: CGFloat = 0
-        for view in subviews {
-            let size = view.sizeThatFits(.unspecified)
-            if x > bounds.minX, x + size.width > bounds.maxX {
-                y += rowHeight + spacing
-                x = bounds.minX
-                rowHeight = 0
-            }
-            view.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
-            x += size.width + spacing
-            rowHeight = max(rowHeight, size.height)
-        }
     }
 }

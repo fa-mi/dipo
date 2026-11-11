@@ -360,21 +360,26 @@ struct AllocationBar: View {
     }
 }
 
+/// One entry per kind held, wrapping to a new row as needed. It was one
+/// HStack, so four kinds squeezed every label until it broke mid-word ("Ema
+/// s", "De-posito") and a fifth kind was left out.
 private struct FlowLegend: View {
     let slices: [(type: InvestmentType, value: Double)]
     let total: Double
     var body: some View {
-        HStack(spacing: 12) {
-            ForEach(slices.prefix(4), id: \.type) { s in
+        WrapFlow(spacing: 14, rowSpacing: 6) {
+            ForEach(slices, id: \.type) { s in
                 HStack(spacing: 5) {
                     Circle().fill(s.type.color).frame(width: 8, height: 8)
                     Text(s.type.displayName).font(.system(.caption2)).foregroundStyle(AppTheme.textSecondary)
                     Text(allocationShareLabel(s.value, of: total))
                         .font(.system(.caption2, weight: .semibold)).foregroundStyle(AppTheme.textPrimary)
                 }
+                .lineLimit(1)
+                .fixedSize()
             }
-            Spacer(minLength: 0)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
