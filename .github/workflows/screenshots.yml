@@ -1,0 +1,86 @@
+# Draws real DiPo screens over a demo account for dipo.info, and pushes the
+# pictures to the `site-screenshots` branch for the website to use.
+#
+# Run by hand (Actions → Store screenshots → Run workflow) after a change to
+# the screens it draws. The pictures come from DiPoTests/StoreScreenshots
+# .swift: the app's own views, a demo account in memory, dark mode, Indonesian
+# and English. As in ios.yml, a throwaway CI runner booting a simulator is
+# the point; CLAUDE.md's rule is about working sessions on Fahmi's Mac.
+name: Store screenshots
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: screenshots
+  cancel-in-progress: true
+
+jobs:
+  draw:
+    runs-on: xcode-27
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Select Xcode
+        run: |
+          XCODE=$(ls -d /Applications/Xcode_27.1*.app 2>/dev/null | grep -vi beta | sort -V | tail -1)
+          if [ -z "$XCODE" ]; then
+            echo "::error::No Xcode 27.1 on this image. Installed:"; ls -d /Applications/Xcode_*.app; exit 1
+          fi
+          sudo xcode-select -s "$XCODE"
+          xcodebuild -version
+
+      - name: Cache Swift packages
+        uses: actions/cache@v5
+        with:
+          path: .spm
+          key: spm-${{ runner.os }}-${{ hashFiles('DiPo.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
+
+      - name: Pick a simulator
+        id: sim
+        run: |
+          udid=$(xcrun simctl list devices available -j | python3 ci/pick-simulator.py)
+          echo "udid=$udid" >> "$GITHUB_OUTPUT"
+
+      - name: Draw the screens
+        env:
+          # xcodebuild hands TEST_RUNNER_-prefixed variables to the tests,
+          # without the prefix. Unset, StoreScreenshots skips.
+          TEST_RUNNER_DIPO_SCREENSHOTS_DIR: ${{ runner.temp }}/screenshots
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -project DiPo.xcodeproj -scheme DiPo \
+            -destination "id=${{ steps.sim.outputs.udid }}" \
+            -only-testing:DiPoTests/StoreScreenshots \
+            -clonedSourcePackagesDirPath .spm \
+            -skipPackagePluginValidation -skipMacroValidation \
+            CODE_SIGNING_ALLOWED=NO \
+            2>&1 | tee xcodebuild.log \
+            | { grep -E '^(Test Suite|Test Case .*(passed|failed|skipped))|error:|\*\* (BUILD|TEST)|\[screenshots\]' || true; }
+          ls -la "$RUNNER_TEMP/screenshots"
+          test -n "$(ls "$RUNNER_TEMP/screenshots"/*.png 2>/dev/null)" || { echo "::error::No screenshots were written"; exit 1; }
+
+      # The pictures go to a branch of their own, replaced on every run, so
+      # main never carries generated images.
+      - name: Push to the site-screenshots branch
+        run: |
+          cd "$RUNNER_TEMP/screenshots"
+          git init -q -b site-screenshots
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Store screenshots from ${GITHUB_SHA::7}"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" site-screenshots
+
+      - name: Keep the log
+        if: failure()
+        uses: actions/upload-artifact@v5
+        with:
+          name: screenshots-log
+          path: xcodebuild.log
+          retention-days: 7
