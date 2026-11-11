@@ -70,14 +70,24 @@ struct ContactAdminSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var showNewTicket  = false
     @State private var selectedTicket: SupportTicket?
+    /// Tickets are found by the Firebase account, so it has to be one that
+    /// carries the person's Apple/Google login: confirmed once, here, before
+    /// anything is listed or sent. Otherwise the uid could be a fresh one
+    /// from a reinstall, and the rules could never keep others' tickets out.
+    @State private var bound = AccountReconnect.isBound
+    @State private var confirming = false
+    @State private var confirmProblem: String?
     private let svc = FirebaseSupportService.shared
+
+    private var loggedIn: Bool { UserSession.shared.isLoggedIn }
 
     var body: some View {
         NavigationStack {
             ZStack {
                 AppTheme.bg.ignoresSafeArea()
                 Group {
-                    if svc.isLoading { loadingView }
+                    if !loggedIn || !bound { confirmGate }
+                    else if svc.isLoading { loadingView }
                     else { ticketList }
                 }
             }
@@ -89,21 +99,23 @@ struct ContactAdminSheet: View {
                     Button(loc("common.close")) { HapticManager.shared.tap(); dismiss() }
                         .foregroundStyle(AppTheme.textSecondary)
                 }
-                ToolbarItem(placement: .primaryAction) {
-                    Button {
-                        HapticManager.shared.tap()
-                        showNewTicket = true
-                    } label: {
-                        Text(loc("support.new"))
-                            .font(.system(.subheadline, weight: .semibold))
-                            .foregroundStyle(AppTheme.accent)
-                            .padding(.horizontal, 10).padding(.vertical, 5)
-                            .background(AppTheme.accent.opacity(0.12), in: Capsule())
+                if loggedIn && bound {
+                    ToolbarItem(placement: .primaryAction) {
+                        Button {
+                            HapticManager.shared.tap()
+                            showNewTicket = true
+                        } label: {
+                            Text(loc("support.new"))
+                                .font(.system(.subheadline, weight: .semibold))
+                                .foregroundStyle(AppTheme.accent)
+                                .padding(.horizontal, 10).padding(.vertical, 5)
+                                .background(AppTheme.accent.opacity(0.12), in: Capsule())
+                        }
                     }
                 }
             }
         }
-        .task { await svc.fetchTickets() }
+        .task { if bound { await svc.fetchTickets() } }
         .sheet(isPresented: $showNewTicket) {
             NavigationStack { NewTicketForm { showNewTicket = false } }
                 .onDisappear { Task { await svc.fetchTickets() } }
@@ -113,6 +125,106 @@ struct ContactAdminSheet: View {
                 .onDisappear { Task { await svc.fetchTickets() } }
         }
         .trackScreen(.support)
+    }
+
+    // MARK: - Confirm it's you
+
+    /// Before any ticket is listed or sent: sign in (in Profile), or confirm
+    /// the Apple ID or Google account once. One green action; the email
+    /// address is the way through when confirming can't work.
+    private var confirmGate: some View {
+        ScrollView(showsIndicators: false) {
+            VStack(spacing: 18) {
+                ZStack {
+                    Circle().fill(AppTheme.cardMid).frame(width: 72, height: 72)
+                    Image(systemName: loggedIn ? "person.crop.circle.badge.checkmark" : "person.crop.circle")
+                        .font(.system(.title))
+                        .foregroundStyle(AppTheme.textPrimary)
+                }
+                .accessibilityHidden(true)
+
+                VStack(spacing: 8) {
+                    Text(loc(loggedIn ? "support.connect_title" : "support.login_title"))
+                        .font(.system(.title3, weight: .bold))
+                        .foregroundStyle(AppTheme.textPrimary)
+                    Text(loc(loggedIn ? "support.connect_body" : "support.login_required"))
+                        .font(.system(.subheadline))
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .lineSpacing(3)
+                }
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+
+                if loggedIn {
+                    confirmButton
+                    if let confirmProblem {
+                        Label(loc(confirmProblem), systemImage: "exclamationmark.circle.fill")
+                            .font(.system(.caption, weight: .medium))
+                            .foregroundStyle(AppTheme.orange)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+
+                if let mail = URL(string: "mailto:support@dipo.info") {
+                    Link(destination: mail) {
+                        Text(loc("support.connect_email"))
+                            .font(.system(.footnote))
+                            .underline()
+                            .foregroundStyle(AppTheme.textSecondary)
+                    }
+                }
+            }
+            .padding(.horizontal, 28)
+            .padding(.top, 56)
+            .containerRelativeFrame(.horizontal)
+        }
+    }
+
+    private var confirmButton: some View {
+        let google = UserSession.shared.provider == .google
+        return Button(action: confirm) {
+            HStack(spacing: 8) {
+                if confirming {
+                    ProgressView().tint(AppTheme.onVividFill)
+                } else {
+                    Image(systemName: google ? "g.circle.fill" : "apple.logo")
+                        .font(.system(.subheadline, weight: .bold))
+                }
+                Text(loc(confirming ? "analysis.confirming"
+                         : (google ? "analysis.confirm_google" : "analysis.confirm_apple")))
+                    .font(.system(.subheadline, weight: .bold))
+            }
+            .foregroundStyle(AppTheme.onVividFill)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 13)
+            .background(AppTheme.accentFill, in: RoundedRectangle(cornerRadius: AppRadius.md))
+        }
+        .buttonStyle(ScaleButtonStyle())
+        .disabled(confirming)
+        .padding(.top, 6)
+    }
+
+    private func confirm() {
+        HapticManager.shared.tap()
+        confirmProblem = nil
+        confirming = true
+        Task {
+            let outcome = await AccountReconnect.bind()
+            confirming = false
+            switch outcome {
+            case .bound:
+                bound = true
+                await svc.fetchTickets()
+                return
+            case .cancelled:
+                return
+            case .otherAccount:  confirmProblem = "analysis.err.other_account"
+            case .heldElsewhere: confirmProblem = "support.err.held_elsewhere"
+            case .failed:        confirmProblem = "analysis.err.confirm_failed"
+            }
+            HapticManager.shared.warning()
+        }
     }
 
     // MARK: - Ticket List
