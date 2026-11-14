@@ -26,6 +26,9 @@ struct MonthFlowCard: View {
     /// Names the window the figures cover — "Since payday 25 Aug", or "This
     /// month" when no salary schedule exists to define a cycle.
     let periodLabel: String
+    /// Today as day N of the M the period runs, for the subtitle and the
+    /// mark on the line. Nil hides both.
+    var cycleDay: (day: Int, of: Int)? = nil
     /// Mirrors the card face's eye toggle. Hiding the balance while leaving
     /// income and expense on screen would defeat the point of hiding it —
     /// anyone reading over a shoulder learns the same thing either way.
@@ -44,11 +47,11 @@ struct MonthFlowCard: View {
 
     /// Spending on living: everything but debt paid and money put away.
     private var living: Double { max(expense - putAway, 0) }
-    /// Share of income spent on living this cycle; nil without income.
+    /// The period's money: income, and money added to this period's budget.
     private var budgetIn: Double { income + extra }
-    private var spentShare: Double? { budgetIn > 0 ? living / budgetIn : nil }
-    /// Share of income that went to debt paid and money put away, counted in
-    /// "used of income" with the living costs.
+    /// Shares of it spent on living, and gone to debts paid and money put
+    /// away: the line's two fills.
+    private var livingShare: Double { budgetIn > 0 ? living / budgetIn : 0 }
     private var putAwayShare: Double { budgetIn > 0 ? putAway / budgetIn : 0 }
     private var remaining: Double { Self.remaining(income: income, expense: expense, putAway: putAway, extra: extra) }
     private var left: Double { Self.left(income: income, expense: expense, putAway: putAway, extra: extra) }
@@ -71,16 +74,26 @@ struct MonthFlowCard: View {
         income + extra - max(expense - putAway, 0)
     }
 
-    /// The hourglass's two bulbs, as shares of the money that came in: what
-    /// has been used (living costs, debts paid and money put away) below, and
-    /// what is left above. Used past the income fills the bottom bulb and
-    /// empties the top one.
-    static func sand(income: Double, expense: Double, putAway: Double, extra: Double) -> (left: Double, used: Double) {
+    /// The period line's three figures, in whole percent of the money that
+    /// came in: all of it used, then its two parts, living costs and what
+    /// went to debts and savings. The parts are cut from the rounded whole,
+    /// so "Spending 51%" and "Debts & savings 30%" always add up to the
+    /// "81%" printed above them. Nil without income to measure against.
+    static func percents(income: Double, expense: Double, putAway: Double,
+                         extra: Double) -> (used: Int, living: Int, putAway: Int)? {
         let budget = income + extra
-        guard budget > 0 else { return (0, 0) }
-        let spent = max(expense - putAway, 0) + putAway
-        let used = min(max(spent / budget, 0), 1)
-        return (1 - used, used)
+        guard budget > 0 else { return nil }
+        let living = max(expense - putAway, 0)
+        let used = Int(((living + max(putAway, 0)) / budget * 100).rounded())
+        let livingPct = min(Int((living / budget * 100).rounded()), used)
+        return (used, livingPct, used - livingPct)
+    }
+
+    /// Where today's mark sits on the line: the share of the period's days
+    /// gone, today counted. Day 22 of 33 sits two thirds along.
+    static func todayMark(day: Int, of total: Int) -> Double {
+        guard total > 0 else { return 0 }
+        return min(max(Double(day) / Double(total), 0), 1)
     }
 
     private var noteTint: Color {
@@ -91,51 +104,51 @@ struct MonthFlowCard: View {
         }
     }
 
+    /// The figures on the line, or nil when there is nothing to draw: no
+    /// income yet, or the balance hidden.
+    private var shown: (used: Int, living: Int, putAway: Int)? {
+        isHidden ? nil : Self.percents(income: income, expense: expense, putAway: putAway, extra: extra)
+    }
+
+    /// The period's dates: since when, and which day of it today is.
+    private var subtitle: String {
+        guard let d = cycleDay else { return periodLabel }
+        return periodLabel + " · " + String(format: loc("stats.day_of"), d.day, d.of)
+    }
+
     var body: some View {
         VStack(spacing: 12) {
-            // The window the figures cover, and how much of the income it has used.
-            HStack(spacing: 10) {
+            // The window the figures cover, and how much of its money is used.
+            HStack(alignment: .top, spacing: 10) {
                 Image(systemName: "calendar")
                     .font(.system(.subheadline, weight: .semibold))
                     .foregroundStyle(AppTheme.accent)
                     .frame(width: 28)
+                    .padding(.top, 2)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(loc("home.this_period"))
                         .font(.system(.subheadline, weight: .bold))
                         .foregroundStyle(AppTheme.textPrimary)
-                    Text(periodLabel)
+                    Text(subtitle)
                         .font(.system(.caption2))
                         .foregroundStyle(AppTheme.textSecondary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                    if let share = spentShare, !isHidden {
-                        HStack(alignment: .firstTextBaseline, spacing: 4) {
-                            Text(loc("home.spent_of_income"))
-                                .font(.system(.caption2))
-                                .foregroundStyle(AppTheme.textSecondary)
-                            Text(verbatim: "\(Int(((share + putAwayShare) * 100).rounded()))%")
-                                .font(.system(.caption, weight: .bold).monospacedDigit())
-                                .foregroundStyle(AppTheme.textPrimary)
-                                .contentTransition(.numericText())
-                        }
-                        .padding(.top, 6)
-                    }
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: 8)
-                if spentShare != nil, !isHidden {
-                    // The same hourglass as dipo.info's hero: green sand on top
-                    // is what is left, grey sand below is what is used, both as
-                    // shares of what came in. It replaces the bar that said the
-                    // same thing as a line.
-                    let sand = Self.sand(income: income, expense: expense, putAway: putAway, extra: extra)
-                    HourglassView(left: sand.left, used: sand.used)
-                        .frame(width: 46, height: 84)
-                        .accessibilityHidden(true)
-                        .animation(.easeOut(duration: 0.8), value: sand.used)
+                if let pct = shown {
+                    usedFigure(pct.used)
                 }
             }
 
-            Rectangle().fill(AppTheme.cardMid).frame(height: 1)
+            // The line: what is used of the period's money, against how much
+            // of the period has gone. It took the hourglass's place, and the
+            // hairline's: one quiet mark that says more than either did.
+            if let pct = shown {
+                periodLine(pct)
+            } else {
+                Rectangle().fill(AppTheme.cardMid).frame(height: 1)
+            }
 
             // Money coming IN points in, money going OUT points out — the
             // same directions the add-transaction form and Statistics use.
@@ -203,6 +216,86 @@ struct MonthFlowCard: View {
         .background(AppTheme.cardDark, in: RoundedRectangle(cornerRadius: AppRadius.lg))
     }
 
+    /// Living costs past income: the one case the line and its figure say in
+    /// orange, as the "over income" tile below does. Debts paid from the
+    /// balance stay in ink: paying debt down is not overspending.
+    private var overIncome: Bool { remaining < -0.5 }
+
+    /// "81%" over "Used", where the hourglass stood. The one large number on
+    /// the card: how much of the period's money is gone.
+    private func usedFigure(_ used: Int) -> some View {
+        VStack(alignment: .trailing, spacing: 0) {
+            HStack(alignment: .firstTextBaseline, spacing: 1) {
+                Text(verbatim: "\(used)")
+                    .font(.system(.title2, weight: .bold).monospacedDigit())
+                    .contentTransition(.numericText())
+                    .animation(.easeOut(duration: 0.4), value: used)
+                Text(verbatim: "%")
+                    .font(.system(.footnote, weight: .bold))
+            }
+            .foregroundStyle(overIncome ? AppTheme.orange : AppTheme.textPrimary)
+            Text(loc("home.used_short"))
+                .font(.system(.caption2))
+                .foregroundStyle(AppTheme.textSecondary)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(loc("home.spent_of_income") + " \(used)%")
+    }
+
+    /// The line and what each of its marks is. Ink for living costs, blue for
+    /// debts paid and money put away (the blue of the note about them), and
+    /// a short upright mark for today. Nothing else is coloured.
+    private func periodLine(_ pct: (used: Int, living: Int, putAway: Int)) -> some View {
+        let mark = cycleDay.map { Self.todayMark(day: $0.day, of: $0.of) }
+        let livingInk = overIncome ? AppTheme.orange : AppTheme.textPrimary
+        return VStack(alignment: .leading, spacing: 8) {
+            PeriodLine(living: livingShare, putAway: putAwayShare, today: mark, livingInk: livingInk)
+                .animation(.easeOut(duration: 0.6), value: livingShare + putAwayShare)
+            WrapFlow(spacing: 14, rowSpacing: 4) {
+                lineKey(swatch: livingInk, text: loc("home.spending") + " \(pct.living)%")
+                if putAway > 0.5 {
+                    lineKey(swatch: AppTheme.blue, text: loc("home.debts_and_savings") + " \(pct.putAway)%")
+                }
+                if mark != nil {
+                    HStack(spacing: 5) {
+                        RoundedRectangle(cornerRadius: 1)
+                            .fill(AppTheme.textPrimary)
+                            .frame(width: 2, height: 10)
+                        Text(loc("home.today_mark"))
+                    }
+                    .font(.system(.caption2))
+                    .foregroundStyle(AppTheme.textSecondary)
+                    .lineLimit(1)
+                    .fixedSize()
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(lineLabel(pct))
+    }
+
+    private func lineKey(swatch: Color, text: String) -> some View {
+        HStack(spacing: 5) {
+            RoundedRectangle(cornerRadius: 2)
+                .fill(swatch)
+                .frame(width: 7, height: 7)
+            Text(text)
+        }
+        .font(.system(.caption2))
+        .foregroundStyle(AppTheme.textSecondary)
+        .lineLimit(1)
+        .fixedSize()
+    }
+
+    /// The line in words, for VoiceOver: the parts, then the day.
+    private func lineLabel(_ pct: (used: Int, living: Int, putAway: Int)) -> String {
+        var parts = [loc("home.spending") + " \(pct.living)%"]
+        if putAway > 0.5 { parts.append(loc("home.debts_and_savings") + " \(pct.putAway)%") }
+        if let d = cycleDay { parts.append(String(format: loc("stats.day_of"), d.day, d.of)) }
+        return parts.joined(separator: ", ")
+    }
+
     /// One figure: what it is, with its direction in its own colour, and the
     /// amount. Nothing behind it: the badge and the wash each tile wore said
     /// the colour again. Only money coming in is green (`ink`); spending and
@@ -241,6 +334,45 @@ struct MonthFlowCard: View {
     private func figure(_ amount: Double, signed: Bool) -> String {
         guard signed else { return CurrencyManager.shared.formatted(amount, currency: currency) }
         return (amount < -0.5 ? "−" : "") + CurrencyManager.shared.formatted(abs(amount), currency: currency)
+    }
+}
+
+/// Home's period line: a 6-point track, filled from the left with living
+/// costs and then debts and savings, as shares of the period's money, with an
+/// upright mark at today. Where the fill ends against the mark is the whole
+/// reading: short of it, the money is lasting longer than the days.
+private struct PeriodLine: View {
+    let living: Double
+    let putAway: Double
+    let today: Double?
+    let livingInk: Color
+
+    var body: some View {
+        GeometryReader { g in
+            let w = g.size.width
+            let l = min(max(living, 0), 1)
+            let p = min(max(putAway, 0), 1 - l)
+            ZStack(alignment: .leading) {
+                Capsule().fill(AppTheme.cardMid).frame(height: 6)
+                HStack(spacing: 0) {
+                    Rectangle().fill(livingInk).frame(width: w * l)
+                    Rectangle().fill(AppTheme.blue).frame(width: w * p)
+                }
+                .frame(width: w, height: 6, alignment: .leading)
+                .clipShape(Capsule())
+                if let today {
+                    // A gap in the card's own colour on each side keeps the
+                    // mark sharp where it crosses the fill.
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 2).fill(AppTheme.cardDark).frame(width: 6, height: 18)
+                        RoundedRectangle(cornerRadius: 1).fill(AppTheme.textPrimary).frame(width: 2, height: 14)
+                    }
+                    .offset(x: min(max(w * today - 3, -2), w - 4))
+                }
+            }
+            .frame(width: w, height: g.size.height)
+        }
+        .frame(height: 18)
     }
 }
 
