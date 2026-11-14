@@ -107,6 +107,8 @@ struct HomeView: View {
     @State private var monthIncome: Double = 0
     @State private var monthExpense: Double = 0
     @State private var flowPeriodLabel: String = ""
+    /// Today as day N of the period's M: the subtitle and the line's mark.
+    @State private var flowCycleDay: (day: Int, of: Int)? = nil
     @State private var flowNote: String? = nil
     @State private var flowNoteTone: MonthFlowCard.NoteTone = .info
     /// Debt paid and money put away this period, kept out of "Spending".
@@ -383,8 +385,10 @@ struct HomeView: View {
         if let payDay = MainCard.payDay(salarySchedules) {
             // The cycle Statistics and Smart Budget use: opened on the day the
             // salary landed on the main card.
-            windowStart = StatPeriod.cycle(payDay: payDay,
-                                           salaryDates: StatPeriod.salaryDates(on: budgetCard)).start
+            let cycle = StatPeriod.cycle(payDay: payDay,
+                                         salaryDates: StatPeriod.salaryDates(on: budgetCard))
+            windowStart = cycle.start
+            flowCycleDay = StatPeriod.cycleDay(cycle)
             let df = DateFormatter()
             df.locale = LanguageManager.shared.currentLocale
             df.setLocalizedDateFormatFromTemplate("d MMM")
@@ -392,6 +396,8 @@ struct HomeView: View {
         } else {
             windowStart = cal.safeDate(from: cal.dateComponents([.year, .month], from: Date()))
             flowPeriodLabel = loc("home.this_month")
+            flowCycleDay = (cal.component(.day, from: Date()),
+                            cal.range(of: .day, in: .month, for: Date())?.count ?? 30)
         }
 
         guard let card = selectedCard else {
@@ -838,6 +844,7 @@ struct HomeView: View {
                       currency: selectedCard?.resolvedCurrency
                                 ?? CurrencyManager.shared.preferredCurrency,
                       periodLabel: flowPeriodLabel,
+                      cycleDay: flowCycleDay,
                       isHidden: hideAll || (selectedCard?.isHidden ?? false),
                       note: flowNote,
                       noteTone: flowNoteTone,
