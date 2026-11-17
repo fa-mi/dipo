@@ -100,6 +100,98 @@ jobs:
             xcodebuild.log
           retention-days: 7
 
+  # The SDKs end to end: FirebaseEmulatorTests sends real requests through the
+  # Firebase Auth and Firestore SDKs, to the Firebase Local Emulator Suite
+  # running on this runner. The project is demo-dipo, which the emulators keep
+  # local: no real Firebase project, data or credentials are involved. No
+  # rules file is loaded, so the emulator allows every read and write; the
+  # production rules are tested in dipo-backend. firebase-tools is pinned to
+  # the version dipo-backend uses.
+  sdk-emulator:
+    runs-on: xcode-27
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Select Xcode
+        run: |
+          XCODE=$(ls -d /Applications/Xcode_27.1*.app 2>/dev/null | grep -vi beta | sort -V | tail -1)
+          if [ -z "$XCODE" ]; then
+            echo "::error::No Xcode 27.1 on this image. Installed:"; ls -d /Applications/Xcode_*.app; exit 1
+          fi
+          sudo xcode-select -s "$XCODE"
+
+      - name: Cache Swift packages
+        uses: actions/cache@v5
+        with:
+          path: .spm
+          key: spm-${{ runner.os }}-${{ hashFiles('DiPo.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
+
+      # The emulators are a Node tool that runs Firestore on Java.
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: Cache the emulators
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/firebase/emulators
+          key: firebase-emulators-14.27.0
+
+      - name: Start the Firebase emulators
+        run: |
+          npx --yes firebase-tools@14.27.0 emulators:start --only auth,firestore \
+            --project demo-dipo --config ci/firebase-emulator.json > emulators.log 2>&1 &
+          # Up when both answer; the first run also downloads the Firestore emulator.
+          for i in $(seq 1 120); do
+            if curl -s -o /dev/null http://127.0.0.1:9099 && curl -s -o /dev/null http://127.0.0.1:8080; then
+              echo "Emulators up after ~$((i * 2))s"; exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::The Firebase emulators did not start"; cat emulators.log; exit 1
+
+      - name: Pick a simulator
+        id: sim
+        run: |
+          udid=$(xcrun simctl list devices available -j | python3 ci/pick-simulator.py)
+          echo "udid=$udid" >> "$GITHUB_OUTPUT"
+
+      # Signed to run locally ("-", no certificate or profile), not unsigned
+      # as in build-and-test: Firebase Auth keeps the signed-in user in the
+      # keychain, and an unsigned app has no keychain entitlement (SecItemAdd
+      # -34018), so every sign-in failed.
+      - name: Run the emulator tests
+        env:
+          # xcodebuild hands TEST_RUNNER_-prefixed variables to the tests,
+          # without the prefix. Unset, FirebaseEmulatorTests skips.
+          TEST_RUNNER_DIPO_AUTH_EMULATOR: 127.0.0.1:9099
+          TEST_RUNNER_DIPO_FIRESTORE_EMULATOR: 127.0.0.1:8080
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -project DiPo.xcodeproj -scheme DiPo \
+            -destination "id=${{ steps.sim.outputs.udid }}" \
+            -only-testing:DiPoTests/FirebaseEmulatorTests \
+            -clonedSourcePackagesDirPath .spm \
+            -skipPackagePluginValidation -skipMacroValidation \
+            CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- PROVISIONING_PROFILE_SPECIFIER= \
+            2>&1 | tee xcodebuild.log \
+            | { grep -E '^(Test Suite|Test Case .*(passed|failed|skipped))|error:|\*\* (BUILD|TEST)' || true; }
+          # A skip here means the tests could not see the emulator: fail.
+          if grep -qE "Test Case .*FirebaseEmulatorTests.*skipped" xcodebuild.log; then
+            echo "::error::FirebaseEmulatorTests skipped: the emulator variables did not reach the tests"; exit 1
+          fi
+          grep -qE "Test Case .*FirebaseEmulatorTests.*passed" xcodebuild.log \
+            || { echo "::error::No FirebaseEmulatorTests ran"; exit 1; }
+
+      - name: Emulator log
+        if: failure()
+        run: tail -100 emulators.log || true
+
   # Could DiPo run on older iPhones? The app targets iOS 26.2, which needs an
   # iPhone 11 or newer, fully updated. iOS 17 also runs on the XS and XR,
   # common second-hand phones, and covers phones that are behind on updates.

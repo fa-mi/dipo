@@ -152,31 +152,15 @@ final class FirebaseSupportService {
             ])
         }
 
-        // Same rule as registerDeviceToken: resolve, and omit rather than write
-        // null. A null userEmail here means the worker has no one to send the
-        // ticket confirmation to, and the admin panel shows a nameless ticket.
-        var data: [String: Any] = [
-            "userId":         userId,
-            // Same reason as `registerDeviceToken`: the ticket is keyed by a
-            // social id, so read/update/delete cannot be pinned to its owner
-            // until the uid is on the document.
-            "uid":            Auth.auth().currentUser?.uid ?? "",
-            "userPlan":       PremiumManager.shared.plan.label,
-            "category":       category,
-            "subject":        subject,
-            "message":        message,
-            "mediaCount":     mediaBase64.count,
-            "status":         "open",
-            "hasUnreadReply": false,
-            "createdAt":      FieldValue.serverTimestamp(),
-            "updatedAt":      FieldValue.serverTimestamp()
-        ]
-        if let name = resolvedName { data["userName"] = name }
-        if let mail = resolvedEmail { data["userEmail"] = mail }
-        // ✅ FCM token so admin panel can push device notifications
-        if let tok = UserDefaults.standard.string(forKey: "dipo_fcm_token"), !tok.isEmpty {
-            data["fcmToken"] = tok
-        }
+        // The document's shape lives in ticketData, shared with the tests.
+        let data = Self.ticketData(
+            userId: userId,
+            uid: Auth.auth().currentUser?.uid ?? "",
+            plan: PremiumManager.shared.plan.label,
+            category: category, subject: subject, message: message,
+            mediaCount: mediaBase64.count,
+            name: resolvedName, email: resolvedEmail,
+            fcmToken: UserDefaults.standard.string(forKey: "dipo_fcm_token"))
 
         // The screenshots go in their own documents, not inline. Inline, every
         // screenshot rode along whenever the ticket list loaded — up to ~0.7 MB
@@ -255,9 +239,7 @@ final class FirebaseSupportService {
         // The person's tickets, found the way the Support screen finds them.
         if AccountReconnect.isBound, let uid = Auth.auth().currentUser?.uid {
             do {
-                let snap = try await db.collection("support_tickets")
-                    .whereField("uid", isEqualTo: uid)
-                    .getDocuments()
+                let snap = try await Self.ticketsQuery(in: db, uid: uid).getDocuments()
                 for doc in snap.documents {
                     try? await doc.reference.updateData(["fcmToken": token])
                 }
@@ -539,11 +521,8 @@ final class FirebaseSupportService {
         await MainActor.run { isLoading = true; fetchError = nil }
         await claimTickets(uid: uid, socialID: socialID)
         do {
-            // ✅ No .order(by:) here — combining whereField + orderBy requires a
-            // composite Firestore index. Sort client-side instead, zero config needed.
-            let snap = try await db.collection("support_tickets")
-                .whereField("uid", isEqualTo: uid)
-                .getDocuments()
+            // Sorted client-side: see ticketsQuery.
+            let snap = try await Self.ticketsQuery(in: db, uid: uid).getDocuments()
             let decoded = snap.documents
                 .compactMap { decodeTicket($0) }
                 .sorted { $0.updatedAt > $1.updatedAt }   // newest first, client-side
@@ -971,9 +950,57 @@ final class FirebaseSupportService {
     // MARK: - Decoders
 
     private func decodeTicket(_ doc: QueryDocumentSnapshot) -> SupportTicket? {
-        let d = doc.data()
-        return SupportTicket(
-            id:             doc.documentID,
+        Self.decodeTicket(id: doc.documentID, data: doc.data())
+    }
+
+    // MARK: - The ticket on the wire
+    //
+    // What a ticket looks like in Firestore, written and read in one place.
+    // The Support screen, the push-token refresh and FirebaseEmulatorTests
+    // all go through these, so the test round-trips exactly what the app
+    // sends and reads.
+
+    /// A new ticket's document. Same rule as registerDeviceToken: resolve, and
+    /// omit rather than write null. A null userEmail means the worker has no
+    /// one to send the ticket confirmation to, and the admin panel shows a
+    /// nameless ticket.
+    static func ticketData(userId: String, uid: String, plan: String,
+                           category: String, subject: String, message: String,
+                           mediaCount: Int, name: String?, email: String?,
+                           fcmToken: String?) -> [String: Any] {
+        var data: [String: Any] = [
+            "userId":         userId,
+            // Same reason as `registerDeviceToken`: the ticket is keyed by a
+            // social id, so read/update/delete cannot be pinned to its owner
+            // until the uid is on the document.
+            "uid":            uid,
+            "userPlan":       plan,
+            "category":       category,
+            "subject":        subject,
+            "message":        message,
+            "mediaCount":     mediaCount,
+            "status":         "open",
+            "hasUnreadReply": false,
+            "createdAt":      FieldValue.serverTimestamp(),
+            "updatedAt":      FieldValue.serverTimestamp()
+        ]
+        if let name { data["userName"] = name }
+        if let email { data["userEmail"] = email }
+        // FCM token so the admin panel can push device notifications.
+        if let fcmToken, !fcmToken.isEmpty { data["fcmToken"] = fcmToken }
+        return data
+    }
+
+    /// The person's own tickets: those carrying their Firebase uid. No
+    /// .order(by:) — with the filter it would need a composite index; callers
+    /// sort client-side.
+    static func ticketsQuery(in db: Firestore, uid: String) -> Query {
+        db.collection("support_tickets").whereField("uid", isEqualTo: uid)
+    }
+
+    static func decodeTicket(id: String, data d: [String: Any]) -> SupportTicket {
+        SupportTicket(
+            id:             id,
             userId:         d["userId"]         as? String ?? "",
             userName:       d["userName"]        as? String,
             userEmail:      d["userEmail"]       as? String,
