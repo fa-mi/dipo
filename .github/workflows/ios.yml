@@ -160,6 +160,10 @@ jobs:
           udid=$(xcrun simctl list devices available -j | python3 ci/pick-simulator.py)
           echo "udid=$udid" >> "$GITHUB_OUTPUT"
 
+      # Signed to run locally ("-", no certificate or profile), not unsigned
+      # as in build-and-test: Firebase Auth keeps the signed-in user in the
+      # keychain, and an unsigned app has no keychain entitlement (SecItemAdd
+      # -34018), so every sign-in failed.
       - name: Run the emulator tests
         env:
           # xcodebuild hands TEST_RUNNER_-prefixed variables to the tests,
@@ -174,7 +178,7 @@ jobs:
             -only-testing:DiPoTests/FirebaseEmulatorTests \
             -clonedSourcePackagesDirPath .spm \
             -skipPackagePluginValidation -skipMacroValidation \
-            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- PROVISIONING_PROFILE_SPECIFIER= \
             2>&1 | tee xcodebuild.log \
             | { grep -E '^(Test Suite|Test Case .*(passed|failed|skipped))|error:|\*\* (BUILD|TEST)' || true; }
           # A skip here means the tests could not see the emulator: fail.
