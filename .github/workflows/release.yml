@@ -54,7 +54,7 @@ jobs:
       BUNDLE_ID: com.fahmiaquinas.DiPo
       TEAM_ID: 3C6KN7P2NC
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       # The runner context isn't available in job-level env, so the paths
       # under RUNNER_TEMP are set here.
@@ -80,7 +80,7 @@ jobs:
           xcodebuild -version
 
       - name: Cache Swift packages
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: ${{ runner.temp }}/spm
           key: release-spm-${{ hashFiles('DiPo.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
@@ -326,7 +326,7 @@ jobs:
 
       - name: Keep the .ipa
         if: success() && !inputs.upload
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: DiPo-${{ inputs.marketing_version }}-ipa
           path: ${{ runner.temp }}/export/*.ipa
@@ -334,7 +334,7 @@ jobs:
 
       - name: Keep the logs
         if: failure()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: release-logs
           path: |
