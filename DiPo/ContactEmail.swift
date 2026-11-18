@@ -59,6 +59,7 @@ enum ContactEmail {
             try await ref.setData(["email": email, "updatedAt": FieldValue.serverTimestamp()])
             return true
         } catch {
+            CrashReporter.recordSDK(error, at: "contact_email.save")
             print("[DiPo] contact email save failed: \(error.localizedDescription)")
             return false
         }

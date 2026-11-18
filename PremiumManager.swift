@@ -207,6 +207,8 @@ final class PremiumManager {
     /// the values to disk so future offline launches show the right price.
     /// Never throws to the caller — failures leave the cached values in place.
     func fetchPricing() {
+        // RevenueCat is configured at launch; not in a test run (RunContext).
+        guard Purchases.isConfigured else { return }
         Task { @MainActor in
             do {
                 let offerings = try await Purchases.shared.offerings()
@@ -252,6 +254,7 @@ final class PremiumManager {
                 }
             } catch {
                 // Leave cached values in place; log for debugging only.
+                CrashReporter.recordSDK(error, at: "purchases.pricing")
                 print("[Premium] fetchPricing failed: \(error.localizedDescription)")
             }
         }
@@ -332,6 +335,7 @@ final class PremiumManager {
     // MARK: - Purchase (real StoreKit via RevenueCat)
 
     func upgrade(to newPlan: PremiumPlan) {
+        guard Purchases.isConfigured else { purchaseError = loc("premium.product_missing"); return }
         guard !isLoading else { return }
         isLoading = true
         purchaseError = nil
@@ -378,6 +382,7 @@ final class PremiumManager {
                 // payment is invalid. Please try a different payment method.")
                 // — show a friendly localized message to the user and keep
                 // the raw error in console for debugging.
+                CrashReporter.recordSDK(error, at: "purchases.royal")
                 print("[Premium] purchase error: \(error.localizedDescription)")
                 purchaseError = loc("premium.purchase_failed")
             }
@@ -387,6 +392,7 @@ final class PremiumManager {
     // MARK: - Restore Purchases
 
     func restorePurchases() {
+        guard Purchases.isConfigured else { return }
         isLoading = true
         purchaseError = nil
         restoreMessage = nil
@@ -408,6 +414,7 @@ final class PremiumManager {
                 }
             } catch {
                 isLoading = false
+                CrashReporter.recordSDK(error, at: "purchases.restore")
                 print("[Premium] restore error: \(error.localizedDescription)")
                 purchaseError = String(format: loc("premium.restore_failed"), UserFacingError.message(error))
             }
@@ -461,6 +468,13 @@ final class PremiumManager {
 
     /// Call after login — logs into RevenueCat and restores active entitlements
     func onLogin(userID: String) {
+        // Not configured yet (or a test run): the cached plan, as when
+        // RevenueCat can't be reached.
+        guard Purchases.isConfigured else {
+            let raw = UserDefaults.standard.string(forKey: "premium_plan_\(userID)") ?? "free"
+            plan = PremiumPlan(rawValue: raw) ?? .free
+            return
+        }
         Task { @MainActor in
             do {
                 let (info, _) = try await Purchases.shared.logIn(userID)
@@ -475,7 +489,7 @@ final class PremiumManager {
 
     /// Call BEFORE UserSession.signOut()
     func onLogout(userID: String) {
-        Task { @MainActor in try? await Purchases.shared.logOut() }
+        if Purchases.isConfigured { Task { @MainActor in try? await Purchases.shared.logOut() } }
         withAnimation(.spring(response: 0.4)) { plan = .free }
         // Premium-managed feature flags must be neutralized too — otherwise a
         // second user signing in on the same device would inherit the previous
@@ -502,6 +516,7 @@ final class PremiumManager {
     }
 
     func checkActiveSubscription() {
+        guard Purchases.isConfigured else { return }
         Task { @MainActor in
             do {
                 let info = try await Purchases.shared.customerInfo()

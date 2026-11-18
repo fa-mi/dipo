@@ -233,6 +233,7 @@ final class WebSyncService {
             HapticManager.shared.success()
             ActionFeedbackCenter.shared.webSynced(at: now)
         } catch {
+            CrashReporter.recordSDK(error, at: "websync.upload")
             print("[WebSync] upload failed: \(error.localizedDescription)")
             state = .failure(loc("websync.err_upload"))
             HapticManager.shared.error()
@@ -294,6 +295,7 @@ final class WebSyncService {
             // Could not check. Say nothing rather than block a sync that may be
             // perfectly fine — a false alarm here is worse than a silent pass,
             // because the snapshot HAS been written either way.
+            CrashReporter.recordSDK(error, at: "websync.dipo_index")
             print("[WebSync] dipoIndex check failed: \(error.localizedDescription)")
             return nil
         }
@@ -697,6 +699,7 @@ final class WebSyncService {
             HapticManager.shared.warning()
             ActionFeedbackCenter.shared.removed(loc("websync.revoked"))
         } catch {
+            CrashReporter.recordSDK(error, at: "websync.revoke")
             print("[WebSync] revoke failed: \(error.localizedDescription)")
             state = .failure(loc("websync.err_revoke"))
         }

@@ -41,6 +41,55 @@ enum CrashReporter {
     static func record(_ error: Error) {
         Crashlytics.crashlytics().record(error: error)
     }
+
+    /// An outside SDK (Firebase, RevenueCat, Google) failed at `place`: sent
+    /// to Crashlytics as a non-fatal, so a broken sign-in, push token or
+    /// shared-account write shows up in the dashboard instead of only in a
+    /// console nobody sees on a customer's phone.
+    ///
+    /// Only the error's domain and code travel, with `place`, a fixed label
+    /// such as "joint.deposit". The message and userInfo are dropped: a
+    /// Firebase Auth error can carry an email address, a network error a
+    /// URL. Being offline is normal for many of DiPo's users, so those are
+    /// not sent, and neither is a cancelled purchase. Nothing is sent from a
+    /// test run.
+    nonisolated static func recordSDK(_ error: Error, at place: String) {
+        guard RunContext.isOnline, !isExpected(error) else { return }
+        Crashlytics.crashlytics().record(error: sanitized(error, at: place))
+    }
+
+    /// The error as it is sent: domain, code, the place, and the domain and
+    /// code of the error underneath, if any. Nothing else.
+    nonisolated static func sanitized(_ error: Error, at place: String) -> NSError {
+        let ns = error as NSError
+        var info: [String: Any] = [NSLocalizedDescriptionKey: place]
+        if let under = ns.userInfo[NSUnderlyingErrorKey] as? NSError {
+            info["underlying"] = "\(under.domain) \(under.code)"
+        }
+        return NSError(domain: ns.domain, code: ns.code, userInfo: info)
+    }
+
+    /// No connection (or too slow a one), or the person cancelled: not a
+    /// fault to report. Looks through to the underlying error.
+    nonisolated static func isExpected(_ error: Error) -> Bool {
+        let ns = error as NSError
+        let offline: [String: Set<Int>] = [
+            NSURLErrorDomain: [NSURLErrorNotConnectedToInternet, NSURLErrorTimedOut,
+                               NSURLErrorNetworkConnectionLost, NSURLErrorCannotConnectToHost,
+                               NSURLErrorCannotFindHost, NSURLErrorDNSLookupFailed,
+                               NSURLErrorDataNotAllowed, NSURLErrorInternationalRoamingOff,
+                               NSURLErrorCallIsActive],
+            // Firestore: unavailable (14), deadline exceeded (4).
+            "FIRFirestoreErrorDomain": [14, 4],
+            // Firebase Auth: network error.
+            "FIRAuthErrorDomain": [17020],
+            // RevenueCat: purchase cancelled (1), network (10), offline (35).
+            "RevenueCat.ErrorCode": [1, 10, 35],
+        ]
+        if offline[ns.domain]?.contains(ns.code) == true { return true }
+        if let under = ns.userInfo[NSUnderlyingErrorKey] as? NSError { return isExpected(under) }
+        return false
+    }
     #if DEBUG
     /// DEBUG-only smoke test. Never ships (compiled out of Release).
     static func testCrash() { fatalError("Crashlytics test crash") }
@@ -77,9 +126,13 @@ class AppDelegate: NSObject, UIApplicationDelegate,
         //
         // Requires the "Anonymous" provider to be enabled in
         // Firebase Console → Authentication → Sign-in method.
-        if Auth.auth().currentUser == nil {
+        //
+        // Not under tests: a test run would make an account in the real
+        // project every time (DiPo/RunContext.swift).
+        if Auth.auth().currentUser == nil, RunContext.isOnline {
             Auth.auth().signInAnonymously { _, error in
                 if let error {
+                    CrashReporter.recordSDK(error, at: "auth.anonymous")
                     print("[DiPo] Anonymous Firebase auth failed: \(error.localizedDescription)")
                 } else {
                     print("[DiPo] Anonymous Firebase auth established ✓")
@@ -114,6 +167,7 @@ class AppDelegate: NSObject, UIApplicationDelegate,
 
     func application(_ application: UIApplication,
                      didFailToRegisterForRemoteNotificationsWithError error: Error) {
+        CrashReporter.recordSDK(error, at: "push.apns_register")
         print("[DiPo] Remote notification registration failed: \(error)")
     }
 
@@ -253,6 +307,9 @@ struct DiPoApp: App {
         // Must precede configure(): Firebase reads the provider factory then.
         AppCheckSetup.install()
         FirebaseApp.configure()
+        // Crash reports and push registration off when XCTest launched the
+        // app (see DiPo/RunContext.swift).
+        RunContext.applySDKSwitches()
         // Apply the last known analytics switch (off unless the backend said
         // on) straight away. Until something touches ScreenAnalytics, Firebase
         // runs Analytics at its own default, which is on — and on 12.11 its

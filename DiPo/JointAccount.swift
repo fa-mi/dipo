@@ -498,6 +498,7 @@ final class JointAccountService {
                         // back — listens again instead of staying deaf until a
                         // relaunch (which is what happened while the rules were
                         // not yet published).
+                        CrashReporter.recordSDK(err, at: "joint.listen_accounts")
                         print("[Joint] accounts listen error: \(err.localizedDescription)")
                         self.accountsListener?.remove()
                         self.accountsListener = nil
@@ -516,6 +517,7 @@ final class JointAccountService {
                 guard let self else { return }
                 Task { @MainActor in
                     if let err {
+                        CrashReporter.recordSDK(err, at: "joint.listen_invites")
                         print("[Joint] invites listen error: \(err.localizedDescription)")
                         self.invitesListener?.remove()
                         self.invitesListener = nil
@@ -554,7 +556,7 @@ final class JointAccountService {
             let memberReg = ref.collection("members").addSnapshotListener { [weak self] snap, err in
                 guard let self else { return }
                 Task { @MainActor in
-                    if let err { print("[Joint] members listen error: \(err.localizedDescription)"); self.forget(id); return }
+                    if let err { CrashReporter.recordSDK(err, at: "joint.listen_members"); print("[Joint] members listen error: \(err.localizedDescription)"); self.forget(id); return }
                     self.members[id] = (snap?.documents ?? [])
                         .map { JointMember(id: $0.documentID, data: $0.data()) }
                         .sorted { $0.joinedAt < $1.joinedAt }
@@ -566,7 +568,7 @@ final class JointAccountService {
                 .addSnapshotListener { [weak self] snap, err in
                     guard let self else { return }
                     Task { @MainActor in
-                        if let err { print("[Joint] month listen error: \(err.localizedDescription)"); self.forget(id); return }
+                        if let err { CrashReporter.recordSDK(err, at: "joint.listen_month"); print("[Joint] month listen error: \(err.localizedDescription)"); self.forget(id); return }
                         self.recent[id] = (snap?.documents ?? [])
                             .compactMap { JointTx(id: $0.documentID, data: $0.data()) }
                     }
@@ -597,6 +599,7 @@ final class JointAccountService {
                 guard let self else { return }
                 Task { @MainActor in
                     if let err {
+                        CrashReporter.recordSDK(err, at: "joint.listen_history")
                         print("[Joint] history listen error: \(err.localizedDescription)")
                         self.historyListeners[accountId]?.remove()
                         self.historyListeners[accountId] = nil
@@ -648,6 +651,7 @@ final class JointAccountService {
         let data = ratios.firestore
         Task {
             do { try await ref.updateData(["smartRatios": data]) } catch {
+                CrashReporter.recordSDK(error, at: "joint.ratios")
                 print("[Joint] ratios refused: \(error.localizedDescription)")
                 failure = loc("joint.err.not_saved")
             }
@@ -709,6 +713,7 @@ final class JointAccountService {
         case .saved, .queued:
             return ref.documentID
         case .refused(let error):
+            CrashReporter.recordSDK(error, at: "joint.create")
             print("[Joint] create refused: \(error.localizedDescription)")
             return nil
         }
@@ -754,6 +759,7 @@ final class JointAccountService {
             do {
                 try await batch.commit()
             } catch {
+                CrashReporter.recordSDK(error, at: "joint.add")
                 print("[Joint] add refused: \(error.localizedDescription)")
                 failure = loc("joint.err.not_saved")
                 return
@@ -815,6 +821,7 @@ final class JointAccountService {
             do {
                 try await batch.commit()
             } catch {
+                CrashReporter.recordSDK(error, at: "joint.deposit")
                 print("[Joint] deposit refused: \(error.localizedDescription)")
                 context.delete(record)
                 try? context.save()
@@ -887,6 +894,7 @@ final class JointAccountService {
                       forDocument: goalRef.collection("members").document(uid), merge: true)
         switch await commit(batch, waitingAtMost: 10) {
         case .refused(let error):
+            CrashReporter.recordSDK(error, at: "joint.move_to_goal")
             print("[Joint] move to goal refused: \(error.localizedDescription)")
             failure = loc("joint.err.not_saved")
             return false
@@ -949,6 +957,7 @@ final class JointAccountService {
             Task { await notify(["type": "invite", "inviteId": inviteId]) }
             return .sent
         } catch {
+            CrashReporter.recordSDK(error, at: "joint.invite")
             print("[Joint] invite failed: \(error.localizedDescription)")
             return .failed
         }
@@ -987,6 +996,7 @@ final class JointAccountService {
         } catch {
             // Full, closed, or gone. The account cannot be read before joining,
             // so the screen says it in general terms.
+            CrashReporter.recordSDK(error, at: "joint.accept")
             print("[Joint] accept refused: \(error.localizedDescription)")
             return false
         }
@@ -1011,6 +1021,7 @@ final class JointAccountService {
             do {
                 try await ref.updateData(["name": title, "emoji": icon, "monthlyBudget": budget])
             } catch {
+                CrashReporter.recordSDK(error, at: "joint.update")
                 print("[Joint] update refused: \(error.localizedDescription)")
                 failure = loc("joint.err.not_saved")
             }
@@ -1032,6 +1043,7 @@ final class JointAccountService {
                 try await ref.collection("members").document(uid).setData(["displayName": name], merge: true)
                 if account.isOwner(uid) { try await ref.updateData(["ownerName": name]) }
             } catch {
+                CrashReporter.recordSDK(error, at: "joint.rename")
                 print("[Joint] rename refused: \(error.localizedDescription)")
                 ok = false
             }
@@ -1060,7 +1072,7 @@ final class JointAccountService {
                 "ownerUid": member.id, "ownerName": JointText.clip(member.displayName, 40),
             ])
             return true
-        } catch { print("[Joint] hand-over refused: \(error.localizedDescription)"); return false }
+        } catch { CrashReporter.recordSDK(error, at: "joint.hand_over"); print("[Joint] hand-over refused: \(error.localizedDescription)"); return false }
     }
 
     func remove(_ memberUid: String, from account: JointAccount) async -> Bool {
@@ -1087,7 +1099,7 @@ final class JointAccountService {
         do {
             try await batch.commit()
             return true
-        } catch { print("[Joint] remove refused: \(error.localizedDescription)"); return false }
+        } catch { CrashReporter.recordSDK(error, at: "joint.remove"); print("[Joint] remove refused: \(error.localizedDescription)"); return false }
     }
 
     /// Owner closes the account for everyone. Firestore does not cascade, so
@@ -1109,6 +1121,7 @@ final class JointAccountService {
             stopHistory(account.id)
             return true
         } catch {
+            CrashReporter.recordSDK(error, at: "joint.close")
             print("[Joint] close failed: \(error.localizedDescription)")
             return false
         }
@@ -1155,6 +1168,7 @@ final class JointAccountService {
                 for d in snap.documents { try? await d.reference.delete() }
             }
         } catch {
+            CrashReporter.recordSDK(error, at: "joint.account_delete")
             print("[Joint][account-delete] \(error.localizedDescription)")
         }
         stop()
@@ -1208,6 +1222,7 @@ final class JointAccountService {
     private func commit(_ batch: WriteBatch, failure key: String) {
         Task {
             do { try await batch.commit() } catch {
+                CrashReporter.recordSDK(error, at: "joint.write")
                 print("[Joint] write refused: \(error.localizedDescription)")
                 failure = loc(key)
             }
@@ -1266,6 +1281,7 @@ final class JointAccountService {
                 try await ref.collection("members").document(uid).setData(["displayName": wanted], merge: true)
                 if owner { try await ref.updateData(["ownerName": wanted]) }
             } catch {
+                CrashReporter.recordSDK(error, at: "joint.name_sync")
                 print("[Joint] name sync refused: \(error.localizedDescription)")
             }
             nameSyncing.remove(accountId)

@@ -492,13 +492,16 @@ struct RootView: View {
                 // user_notifications doc — produced TWO banners and TWO bell
                 // rows per reply. The single dual-channel path below (FCM
                 // banner + this Firestore-backed bell) is the source of truth.
-                FirebaseSupportService.shared.startListeningForAdminNotifications()
-                // Register this device's push token under the freshly
-                // signed-in user so the admin panel can target them, once the
-                // email they typed before has been brought back.
-                Task {
-                    await UserSession.shared.restoreEmail()
-                    await FirebaseSupportService.shared.registerCurrentDeviceToken()
+                // Online only: never from a test run (DiPo/RunContext.swift).
+                if RunContext.isOnline {
+                    FirebaseSupportService.shared.startListeningForAdminNotifications()
+                    // Register this device's push token under the freshly
+                    // signed-in user so the admin panel can target them, once
+                    // the email they typed before has been brought back.
+                    Task {
+                        await UserSession.shared.restoreEmail()
+                        await FirebaseSupportService.shared.registerCurrentDeviceToken()
+                    }
                 }
             } else {
                 FirebaseSupportService.shared.stopListening()
@@ -552,7 +555,11 @@ struct RootView: View {
             UserSession.shared.backfillNameFromFirebaseIfNeeded()
             authVM.bootstrap()
             HapticManager.shared.prepare()
-            CurrencyManager.shared.fetchRate()
+            // The lines marked "online" below talk to Firebase, RevenueCat or
+            // another service, and are skipped when XCTest launched the app
+            // (DiPo/RunContext.swift). Everything else runs either way.
+            let online = RunContext.isOnline
+            if online { CurrencyManager.shared.fetchRate() }
             SalaryCreditEngine.processIfNeeded(context: context)
             RecurringExpenseEngine.processIfNeeded(context: context)
             // Seed the daily-rollup cache (see RollupEngine). Loads the persisted
@@ -580,17 +587,23 @@ struct RootView: View {
             // Never call Purchases.configure() a second time anywhere else in the app.
             // Previously a duplicate call existed in App.init() with a test key, which caused
             // an EXC_BREAKPOINT crash (SDK assertionFailure) within ~3 ms of launch.
-            let rcKey = Bundle.main.object(forInfoDictionaryKey: "REVENUECAT_API_KEY") as? String ?? ""
-            Purchases.configure(withAPIKey: rcKey)
-            PremiumManager.shared.checkActiveSubscription()
+            // Online: under tests RevenueCat stays unconfigured, and every
+            // Purchases call in PremiumManager and CreditPacks checks first.
+            if online {
+                let rcKey = Bundle.main.object(forInfoDictionaryKey: "REVENUECAT_API_KEY") as? String ?? ""
+                Purchases.configure(withAPIKey: rcKey)
+                PremiumManager.shared.checkActiveSubscription()
+            }
             // Clear any stuck app-icon badge left by a prior local push.
             NotificationManager.shared.syncAppBadge()
             // Tag crash reports with the current user (covers returning users
             // restored from Keychain, where the userID onChange doesn't fire).
             CrashReporter.setUser(UserSession.shared.userID)
             // Listen for an admin-triggered maintenance window (real-time).
-            FirebaseSupportService.shared.startListeningForMaintenance()
-            ScreenAnalytics.shared.startListening()
+            if online {
+                FirebaseSupportService.shared.startListeningForMaintenance()
+                ScreenAnalytics.shared.startListening()
+            }
             // Admin broadcast + ticket-reply listener — on launch its initial
             // snapshot replays any admin notification (broadcasts AND support
             // replies) written to user_notifications while the app was closed,
@@ -598,7 +611,7 @@ struct RootView: View {
             // (sent by the admin panel) handles the lock-screen banner. See the
             // userID `.onChange` above for why the older startListeningForReplies
             // path was removed (it double-fired notifications).
-            FirebaseSupportService.shared.startListeningForAdminNotifications()
+            if online { FirebaseSupportService.shared.startListeningForAdminNotifications() }
             // Register this device's push token on every launch too — the
             // userID `.onChange` above does NOT fire for users restored
             // from Keychain at startup, so returning users would otherwise
@@ -606,16 +619,18 @@ struct RootView: View {
             // them. The email the user typed in Profile is restored from the
             // server first (UserSession.restoreEmail), so the token's doc
             // carries it rather than Apple's relay address.
-            Task {
-                await UserSession.shared.restoreEmail()
-                await FirebaseSupportService.shared.registerCurrentDeviceToken()
+            if online {
+                Task {
+                    await UserSession.shared.restoreEmail()
+                    await FirebaseSupportService.shared.registerCurrentDeviceToken()
+                }
+                // ✅ Pre-fetch Indonesian public holidays for this year + next year
+                // from api-harilibur.vercel.app (free, no auth). Cached for offline use.
+                IndonesianHolidayService.shared.prefetch()
+                // ✅ Register for remote (APNs/FCM) push notifications.
+                // This is what allows notifications even when the app is fully closed.
+                NotificationManager.registerForRemotePushNotifications()
             }
-            // ✅ Pre-fetch Indonesian public holidays for this year + next year
-            // from api-harilibur.vercel.app (free, no auth). Cached for offline use.
-            IndonesianHolidayService.shared.prefetch()
-            // ✅ Register for remote (APNs/FCM) push notifications.
-            // This is what allows notifications even when the app is fully closed.
-            NotificationManager.registerForRemotePushNotifications()
             UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, _ in
                 // Arm the evening check-in as soon as there is permission. The
                 // Home card corrects today's as soon as it renders, which is

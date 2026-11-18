@@ -60,6 +60,8 @@ final class CreditPackStore {
     private var packages: [String: Package] = [:]
 
     func load() async {
+        // RevenueCat is configured at launch; not in a test run (RunContext).
+        guard Purchases.isConfigured else { phase = .unavailable; return }
         phase = .loading
         do {
             let offerings = try await Purchases.shared.offerings()
@@ -74,6 +76,7 @@ final class CreditPackStore {
             packs = CreditPacks.sorted(found)
             phase = packs.isEmpty ? .unavailable : .ready
         } catch {
+            CrashReporter.recordSDK(error, at: "purchases.packs_offerings")
             print("[CreditPacks] offerings error: \(error.localizedDescription)")
             phase = .unavailable
         }
@@ -104,6 +107,7 @@ final class CreditPackStore {
         } catch {
             // RevenueCat's own wording is English and technical; the console
             // keeps it, the person gets a plain sentence.
+            CrashReporter.recordSDK(error, at: "purchases.packs")
             print("[CreditPacks] purchase error: \(error.localizedDescription)")
             phase = .failed(loc("packs.err.generic"))
             return false

@@ -73,6 +73,7 @@ enum FirebaseAccountLinker {
                     // stranding them on an anonymous one.
                     print("[DiPo] Firebase (\(label)) already linked elsewhere; signing into it")
                 } else {
+                    CrashReporter.recordSDK(error, at: "auth.link")
                     print("[DiPo] Firebase (\(label)) link failed: \(error.localizedDescription)")
                 }
                 let recovery = error.userInfo[AuthErrors.userInfoUpdatedCredentialKey] as? AuthCredential
@@ -184,6 +185,7 @@ final class UserSession {
             )
             FirebaseAccountLinker.signInPreservingAccount(firebaseCredential, label: "Apple") { [weak self] result, error in
                 if let error = error {
+                    CrashReporter.recordSDK(error, at: "auth.apple")
                     print("[DiPo] Firebase Auth (Apple) error: \(error.localizedDescription)")
                 } else {
                     print("[DiPo] Firebase Auth (Apple) signed in: \(result?.user.uid ?? "")")
@@ -226,6 +228,7 @@ final class UserSession {
             )
             FirebaseAccountLinker.signInPreservingAccount(firebaseCredential, label: "Google") { [weak self] authResult, authError in
                 if let authError = authError {
+                    CrashReporter.recordSDK(authError, at: "auth.google")
                     print("[DiPo] Firebase Auth (Google) error: \(authError.localizedDescription)")
                 } else {
                     print("[DiPo] Firebase Auth (Google) signed in: \(authResult?.user.uid ?? "")")

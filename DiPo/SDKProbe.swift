@@ -5,7 +5,9 @@ import FirebaseCore
 import FirebaseAuth
 import FirebaseFirestore
 import FirebaseMessaging
+import FirebaseCrashlytics
 import GoogleSignIn
+import RevenueCat
 
 // MARK: - SDK probe (Debug builds only)
 //
@@ -42,6 +44,14 @@ enum SDKProbe {
     static var notificationsReachTheApp: Bool {
         UNUserNotificationCenter.current().delegate is AppDelegate
     }
+
+    // What a test run left switched off (DiPo/RunContext.swift).
+    static var revenueCatConfigured: Bool { Purchases.isConfigured }
+    static var crashReportsOn: Bool { Crashlytics.crashlytics().isCrashlyticsCollectionEnabled() }
+    static var pushAutoInitOn: Bool { Messaging.messaging().isAutoInitEnabled }
+    /// Signed in to the app's real Firebase project, as opposed to the
+    /// emulator's separate one.
+    static var signedInToRealFirebase: Bool { Auth.auth().currentUser != nil }
 }
 
 // MARK: - Firebase on the local emulator
