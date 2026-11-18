@@ -1,0 +1,49 @@
+# Which DiPo build is live on the App Store, which is in review, and the
+# latest uploads. Run by hand: Actions → App Store status → Run workflow.
+# The table is in the run's summary. Reads only, with the same App Store
+# Connect key release.yml uses; prints no secret.
+name: App Store status
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  status:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      BUNDLE_ID: com.fahmiaquinas.DiPo
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: App Store Connect API key
+        env:
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+        run: |
+          dir="$RUNNER_TEMP/asc"; mkdir -p "$dir"; chmod 700 "$dir"
+          key="$dir/AuthKey.p8"
+          # Accept the .p8 as pasted text or as base64 of the file.
+          if printf '%s' "$ASC_KEY_P8" | grep -q "BEGIN PRIVATE KEY"; then
+            printf '%s\n' "$ASC_KEY_P8" > "$key"
+          else
+            printf '%s' "$ASC_KEY_P8" | base64 --decode > "$key"
+          fi
+          chmod 600 "$key"
+          grep -q "BEGIN PRIVATE KEY" "$key" || { echo "::error::ASC_KEY_P8 is not a .p8 private key"; exit 1; }
+          echo "ASC_KEY_PATH=$key" >> "$GITHUB_ENV"
+
+      - name: Status
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: node ci/asc-status.mjs | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Clean up
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/asc"
