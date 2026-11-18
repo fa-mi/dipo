@@ -28,8 +28,13 @@ import FirebaseAppCheck
 // tokens, or those builds are refused once enforcement is on.
 enum AppCheckSetup {
     /// Call before `FirebaseApp.configure()`.
+    ///
+    /// Not in a test run (DiPo/RunContext.swift): the debug provider would ask
+    /// the real App Check service for a token from the CI machine, which has
+    /// no registered debug token, and log a refusal on every run.
     static func install() {
         #if canImport(FirebaseAppCheck)
+        guard RunContext.isOnline else { return }
         AppCheck.setAppCheckProviderFactory(DiPoAppCheckProviderFactory())
         #endif
     }
