@@ -1,6 +1,10 @@
 # Weekly pull requests for newer versions of what DiPo is built on. Each one
 # runs the full CI, including SDKSetupTests and the sdk-emulator job, so an
 # update that breaks an SDK's wiring shows up red before anyone merges it.
+#
+# The Swift PRs also raise the package's minimum version in
+# DiPo.xcodeproj/project.pbxproj (Fahmi's working file), next to
+# Package.resolved. Merge them when the local project has no unpushed edits.
 version: 2
 updates:
   # The SDKs: Firebase, Google Sign-In and RevenueCat, as Swift packages in
@@ -14,6 +18,12 @@ updates:
       time: "06:00"
       timezone: Asia/Jakarta
     open-pull-requests-limit: 5
+    # Minor and patch releases only. A new major version (Firebase 12 → 13,
+    # Google Sign-In 9 → 10) changes APIs and needs real migration work in
+    # its own PR; the first run's group PR for one failed to build.
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
     groups:
       # Firebase and the Google libraries it pulls in move together; one PR
       # for the lot rather than a dozen that only work as a set.
