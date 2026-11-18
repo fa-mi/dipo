@@ -1,0 +1,43 @@
+# Weekly pull requests for newer versions of what DiPo is built on. Each one
+# runs the full CI, including SDKSetupTests and the sdk-emulator job, so an
+# update that breaks an SDK's wiring shows up red before anyone merges it.
+version: 2
+updates:
+  # The SDKs: Firebase, Google Sign-In and RevenueCat, as Swift packages in
+  # the Xcode project. Dependabot moves Package.resolved within the version
+  # ranges the project file sets; it does not change those ranges.
+  - package-ecosystem: swift
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Asia/Jakarta
+    open-pull-requests-limit: 5
+    groups:
+      # Firebase and the Google libraries it pulls in move together; one PR
+      # for the lot rather than a dozen that only work as a set.
+      firebase-and-google:
+        patterns:
+          - "*firebase*"
+          - "*google*"
+          - "*grpc*"
+          - "*abseil*"
+          - "*leveldb*"
+          - "*nanopb*"
+          - "*promises*"
+          - "*gtm*"
+          - "*app-check*"
+          - "*appauth*"
+
+  # The actions the workflows use (checkout, cache, setup-node, ...).
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Asia/Jakarta
+    groups:
+      actions:
+        patterns: ["*"]

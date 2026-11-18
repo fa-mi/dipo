@@ -32,6 +32,30 @@ final class SDKSetupTests: XCTestCase {
         Bundle.main.object(forInfoDictionaryKey: key)
     }
 
+    // MARK: A test run stays off production
+
+    /// XCTest's launch of the app is recognised, and nothing in it reaches
+    /// the real services: RevenueCat is never configured (no customer added
+    /// to its dashboard), crash reports and push registration are off, and
+    /// no anonymous account is made in the real Firebase project.
+    func testATestRunStaysOffProduction() {
+        XCTAssertTrue(RunContext.isUnderTest, "the app did not notice it was launched by XCTest")
+        XCTAssertFalse(RunContext.isOnline)
+        XCTAssertFalse(SDKProbe.revenueCatConfigured, "RevenueCat was configured with the real key in a test run")
+        XCTAssertFalse(SDKProbe.crashReportsOn, "a test run would send crash reports to the real dashboard")
+        XCTAssertFalse(SDKProbe.pushAutoInitOn, "a test run would register a push token")
+        XCTAssertFalse(SDKProbe.signedInToRealFirebase, "the app signed in to the real Firebase project")
+    }
+
+    /// With RevenueCat unconfigured, the calls the app makes on launch and on
+    /// returning to the foreground do nothing rather than crash.
+    func testPurchasesWaitForRevenueCat() {
+        PremiumManager.shared.checkActiveSubscription()
+        PremiumManager.shared.fetchPricing()
+        PremiumManager.shared.restorePurchases()
+        XCTAssertFalse(SDKProbe.revenueCatConfigured)
+    }
+
     // MARK: Firebase
 
     /// The Firebase file belongs to this app and to DiPo's project. A file

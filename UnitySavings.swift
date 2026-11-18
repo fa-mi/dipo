@@ -168,7 +168,7 @@ final class UnitySavingsService {
                 guard let self else { return }
                 Task { @MainActor in
                     self.isLoading = false
-                    if let err { print("[Unity] listen error: \(err)"); return }
+                    if let err { CrashReporter.recordSDK(err, at: "unity.listen"); print("[Unity] listen error: \(err)"); return }
                     self.goals = (snap?.documents ?? [])
                         .compactMap { SharedGoal(id: $0.documentID, data: $0.data()) }
                         .filter { $0.status == "active" }
@@ -191,7 +191,7 @@ final class UnitySavingsService {
             .addSnapshotListener { [weak self] snap, err in
                 guard let self else { return }
                 Task { @MainActor in
-                    if let err { print("[Unity] invites listen error: \(err)"); return }
+                    if let err { CrashReporter.recordSDK(err, at: "unity.listen_invites"); print("[Unity] invites listen error: \(err)"); return }
                     self.pendingInvites = (snap?.documents ?? [])
                         .compactMap { SharedInvite(id: $0.documentID, data: $0.data()) }
                         .filter { $0.status == "pending" }
@@ -270,7 +270,7 @@ final class UnitySavingsService {
         do {
             try await batch.commit()
             return true
-        } catch { print("[Unity] addContribution error: \(error)"); return false }
+        } catch { CrashReporter.recordSDK(error, at: "unity.contribute"); print("[Unity] addContribution error: \(error)"); return false }
     }
 
     /// Self-heal: member rows written before the display name had loaded show a
@@ -355,7 +355,7 @@ final class UnitySavingsService {
             }
             try await goalRef.collection("members").document(target).setData(["status": newStatus], merge: true)
             return true
-        } catch { print("[Unity] removeUid error: \(error)"); return false }
+        } catch { CrashReporter.recordSDK(error, at: "unity.remove_member"); print("[Unity] removeUid error: \(error)"); return false }
     }
 
     /// Owner deletes the goal for everyone — including everything hanging off it.
@@ -690,6 +690,7 @@ final class UnitySavingsService {
             try await batch.commit()
             return true
         } catch {
+            CrashReporter.recordSDK(error, at: "unity.create")
             print("[Unity] createGoal error: \(error)")
             return false
         }
@@ -709,7 +710,7 @@ final class UnitySavingsService {
             .addSnapshotListener { [weak self] snap, err in
                 guard let self else { return }
                 Task { @MainActor in
-                    if let err { print("[Unity] account goals listen error: \(err)"); return }
+                    if let err { CrashReporter.recordSDK(err, at: "unity.listen_account_goals"); print("[Unity] account goals listen error: \(err)"); return }
                     let goals = (snap?.documents ?? [])
                         .compactMap { SharedGoal(id: $0.documentID, data: $0.data()) }
                         .filter { $0.status == "active" }

@@ -79,6 +79,7 @@ final class AccountDeletionService {
             if e.code == 17014 {   // FIRAuthErrorCodeRequiresRecentLogin
                 return .requiresRecentLogin
             }
+            CrashReporter.recordSDK(e, at: "account_delete.auth")
             print("[DiPo][account-delete] ✗ auth delete failed: \(e.localizedDescription)")
             return .failed(UserFacingError.message(e))
         }

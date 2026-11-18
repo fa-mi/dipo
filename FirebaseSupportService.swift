@@ -175,6 +175,7 @@ final class FirebaseSupportService {
                 try await ticketRef.collection("media").document(String(index))
                     .setData(["data": encoded, "index": index])
             } catch {
+                CrashReporter.recordSDK(error, at: "support.media_upload")
                 print("[DiPo] ticket media \(index) upload failed: \(error.localizedDescription)")
             }
         }
@@ -215,6 +216,7 @@ final class FirebaseSupportService {
         do {
             _ = try await URLSession.shared.data(for: req)
         } catch {
+            CrashReporter.recordSDK(error, at: "support.created_email")
             print("[DiPo] ticket_created email failed: \(error.localizedDescription)")
         }
     }
@@ -244,6 +246,7 @@ final class FirebaseSupportService {
                     try? await doc.reference.updateData(["fcmToken": token])
                 }
             } catch {
+                CrashReporter.recordSDK(error, at: "push.token_on_tickets")
                 print("[DiPo] updateFCMToken error: \(error)")
             }
         }
@@ -284,6 +287,7 @@ final class FirebaseSupportService {
             ])
             print("[DiPo] device_tokens/\(userId) token detached ✓")
         } catch {
+            CrashReporter.recordSDK(error, at: "push.unregister")
             print("[DiPo] unregisterDeviceToken error: \(error)")
         }
     }
@@ -349,6 +353,7 @@ final class FirebaseSupportService {
                 .setData(data, merge: true)
             print("[DiPo] device_tokens/\(userId) registered ✓")
         } catch {
+            CrashReporter.recordSDK(error, at: "push.register")
             print("[DiPo] registerDeviceToken error: \(error)")
         }
     }
@@ -365,6 +370,7 @@ final class FirebaseSupportService {
                 "updatedAt": FieldValue.serverTimestamp(),
             ], merge: true)
         } catch {
+            CrashReporter.recordSDK(error, at: "push.token_email")
             print("[DiPo] device_tokens email save failed: \(error.localizedDescription)")
         }
     }
@@ -432,6 +438,7 @@ final class FirebaseSupportService {
             }
             print("[DiPo] users/\(uid) + dipoIndex/\(dipoID) registered ✓ (name='\(resolved.isEmpty ? "—" : resolved)')")
         } catch {
+            CrashReporter.recordSDK(error, at: "profile.register")
             print("[DiPo] registerUserProfile error: \(error)")
         }
     }
@@ -458,6 +465,7 @@ final class FirebaseSupportService {
             // APNs not ready yet (capability missing, simulator, or token
             // still in flight). Fall back to whatever is cached; the
             // token-refresh callback will register later when it arrives.
+            CrashReporter.recordSDK(error, at: "push.fcm_token")
             print("[DiPo] Messaging.token() failed: \(error)")
             if let cached = UserDefaults.standard.string(forKey: "dipo_fcm_token") {
                 await registerDeviceToken(cached)
@@ -530,6 +538,7 @@ final class FirebaseSupportService {
         } catch {
             await MainActor.run {
                 fetchError = Self.fetchErrorMessage(error)
+                CrashReporter.recordSDK(error, at: "support.fetch")
                 print("[DiPo Support] fetchTickets failed: \(error)")
             }
         }
@@ -587,6 +596,7 @@ final class FirebaseSupportService {
             if status != 200 { print("[DiPo Support] claim-tickets answered \(status)") }
             return status == 200
         } catch {
+            CrashReporter.recordSDK(error, at: "support.claim")
             print("[DiPo Support] claim-tickets failed: \(error.localizedDescription)")
             return false
         }
@@ -755,6 +765,7 @@ final class FirebaseSupportService {
             .collection("items")
             .addSnapshotListener { snapshot, error in
                 if let error {
+                    CrashReporter.recordSDK(error, at: "notifications.listen")
                     print("[DiPo] admin notif listener error: \(error.localizedDescription)")
                     return
                 }

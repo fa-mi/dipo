@@ -205,6 +205,7 @@ enum AccountReconnect {
         let code = AuthErrorCode(rawValue: error.code)
         lastFailure = Failure(step: "link", code: error.code)
         guard code == .credentialAlreadyInUse || code == .emailAlreadyInUse else {
+            CrashReporter.recordSDK(error, at: "reconnect.link")
             print("[Reconnect] link failed: \(error.localizedDescription)")
             return .failed
         }
@@ -344,6 +345,7 @@ enum AccountReconnect {
             }
             return (snap.data()?["uid"] as? String) == uid
         } catch {
+            CrashReporter.recordSDK(error, at: "reconnect.dipo_index")
             print("[Reconnect] dipoIndex check failed: \(error.localizedDescription)")
             lastFailure = Failure(step: "index", code: (error as NSError).code)
             return false
@@ -376,6 +378,7 @@ enum AccountReconnect {
             }
             return true
         } catch {
+            CrashReporter.recordSDK(error, at: "reconnect.reclaim")
             print("[Reconnect] reclaim failed: \(error.localizedDescription)")
             lastFailure = Failure(step: "reclaim", code: (error as NSError).code, detail: "network")
             return false
