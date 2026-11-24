@@ -259,8 +259,7 @@ struct MonthFlowCard: View {
                 // The empty part of the line, named: on the last day "Today"
                 // sat at the line's end and the 10% still left read as full.
                 if pct.used < 100 {
-                    lineKey(swatch: AppTheme.cardDark, outline: true,
-                            text: loc("home.left_of_income") + " \(100 - pct.used)%")
+                    lineKey(swatch: PeriodLine.rest, text: loc("home.left_of_income") + " \(100 - pct.used)%")
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -269,12 +268,10 @@ struct MonthFlowCard: View {
         .accessibilityLabel(lineLabel(pct))
     }
 
-    private func lineKey(swatch: Color, outline: Bool = false, text: String) -> some View {
+    private func lineKey(swatch: Color, text: String) -> some View {
         HStack(spacing: 5) {
             RoundedRectangle(cornerRadius: 2)
                 .fill(swatch)
-                .overlay(RoundedRectangle(cornerRadius: 2)
-                    .strokeBorder(outline ? PeriodLine.rim : .clear, lineWidth: 1))
                 .frame(width: 7, height: 7)
             Text(text)
         }
@@ -344,9 +341,10 @@ private struct PeriodLine: View {
     let today: Double?
     let livingInk: Color
 
-    /// The line's empty part: the card's own surface inside a thin rim, so
-    /// what is left reads as room, not as more line.
-    static let rim = AppTheme.textSecondary.opacity(0.45)
+    /// The line's empty part: a neutral clearly lighter than the ink and the
+    /// blue, so what is left reads as room, not as more line. No rim: Home
+    /// draws no borders (HomeMinimalTests).
+    static let rest = AppTheme.textSecondary.opacity(0.25)
 
     var body: some View {
         GeometryReader { g in
@@ -376,8 +374,7 @@ private struct PeriodLine: View {
                     .frame(width: w, alignment: today >= 0.5 ? .leading : .trailing)
                 }
                 ZStack(alignment: .leading) {
-                    Capsule().fill(AppTheme.cardDark)
-                        .overlay(Capsule().strokeBorder(Self.rim, lineWidth: 1))
+                    Capsule().fill(Self.rest)
                     HStack(spacing: 0) {
                         Rectangle().fill(livingInk).frame(width: w * l)
                         Rectangle().fill(AppTheme.blue).frame(width: w * p)
