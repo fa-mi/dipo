@@ -129,10 +129,12 @@ struct MonthlyRecap: Equatable {
 
     // MARK: The pot
 
-    /// The rows Statistics reads: the main card and its bill cards, or every
-    /// card when no main card has been chosen.
+    /// The rows Statistics reads: the main card and its bill cards with what
+    /// was bought on credit cards, or every card when no main card has been
+    /// chosen.
     static func transactions(in cards: [BankCard]) -> [TxRecord] {
-        MainCard.potTransactions(in: cards) ?? cards.flatMap(\.transactions)
+        MainCard.resolve(in: cards) == nil
+            ? cards.flatMap(\.transactions) : MainCard.budgetSpendingTransactions(in: cards)
     }
 
     /// Statistics' currency: the main card's.

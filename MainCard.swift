@@ -132,9 +132,13 @@ enum MainCard {
     }
 
     /// What the budget counts as spending: the pot's rows and credit-card
-    /// purchases. Empty without a main card, like `budgetTransactions`. Cash
-    /// views — Statistics, the period card on Home, the balance — keep reading
-    /// the pot alone, since a card purchase moves no money out of it.
+    /// purchases. Empty without a main card, like `budgetTransactions`.
+    /// Smart Budget, Home's period card, Statistics, the Siri summary and the
+    /// monthly recap all count them; before, the cash views left card shopping
+    /// out and "Left" read too high. The
+    /// balance and the cash book stay the pot's: a card purchase moves no money
+    /// out of it until the bill is paid, and that payment is a transfer.
+    /// PeriodCashBook carries the card's part as `onCard`.
     static func budgetSpendingTransactions(in cards: [BankCard]) -> [TxRecord] {
         guard resolve(in: cards) != nil else { return [] }
         return budgetTransactions(in: cards) + creditCardSpending(in: cards)

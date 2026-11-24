@@ -711,6 +711,7 @@ struct FinancialBriefingView: View {
                     guard let card = MainCard.resolve(in: cards),
                           let day = MainCard.payDay(salaries) else { return nil }
                     return StatisticsView.projectedCycleSpend(card: card, billCards: MainCard.billCards(in: cards),
+                                                              creditCards: cards.filter(\.isCreditCard),
                                                               payDay: day,
                                                               recurrings: recurrings,
                                                               currency: CurrencyManager.shared.preferredCurrency,

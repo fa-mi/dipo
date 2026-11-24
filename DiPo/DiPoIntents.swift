@@ -221,7 +221,9 @@ struct MoneyLeftSummary {
         }
         let start = cycle?.start ?? cal.safeDate(from: cal.dateComponents([.year, .month], from: now))
         let all = scope.flatMap(\.transactions)
-        let rows = all.filter { $0.date >= start }
+        // Living counts credit-card purchases too, as Home does.
+        let cardRows = MainCard.isMain(main) ? MainCard.creditCardSpending(in: cards) : []
+        let rows = (all + cardRows).filter { $0.date >= start }
         let convert: (TxRecord) -> Double = {
             CurrencyManager.shared.convert($0.amount, from: $0.currency, to: currency)
         }

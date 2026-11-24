@@ -291,7 +291,7 @@ extension StatisticsView {
     /// Money in that isn't income but the person added to this period's
     /// budget (ExtraFunds).
     var periodExtraFunds: Double {
-        ExtraFunds.total(in: filteredTx, from: .distantPast, currency: displayCurrency)
+        ExtraFunds.total(in: filteredCashTx, from: .distantPast, currency: displayCurrency)
     }
 
     /// What living costs are measured against: income, plus that.
@@ -348,8 +348,9 @@ extension StatisticsView {
     /// Nil without a card to read a balance from.
     var cashBook: PeriodCashBook? {
         guard let start = periodStartBalance else { return nil }
-        var book = PeriodCashBook.build(filteredTx, start: start, convert: convertedAmount,
-                                        movedFrom: OwnMoves.arrivals(into: scopeCards, cards: appVM.cards))
+        var book = PeriodCashBook.build(filteredCashTx, start: start, convert: convertedAmount,
+                                        movedFrom: OwnMoves.arrivals(into: scopeCards, cards: appVM.cards),
+                                        cardSpending: filteredCardTx)
         book.extraFunds = periodExtraFunds
         return book
     }
@@ -374,6 +375,12 @@ extension StatisticsView {
                          tint: AppTheme.accent)
             }
             bookLine(loc("stats.book_living"), book.living, op: "−")
+            // Bought on a credit card: in the spending above, but on the
+            // card's bill rather than out of this balance.
+            if book.onCard >= 0.5 {
+                bookLine(loc("stats.book_on_card"), book.onCard, op: "+",
+                         caption: loc("stats.book_on_card_note"))
+            }
             if book.debtPaid >= 0.5 {
                 bookLine(loc("stats.book_debt"), book.debtPaid, op: "−",
                          caption: loc("stats.book_debt_note"), tint: AppTheme.blue)
@@ -430,7 +437,7 @@ extension StatisticsView {
 
     /// The moves between own cards, one line per other card. See OwnMoves.
     var ownMoveLines: [OwnMoves.Line] {
-        OwnMoves.lines(filteredTx, scope: scopeCards, cards: appVM.cards, convert: convertedAmount)
+        OwnMoves.lines(filteredCashTx, scope: scopeCards, cards: appVM.cards, convert: convertedAmount)
     }
 
     /// "Between your own accounts", which opens into where the money came
@@ -785,7 +792,7 @@ extension StatisticsView {
     /// Transfers for the current tab, shown beside the breakdown and never
     /// added to it (see NonFlowMovements).
     var nonFlowRows: [NonFlowMovements.Row] {
-        NonFlowMovements.rows(filteredTx, incoming: statsVM.selectedStatTab != .expenses,
+        NonFlowMovements.rows(filteredCashTx, incoming: statsVM.selectedStatTab != .expenses,
                               amount: { convertedAmount($0) })
     }
 
