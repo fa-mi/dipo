@@ -256,17 +256,11 @@ struct MonthFlowCard: View {
                 if putAway > 0.5 {
                     lineKey(swatch: AppTheme.blue, text: loc("home.debts_and_savings") + " \(pct.putAway)%")
                 }
-                if mark != nil {
-                    HStack(spacing: 5) {
-                        RoundedRectangle(cornerRadius: 1)
-                            .fill(AppTheme.textPrimary)
-                            .frame(width: 2, height: 10)
-                        Text(loc("home.today_mark"))
-                    }
-                    .font(.system(.caption2))
-                    .foregroundStyle(AppTheme.textSecondary)
-                    .lineLimit(1)
-                    .fixedSize()
+                // The empty part of the line, named: on the last day "Today"
+                // sat at the line's end and the 10% still left read as full.
+                if pct.used < 100 {
+                    lineKey(swatch: AppTheme.cardDark, outline: true,
+                            text: loc("home.left_of_income") + " \(100 - pct.used)%")
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -275,10 +269,12 @@ struct MonthFlowCard: View {
         .accessibilityLabel(lineLabel(pct))
     }
 
-    private func lineKey(swatch: Color, text: String) -> some View {
+    private func lineKey(swatch: Color, outline: Bool = false, text: String) -> some View {
         HStack(spacing: 5) {
             RoundedRectangle(cornerRadius: 2)
                 .fill(swatch)
+                .overlay(RoundedRectangle(cornerRadius: 2)
+                    .strokeBorder(outline ? PeriodLine.rim : .clear, lineWidth: 1))
                 .frame(width: 7, height: 7)
             Text(text)
         }
@@ -292,6 +288,7 @@ struct MonthFlowCard: View {
     private func lineLabel(_ pct: (used: Int, living: Int, putAway: Int)) -> String {
         var parts = [loc("home.spending") + " \(pct.living)%"]
         if putAway > 0.5 { parts.append(loc("home.debts_and_savings") + " \(pct.putAway)%") }
+        if pct.used < 100 { parts.append(loc("home.left_of_income") + " \(100 - pct.used)%") }
         if let d = cycleDay { parts.append(String(format: loc("stats.day_of"), d.day, d.of)) }
         return parts.joined(separator: ", ")
     }
@@ -347,32 +344,64 @@ private struct PeriodLine: View {
     let today: Double?
     let livingInk: Color
 
+    /// The line's empty part: the card's own surface inside a thin rim, so
+    /// what is left reads as room, not as more line.
+    static let rim = AppTheme.textSecondary.opacity(0.45)
+
     var body: some View {
         GeometryReader { g in
             let w = g.size.width
             let l = min(max(living, 0), 1)
             let p = min(max(putAway, 0), 1 - l)
-            ZStack(alignment: .leading) {
-                Capsule().fill(AppTheme.cardMid).frame(height: 6)
-                HStack(spacing: 0) {
-                    Rectangle().fill(livingInk).frame(width: w * l)
-                    Rectangle().fill(AppTheme.blue).frame(width: w * p)
-                }
-                .frame(width: w, height: 6, alignment: .leading)
-                .clipShape(Capsule())
+            VStack(alignment: .leading, spacing: 3) {
+                // Today above the line, a label and a small caret pointing
+                // down at it. Drawn across the line, the mark sat at its end
+                // on the last day of a period and made it look full.
                 if let today {
-                    // A gap in the card's own colour on each side keeps the
-                    // mark sharp where it crosses the fill.
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 2).fill(AppTheme.cardDark).frame(width: 6, height: 18)
-                        RoundedRectangle(cornerRadius: 1).fill(AppTheme.textPrimary).frame(width: 2, height: 14)
+                    let x = w * min(max(today, 0), 1)
+                    VStack(alignment: today >= 0.5 ? .trailing : .leading, spacing: 1) {
+                        Text(loc("home.today_mark"))
+                            .font(.system(.caption2))
+                            .foregroundStyle(AppTheme.textSecondary)
+                            .lineLimit(1)
+                            .fixedSize()
+                        Caret()
+                            .fill(AppTheme.textPrimary)
+                            .frame(width: 10, height: 6)
                     }
-                    .offset(x: min(max(w * today - 3, -2), w - 4))
+                    // Anchored at the caret: ending at it past halfway,
+                    // starting at it before, so the label stays on the card.
+                    .frame(width: today >= 0.5 ? min(x + 5, w) : max(w - x + 5, 0),
+                           alignment: today >= 0.5 ? .trailing : .leading)
+                    .frame(width: w, alignment: today >= 0.5 ? .leading : .trailing)
                 }
+                ZStack(alignment: .leading) {
+                    Capsule().fill(AppTheme.cardDark)
+                        .overlay(Capsule().strokeBorder(Self.rim, lineWidth: 1))
+                    HStack(spacing: 0) {
+                        Rectangle().fill(livingInk).frame(width: w * l)
+                        Rectangle().fill(AppTheme.blue).frame(width: w * p)
+                    }
+                    .frame(width: w, height: 6, alignment: .leading)
+                    .clipShape(Capsule())
+                }
+                .frame(width: w, height: 6)
             }
-            .frame(width: w, height: g.size.height)
+            .frame(width: w, height: g.size.height, alignment: .bottomLeading)
         }
-        .frame(height: 18)
+        .frame(height: today == nil ? 6 : 30)
+    }
+
+    /// A small triangle pointing down.
+    private struct Caret: Shape {
+        func path(in r: CGRect) -> Path {
+            var p = Path()
+            p.move(to: CGPoint(x: r.minX, y: r.minY))
+            p.addLine(to: CGPoint(x: r.maxX, y: r.minY))
+            p.addLine(to: CGPoint(x: r.midX, y: r.maxY))
+            p.closeSubpath()
+            return p
+        }
     }
 }
 

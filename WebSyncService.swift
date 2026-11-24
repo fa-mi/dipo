@@ -658,6 +658,7 @@ final class WebSyncService {
             let projected: Double? = {
                 guard let day = payDay, let card = mainCard else { return nil }
                 return StatisticsView.projectedCycleSpend(card: card, billCards: MainCard.billCards(in: cards),
+                                                          creditCards: cards.filter(\.isCreditCard),
                                                           payDay: day,
                                                           recurrings: recurrings, currency: base, now: now,
                                                           livingOnly: true)

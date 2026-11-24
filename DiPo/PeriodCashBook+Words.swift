@@ -43,7 +43,9 @@ extension PeriodCashBook {
         if extraFunds >= 0.5 {
             text += " " + String(format: loc("stats.extra_included"), money(extraFunds))
         }
-        if over, let why = overspend(deficit: -livingNet) {
+        // What the balance paid for. The part bought on a credit card is on
+        // its bill, said in the sentence after.
+        if over, let why = overspend(deficit: cashOverspend) {
             switch why {
             case .coveredBy(let label, let amount):
                 text += " " + String(format: loc("stats.over_covered"), label, money(amount))
@@ -55,7 +57,15 @@ extension PeriodCashBook {
                 break
             }
         }
+        if let card = cardSentence(money: money) { text += " " + card }
         return text
+    }
+
+    /// "Rp X of it was on a credit card, so it goes on the card's bill." Nil
+    /// when nothing was bought on one.
+    func cardSentence(money: (Double) -> String) -> String? {
+        guard onCard >= 0.5 else { return nil }
+        return String(format: loc("period.on_card"), money(onCard))
     }
 
     /// Debt paid down and money put away — named as what they are rather than

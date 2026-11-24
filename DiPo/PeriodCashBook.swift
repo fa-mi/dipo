@@ -35,6 +35,11 @@ struct PeriodCashBook: Equatable {
     var debtPaid: Double = 0
     /// Of `spent`: put into savings and investments.
     var invested: Double = 0
+    /// Of `spent`: bought on a credit card. It counts against income like any
+    /// spending, but no money left the balance for it: it goes on the card's
+    /// bill. Before, a card outside the pot meant its purchases were counted
+    /// nowhere, and the period's "Left" read higher than the money really left.
+    var onCard: Double = 0
     /// Money out that is not spending — a credit card bill, lending — largest first.
     var otherOut: [NonFlowMovements.Row]
     /// Net of moves between the user's own cards and wallets. Signed.
@@ -56,16 +61,27 @@ struct PeriodCashBook: Equatable {
     var otherInTotal: Double { otherIn.reduce(0) { $0 + $1.amount } }
     var otherOutTotal: Double { otherOut.reduce(0) { $0 + $1.amount } }
     /// Balance at the end of the window. Equals the card balance for a window
-    /// running to today.
-    var end: Double { start + income + otherInTotal - spent - otherOutTotal + ownMoves }
+    /// running to today. Spending on a credit card is added back: it is in
+    /// `spent` but took nothing from this balance.
+    var end: Double { start + income + otherInTotal - spent + onCard - otherOutTotal + ownMoves }
+
+    /// How far living costs passed income that the balance itself paid for:
+    /// the overspend less what went on a credit card. What a card paid is on
+    /// its bill, not "covered" by anything here.
+    var cashOverspend: Double { max(-livingNet - onCard, 0) }
 
     /// The book for `txs` (one card, one window), opened at `start`.
-    /// `movedFrom`: see CoverTimeline.walk.
+    /// `movedFrom`: see CoverTimeline.walk. `cardSpending`: purchases and
+    /// refunds on credit cards in the same window (MainCard.creditCardSpending),
+    /// counted as spending but not as money out of this balance.
     static func build(_ txs: [TxRecord], start: Double,
                       convert: (TxRecord) -> Double,
-                      movedFrom: ((TxRecord) -> String?)? = nil) -> PeriodCashBook {
+                      movedFrom: ((TxRecord) -> String?)? = nil,
+                      cardSpending: [TxRecord] = []) -> PeriodCashBook {
         let income = StatisticsView.income(txs, convert: convert)
-        let spent = StatisticsView.expenses(txs, convert: convert)
+        let onCard = StatisticsView.expenses(cardSpending, convert: convert)
+        let spent = StatisticsView.expenses(txs, convert: convert) + onCard
+        let spending = txs + cardSpending
         let transfers = txs.filter { $0.txSubtype == .transfer }.reduce(0.0) { $0 + convert($1) }
         let ins = NonFlowMovements.rows(txs, incoming: true, amount: convert)
         let outs = NonFlowMovements.rows(txs, incoming: false, amount: convert)
@@ -73,8 +89,9 @@ struct PeriodCashBook: Equatable {
         // between the user's own accounts.
         let own = transfers - ins.reduce(0) { $0 + $1.amount } + outs.reduce(0) { $0 + $1.amount }
         return PeriodCashBook(start: start, income: income, otherIn: ins, spent: spent,
-                              debtPaid: categorySpend(txs, .debtPayment, convert: convert),
-                              invested: categorySpend(txs, .investment, convert: convert),
+                              debtPaid: categorySpend(spending, .debtPayment, convert: convert),
+                              invested: categorySpend(spending, .investment, convert: convert),
+                              onCard: onCard,
                               otherOut: outs, ownMoves: abs(own) < 0.5 ? 0 : own,
                               cover: CoverTimeline.walk(txs, start: start, convert: convert, movedFrom: movedFrom))
     }
@@ -96,8 +113,9 @@ struct PeriodCashBook: Equatable {
     /// today, where the card's balance is the end. The start is what makes it add up.
     static func build(_ txs: [TxRecord], end: Double,
                       convert: (TxRecord) -> Double,
-                      movedFrom: ((TxRecord) -> String?)? = nil) -> PeriodCashBook {
-        var book = build(txs, start: 0, convert: convert)
+                      movedFrom: ((TxRecord) -> String?)? = nil,
+                      cardSpending: [TxRecord] = []) -> PeriodCashBook {
+        var book = build(txs, start: 0, convert: convert, cardSpending: cardSpending)
         book.start = end - book.end
         // The walk depends on the balance carried in, known only now.
         book.cover = CoverTimeline.walk(txs, start: book.start, convert: convert, movedFrom: movedFrom)

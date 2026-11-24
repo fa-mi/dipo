@@ -363,8 +363,25 @@ extension StatisticsView {
         return MainCard.budgetCards(in: appVM.cards)
     }
 
-    /// Every row in that pot.
-    var scopeTransactions: [TxRecord] { scopeCards.flatMap(\.transactions) }
+    /// Every row the screen's spending counts: the pot's, and purchases on
+    /// credit cards (MainCard.creditCardSpending), which are spending though
+    /// no money left the pot for them yet. The cash book and the balances
+    /// read `scopeCashTransactions`.
+    var scopeTransactions: [TxRecord] { scopeCashTransactions + cardSpendingTransactions }
+
+    /// Every row in the pot: the money the balance is made of.
+    var scopeCashTransactions: [TxRecord] { scopeCards.flatMap(\.transactions) }
+
+    /// Credit-card purchases and refunds, with a main card to measure them
+    /// against; none without one.
+    var cardSpendingTransactions: [TxRecord] {
+        selectedCard == nil ? [] : MainCard.creditCardSpending(in: appVM.cards)
+    }
+
+    /// The credit cards whose purchases are counted.
+    var spendingCreditCards: [BankCard] {
+        selectedCard == nil ? [] : appVM.cards.filter(\.isCreditCard)
+    }
 
     /// Each card's part of the balance, when there is more than one.
     var scopeBalanceSplit: String? {
@@ -382,7 +399,8 @@ extension StatisticsView {
     var scopeCardsLine: String? {
         guard let main = scopeCards.first else { return nil }
         return ([String(format: loc("stats.scope_main"), main.shortName(among: appVM.cards))]
-                + scopeCards.dropFirst().map { $0.shortName(among: appVM.cards) })
+                + scopeCards.dropFirst().map { $0.shortName(among: appVM.cards) }
+                + spendingCreditCards.map { $0.shortName(among: appVM.cards) })
             .joined(separator: " · ")
     }
 
@@ -396,7 +414,7 @@ extension StatisticsView {
 
     /// The card a row sits on, for its list row.
     func sourceCard(of tx: TxRecord) -> BankCard? {
-        let cards = scopeCards
+        let cards = scopeCards + spendingCreditCards
         guard cards.count > 1 else { return selectedCard }
         return cards.first { c in c.transactions.contains { $0.id == tx.id } } ?? selectedCard
     }
@@ -421,12 +439,28 @@ extension StatisticsView {
         return scopeTransactions.filter { $0.date >= start && $0.date <= end }
     }
 
+    /// The period's rows in the pot alone, for the cash book.
+    var filteredCashTx: [TxRecord] { cachedFilteredCashTx }
+
+    func computeFilteredCashTx() -> [TxRecord] {
+        guard selectedCard != nil else { return [] }
+        let (start, end) = effectiveRange
+        return scopeCashTransactions.filter { $0.date >= start && $0.date <= end }
+    }
+
+    /// The period's credit-card purchases and refunds.
+    var filteredCardTx: [TxRecord] {
+        let (start, end) = effectiveRange
+        return cardSpendingTransactions.filter { $0.date >= start && $0.date <= end }
+    }
+
     /// Recompute the memoized heavy derivations. Called on appear and whenever
     /// period / card / custom dates / tx count change — never per render.
     func recomputeStats() {
         // Rhythm first: everything below reads it.
         cachedRhythm = computeRhythm()
         cachedFilteredTx = computeFilteredTx()
+        cachedFilteredCashTx = computeFilteredCashTx()
         // Figures LAST: they read both of the above.
         cachedFigures = computeFigures()
         cachedPriorPeriod = computePriorPeriod()
@@ -1095,7 +1129,8 @@ extension StatisticsView {
     /// `livingOnly` takes out the debt paid and money put away so far, for a
     /// caller that holds the figure against income: Statistics' pace sentence
     /// does the same, or a card bill reads as a pace of overspending.
-    static func projectedCycleSpend(card: BankCard, billCards: [BankCard] = [], payDay: Int,
+    static func projectedCycleSpend(card: BankCard, billCards: [BankCard] = [],
+                                    creditCards: [BankCard] = [], payDay: Int,
                                     recurrings: [RecurringExpense],
                                     currency: String, now: Date = Date(),
                                     livingOnly: Bool = false) -> Double? {
@@ -1104,7 +1139,9 @@ extension StatisticsView {
             return CurrencyManager.shared.convert(tx.amount, from: from, to: currency)
         }
         let pot = [card] + billCards
-        let all = pot.flatMap(\.transactions)
+        // Purchases on credit cards are spending, as on Home and Statistics;
+        // the payments reaching those cards are transfers and stay out.
+        let all = pot.flatMap(\.transactions) + MainCard.creditCardSpending(in: creditCards)
         let salaryDates = StatPeriod.salaryDates(on: card)
         let cycle = StatPeriod.cycle(payDay: payDay, salaryDates: salaryDates, now: now)
         let window = all.filter { $0.date >= cycle.start && $0.date <= now }
@@ -1113,7 +1150,7 @@ extension StatisticsView {
         else { return nil }
         let rhythm = SpendingRhythm(history: all, convert: convert)
         let f = figures(for: window, rhythm: rhythm, convert: convert)
-        let upcoming = upcomingFixed(recurrings: recurrings, cardIDs: Set(pot.map(\.id)),
+        let upcoming = upcomingFixed(recurrings: recurrings, cardIDs: Set((pot + creditCards).map(\.id)),
                                      periodEnd: cycle.end, currency: currency, now: now)
         // The first week leans on the cycle before, as Statistics does.
         let prior = p.elapsed < settledDays
@@ -1138,7 +1175,7 @@ extension StatisticsView {
         // silently evaluated to zero. The window has to reach the next payday.
         guard let periodEnd = (selectedPeriod == .payCycle ? cycleBoundary(monthsFromNow: 1) : nil)
                 ?? cal.date(byAdding: .month, value: 1, to: start) else { return 0 }
-        return Self.upcomingFixed(recurrings: recurringPlans, cardIDs: Set(scopeCards.map(\.id)),
+        return Self.upcomingFixed(recurrings: recurringPlans, cardIDs: Set((scopeCards + spendingCreditCards).map(\.id)),
                                   periodEnd: periodEnd, currency: displayCurrency)
     }
 

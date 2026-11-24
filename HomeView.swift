@@ -335,15 +335,22 @@ struct HomeView: View {
         // from BCA is in the spending, so the balance that covers it is too.
         // Money moved in from a card outside it (BRI into Mandiri, with
         // Mandiri on screen) is named as where the spending's money came from.
+        // Credit-card purchases since the period opened, when this is the
+        // main card's pot: spending, but not money out of its balance.
+        let cardSpending = MainCard.isMain(card)
+            ? MainCard.creditCardSpending(in: queriedCards).filter { $0.date >= start } : []
         let book = PeriodCashBook.build(scope.flatMap(\.transactions).filter { $0.date >= start },
                                         end: scope.reduce(0.0) {
                                             $0 + cm.convert($1.computedBalance(), from: $1.resolvedCurrency, to: cur)
                                         },
                                         convert: { cm.convert(
                                             $0.amount, from: $0.currency.isEmpty ? cur : $0.currency, to: cur) },
-                                        movedFrom: OwnMoves.arrivals(into: scope, cards: queriedCards))
+                                        movedFrom: OwnMoves.arrivals(into: scope, cards: queriedCards),
+                                        cardSpending: cardSpending)
         let putAway = book.debtPaid + book.invested
         let over = max(expense - putAway, 0) - income - extra
+        // The part of that the balance paid for; the rest is on a card's bill.
+        let cashOver = over - book.onCard
         // A credit card's "balance" is what is owed; nothing there "covers" anything.
         let balanceUp = !card.isCreditCard && book.end >= 0.5
         var parts: [String] = []
@@ -351,7 +358,9 @@ struct HomeView: View {
         if book.debtPaid >= 0.5 { parts.append(String(format: loc("home.debt_note"), fmt(book.debtPaid))) }
         if book.invested >= 0.5 { parts.append(String(format: loc("home.invest_note"), fmt(book.invested))) }
         if over >= 0.5 {
-            switch (card.isCreditCard ? nil : book.overspend(deficit: over)) ?? .plain {
+            // Only what the balance paid for is explained by where its money
+            // came from; a card's part is said by the card sentence below.
+            switch (card.isCreditCard || cashOver < 0.5 ? nil : book.overspend(deficit: cashOver)) ?? .plain {
             case .coveredBy(let label, let amount):
                 parts.append(String(format: loc("home.over_in"), fmt(over), label, fmt(amount)))
             case .partly(let label, let amount):
@@ -362,6 +371,7 @@ struct HomeView: View {
                 parts.append(String(format: loc("home.over_plain"), fmt(over)))
             }
         }
+        if let onCard = book.cardSentence(money: fmt) { parts.append(onCard) }
         if !parts.isEmpty, balanceUp { parts.append(String(format: loc("home.balance_ok"), fmt(book.end))) }
         let tone: MonthFlowCard.NoteTone = over >= 0.5 ? (balanceUp ? .warn : .danger) : .info
         return (parts.isEmpty ? nil : parts.joined(separator: " "), tone, putAway)
@@ -434,7 +444,13 @@ struct HomeView: View {
         // The main card is shown with the cards it pays bills from, the same
         // pot Smart Budget and Statistics read; any other card on its own.
         let scope = MainCard.isMain(card) ? MainCard.budgetCards(in: queriedCards) : [card]
-        let window = RollupEngine.buckets(buckets, cardIDs: Set(scope.map(\.id.uuidString)), from: windowStart)
+        // The main card's spending also counts what was bought on a credit
+        // card (MainCard.creditCardSpending): it is spent, though it left no
+        // card in the pot yet. Its bill, paid from the pot later, is a
+        // transfer, so nothing is counted twice. The balance stays the pot's.
+        let spendIDs = MainCard.isMain(card)
+            ? MainCard.budgetSpendingCardIDs(in: queriedCards) : Set(scope.map(\.id.uuidString))
+        let window = RollupEngine.buckets(buckets, cardIDs: spendIDs, from: windowStart)
         let totals = RollupEngine.totals(for: window, targetCurrency: cur,
                                          convert: { CurrencyManager.shared.convert($0, from: $1, to: $2) })
         var flow = PeriodFlow(income: totals.income, expense: max(totals.expenses, 0))
@@ -468,6 +484,7 @@ struct HomeView: View {
             guard let day = payDay, let card = budgetCard else { return nil }
             return StatisticsView.projectedCycleSpend(card: card,
                                                       billCards: MainCard.isMain(card) ? MainCard.billCards(in: queriedCards) : [],
+                                                      creditCards: MainCard.isMain(card) ? queriedCards.filter(\.isCreditCard) : [],
                                                       payDay: day,
                                                       recurrings: recurringExpenses,
                                                       currency: budgetCurrency,

@@ -36,6 +36,9 @@ struct StatisticsView: View {
     // filter ran ~6× per render. `netWorthTrend` scans all tx across 6 buckets.
     // We now compute both once, only when inputs change (see recomputeStats).
     @State var cachedFilteredTx: [TxRecord] = []
+    /// `cachedFilteredTx` less the credit-card purchases: the pot's own rows,
+    /// which the cash book adds up to the balance.
+    @State var cachedFilteredCashTx: [TxRecord] = []
     @State var cachedRhythm = SpendingRhythm(history: []) { _ in 0 }
     @State var cachedFigures = SpendingFigures()
     /// The period before the selected one, while the selected one is under a
