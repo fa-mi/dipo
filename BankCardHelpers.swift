@@ -76,6 +76,16 @@ extension BankCard {
         return isDigitalWallet || last4.count < 4 ? name : "\(name) ••\(last4)"
     }
 
+    /// Several cards said as one: "BRI + BCA + Mandiri". The main card's pot
+    /// is read as one balance (it pays bills from the others), and saying
+    /// which cards are in it keeps that sum from reading as the balance of
+    /// the card on screen. Two cards of one bank keep their last four digits.
+    static func joinedNames(_ pot: [BankCard], among cards: [BankCard]) -> String {
+        let names = pot.map { $0.distinctName(among: cards) }
+        let plain = Set(names.map { $0.lowercased() }).count == names.count
+        return (plain ? names : pot.map { $0.shortName(among: cards) }).joined(separator: " + ")
+    }
+
     /// Phone number shown in the UI, respecting this card's individual hide/show state.
     /// Hidden  → "•••••••• 7890"  (last 4 always visible for wallet identification)
     /// Visible → full phone number

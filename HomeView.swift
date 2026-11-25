@@ -372,7 +372,14 @@ struct HomeView: View {
             }
         }
         if let onCard = book.cardSentence(money: fmt) { parts.append(onCard) }
-        if !parts.isEmpty, balanceUp { parts.append(String(format: loc("home.balance_ok"), fmt(book.end))) }
+        if !parts.isEmpty, balanceUp {
+            // With bill cards the balance is the pot's, not the card on
+            // screen's alone, so the sentence names the cards it adds up.
+            parts.append(scope.count > 1
+                ? String(format: loc("home.balance_ok_pot"),
+                         BankCard.joinedNames(scope, among: queriedCards), fmt(book.end))
+                : String(format: loc("home.balance_ok"), fmt(book.end)))
+        }
         let tone: MonthFlowCard.NoteTone = over >= 0.5 ? (balanceUp ? .warn : .danger) : .info
         return (parts.isEmpty ? nil : parts.joined(separator: " "), tone, putAway)
     }
