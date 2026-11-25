@@ -237,3 +237,141 @@ jobs:
           grep -E "error: .*(is only available in iOS|available in iOS [0-9]+|@available)" build.log \
             | sed -E 's#^/Users/runner/work/dipo/dipo/##' | sort -u | head -150 || true
           echo "Total errors: $(grep -c 'error:' build.log || true)"
+
+  # TEMPORARY: comes out before merge. Which part of `xcodebuild test` talks
+  # to the simulator's instruments service hub (DTServiceHub, reached as
+  # "com.apple.instruments.deviceservice.lockdown")? Twice this week that
+  # connection failed and the run later stopped with no test failing. Each
+  # leg builds once, runs the two classes those runs stopped in with one
+  # setting changed, and records every DTServiceHub the simulator starts.
+  lockdown-probe:
+    runs-on: xcode-27
+    timeout-minutes: 50
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [as-today, collect-test-diagnostics-never, screen-capture-off]
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Select Xcode
+        run: |
+          XCODE=$(ls -d /Applications/Xcode_27.1*.app 2>/dev/null | grep -vi beta | sort -V | tail -1)
+          [ -n "$XCODE" ] || { ls -d /Applications/Xcode_*.app; exit 1; }
+          sudo xcode-select -s "$XCODE"
+          xcodebuild -version
+
+      # Restore only: the probe never writes the shared package cache.
+      - name: Restore Swift packages
+        uses: actions/cache/restore@v5
+        with:
+          path: .spm
+          key: spm-${{ runner.os }}-${{ hashFiles('DiPo.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
+
+      - name: Pick a simulator
+        id: sim
+        run: |
+          udid=$(xcrun simctl list devices available -j | python3 ci/pick-simulator.py)
+          echo "udid=$udid" >> "$GITHUB_OUTPUT"
+          xcrun simctl list devices | grep "$udid"
+
+      - name: Test options this xcodebuild has
+        run: |
+          xcodebuild -help 2>&1 | grep -iE -A3 'diagnos|screen|captur|record|attachment|video' || echo "(none matched)"
+
+      - name: Build for testing
+        run: |
+          set -o pipefail
+          xcodebuild build-for-testing \
+            -project DiPo.xcodeproj -scheme DiPo \
+            -destination "id=${{ steps.sim.outputs.udid }}" \
+            -derivedDataPath dd -clonedSourcePackagesDirPath .spm \
+            -skipPackagePluginValidation -skipMacroValidation \
+            CODE_SIGNING_ALLOWED=NO \
+            2>&1 | tee build.log | { grep -E 'error:|\*\* BUILD' || true; }
+
+      - name: Set up the variant
+        id: variant
+        env:
+          VARIANT: ${{ matrix.variant }}
+        run: |
+          xctestrun=$(ls dd/Build/Products/*.xctestrun | head -1)
+          echo "xctestrun=$xctestrun" >> "$GITHUB_OUTPUT"
+          # Every test target's settings as build-for-testing wrote them,
+          # paths and environment left out; screen-capture-off then turns off
+          # automatic screen capture the way a test plan's "Off" does.
+          python3 - "$xctestrun" "$VARIANT" <<'PY'
+          import plistlib, sys
+          path, variant = sys.argv[1], sys.argv[2]
+          with open(path, "rb") as f:
+              plist = plistlib.load(f)
+          print("FormatVersion:", plist.get("__xctestrun_metadata__", {}).get("FormatVersion"))
+          targets = []
+          def walk(x):
+              if isinstance(x, dict):
+                  if "TestBundlePath" in x:
+                      targets.append(x)
+                  for v in x.values():
+                      walk(v)
+              elif isinstance(x, list):
+                  for v in x:
+                      walk(v)
+          walk(plist)
+          for t in targets:
+              print("--", t.get("BlueprintName"))
+              for k in sorted(t):
+                  if "Path" in k or "Environment" in k or k.startswith("Dependent"):
+                      continue
+                  print(f"   {k} = {t[k]!r}"[:200])
+          if variant == "screen-capture-off":
+              for t in targets:
+                  t["SystemAttachmentLifetime"] = "keepNever"
+              with open(path, "wb") as f:
+                  plistlib.dump(plist, f)
+              print(f"SystemAttachmentLifetime = keepNever on {len(targets)} test target(s)")
+          PY
+
+      - name: Run two classes, watching the service hub
+        env:
+          UDID: ${{ steps.sim.outputs.udid }}
+          VARIANT: ${{ matrix.variant }}
+          XCTESTRUN: ${{ steps.variant.outputs.xctestrun }}
+        run: |
+          extra=()
+          [ "$VARIANT" = collect-test-diagnostics-never ] && extra=(-collect-test-diagnostics never)
+          # Every process whose name has "servicehub" in it, sampled each second.
+          ( while :; do
+              ps -axo pid=,ppid=,lstart=,command= | grep -i '[s]ervicehub' | sed "s|^|$(date -u +%H:%M:%S) |"
+              sleep 1
+            done ) > hub-ps.log 2>&1 &
+          sampler=$!
+          echo "xcodebuild starts $(date -u +%H:%M:%S) with: ${extra[*]:-(nothing extra)}"
+          set +e
+          xcodebuild test-without-building -xctestrun "$XCTESTRUN" \
+            -destination "id=$UDID" \
+            -only-testing:DiPoTests/PerformanceTests -only-testing:DiPoTests/StoreMigrationTests \
+            -resultBundlePath probe.xcresult "${extra[@]}" \
+            2>&1 | tee xcodebuild.log \
+            | grep --line-buffered -iE "^(Test Suite|Test Case .*(passed|failed))|error:|\*\* TEST|lockdown|servicehub"
+          status=${PIPESTATUS[0]}
+          kill $sampler
+          echo "xcodebuild ends $(date -u +%H:%M:%S), exit $status"
+          echo "Test Case lines passed: $(grep -cE "^Test Case .*passed" xcodebuild.log)"
+          echo "::group::DTServiceHub processes seen (first sighting of each pid)"
+          awk '!seen[$2]++' hub-ps.log | cut -c1-400
+          echo "::endgroup::"
+          echo "::group::xcodebuild.log: service hub, recording, diagnostics"
+          grep -iE 'lockdown|servicehub|record|screen|diagnos|spindump|sysdiagnose' xcodebuild.log | cut -c1-400 | head -60 || true
+          echo "::endgroup::"
+          echo "::group::Simulator log: service hub"
+          xcrun simctl spawn "$UDID" log show --last 60m --style compact \
+            --predicate 'process CONTAINS[c] "servicehub" OR eventMessage CONTAINS[c] "servicehub" OR eventMessage CONTAINS[c] "deviceservice"' \
+            2>&1 | cut -c1-400 | head -200 || true
+          echo "::endgroup::"
+          echo "::group::Mac log: service hub"
+          log show --last 60m --style compact \
+            --predicate 'eventMessage CONTAINS[c] "servicehub" OR eventMessage CONTAINS[c] "deviceservice.lockdown"' \
+            2>&1 | cut -c1-400 | head -200 || true
+          echo "::endgroup::"
+          exit $status
