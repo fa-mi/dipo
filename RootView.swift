@@ -110,6 +110,8 @@ enum WidgetDataSync {
         ]
         for key in keys { store.removeObject(forKey: key) }
         WidgetCenter.shared.reloadAllTimelines()
+        // And the watch forgets the figures it was sent.
+        WatchBridge.shared.clear()
     }
 
     static func refresh(context: ModelContext) {
@@ -333,6 +335,14 @@ enum WidgetDataSync {
         if let data = try? JSONEncoder().encode(detail) {
             store.set(data, forKey: WidgetPeriodDetail.storeKey)
         }
+
+        // The same period for the Apple Watch (DiPo/WatchSnapshot.swift),
+        // with the card a watch entry is saved to.
+        WatchBridge.shared.send(WatchSnapshot.make(
+            detail: detail, income: income, expenses: expenses,
+            daysToPayday: cycle.map { StatPeriod.daysLeft(in: $0, now: now) },
+            currency: preferred, main: DiPoIntentSupport.mainCard(in: allCards), cards: allCards,
+            history: txs, now: now))
 
         WidgetCenter.shared.reloadAllTimelines()
     }
