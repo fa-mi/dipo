@@ -196,9 +196,22 @@ enum AppLayout {
     static func fitsTwoColumns(_ width: CGFloat) -> Bool {
         width >= 2 * columnMinWidth + columnGap + 2 * pageMargin
     }
+
+    /// Below this, a page is short: the Duo folded (about 630 pt under the
+    /// status bar), an iPhone SE (about 647 pt), any iPhone on its side. Home
+    /// then puts the period card straight under the cards, so what is left
+    /// is on screen without scrolling. Every other iPhone held upright has
+    /// 760 pt or more and keeps Home's order.
+    static let shortPageHeight: CGFloat = 700
+
+    /// Nothing is short before the page has been measured.
+    static func isShortPage(_ height: CGFloat) -> Bool {
+        height > 0 && height < shortPageHeight
+    }
 }
 
 private struct PageColumnsKey: EnvironmentKey { static let defaultValue = 1 }
+private struct PageIsShortKey: EnvironmentKey { static let defaultValue = false }
 
 extension EnvironmentValues {
     /// How many phone columns the tab's page has room for: 2 on a wide panel,
@@ -206,6 +219,13 @@ extension EnvironmentValues {
     var pageColumns: Int {
         get { self[PageColumnsKey.self] }
         set { self[PageColumnsKey.self] = newValue }
+    }
+
+    /// Whether the tab's page is short (AppLayout.isShortPage). Set by
+    /// MainTabView from the height it gives its pages.
+    var pageIsShort: Bool {
+        get { self[PageIsShortKey.self] }
+        set { self[PageIsShortKey.self] = newValue }
     }
 }
 
