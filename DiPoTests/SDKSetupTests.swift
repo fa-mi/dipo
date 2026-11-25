@@ -36,14 +36,18 @@ final class SDKSetupTests: XCTestCase {
 
     /// XCTest's launch of the app is recognised, and nothing in it reaches
     /// the real services: RevenueCat is never configured (no customer added
-    /// to its dashboard), crash reports and push registration are off, and
-    /// no anonymous account is made in the real Firebase project.
+    /// to its dashboard), crash reports and push registration are off,
+    /// Analytics never runs (no experiment fetch from Google, no screen
+    /// counts), and no anonymous account is made in the real Firebase project.
     func testATestRunStaysOffProduction() {
         XCTAssertTrue(RunContext.isUnderTest, "the app did not notice it was launched by XCTest")
         XCTAssertFalse(RunContext.isOnline)
         XCTAssertFalse(SDKProbe.revenueCatConfigured, "RevenueCat was configured with the real key in a test run")
         XCTAssertFalse(SDKProbe.crashReportsOn, "a test run would send crash reports to the real dashboard")
         XCTAssertFalse(SDKProbe.pushAutoInitOn, "a test run would register a push token")
+        XCTAssertTrue(SDKProbe.analyticsDeactivated,
+                      "Firebase Analytics ran in this test run and fetched its experiments from Google: the build has no FIREBASE_ANALYTICS_COLLECTION_DEACTIVATED (ios.yml writes it on CI)")
+        XCTAssertFalse(ScreenAnalytics.shared.isEnabled, "a test run would count screens in the real Firestore")
         XCTAssertFalse(SDKProbe.signedInToRealFirebase, "the app signed in to the real Firebase project")
     }
 

@@ -49,6 +49,16 @@ enum SDKProbe {
     static var revenueCatConfigured: Bool { Purchases.isConfigured }
     static var crashReportsOn: Bool { Crashlytics.crashlytics().isCrashlyticsCollectionEnabled() }
     static var pushAutoInitOn: Bool { Messaging.messaging().isAutoInitEnabled }
+    /// Firebase Analytics is deactivated for this whole launch. Analytics has
+    /// no getter for its own state, so this reads the switch it reads itself,
+    /// in the build's Info.plist, before any app code runs. Set, it overrides
+    /// FIREBASE_ANALYTICS_COLLECTION_ENABLED and every call to
+    /// setAnalyticsCollectionEnabled. ios.yml writes it into the test build;
+    /// the shipped app has the ENABLED switch instead, so the backend can
+    /// still turn Analytics on there.
+    static var analyticsDeactivated: Bool {
+        Bundle.main.object(forInfoDictionaryKey: "FIREBASE_ANALYTICS_COLLECTION_DEACTIVATED") as? Bool == true
+    }
     /// Signed in to the app's real Firebase project, as opposed to the
     /// emulator's separate one.
     static var signedInToRealFirebase: Bool { Auth.auth().currentUser != nil }

@@ -62,7 +62,11 @@ final class ScreenAnalytics {
     private var listener: ListenerRegistration?
 
     private init() {
-        isEnabled = UserDefaults.standard.bool(forKey: Self.cacheKey)
+        // A test run never collects, whatever this simulator's last real
+        // launch cached: an "on" here would log screens to Analytics and
+        // count them in the real Firestore (DiPo/RunContext.swift). The
+        // backend is not asked either; startListening() is not called then.
+        isEnabled = RunContext.isOnline && UserDefaults.standard.bool(forKey: Self.cacheKey)
         Analytics.setAnalyticsCollectionEnabled(isEnabled)
     }
 
@@ -75,7 +79,11 @@ final class ScreenAnalytics {
                 guard let self else { return }
                 // An error is not a "yes". Leave the cached answer alone rather
                 // than defaulting to on because a read failed.
-                guard error == nil else { return }
+                if let error {
+                    CrashReporter.recordSDK(error, at: "analytics.listen")
+                    print("[DiPo] Analytics switch listen error: \(error.localizedDescription)")
+                    return
+                }
                 let on = (snapshot?.data()?["screenTracking"] as? Bool) ?? false
                 Task { @MainActor in self.isEnabled = on }
             }

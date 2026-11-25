@@ -51,6 +51,21 @@ jobs:
           udid=$(xcrun simctl list devices available -j | python3 ci/pick-simulator.py)
           echo "udid=$udid" >> "$GITHUB_OUTPUT"
 
+      # The tests run inside the app, and its launch must not reach Google.
+      # A Debug build has no Analytics switch in Info.plist, so
+      # FirebaseApp.configure() started Analytics at Firebase's default, on,
+      # and it fetched its experiments from app-analytics-services.com before
+      # ScreenAnalytics could turn it off (run 45526375661). Deactivated, it
+      # stays off for the whole launch, and no call in the app can turn it on.
+      # Written on the runner only, the way release.yml writes the shipped
+      # app's switch: DiPo/Info.plist is Fahmi's file. SDKSetupTests checks
+      # the built app carries it.
+      - name: Keep Analytics out of the test build
+        run: |
+          plist=DiPo/Info.plist
+          /usr/libexec/PlistBuddy -c "Delete :FIREBASE_ANALYTICS_COLLECTION_DEACTIVATED" "$plist" 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Add :FIREBASE_ANALYTICS_COLLECTION_DEACTIVATED bool true" "$plist"
+
       - name: Build and test
         run: |
           set -o pipefail
@@ -159,6 +174,13 @@ jobs:
         run: |
           udid=$(xcrun simctl list devices available -j | python3 ci/pick-simulator.py)
           echo "udid=$udid" >> "$GITHUB_OUTPUT"
+
+      # The app launches here too: as in build-and-test, Analytics stays off.
+      - name: Keep Analytics out of the test build
+        run: |
+          plist=DiPo/Info.plist
+          /usr/libexec/PlistBuddy -c "Delete :FIREBASE_ANALYTICS_COLLECTION_DEACTIVATED" "$plist" 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Add :FIREBASE_ANALYTICS_COLLECTION_DEACTIVATED bool true" "$plist"
 
       # Signed to run locally ("-", no certificate or profile), not unsigned
       # as in build-and-test: Firebase Auth keeps the signed-in user in the

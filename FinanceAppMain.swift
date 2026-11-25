@@ -313,9 +313,12 @@ struct DiPoApp: App {
         // Apply the last known analytics switch (off unless the backend said
         // on) straight away. Until something touches ScreenAnalytics, Firebase
         // runs Analytics at its own default, which is on — and on 12.11 its
-        // experiment worker crashed the app with a nil-key flag. The real
-        // off-by-default is FIREBASE_ANALYTICS_COLLECTION_ENABLED = NO in
-        // Info.plist; this narrows the window if that key is ever missing.
+        // experiment worker crashed the app with a nil-key flag. Only a build
+        // with an Analytics switch in Info.plist starts it off: the shipped
+        // app (FIREBASE_ANALYTICS_COLLECTION_ENABLED = NO, from release.yml)
+        // and CI's test build (FIREBASE_ANALYTICS_COLLECTION_DEACTIVATED, from
+        // ios.yml). A Debug build from Xcode has neither, and in it this only
+        // narrows the window.
         _ = ScreenAnalytics.shared
 
         if let path = Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist"),
