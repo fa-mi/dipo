@@ -36,6 +36,8 @@ struct MainTabView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     /// The width the tabs' pages get: the screen, less the rail when it shows.
     @State private var pageWidth: CGFloat = 0
+    /// And the height, for the short pages of the Duo folded and an iPhone SE.
+    @State private var pageHeight: CGFloat = 0
 
     /// A wide panel — the iPhone Duo opened, a large iPhone turned on its
     /// side — stands the tabs in a rail on the leading edge, where Apple's
@@ -226,6 +228,7 @@ struct MainTabView: View {
             // Home and Statistics split into two columns where two phone
             // columns fit beside the rail (AppLayout.fitsTwoColumns).
             .environment(\.pageColumns, AppLayout.fitsTwoColumns(pageWidth) ? 2 : 1)
+            .environment(\.pageIsShort, AppLayout.isShortPage(pageHeight))
 
             // No-card toast banner
             if showNoCardBanner {
@@ -260,7 +263,10 @@ struct MainTabView: View {
             // own its own success UI.
             ActionFeedbackOverlay()
         }
-        .onGeometryChange(for: CGFloat.self) { proxy in proxy.size.width } action: { pageWidth = $0 }
+        .onGeometryChange(for: CGSize.self) { proxy in proxy.size } action: {
+            pageWidth = $0.width
+            pageHeight = $0.height
+        }
         .ignoresSafeArea(edges: .bottom)
     }
 
