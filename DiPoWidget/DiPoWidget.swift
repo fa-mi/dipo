@@ -65,6 +65,39 @@ enum DiPoSharedConfig {
     static let upgradeRoyalURL    = URL(string: "dipo://upgrade-royal")!
 }
 
+// MARK: - The large widget's period
+//
+// Written by the app as JSON (DiPo/WidgetPeriodDetail.swift): what Home's
+// period card shows, computed by the app's own helpers. These field names are
+// the contract; keep them identical to the app's copy.
+
+struct WidgetPeriodDetail: Decodable, Equatable {
+    struct Category: Decodable, Equatable {
+        var label: String
+        var amount: String
+        var share: Double
+        var hex: String
+        var symbol: String
+    }
+    struct Bill: Decodable, Equatable {
+        var label: String
+        var due: String
+        var amount: String
+    }
+    var living: Double
+    var putAway: Double
+    var today: Double?
+    var payday: String?
+    var categories: [Category]
+    var bills: [Bill]
+    var labelToday: String
+    var labelTop: String
+    var labelBills: String
+    var labelNoBills: String
+
+    static let storeKey = "widget.periodDetail"
+}
+
 // MARK: - Timeline Entry
 
 struct MonthlyExpensesEntry: TimelineEntry {
@@ -86,6 +119,8 @@ struct MonthlyExpensesEntry: TimelineEntry {
     let labelLeft: String
     let labelOver: String
     let isPlaceholder: Bool
+    /// The large size's period; nil until the app has written one.
+    var detail: WidgetPeriodDetail? = nil
 
     /// Spent ÷ income; nil when there is no income to measure against.
     var spentFraction: Double? { income > 0 ? expenses / income : nil }
@@ -109,7 +144,24 @@ struct MonthlyExpensesEntry: TimelineEntry {
             labelUpgrade:     english ? "Unlock with Royal" : "Buka dengan Royal",
             labelLeft:        english ? "Left" : "Sisa",
             labelOver:        english ? "Over by" : "Lebih",
-            isPlaceholder: true
+            isPlaceholder: true,
+            detail: WidgetPeriodDetail(
+                living: 0.31, putAway: 0.035, today: 0.25,
+                payday: english ? "24 days to payday" : "24 hari lagi gajian",
+                categories: [
+                    .init(label: english ? "Food" : "Makan", amount: "Rp 1.450.000", share: 0.47,
+                          hex: "#F59E0B", symbol: "fork.knife"),
+                    .init(label: "Transport", amount: "Rp 720.000", share: 0.23,
+                          hex: "#6366F1", symbol: "car.fill"),
+                    .init(label: english ? "Shopping" : "Belanja", amount: "Rp 530.000", share: 0.17,
+                          hex: "#F97316", symbol: "bag.fill"),
+                ],
+                bills: [.init(label: english ? "Internet" : "Internet", due: "30 Agu", amount: "Rp 150.000")],
+                labelToday: english ? "Today" : "Hari ini",
+                labelTop: english ? "Most spent" : "Paling banyak",
+                labelBills: english ? "Due before payday" : "Sebelum gajian",
+                labelNoBills: english ? "No monthly expenses due before payday."
+                                      : "Tidak ada tagihan bulanan sebelum gajian.")
         )
     }
 }
@@ -171,7 +223,9 @@ struct Provider: TimelineProvider {
             labelUpgrade:       store.string(forKey: K.labelUpgrade)     ?? fallback.labelUpgrade,
             labelLeft:          store.string(forKey: K.labelLeft)        ?? fallback.labelLeft,
             labelOver:          store.string(forKey: K.labelOver)        ?? fallback.labelOver,
-            isPlaceholder:      false
+            isPlaceholder:      false,
+            detail:             store.data(forKey: WidgetPeriodDetail.storeKey)
+                .flatMap { try? JSONDecoder().decode(WidgetPeriodDetail.self, from: $0) }
         )
     }
 }
@@ -203,6 +257,14 @@ private enum WidgetTheme {
     static let purple      = adaptive(dark: 0xA78BFA, light: 0x8B66F8)
     static let secondary   = adaptive(dark: 0x8A9693, light: 0x4D6B62)
     static let track       = adaptive(dark: 0x2A3330, light: 0xE4EAE8)
+    /// AppTheme.blue: debt paid and money put away, on the period line.
+    static let blue        = adaptive(dark: 0x38BDF8, light: 0x0789C3)
+
+    /// A category's circle colour, written by the app as "#F59E0B".
+    static func hex(_ string: String) -> Color {
+        let digits = string.trimmingCharacters(in: CharacterSet(charactersIn: "#"))
+        return fixed(UInt32(digits, radix: 16) ?? 0x5B6F6B)
+    }
 
     /// Same stops as the app's `SpendGauge`.
     static let gaugeStops: [Gradient.Stop] = [
@@ -264,6 +326,18 @@ private struct WidgetSpendBar: View {
     }
 }
 
+/// A small triangle pointing down: today, above the period line (as on Home).
+private struct WidgetCaret: Shape {
+    func path(in r: CGRect) -> Path {
+        var p = Path()
+        p.move(to: CGPoint(x: r.minX, y: r.minY))
+        p.addLine(to: CGPoint(x: r.maxX, y: r.minY))
+        p.addLine(to: CGPoint(x: r.midX, y: r.maxY))
+        p.closeSubpath()
+        return p
+    }
+}
+
 // MARK: - Views per family
 
 struct DiPoWidgetEntryView: View {
@@ -287,6 +361,9 @@ struct DiPoWidgetEntryView: View {
                 .containerBackground(for: .widget) { Color.clear }
         case .systemSmall:
             small
+                .containerBackground(for: .widget) { WidgetTheme.background(for: colorScheme) }
+        case .systemLarge:
+            large
                 .containerBackground(for: .widget) { WidgetTheme.background(for: colorScheme) }
         default:
             medium
@@ -398,6 +475,211 @@ struct DiPoWidgetEntryView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
 
             quickAdd
+        }
+    }
+
+    // MARK: Large
+    //
+    // What Home's period card says, from the app's own figures: what is left,
+    // the period line with today above it, where the most went (Royal), and
+    // the monthly expenses still due before payday.
+
+    private var large: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(largeCaption)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(secondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                    Text(largeAmount)
+                        .font(.system(size: 30, weight: .bold, design: .rounded))
+                        .foregroundStyle(isOver ? tone(entry.spentFraction ?? 1) : .primary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.5)
+                        .contentTransition(.numericText())
+                }
+                Spacer(minLength: 0)
+                smallAdd
+            }
+            if let d = entry.detail, entry.income > 0 {
+                periodLine(d)
+                    .padding(.top, 12)
+            } else if let f = entry.spentFraction {
+                WidgetSpendBar(fraction: f, fullColor: fullColor)
+                    .padding(.top, 14)
+            }
+            if let d = entry.detail {
+                topCategories(d)
+                    .padding(.top, 16)
+                billsBlock(d)
+                    .padding(.top, 14)
+            } else {
+                insightLine
+                    .padding(.top, 14)
+            }
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    private var isOver: Bool { (entry.spentFraction ?? 0) >= 1 }
+
+    /// "Sisa · 6 hari lagi gajian"; spending instead when there is no income.
+    private var largeCaption: String {
+        let when = entry.detail?.payday ?? entry.monthLabel
+        guard entry.spentFraction != nil else { return "\(entry.labelExpenses) · \(when)" }
+        return "\(isOver ? entry.labelOver : entry.labelLeft) · \(when)"
+    }
+
+    private var largeAmount: String {
+        entry.spentFraction == nil || entry.leftFormatted.isEmpty ? entry.expensesFormatted : entry.leftFormatted
+    }
+
+    /// The add button without its label, for the corner of the large size.
+    private var smallAdd: some View {
+        Link(destination: DiPoSharedConfig.addTransactionURL) {
+            ZStack {
+                if fullColor {
+                    Circle().fill(WidgetTheme.accent)
+                } else {
+                    Circle().fill(Color.primary.opacity(0.18))
+                        .widgetAccentable()
+                }
+                Image(systemName: "plus")
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundStyle(fullColor ? WidgetTheme.onVividFill : Color.primary)
+            }
+            .frame(width: 40, height: 40)
+        }
+        .accessibilityLabel(entry.labelQuickAdd)
+    }
+
+    /// Home's period line: living costs in ink (orange past income), debt paid
+    /// and money put away in blue, the rest empty, today a caret above.
+    private func periodLine(_ d: WidgetPeriodDetail) -> some View {
+        let living = min(max(d.living, 0), 1)
+        let putAway = min(max(d.putAway, 0), 1 - living)
+        let overIncome = d.living + d.putAway >= 1
+        let ink: Color = fullColor ? (overIncome ? WidgetTheme.orangeText : .primary) : .primary
+        let blue: Color = fullColor ? WidgetTheme.blue : Color.primary.opacity(0.55)
+        let rest: Color = fullColor ? WidgetTheme.secondary.opacity(0.25) : Color.primary.opacity(0.18)
+        return GeometryReader { g in
+            let w = g.size.width
+            VStack(alignment: .leading, spacing: 3) {
+                // Anchored at the caret as on Home: ending at it past halfway,
+                // starting at it before, so the label stays on the widget.
+                if let today = d.today {
+                    let x = w * min(max(today, 0), 1)
+                    VStack(alignment: today >= 0.5 ? .trailing : .leading, spacing: 1) {
+                        Text(d.labelToday)
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(secondary)
+                            .lineLimit(1)
+                            .fixedSize()
+                        WidgetCaret()
+                            .fill(Color.primary)
+                            .frame(width: 10, height: 6)
+                    }
+                    .frame(width: today >= 0.5 ? min(x + 5, w) : max(w - x + 5, 0),
+                           alignment: today >= 0.5 ? .trailing : .leading)
+                    .frame(width: w, alignment: today >= 0.5 ? .leading : .trailing)
+                }
+                ZStack(alignment: .leading) {
+                    Capsule().fill(rest)
+                    HStack(spacing: 0) {
+                        Rectangle().fill(ink).frame(width: w * living)
+                        Rectangle().fill(blue).frame(width: w * putAway)
+                    }
+                    .frame(width: w, height: 8, alignment: .leading)
+                    .clipShape(Capsule())
+                    .widgetAccentable()
+                }
+                .frame(width: w, height: 8)
+            }
+            .frame(width: w, height: g.size.height, alignment: .bottomLeading)
+        }
+        .frame(height: d.today == nil ? 8 : 30)
+    }
+
+    /// Where the most went: Royal's insight, as on the medium size.
+    @ViewBuilder
+    private func topCategories(_ d: WidgetPeriodDetail) -> some View {
+        if entry.isRoyal {
+            if !d.categories.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(d.labelTop)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(secondary)
+                    ForEach(Array(d.categories.prefix(3).enumerated()), id: \.offset) { _, c in
+                        categoryRow(c)
+                    }
+                }
+            }
+        } else {
+            insightLine
+        }
+    }
+
+    private func categoryRow(_ c: WidgetPeriodDetail.Category) -> some View {
+        HStack(spacing: 10) {
+            ZStack {
+                Circle().fill(fullColor ? WidgetTheme.hex(c.hex) : Color.primary.opacity(0.18))
+                Image(systemName: c.symbol)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(fullColor ? Color.white : Color.primary)
+            }
+            .frame(width: 26, height: 26)
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Text(c.label)
+                        .font(.system(size: 13, weight: .medium))
+                        .lineLimit(1)
+                    Spacer(minLength: 6)
+                    Text(c.amount)
+                        .font(.system(size: 13))
+                        .foregroundStyle(secondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
+                GeometryReader { g in
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(fullColor ? WidgetTheme.track : Color.primary.opacity(0.18))
+                        Capsule().fill(Color.primary)
+                            .frame(width: max(g.size.width * min(max(c.share, 0), 1), 3))
+                    }
+                }
+                .frame(height: 4)
+            }
+        }
+    }
+
+    /// The monthly expenses still due before payday, earliest first.
+    private func billsBlock(_ d: WidgetPeriodDetail) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(d.labelBills)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(secondary)
+            if d.bills.isEmpty {
+                Text(d.labelNoBills)
+                    .font(.system(size: 12))
+                    .foregroundStyle(secondary)
+                    .lineLimit(2)
+            } else {
+                ForEach(Array(d.bills.prefix(3).enumerated()), id: \.offset) { _, b in
+                    HStack {
+                        Text("\(b.label) · \(b.due)")
+                            .font(.system(size: 13))
+                            .lineLimit(1)
+                        Spacer(minLength: 6)
+                        Text(b.amount)
+                            .font(.system(size: 13, weight: .semibold))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                    }
+                }
+            }
         }
     }
 
@@ -518,7 +800,7 @@ struct DiPoWidget: Widget {
         }
         .configurationDisplayName("DiPo")
         .description(WidgetCopy.galleryDescription)
-        .supportedFamilies([.systemSmall, .systemMedium,
+        .supportedFamilies([.systemSmall, .systemMedium, .systemLarge,
                             .accessoryCircular, .accessoryRectangular, .accessoryInline])
     }
 }
@@ -537,5 +819,6 @@ private let sampleEntry = MonthlyExpensesEntry(
 
 #Preview("Small", as: .systemSmall) { DiPoWidget() } timeline: { sampleEntry }
 #Preview("Medium", as: .systemMedium) { DiPoWidget() } timeline: { sampleEntry }
+#Preview("Large", as: .systemLarge) { DiPoWidget() } timeline: { MonthlyExpensesEntry.placeholder }
 #Preview("Lock · circular", as: .accessoryCircular) { DiPoWidget() } timeline: { sampleEntry }
 #Preview("Lock · rectangular", as: .accessoryRectangular) { DiPoWidget() } timeline: { sampleEntry }
