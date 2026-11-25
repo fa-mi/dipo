@@ -89,6 +89,11 @@ jobs:
         run: |
           grep -E 'error:|failed|BEGIN SchemaFingerprint|END SchemaFingerprint' xcodebuild.log | head -200 || true
           sed -n '/BEGIN SchemaFingerprint.txt/,/END SchemaFingerprint.txt/p' xcodebuild.log | head -400 || true
+          # A run that stops with no failed test (a crash, a lost simulator)
+          # gives its reason in the indented lines under "Testing failed:",
+          # and xcodebuild says where it restarted after a crash.
+          sed -n '/^Testing failed:/,/^\*\* TEST/p' xcodebuild.log | head -40 || true
+          grep -E 'Restarting after|crashed|Lost connection|timed out' xcodebuild.log | head -20 || true
 
       - name: Upload results
         if: failure()
