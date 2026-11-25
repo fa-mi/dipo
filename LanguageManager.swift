@@ -479,6 +479,9 @@ final class LanguageManager {
         "widget.label.weeklyAvg":    "per week",
         "widget.label.insights":     "Spending insights",
         "widget.label.upgrade":      "Unlock with Royal",
+        "widget.large.top":          "Most spent",
+        "widget.large.bills":        "Due before payday",
+        "widget.large.no_bills":     "No monthly expenses due before payday.",
         // Backup preview — shown after file pick, before destructive confirm
         "backup.preview.title":      "Review Backup File",
         "backup.preview.subtitle":   "Check the contents below before replacing your current data.",
@@ -3692,6 +3695,9 @@ final class LanguageManager {
         "widget.label.weeklyAvg":    "per minggu",
         "widget.label.insights":     "Ringkasan belanja",
         "widget.label.upgrade":      "Buka dengan Royal",
+        "widget.large.top":          "Paling banyak",
+        "widget.large.bills":        "Sebelum gajian",
+        "widget.large.no_bills":     "Tidak ada tagihan bulanan sebelum gajian.",
         // Backup preview (ID)
         "backup.preview.title":      "Tinjau File Cadangan",
         "backup.preview.subtitle":   "Cek isi file ini sebelum mengganti datamu sekarang.",

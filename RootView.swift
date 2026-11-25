@@ -106,6 +106,7 @@ enum WidgetDataSync {
             Key.labelTopCategory, Key.labelWeeklyAvg,
             Key.labelInsights, Key.labelUpgrade,
             Key.labelLeft, Key.labelOver, Key.leftFormatted,
+            WidgetPeriodDetail.storeKey,
         ]
         for key in keys { store.removeObject(forKey: key) }
         WidgetCenter.shared.reloadAllTimelines()
@@ -125,15 +126,18 @@ enum WidgetDataSync {
         // instead of the pay cycle. On a payday of the 25th that is a different
         // window, a different denominator and a different set of transactions —
         // three ways for the lock screen to contradict the app behind it.
-        let monthStart: Date = {
-            if let day = MainCard.payDay(schedules) {
-                return StatPeriod.cycle(payDay: day,
-                                        salaryDates: StatPeriod.salaryDates(on: MainCard.resolve(in: allCards))).start
-            }
-            return cal.date(from: cal.dateComponents([.year, .month], from: now)) ?? now
-        }()
+        let cycle: (start: Date, end: Date)? = MainCard.payDay(schedules).map {
+            StatPeriod.cycle(payDay: $0, salaryDates: StatPeriod.salaryDates(on: MainCard.resolve(in: allCards)),
+                             now: now)
+        }
+        let monthStart: Date = cycle?.start
+            ?? cal.date(from: cal.dateComponents([.year, .month], from: now)) ?? now
         let allTxs: [TxRecord] = (try? context.fetch(FetchDescriptor<TxRecord>())) ?? []
-        let txs: [TxRecord] = MainCard.potTransactions(in: allCards) ?? allTxs
+        // The pot's rows and what was bought on a credit card, as Home's period
+        // card reads them (MainCard.budgetSpendingTransactions): card shopping
+        // is spending. The pot alone left it out and "Left" read too high.
+        let txs: [TxRecord] = MainCard.resolve(in: allCards) == nil
+            ? allTxs : MainCard.budgetSpendingTransactions(in: allCards)
 
         let preferred = CurrencyManager.shared.preferredCurrency
         var expenses: Double = 0
@@ -308,6 +312,27 @@ enum WidgetDataSync {
         store.set(loc("stats.over"), forKey: Key.labelOver)
         store.set(CurrencyManager.shared.formatted(abs(income - expenses), currency: preferred),
                   forKey: Key.leftFormatted)
+
+        // ── The large widget's period (DiPo/WidgetPeriodDetail.swift) ──
+        let convert: (TxRecord) -> Double = {
+            CurrencyManager.shared.convert($0.amount, from: $0.currency.isEmpty ? preferred : $0.currency,
+                                           to: preferred)
+        }
+        let periodEnd = cycle?.end
+            ?? cal.date(byAdding: .month, value: 1, to: monthStart) ?? now
+        let plans: [RecurringExpense] = (try? context.fetch(FetchDescriptor<RecurringExpense>())) ?? []
+        let bills = ScheduledBills.upcoming(plans: plans, cards: allCards,
+                                            cardIDs: MainCard.budgetSpendingCardIDs(in: allCards),
+                                            periodStart: monthStart, periodEnd: periodEnd,
+                                            currency: preferred, now: now)
+        let detail = WidgetPeriodDetail.make(
+            spending: txs.filter { $0.date >= monthStart && $0.date <= now }, income: income,
+            period: (monthStart, periodEnd), now: now,
+            daysToPayday: cycle.map { StatPeriod.daysLeft(in: $0, now: now) },
+            bills: bills, currency: preferred, convert: convert)
+        if let data = try? JSONEncoder().encode(detail) {
+            store.set(data, forKey: WidgetPeriodDetail.storeKey)
+        }
 
         WidgetCenter.shared.reloadAllTimelines()
     }
