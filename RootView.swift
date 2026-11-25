@@ -394,8 +394,9 @@ struct RootView: View {
                                 .transition(.asymmetric(
                                     insertion: .opacity,
                                     removal: .scale(scale: 1.05).combined(with: .opacity)))
-                        } else if scenePhase != .active && authVM.isBiometricActive {
-                            // Keeps finances out of the app-switcher snapshot.
+                        } else if scenePhase != .active {
+                            // Keeps finances out of the app-switcher snapshot,
+                            // for everyone, lock on or off (DiPo/PrivacyCover.swift).
                             PrivacyCover()
                         }
                     }
