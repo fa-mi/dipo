@@ -273,7 +273,28 @@ jobs:
             -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
             2>&1 | tee "$RUNNER_TEMP/export.log" | grep -E "error:|Upload|EXPORT (SUCCEEDED|FAILED)" \
             | grep -vE "$GOOGLE_BINARIES" || true
-          grep -q "EXPORT SUCCEEDED" "$RUNNER_TEMP/export.log" || { echo "::error::Export failed; see the export-log artifact"; exit 1; }
+          if ! grep -q "EXPORT SUCCEEDED" "$RUNNER_TEMP/export.log"; then
+            # The one-line error rarely says why. Apple's answer is in the
+            # lines around it (an NSError's domain, code and reason) and in
+            # the distribution log xcodebuild names; both go to this job's
+            # log, where they can be read without the artifact.
+            # The repository is public, and so is this log: request headers
+            # are dropped and anything shaped like a token (the App Store
+            # Connect JWT signed from the key) is blanked before printing.
+            redact() {
+              grep -viE "authorization|bearer|cookie|x-api-key|password" \
+                | sed -E 's/eyJ[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+){1,2}/[token]/g; s/[A-Za-z0-9_-]{40,}/[long-id]/g'
+            }
+            grep -nE -B2 -A8 "error|Error Domain|NSLocalized|failed|Failure" "$RUNNER_TEMP/export.log" \
+              | grep -vE "$GOOGLE_BINARIES" | redact | tail -80 || true
+            dist=$(grep -oE "/[^ ]+\.xcdistributionlogs" "$RUNNER_TEMP/export.log" | head -1)
+            if [ -n "$dist" ] && [ -d "$dist" ]; then
+              grep -rhE -A4 "error|Error Domain|NSLocalizedDescription|NSLocalizedFailureReason" "$dist" \
+                | grep -vE "$GOOGLE_BINARIES" | redact | tail -60 || true
+            fi
+            echo "::error::Export failed; the reason is above, the full log in the release-logs artifact"
+            exit 1
+          fi
           # (2>&1 above: xcodebuild writes its symbol-upload warnings and
           # progress to stderr, which would otherwise skip this filter and
           # the log file.)
