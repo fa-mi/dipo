@@ -43,6 +43,10 @@
 		9B944DBF2F95089200C5892D /* LanguageManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B944DBE2F95089200C5892D /* LanguageManager.swift */; };
 		9B9AE5472FBD6A9700A3D1B8 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9BCF249E2FB63FE40070A483 /* SwiftUI.framework */; };
 		9BAC4A700000000000000001 /* AIChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BAC4A700000000000000002 /* AIChatView.swift */; };
+		9BAF386F30B698AF0073D383 /* DiPoWatch Watch App.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 9BAF386530B698AD0073D383 /* DiPoWatch Watch App.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		9BAF387A30B69A340073D383 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9BCF249C2FB63FE40070A483 /* WidgetKit.framework */; };
+		9BAF387B30B69A340073D383 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9BCF249E2FB63FE40070A483 /* SwiftUI.framework */; };
+		9BAF388630B69A360073D383 /* DiPoWatchWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 9BAF387930B69A340073D383 /* DiPoWatchWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		9BBA0001000000000000BACK /* BackupService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BBA0002000000000000BACK /* BackupService.swift */; };
 		9BC564B02F935E740081E8F7 /* FirebaseSupportService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BC564AF2F935E740081E8F7 /* FirebaseSupportService.swift */; };
 		9BC564B22F935F1A0081E8F7 /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = 9BC564B12F935F1A0081E8F7 /* FirebaseFirestore */; };
@@ -107,6 +111,20 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		9BAF386D30B698AF0073D383 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 9BE64C2E2F7513F000662EC1 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 9BAF386430B698AD0073D383;
+			remoteInfo = "DiPoWatch Watch App";
+		};
+		9BAF388430B69A360073D383 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 9BE64C2E2F7513F000662EC1 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 9BAF387830B69A340073D383;
+			remoteInfo = DiPoWatchWidgetExtension;
+		};
 		9BCF24AA2FB63FE60070A483 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 9BE64C2E2F7513F000662EC1 /* Project object */;
@@ -131,6 +149,28 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
+		9BAF387030B698AF0073D383 /* Embed Watch Content */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "$(CONTENTS_FOLDER_PATH)/Watch";
+			dstSubfolderSpec = 16;
+			files = (
+				9BAF386F30B698AF0073D383 /* DiPoWatch Watch App.app in Embed Watch Content */,
+			);
+			name = "Embed Watch Content";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		9BAF388B30B69A360073D383 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				9BAF388630B69A360073D383 /* DiPoWatchWidgetExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		9BCF24AD2FB63FE60070A483 /* Embed Foundation Extensions */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
@@ -174,6 +214,9 @@
 		9B944DB82F94FCF100C5892D /* NetworkMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkMonitor.swift; sourceTree = "<group>"; };
 		9B944DBE2F95089200C5892D /* LanguageManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LanguageManager.swift; sourceTree = "<group>"; };
 		9BAC4A700000000000000002 /* AIChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIChatView.swift; sourceTree = "<group>"; };
+		9BAF386530B698AD0073D383 /* DiPoWatch Watch App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "DiPoWatch Watch App.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		9BAF387930B69A340073D383 /* DiPoWatchWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = DiPoWatchWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		9BAF388C30B69A5B0073D383 /* DiPoWatchWidgetExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = DiPoWatchWidgetExtension.entitlements; sourceTree = "<group>"; };
 		9BBA0002000000000000BACK /* BackupService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupService.swift; sourceTree = "<group>"; };
 		9BC564AF2F935E740081E8F7 /* FirebaseSupportService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirebaseSupportService.swift; sourceTree = "<group>"; };
 		9BCAABF02F9C86F700897FF9 /* DateExtensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DateExtensions.swift; sourceTree = "<group>"; };
@@ -242,6 +285,13 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		9BAF388A30B69A360073D383 /* Exceptions for "DiPoWatchWidget" folder in "DiPoWatchWidgetExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 9BAF387830B69A340073D383 /* DiPoWatchWidgetExtension */;
+		};
 		9BCF24B12FB63FE60070A483 /* Exceptions for "DiPoWidget" folder in "DiPoWidgetExtension" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
@@ -266,6 +316,19 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		9BAF386630B698AD0073D383 /* DiPoWatch Watch App */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = "DiPoWatch Watch App";
+			sourceTree = "<group>";
+		};
+		9BAF387C30B69A340073D383 /* DiPoWatchWidget */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				9BAF388A30B69A360073D383 /* Exceptions for "DiPoWatchWidget" folder in "DiPoWatchWidgetExtension" target */,
+			);
+			path = DiPoWatchWidget;
+			sourceTree = "<group>";
+		};
 		9BCF24A02FB63FE40070A483 /* DiPoWidget */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
@@ -298,6 +361,22 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		9BAF386230B698AD0073D383 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		9BAF387630B69A340073D383 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				9BAF387B30B69A340073D383 /* SwiftUI.framework in Frameworks */,
+				9BAF387A30B69A340073D383 /* WidgetKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		9BCF24982FB63FE40070A483 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -343,6 +422,7 @@
 		9BE64C2D2F7513F000662EC1 = {
 			isa = PBXGroup;
 			children = (
+				9BAF388C30B69A5B0073D383 /* DiPoWatchWidgetExtension.entitlements */,
 				9BCF24B72FB640B70070A483 /* DiPoWidgetExtension.entitlements */,
 				9BD5A1012FC000000000000E /* DiPoShareExtension.entitlements */,
 				9BD5A1012FC000000000000F /* SharedScanInbox.swift */,
@@ -433,6 +513,8 @@
 				9BE64C382F7513F000662EC1 /* DiPo */,
 				9BCF24A02FB63FE40070A483 /* DiPoWidget */,
 				9BD5A1012FC0000000000007 /* DiPoShare */,
+				9BAF386630B698AD0073D383 /* DiPoWatch Watch App */,
+				9BAF387C30B69A340073D383 /* DiPoWatchWidget */,
 				9BFC17B32F91206C00D80402 /* Frameworks */,
 				9BE64C372F7513F000662EC1 /* Products */,
 				9B32E07C3054C7A4004E8230 /* Recovered References */,
@@ -446,6 +528,8 @@
 				9BE64C362F7513F000662EC1 /* DiPo.app */,
 				9BCF249B2FB63FE40070A483 /* DiPoWidgetExtension.appex */,
 				9BD5A1012FC0000000000002 /* DiPoShare.appex */,
+				9BAF386530B698AD0073D383 /* DiPoWatch Watch App.app */,
+				9BAF387930B69A340073D383 /* DiPoWatchWidgetExtension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -462,6 +546,52 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		9BAF386430B698AD0073D383 /* DiPoWatch Watch App */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 9BAF387330B698AF0073D383 /* Build configuration list for PBXNativeTarget "DiPoWatch Watch App" */;
+			buildPhases = (
+				9BAF386130B698AD0073D383 /* Sources */,
+				9BAF386230B698AD0073D383 /* Frameworks */,
+				9BAF386330B698AD0073D383 /* Resources */,
+				9BAF388B30B69A360073D383 /* Embed Foundation Extensions */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				9BAF388530B69A360073D383 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				9BAF386630B698AD0073D383 /* DiPoWatch Watch App */,
+			);
+			name = "DiPoWatch Watch App";
+			packageProductDependencies = (
+			);
+			productName = "DiPoWatch Watch App";
+			productReference = 9BAF386530B698AD0073D383 /* DiPoWatch Watch App.app */;
+			productType = "com.apple.product-type.application";
+		};
+		9BAF387830B69A340073D383 /* DiPoWatchWidgetExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 9BAF388730B69A360073D383 /* Build configuration list for PBXNativeTarget "DiPoWatchWidgetExtension" */;
+			buildPhases = (
+				9BAF387530B69A340073D383 /* Sources */,
+				9BAF387630B69A340073D383 /* Frameworks */,
+				9BAF387730B69A340073D383 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				9BAF387C30B69A340073D383 /* DiPoWatchWidget */,
+			);
+			name = DiPoWatchWidgetExtension;
+			packageProductDependencies = (
+			);
+			productName = DiPoWatchWidgetExtension;
+			productReference = 9BAF387930B69A340073D383 /* DiPoWatchWidgetExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		9BCF249A2FB63FE40070A483 /* DiPoWidgetExtension */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 9BCF24B02FB63FE60070A483 /* Build configuration list for PBXNativeTarget "DiPoWidgetExtension" */;
@@ -514,12 +644,14 @@
 				9BE64C332F7513F000662EC1 /* Frameworks */,
 				9BE64C342F7513F000662EC1 /* Resources */,
 				9BCF24AD2FB63FE60070A483 /* Embed Foundation Extensions */,
+				9BAF387030B698AF0073D383 /* Embed Watch Content */,
 			);
 			buildRules = (
 			);
 			dependencies = (
 				9BCF24AB2FB63FE60070A483 /* PBXTargetDependency */,
 				9BD5A1012FC000000000000D /* PBXTargetDependency */,
+				9BAF386E30B698AF0073D383 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				9BE64C382F7513F000662EC1 /* DiPo */,
@@ -565,9 +697,15 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
-				LastSwiftUpdateCheck = 2650;
+				LastSwiftUpdateCheck = 2720;
 				LastUpgradeCheck = 2640;
 				TargetAttributes = {
+					9BAF386430B698AD0073D383 = {
+						CreatedOnToolsVersion = 27.2;
+					};
+					9BAF387830B69A340073D383 = {
+						CreatedOnToolsVersion = 27.2;
+					};
 					9BCF249A2FB63FE40070A483 = {
 						CreatedOnToolsVersion = 26.5;
 					};
@@ -602,11 +740,27 @@
 				9BE64C352F7513F000662EC1 /* DiPo */,
 				9BCF249A2FB63FE40070A483 /* DiPoWidgetExtension */,
 				9BD5A1012FC0000000000001 /* DiPoShare */,
+				9BAF386430B698AD0073D383 /* DiPoWatch Watch App */,
+				9BAF387830B69A340073D383 /* DiPoWatchWidgetExtension */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		9BAF386330B698AD0073D383 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		9BAF387730B69A340073D383 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		9BCF24992FB63FE40070A483 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -632,6 +786,20 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		9BAF386130B698AD0073D383 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		9BAF387530B69A340073D383 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		9BCF24972FB63FE40070A483 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -747,6 +915,16 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		9BAF386E30B698AF0073D383 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 9BAF386430B698AD0073D383 /* DiPoWatch Watch App */;
+			targetProxy = 9BAF386D30B698AF0073D383 /* PBXContainerItemProxy */;
+		};
+		9BAF388530B69A360073D383 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 9BAF387830B69A340073D383 /* DiPoWatchWidgetExtension */;
+			targetProxy = 9BAF388430B69A360073D383 /* PBXContainerItemProxy */;
+		};
 		9BCF24AB2FB63FE60070A483 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 9BCF249A2FB63FE40070A483 /* DiPoWidgetExtension */;
@@ -765,6 +943,146 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		9BAF387130B698AF0073D383 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "DiPoWatch Watch App/DiPoWatch Watch App.entitlements";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 3C6KN7P2NC;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = DiPo;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.fahmiaquinas.DiPo;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.fahmiaquinas.DiPo.watchkitapp;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 26.0;
+			};
+			name = Debug;
+		};
+		9BAF387230B698AF0073D383 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "DiPoWatch Watch App/DiPoWatch Watch App.entitlements";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 3C6KN7P2NC;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = DiPo;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.fahmiaquinas.DiPo;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.fahmiaquinas.DiPo.watchkitapp;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 26.0;
+			};
+			name = Release;
+		};
+		9BAF388830B69A360073D383 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = DiPoWatchWidgetExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 3C6KN7P2NC;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = DiPoWatchWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = DiPoWatchWidget;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.fahmiaquinas.DiPo.watchkitapp.DiPoWatchWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 26.0;
+			};
+			name = Debug;
+		};
+		9BAF388930B69A360073D383 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = DiPoWatchWidgetExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 3C6KN7P2NC;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = DiPoWatchWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = DiPoWatchWidget;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.fahmiaquinas.DiPo.watchkitapp.DiPoWatchWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 26.0;
+			};
+			name = Release;
+		};
 		9BCF24AE2FB63FE60070A483 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -1135,6 +1453,24 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		9BAF387330B698AF0073D383 /* Build configuration list for PBXNativeTarget "DiPoWatch Watch App" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				9BAF387130B698AF0073D383 /* Debug */,
+				9BAF387230B698AF0073D383 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		9BAF388730B69A360073D383 /* Build configuration list for PBXNativeTarget "DiPoWatchWidgetExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				9BAF388830B69A360073D383 /* Debug */,
+				9BAF388930B69A360073D383 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		9BCF24B02FB63FE60070A483 /* Build configuration list for PBXNativeTarget "DiPoWidgetExtension" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

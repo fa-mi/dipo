@@ -317,6 +317,9 @@ struct DiPoApp: App {
         // off-by-default is FIREBASE_ANALYTICS_COLLECTION_ENABLED = NO in
         // Info.plist; this narrows the window if that key is ever missing.
         _ = ScreenAnalytics.shared
+        // The Apple Watch's link to this phone (DiPo/WatchBridge.swift). Off
+        // in a test run, like every other outside connection.
+        WatchBridge.shared.start()
 
         if let path = Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist"),
            let plist = NSDictionary(contentsOfFile: path),

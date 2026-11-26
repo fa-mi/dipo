@@ -325,9 +325,9 @@ enum DiPoIntentSupport {
     }
 
     /// The row the add form would write for the same entry, marked as
-    /// coming from Siri or Shortcuts.
+    /// coming from Siri or Shortcuts (or, with `notes`, from the watch).
     static func expense(amount: Double, name: String, category: TxCategory, currency: String,
-                        date: Date = Date()) -> TxRecord {
+                        date: Date = Date(), notes: String = "tx.note.from_siri") -> TxRecord {
         TxRecord(
             name: name,
             date: date,
@@ -339,7 +339,7 @@ enum DiPoIntentSupport {
             iconBgHex: category.iconBg,
             category: category,
             currency: currency,
-            notes: "tx.note.from_siri"
+            notes: notes
         )
     }
 

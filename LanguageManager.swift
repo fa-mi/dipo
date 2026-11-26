@@ -482,6 +482,16 @@ final class LanguageManager {
         "widget.large.top":          "Most spent",
         "widget.large.bills":        "Due before payday",
         "widget.large.no_bills":     "No monthly expenses due before payday.",
+        "watch.left":                "Left this period",
+        "watch.over":                "Over income by",
+        "watch.spent":               "Spent this period",
+        "watch.per_day":             "About %@ a day",
+        "watch.log":                 "Log",
+        "watch.for_what":            "What was %@ for?",
+        "watch.saved":               "Saved",
+        "watch.saved_to":            "To %@, through your iPhone",
+        "watch.pending":             "Waiting for your iPhone",
+        "watch.no_card":             "Choose a main card in DiPo on your iPhone first.",
         // Backup preview — shown after file pick, before destructive confirm
         "backup.preview.title":      "Review Backup File",
         "backup.preview.subtitle":   "Check the contents below before replacing your current data.",
@@ -2545,6 +2555,7 @@ final class LanguageManager {
         "pending.recurring_gone": "A payment of the same amount was logged this period. Swipe this away if that was this bill.",
         "tx.note.from_inbox":     "Reviewed from the inbox",
         "tx.note.from_siri":      "Logged with Siri or Shortcuts",
+        "tx.note.from_watch":     "Logged on Apple Watch",
 
         // Siri and Shortcuts (DiPo/DiPoIntents.swift)
         "appintent.no_card":      "Add a card in DiPo first.",
@@ -3698,6 +3709,16 @@ final class LanguageManager {
         "widget.large.top":          "Paling banyak",
         "widget.large.bills":        "Sebelum gajian",
         "widget.large.no_bills":     "Tidak ada tagihan bulanan sebelum gajian.",
+        "watch.left":                "Sisa periode",
+        "watch.over":                "Lebih dari pemasukan",
+        "watch.spent":               "Belanja periode ini",
+        "watch.per_day":             "±%@ per hari",
+        "watch.log":                 "Catat",
+        "watch.for_what":            "%@ untuk apa?",
+        "watch.saved":               "Tersimpan",
+        "watch.saved_to":            "Di %@, lewat iPhone",
+        "watch.pending":             "Menunggu iPhone",
+        "watch.no_card":             "Pilih kartu utama di DiPo iPhone dulu.",
         // Backup preview (ID)
         "backup.preview.title":      "Tinjau File Cadangan",
         "backup.preview.subtitle":   "Cek isi file ini sebelum mengganti datamu sekarang.",
@@ -5754,6 +5775,7 @@ final class LanguageManager {
         "pending.recurring_gone": "Periode ini sudah ada pembayaran dengan nominal sama. Geser untuk membuang kalau itu tagihan ini.",
         "tx.note.from_inbox":     "Diperiksa dari kotak masuk",
         "tx.note.from_siri":      "Dicatat lewat Siri atau Pintasan",
+        "tx.note.from_watch":     "Dicatat lewat Apple Watch",
 
         // Siri dan Pintasan (DiPo/DiPoIntents.swift)
         "appintent.no_card":      "Tambahkan kartu di DiPo dulu.",
