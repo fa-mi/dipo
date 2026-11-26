@@ -123,6 +123,7 @@ struct StatisticsView: View {
                 didDefaultPeriod = true
                 if payCycleDay != nil { selectedPeriod = .payCycle }
             }
+            selectedPeriod = selectedPeriod.kept(payDay: payCycleDay)
             selectedCardID = MainCard.reconcile(cards: appVM.cards)?.id.uuidString
             recomputeStats()
             withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
@@ -153,6 +154,11 @@ struct StatisticsView: View {
             showAllCategories = false
             withAnimation { statsVM.categories = realCategories }
             statsVM.animateIn()
+        }
+        // The salary schedule removed or paused while the pay cycle is shown:
+        // its chip goes, so the screen moves to this month with it.
+        .onChange(of: payCycleDay) { _, day in
+            selectedPeriod = selectedPeriod.kept(payDay: day)
         }
         .onChange(of: selectedPeriod) { _, _ in
             statsVM.selectedSliceIndex = nil

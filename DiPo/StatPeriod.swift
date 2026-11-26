@@ -15,6 +15,20 @@ enum StatPeriod: String, CaseIterable {
     case allTime    = "All time"
     case custom     = "Custom"
 
+    /// The periods a screen offers: "Pay cycle" only with a salary schedule
+    /// to anchor it on. Without one it would only repeat "This month" under
+    /// a payday's name.
+    static func offered(payDay: Int?) -> [StatPeriod] {
+        allCases.filter { $0 != .payCycle || payDay != nil }
+    }
+
+    /// The period to keep showing: a pay cycle whose salary schedule has been
+    /// removed or paused falls back to this month, rather than staying
+    /// selected with no chip to show it.
+    func kept(payDay: Int?) -> StatPeriod {
+        self == .payCycle && payDay == nil ? .thisMonth : self
+    }
+
     /// Localized label for UI. rawValue stays English for internal logic.
     var title: String {
         switch self {

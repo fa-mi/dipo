@@ -9,6 +9,9 @@ struct HomeView: View {
     @Environment(\.scenePhase) private var scenePhase
     /// Two on a wide panel: Home then lays out in two columns (Sections).
     @Environment(\.pageColumns) private var pageColumns
+    /// A short page (the Duo folded, an iPhone SE): the period card comes up
+    /// under the cards, so what is left is seen without scrolling.
+    @Environment(\.pageIsShort) private var pageIsShort
     @State private var wasInBackground = false
     @Query(sort: \SalarySchedule.createdAt) private var salarySchedules: [SalarySchedule]
     @Query(sort: \BankCard.sortOrder) private var queriedCards: [BankCard]
@@ -604,12 +607,13 @@ struct HomeView: View {
                         VStack(spacing: 0) {
                             homeHeader
                             if hasCards { moneyTop }
+                            if hasCards && pageIsShort { flowCard }
                             dipoSection
                             if !hasCards {
                                 noCardState
                             } else {
                                 attentionCards
-                                flowCard
+                                if !pageIsShort { flowCard }
                                 netWorthCard
                                 filterBar
                                 transactionsCard
