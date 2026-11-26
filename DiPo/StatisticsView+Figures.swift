@@ -15,7 +15,7 @@ extension StatisticsView {
     /// Periods shown as chips. "Pay cycle" only appears when there's a salary
     /// schedule to anchor it on; otherwise it would be meaningless.
     var availablePeriods: [StatPeriod] {
-        StatPeriod.allCases.filter { $0 != .payCycle || payCycleDay != nil }
+        StatPeriod.offered(payDay: payCycleDay)
     }
 
     /// Dates the salary actually landed. Used to anchor cycle boundaries so
