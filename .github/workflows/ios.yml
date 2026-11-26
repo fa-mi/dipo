@@ -54,15 +54,22 @@ jobs:
       - name: Build and test
         run: |
           set -o pipefail
+          # -collect-test-diagnostics never: with diagnostics on, xcodebuild
+          # tries to reach the simulator's instruments service hub
+          # ("com.apple.instruments.deviceservice.lockdown") as testing starts,
+          # and on this runner that often times out after 120 s. The cost: a
+          # failed run has no sysdiagnose. Its result bundle and full log are
+          # still uploaded. The grep prints any lockdown error, pass or fail.
           xcodebuild test \
             -project DiPo.xcodeproj -scheme DiPo \
             -destination "id=${{ steps.sim.outputs.udid }}" \
             -clonedSourcePackagesDirPath .spm \
             -resultBundlePath DiPo.xcresult \
             -skipPackagePluginValidation -skipMacroValidation \
+            -collect-test-diagnostics never \
             CODE_SIGNING_ALLOWED=NO \
             2>&1 | tee xcodebuild.log \
-            | { grep -E '^(Test Suite|Test Case .*(passed|failed))|error:|\*\* (BUILD|TEST)|PERF\|' || true; }
+            | { grep -E '^(Test Suite|Test Case .*(passed|failed))|error:|\*\* (BUILD|TEST)|PERF\||deviceservice\.lockdown' || true; }
           # pipefail makes the step fail with xcodebuild's status; the grep
           # group always succeeds, so it can't mask or cause a failure.
 
@@ -238,12 +245,11 @@ jobs:
             | sed -E 's#^/Users/runner/work/dipo/dipo/##' | sort -u | head -150 || true
           echo "Total errors: $(grep -c 'error:' build.log || true)"
 
-  # TEMPORARY: comes out before merge. Which part of `xcodebuild test` talks
-  # to the simulator's instruments service hub (DTServiceHub, reached as
-  # "com.apple.instruments.deviceservice.lockdown")? Twice this week that
-  # connection failed and the run later stopped with no test failing. Each
-  # leg builds once, runs the two classes those runs stopped in with one
-  # setting changed, and records every DTServiceHub the simulator starts.
+  # TEMPORARY: comes out before merge. Does -collect-test-diagnostics never
+  # reliably stop xcodebuild's timed-out connection to the simulator's
+  # instruments service hub ("com.apple.instruments.deviceservice.lockdown")?
+  # The first round saw it in both legs without the flag and not with it.
+  # Two more of each, same two test classes, same observers.
   lockdown-probe:
     runs-on: xcode-27
     timeout-minutes: 50
@@ -251,7 +257,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: [as-today, collect-test-diagnostics-never, screen-capture-off]
+        variant: [as-today, collect-test-diagnostics-never]
+        rep: [2, 3]
     steps:
       - uses: actions/checkout@v5
 
@@ -358,16 +365,12 @@ jobs:
           kill $sampler
           echo "xcodebuild ends $(date -u +%H:%M:%S), exit $status"
           echo "Test Case lines passed: $(grep -cE "^Test Case .*passed" xcodebuild.log)"
+          echo "VERDICT $VARIANT: lockdown errors in xcodebuild.log: $(grep -c 'deviceservice.lockdown' xcodebuild.log)"
           echo "::group::DTServiceHub processes seen (first sighting of each pid)"
           awk '!seen[$2]++' hub-ps.log | cut -c1-400
           echo "::endgroup::"
           echo "::group::xcodebuild.log: service hub, recording, diagnostics"
           grep -iE 'lockdown|servicehub|record|screen|diagnos|spindump|sysdiagnose' xcodebuild.log | cut -c1-400 | head -60 || true
-          echo "::endgroup::"
-          echo "::group::Simulator log: service hub"
-          xcrun simctl spawn "$UDID" log show --last 60m --style compact \
-            --predicate 'process CONTAINS[c] "servicehub" OR eventMessage CONTAINS[c] "servicehub" OR eventMessage CONTAINS[c] "deviceservice"' \
-            2>&1 | cut -c1-400 | head -200 || true
           echo "::endgroup::"
           echo "::group::Mac log: service hub"
           log show --last 60m --style compact \
