@@ -318,6 +318,13 @@ final class WebSyncService {
         /// What the user marked as on purpose, so the dashboard's insights
         /// say what the phone's do.
         var intents: [CycleIntent] = []
+        /// What "Hartamu hari ini" adds up besides cards, debts and goals
+        /// (see WebWealth): money lent out, investments, belongings, and the
+        /// instalments a credit card's bill includes.
+        var receivables: [Receivable] = []
+        var holdings: [InvestmentHolding] = []
+        var assets: [PhysicalAsset] = []
+        var installments: [CardInstallment] = []
     }
 
     private func fetchSource(context: ModelContext) -> Source {
@@ -328,7 +335,11 @@ final class WebSyncService {
             recurrings: (try? context.fetch(FetchDescriptor<RecurringExpense>())) ?? [],
             salaries:   (try? context.fetch(FetchDescriptor<SalarySchedule>())) ?? [],
             configs:    (try? context.fetch(FetchDescriptor<CardBudgetConfig>())) ?? [],
-            intents:    (try? context.fetch(FetchDescriptor<CycleIntent>())) ?? []
+            intents:    (try? context.fetch(FetchDescriptor<CycleIntent>())) ?? [],
+            receivables: (try? context.fetch(FetchDescriptor<Receivable>())) ?? [],
+            holdings:   (try? context.fetch(FetchDescriptor<InvestmentHolding>())) ?? [],
+            assets:     (try? context.fetch(FetchDescriptor<PhysicalAsset>())) ?? [],
+            installments: (try? context.fetch(FetchDescriptor<CardInstallment>())) ?? []
         )
     }
 
@@ -556,6 +567,13 @@ final class WebSyncService {
             "salaries":     salaryRows,
         ]
         if let scope = Self.scope(cards: cards) { out["mainCard"] = scope }
+
+        // What you have today: Home's net worth and what it is made of, for
+        // the dashboard's three sections after the period ones.
+        out["wealth"] = WebWealth.payload(cards: cards, goals: goals, receivables: source.receivables,
+                                          holdings: source.holdings, assets: source.assets,
+                                          debts: debts, installments: source.installments,
+                                          currency: base, now: now)
 
         if let f = figures {
             out["cycleStartISO"] = iso.string(from: f.start)
