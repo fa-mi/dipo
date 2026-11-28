@@ -136,40 +136,6 @@ struct HomeView: View {
             .first
     }
 
-    private var totalBalance: Double {
-        // Cash only — credit cards are liabilities, not money you hold. They
-        // must never inflate the "total balance" figure.
-        //
-        // Every amount is converted to the preferred currency first. Summing
-        // raw values added a USD card's balance to an IDR one as if they were
-        // the same unit — and since `totalLiabilities` DID convert, net worth
-        // silently mixed converted debts with unconverted cash.
-        let cm = CurrencyManager.shared
-        let pref = cm.preferredCurrency
-        return vm.cards.filter { !$0.isCreditCard }
-            .reduce(0.0) { sum, card in
-                let cur = card.resolvedCurrency
-                let txSum = card.transactions.reduce(0.0) { txAcc, tx in
-                    txAcc + cm.convert(tx.amount, from: tx.currency.isEmpty ? cur : tx.currency, to: pref)
-                }
-                return sum + cm.convert(card.balance, from: cur, to: pref) + txSum
-            }
-    }
-
-    /// Total liabilities: credit-card owed + active debt balances, in the
-    /// preferred currency.
-    private var totalLiabilities: Double {
-        let cm = CurrencyManager.shared
-        let pref = cm.preferredCurrency
-        // A card also recorded as a debt by hand is the same money; count it
-        // once, as the Debts screen does.
-        let cardRecorded = activeDebts.contains { !$0.manuallyClosed && $0.type == DebtType.creditCard.rawValue }
-        let cc = cardRecorded ? 0 : vm.cards.filter { $0.isCreditCard }
-            .reduce(0.0) { $0 + cm.convert($1.totalOwed(installments), from: $1.resolvedCurrency, to: pref) }
-        let debt = activeDebts.reduce(0.0) { $0 + cm.convert($1.currentBalance, from: $1.currency, to: pref) }
-        return cc + debt
-    }
-
     /// Net worth aggregates data from two Royal-only features — savings goals
     /// and debt tracking. The chip had no entitlement check at all, so a user
     /// who lapsed from Royal (or restored a backup made on Royal) kept seeing
@@ -178,60 +144,13 @@ struct HomeView: View {
         premiumMgr.canAccess(.savingsGoals) && premiumMgr.canAccess(.smartDebt)
     }
 
-    /// Money already set aside in savings goals. This is the user's money —
-    /// leaving it out made someone with Rp 30M saved and Rp 12M of installments
-    /// look bankrupt. Only counts what is provably NOT still sitting in a
-    /// tracked account: deposits recorded as transactions (cash already went
-    /// down) plus balances the user confirmed are held outside DiPo. Anything
-    /// unconfirmed is left out until they answer the prompt on the goal, so
-    /// the same rupiah is never counted twice.
-    private var goalSavings: Double {
-        let cm = CurrencyManager.shared
-        let pref = cm.preferredCurrency
-        let tx = vm.cards.flatMap(\.transactions)
-        return activeGoals.reduce(0.0) {
-            $0 + cm.convert($1.netWorthContribution(from: tx), from: $1.currency, to: pref)
-        }
-    }
-
-    /// Money other people owe the user. An outstanding claim is an asset in
-    /// exactly the way a debt is a liability; leaving it out understated the
-    /// net worth of anyone who had lent money out.
-    private var receivableAssets: Double {
-        let cm = CurrencyManager.shared
-        let pref = cm.preferredCurrency
-        let tx = vm.cards.flatMap(\.transactions)
-        return receivables.reduce(0.0) {
-            $0 + cm.convert($1.netWorthContribution(from: tx), from: $1.currency, to: pref)
-        }
-    }
-
-    /// Current market value of every investment holding, in the preferred
-    /// currency. Royal-only, so a free user's query is empty and this is 0.
-    private var investmentValue: Double {
-        let cm = CurrencyManager.shared
-        let pref = cm.preferredCurrency
-        return investmentHoldings.reduce(0.0) {
-            $0 + cm.convert($1.stats().marketValue, from: $1.currency, to: pref)
-        }
-    }
-
-    /// Estimated value of the house, land, vehicles and electronics (Royal).
-    private var physicalAssetValue: Double {
-        AssetSummary.of(physicalAssets, currency: CurrencyManager.shared.preferredCurrency).totalValue
-    }
-
-    /// Net worth = cash + savings goals + receivables + investments + physical
-    /// assets − liabilities.
-    struct NetWorthParts: Equatable {
-        var balance = 0.0, goals = 0.0, receivables = 0.0, investments = 0.0, assets = 0.0, liabilities = 0.0
-        var total: Double { balance + goals + receivables + investments + assets - liabilities }
-    }
-
+    /// Net worth and its parts (DiPo/NetWorth.swift), the same figure the web
+    /// dashboard prints.
     private func recomputeNetWorth() {
-        let parts = NetWorthParts(balance: totalBalance, goals: goalSavings, receivables: receivableAssets,
-                                  investments: investmentValue, assets: physicalAssetValue,
-                                  liabilities: totalLiabilities)
+        let parts = NetWorth.parts(cards: vm.cards, goals: activeGoals, receivables: receivables,
+                                   holdings: investmentHoldings, assets: physicalAssets,
+                                   debts: activeDebts, installments: installments,
+                                   currency: CurrencyManager.shared.preferredCurrency)
         if parts != worth { worth = parts }
     }
 
